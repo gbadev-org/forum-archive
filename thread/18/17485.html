@@ -1,0 +1,447 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Coming up with an ADPCM Midi player... - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Coming up with an ADPCM Midi player...</h2>
+<div id="posts">
+<div class="post">
+    <h4>#175932 - Ruben - Fri Mar 04, 2011 1:01 pm</h4>
+    <div class="postbody"><span class="postbody">[this is more General Coding, but since it's targetted at the DS, I thought I'd put it here]
+<br/>
+<br/>
+Hullo.
+<br/>
+<br/>
+I recently got the idea to make a custom ADPCM format to play sequenced music on the DS by mixing on the ARM9 [SMLAxy ftw!] since I'm not fond of being limited to 16 channels. I've come up with a step table that, so far, appears to work great [may be tweaked later on].
+<br/>
+<br/>
+The basic idea of the format is:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">//! when initializing
+<br/>
+chan.sample = wave.firstSample;
+<br/>
+chan.sampPack = *(s32*)(wave.data)[0]; //! note the sign
+<br/>
+chan.sampNext = &amp;(u32*)(wave.data)[1];
+<br/>
+chan.stepTab = &amp;stepTab[wave.firstIdx];
+<br/>
+<br/>
+//! during mixing
+<br/>
+mixOut(chan.sample);
+<br/>
+if(needSkipSamples) {
+<br/>
+    s32 indexStep = chan.sampPack &gt;&gt; 28; //! ASR 28
+<br/>
+    s32 delta = chan.stepTab[indexStep]; chan.stepTab += indexStep;
+<br/>
+    chan.sample += delta;
+<br/>
+    
+<br/>
+    //! last nibble can't be 0 - 0 is reserved for 'end of word'
+<br/>
+    if((chan.SampPack &lt;&lt;= 4) == 0) chan.SampPack = *chan.SampNext++;
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+What that means is:
+<br/>
+The sound wave starts off with a sample. When it's done with that sample, it reads the next by skipping through the delta step table, using the SIGNED nibble as its index (this allows it to go back/forth). Further, the step table is alternating positive/negative values so it won't have to make humongous leaps to reach the other side. The last nibble is reserved to not be zero as this allows an optimization to the decoder.
+<br/>
+Another note is that the step table is 16.16, as the sample data is in the upper 16 bits anyway to use a saturating add.
+<br/>
+<br/>
+Now, the problem I have at the moment is calculating the step values when encoding (the decoder is complete and works perfectly. Afaik, it is as optimized as it can get - and doesn't even take up the stack pointer =O).
+<br/>
+<br/>
+DekuTree and I had tried to come up with a good way of calculating the index steps, but his method had a small flaw that caused BIG problems.
+<br/>
+<br/>
+As such, I'm asking for help here.
+<br/>
+Any tips/ideas how to calculate the steps?
+<br/>
+<br/>
+The step table is 96 values - 48 positives, 48 negatives, all in the form of:
+<br/>
+tab[x+0] = (x*x * 200h &lt;&lt; 16) / (48*48);
+<br/>
+tab[x+1] = -tab[x+0]</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#175933 - elhobbs - Fri Mar 04, 2011 2:44 pm</h4>
+    <div class="postbody"><span class="postbody">maybe it would be helpful to show the flawed table and explain why it is flawed?
+<br/>
+<br/>
+I can see that </span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">(x*x * 200h &lt;&lt; 16) / (48*48); </td> </tr></table><span class="postbody"> will overflow 32bits with even small values for x.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#175934 - Ruben - Sat Mar 05, 2011 12:09 am</h4>
+    <div class="postbody"><span class="postbody">The problem isn't the table - everything is calculated using 64 bits just to be safe.
+<br/>
+<br/>
+This is the final step table calculated:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">   .word 0x000038E3,0xFFFFC71D,0x0000E38E,0xFFFF1C72,0x00020000,0xFFFE0000,0x00038E38,0xFFFC71C8
+<br/>
+   .word 0x00058E38,0xFFFA71C8,0x00080000,0xFFF80000,0x000AE38E,0xFFF51C72,0x000E38E3,0xFFF1C71D
+<br/>
+   .word 0x00120000,0xFFEE0000,0x001638E3,0xFFE9C71D,0x001AE38E,0xFFE51C72,0x00200000,0xFFE00000
+<br/>
+   .word 0x00258E38,0xFFDA71C8,0x002B8E38,0xFFD471C8,0x00320000,0xFFCE0000,0x0038E38E,0xFFC71C72
+<br/>
+   .word 0x004038E3,0xFFBFC71D,0x00480000,0xFFB80000,0x005038E3,0xFFAFC71D,0x0058E38E,0xFFA71C72
+<br/>
+   .word 0x00620000,0xFF9E0000,0x006B8E38,0xFF9471C8,0x00758E38,0xFF8A71C8,0x00800000,0xFF800000
+<br/>
+   .word 0x008AE38E,0xFF751C72,0x009638E3,0xFF69C71D,0x00A20000,0xFF5E0000,0x00AE38E3,0xFF51C71D
+<br/>
+   .word 0x00BAE38E,0xFF451C72,0x00C80000,0xFF380000,0x00D58E38,0xFF2A71C8,0x00E38E38,0xFF1C71C8
+<br/>
+   .word 0x00F20000,0xFF0E0000,0x0100E38E,0xFEFF1C72,0x011038E3,0xFEEFC71D,0x01200000,0xFEE00000
+<br/>
+   .word 0x013038E3,0xFECFC71D,0x0140E38E,0xFEBF1C72,0x01520000,0xFEAE0000,0x01638E38,0xFE9C71C8
+<br/>
+   .word 0x01758E38,0xFE8A71C8,0x01880000,0xFE780000,0x019AE38E,0xFE651C72,0x01AE38E3,0xFE51C71D
+<br/>
+   .word 0x01C20000,0xFE3E0000,0x01D638E3,0xFE29C71D,0x01EAE38E,0xFE151C72,0x02000000,0xFE000000</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I believe the problem lies in the following:
+<br/>
+<br/>
+The step value is currently calculated by, more or less, doing the following:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">s64 smp = adpcm.smp;
+<br/>
+s32 idx = adpcm.idx;
+<br/>
+s32 upDown = abs(realDelta) &lt; abs(pastDelta) ? (-1) : (1);
+<br/>
+s64 bestDelta = 0x7FFFFFFFLL;
+<br/>
+s64 bestIdxChange = 0;
+<br/>
+<br/>
+for(int i=0;i != upDown*8;i += upDown) {
+<br/>
+    s64 estSample = smp+step[idx+i];
+<br/>
+    s64 estDelta = estSample - originalSample;
+<br/>
+    if(abs(estDelta) &lt; abs(bestDelta)) bestDelta = estDelta, bestIdxChange = i;
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+The problem with this is:
+<br/>
+Say I'm on index 95 [delta = -200h]. If the new delta is +200h [need to move back one], then I get this:
+<br/>
+<br/>
+abs(realDelta) &lt; abs(pastDelta) = 200h &lt; 200h = false, move <span style="font-weight: bold">up</span>
+<br/>
+<br/>
+By doing that, it would result in a virtually endless addition.
+<br/>
+So far, I haven't come up with a way to go around that.. &gt;_&gt;</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#175935 - elhobbs - Sat Mar 05, 2011 3:12 am</h4>
+    <div class="postbody"><span class="postbody">My first thought would be that you need to flip the sign if the sign bits are different. But then it made me wonder why you were using abs for both values. Can you provide a high level view of how that section should work?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#175936 - Ruben - Sat Mar 05, 2011 6:44 am</h4>
+    <div class="postbody"><span class="postbody">It basically keeps checking until it finds the smallest difference (hence the abs()). If the signs differ, then the difference would be quite high, so it would say that the absolute difference is higher, thereby skipping it.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#175937 - elhobbs - Sat Mar 05, 2011 4:54 pm</h4>
+    <div class="postbody"><span class="postbody">what if the step table were not symetrical with respect to the x and x=1values? so, if you built the table such that it was skewed a little bit towards positive or negative at each step - maybe alternating between skewing towards positve and negative for each pair? essentially the point is to modify the table so that abs(x) will never match abs(x+1)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#175938 - Ruben - Sat Mar 05, 2011 5:16 pm</h4>
+    <div class="postbody"><span class="postbody">Even then it doesn't work, which leads me to believe there's something else going on... T_T
+<br/>
+<br/>
+This is the function...
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">static inline u32 toAD(s64 smp) {
+<br/>
+   s64 rDelta = (smp&lt;&lt;16) - gAD.smp;
+<br/>
+   s32 idxDir = IABS(rDelta) &lt; IABS(ad_Step[gAD.idx]) ? (-1) : (1);
+<br/>
+   s64 bstDlt = 0x7FFFFFFF;
+<br/>
+   s32 bstChn = 0;
+<br/>
+   s32 bstLim = idxDir &lt; 0 ? 9 : 8; //! 9 because neg can use -8
+<br/>
+   
+<br/>
+   for(int  idxChn  = 0;
+<br/>
+      (idxChn != idxDir*bstLim) &amp;&amp;
+<br/>
+      (gAD.idx + idxChn &gt;= 0)   &amp;&amp; 
+<br/>
+      (gAD.idx + idxChn &lt; 96);
+<br/>
+       idxChn += idxDir)
+<br/>
+   {
+<br/>
+      s32 est = Clamp64(gAD.smp + (s64)ad_Step[gAD.idx + idxChn])&gt;&gt;16;
+<br/>
+      s32 del = smp - est;
+<br/>
+      if(IABS(del) &lt; IABS(bstDlt)) {
+<br/>
+         bstDlt = del;
+<br/>
+         bstChn = idxChn;
+<br/>
+      }
+<br/>
+   } ;
+<br/>
+   
+<br/>
+   gAD.smp = Clamp64(gAD.smp + (s64)ad_Step[gAD.idx += bstChn]);
+<br/>
+   
+<br/>
+   static FILE *outF = 0;
+<br/>
+   if(!outF) outF = fopen("output.sw", "wb");
+<br/>
+   
+<br/>
+   s32 var = gAD.smp&gt;&gt;16;
+<br/>
+   fwrite(&amp;var, 2, 1, outF);
+<br/>
+   
+<br/>
+   return bstChn&amp;0xF;
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+I've also uploaded a trimmed [2500 samples] comaprison of input/output.
+<br/>
+<a class="postlink" href="http://www.mediafire.com/?038mlalhhtu8k9p" target="_blank">Link</a>
+<br/>
+<br/>
+EDIT:
+<br/>
+Accidentally pasted the old code. &gt;_&gt;</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#175947 - sverx - Mon Mar 07, 2011 5:47 pm</h4>
+    <div class="postbody"><span class="postbody">You mean you want to build up a table that contains 96 signed values and that would be used as a delta to add to your previous sample and you want to encode your wave into a 4 bits per sample ADPCM that will use the table above? And adding these 4 bits (as a signed) to locate the next beginning of the 16 values for the next sample? :| Mmm... tricky!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#175969 - Ruben - Sun Mar 13, 2011 2:25 pm</h4>
+    <div class="postbody"><span class="postbody">Bah! Does the universe hate me or something? This is the THIRD time I've lost all my data. &gt;_&lt;
+<br/>
+<br/>
+Well, here's hoping my next start will not be interrupted as much...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#175971 - headspin - Sun Mar 13, 2011 8:52 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Ruben wrote:</b></span></td> </tr> <tr> <td class="quote">Bah! Does the universe hate me or something? This is the THIRD time I've lost all my data. &gt;_&lt;</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Backup, backup, backup.<br/>_________________<br/><a class="postlink" href="http://headsoft.com.au/index.php?category=warhawk" target="_blank">Warhawk DS</a> | <a class="postlink" href="http://headsoft.com.au/index.php?category=mmll" target="_blank">Manic Miner: The Lost Levels</a> | <a class="postlink" href="http://headsoft.com.au/index.php?category=tdg" target="_blank">The Detective Game</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#175972 - Lazy1 - Sun Mar 13, 2011 9:16 pm</h4>
+    <div class="postbody"><span class="postbody">I'm guessing you backup the same way I do...
+<br/>
+Either not at all or to the same disk/directory.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176090 - Ruben - Wed Apr 06, 2011 8:13 pm</h4>
+    <div class="postbody"><span class="postbody">Well, looks like I've hit the jackpot.
+<br/>
+The new delta table contains 32 delta values and it sounds AWESOME.
+<br/>
+<br/>
+If someone has a nice sounding public domain song (.mp3 or something) they'd like to share to see the results (can be stereo, too), link me.
+<br/>
+<br/>
+EDIT:
+<br/>
+After a lot of thinking, I decided 'what the hell' and am no longer programming for the DS. As such, I'm uploading the source for this music player (note: there is no Midi handling at ALL - all the structs are there, but the handling is not, so it's just a sound mixer that can be easily made into a sequence player).
+<br/>
+<br/>
+I uploaded the source code, the necessary structs and #defines and the conversion program source.
+<br/>
+<a class="postlink" href="http://www.mediafire.com/?31hq9edozxmmco8" target="_blank">Linky</a>
+<br/>
+<br/>
+No credit needed if you use the code but would be appreciated ;D</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176143 - Ruben - Sat Apr 16, 2011 9:09 pm</h4>
+    <div class="postbody"><span class="postbody">Ok, I decided 'what the hell' again and am back to programming on the DS xD
+<br/>
+<br/>
+Currently, I've optimized this mixer a LOT and improved the step table (and added linear interpolation!)... but as embarrassing as it is, I've hit a tiny little problem [maybe not so little]... I can't seem to loop samples xD
+<br/>
+<br/>
+To be more precise, I don't think I'm calculating things properly which leads to not mixing enough samples and the looping going all over the place.
+<br/>
+<br/>
+What I'm doing right now is pre-calculating the amount of samples that can be read so that I can remove the checks from the mixing loop (and free another register). However, it appears that I am a total n00b at this as is evidenced by my problems =P
+<br/>
+<br/>
+Can anyone shed a little light on this? I've tried looking at Maxmod's source but I couldn't exactly follow. =P</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176146 - Ruben - Sun Apr 17, 2011 7:29 pm</h4>
+    <div class="postbody"><span class="postbody">Alright, nevermind that, I fixed it xD
+<br/>
+<br/>
+So far, the entire framework is down and I just need to add functions like "SeqStart", "SeqStop", etc... but here's a small demo showing off the music player + interpolating mixer
+<br/>
+<br/>
+<a class="postlink" href="http://www.mediafire.com/?9geo6h6w3oikw0w" target="_blank">Link 1</a> (demo with visual effect - CPU usage doesn't reflect mixing only)
+<br/>
+<br/>
+<a class="postlink" href="http://www.mediafire.com/?a6ipkwjez17gyq3" target="_blank">Link 2</a> (demo without visual effect - CPU usage is 99% just the mixer + sequence player)
+<br/>
+<br/>
+Controls:
+<br/>
+-A: Start sequence
+<br/>
+-B: Stop sequence (doesn't stop sound channels)
+<br/>
+<br/>
+Specs:
+<br/>
+-4 music players (ie, one for BGM, three for effects or whatever)
+<br/>
+-24 channel polyphony
+<br/>
+-Linear interpolation of samples (when delta &lt; 1.0)
+<br/>
+-Mixing at 32728Hz
+<br/>
+-Completely hand-written ASM</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176178 - Ruben - Tue May 03, 2011 10:29 am</h4>
+    <div class="postbody"><span class="postbody">Right, well, time for an update.
+<br/>
+<br/>
+I've been working on the player/mixer a LOT (even though I should be doing school stuff =P). The music player is working VERY well and the mixer is working surprisingly well (CPU stays under 50% at 24 channels under most circumstances).
+<br/>
+<br/>
+Here's a list of specs:
+<br/>
+    -4 music players updating at 120Hz (300bpm)
+<br/>
+    -24 channels using a custom ADPCM/DPCM format
+<br/>
+    -16-bit (8.8) envelopes
+<br/>
+    -Linear interpolation (can be activated for delta &lt; 1.0 or all samples, or none)
+<br/>
+    -Real-time decoding of samples (ie. no decompression buffers)
+<br/>
+    -Mixing at 32728Hz
+<br/>
+    -1344 bytes of channels (just over 1kB)
+<br/>
+    -17kB of sound buffers (OUCH! Will drastically reduce when I can sync the sound properly)
+<br/>
+    -1072 bytes of music data (just over 1kB)
+<br/>
+    -4kB of mixing temporary in DTCM
+<br/>
+    -1672 bytes of mixing code
+<br/>
+<br/>
+Here's the todo list:
+<br/>
+    -Reverb
+<br/>
+<br/>
+EDIT:
+<br/>
+Don't need 8-bit DPCM - turns out it was a small bug I had in my code (technically a rounding error).</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176224 - Ruben - Sun May 22, 2011 10:37 am</h4>
+    <div class="postbody"><span class="postbody">Right.
+<br/>
+<br/>
+I've given up on making a nice demo to go with the music player so this is the final release. =P
+<br/>
+<br/>
+Final specs:
+<br/>
+-4 music players updating at 120Hz (300bpm)
+<br/>
+-24 channels using a custom ADPCM/DPCM format
+<br/>
+-11-bit mixing mode (slightly faster, a bit less DTCM usage, more ITCM)
+<br/>
+-16-bit envelopes
+<br/>
+-Linear interpolation (can be activated for: always, delta &lt; 1.0, never)
+<br/>
+-Real-time decoding of samples (ie. no decompression buffers)
+<br/>
+-Mixing at 32728Hz
+<br/>
+-1kB of channels
+<br/>
+-8kB of sound buffers (can be 4kB without surround effect)
+<br/>
+-1kB of music data
+<br/>
+-2kB of mixing temporary in DTCM (can be 1kB with 11-bit mixing)
+<br/>
+-1.5kB of mixing code
+<br/>
+<br/>
+Notes:
+<br/>
+-Drastically-changing sounds (such as ride cymbals and hi-hats) have the potential to sound VERY bad due to the delta not being changed fast enough resulting in a lot of noise.
+<br/>
+-I gave up on reverb after I tried experimenting even with 32kB of buffers
+<br/>
+-Does not use the stack pointer and has a lot of #defines at the top of the mixer code to simplify settings (such as allowing multiple interrupts)
+<br/>
+-This sound driver is ripped directly from my custom DS framework, so there may be references to "NitroLib"; it is not the official SDK.
+<br/>
+-The song 'Duel of the Fates' is unfinished as I got bored with sequencing it =P
+<br/>
+<br/>
+<a class="postlink" href="http://www.mediafire.com/?2sbd5v3o5ybcd2a" target="_blank">Demo</a> (note: this is using my own DS library and most likely will NOT work on hardware; I had tried porting to libnds but gave up after I couldn't get anything visual working).
+<br/>
+<br/>
+<a class="postlink" href="http://www.mediafire.com/?o76m3u4iiik7qzy" target="_blank">Source</a> (note: this is only the ARM9 code with NO initialization; the only thing the ARM7 has to do is capture the sound buffer address and start channel playback [preferably after syncing to V-Blank or something] while the ARM9 has to start a timer/thread/alarm/whatever at 512*272*2 cycles [512 = 16756991/32728, 272 = buffer size, 2 = clock multiplier])</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

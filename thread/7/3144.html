@@ -1,0 +1,216 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>switch() speed killing? - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>C/C++ > switch() speed killing?</h2>
+<div id="posts">
+<div class="post">
+    <h4>#18568 - LOst? - Mon Mar 29, 2004 1:01 am</h4>
+    <div class="postbody"><span class="postbody">I have a switch() statement that updates the selected background, like most of use have I guess?
+<br/>
+<br/>
+Now I wanted to use the UpdateBackground() with the switch() in my Hblank interrupt, but it didn't manage to finish the work before the interrupt time was over making the background flicker in some areas. So I fixed it by taking out the switch() and just updating the bg registers of the background I wanted to do the effect for and that worked.
+<br/>
+<br/>
+Now i'm afraid to use switch() for anything, and when am I then to use? goto labels? That's so far away from OOP as I can get.
+<br/>
+<br/>
+So, why are switch() so bad?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#18572 - Miked0801 - Mon Mar 29, 2004 1:50 am</h4>
+    <div class="postbody"><span class="postbody">They aren't.  Most of the time, a switch is changed into an offset table read then PC jump.  If your switch is small though, quite often the compiler will change it to a if/else if construct to save space or time.  Still, why are you doing a switch statement in HBlank?  That's pretty much the last place you want to do conditional checks style code.  You should be able to setup a system where the code you want to run is figured out well before you get to the interrupt - perhaps by setting up a function pointer in real time that is later used by the hblank.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#18595 - torne - Mon Mar 29, 2004 1:30 pm</h4>
+    <div class="postbody"><span class="postbody">If the case values in a switch are consecutive (or nearly so) then it will almost always compile into a jump table, which is fast (unless there are very few choices, as miked said, but if there are that few then going through the ifs shouldn't be too bad). If your values are not consecutive then it'll make a set of if-else's however many there are.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#18608 - LOst? - Mon Mar 29, 2004 8:52 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Miked0801 wrote:</b></span></td> </tr> <tr> <td class="quote">Still, why are you doing a switch statement in HBlank?</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I wanted to have the same standard as I use in the main game loop. I call a UpdateBG (&amp;bg1) and I just used the same call in the HBlank and that wasn't a good move.
+<br/>
+<br/>
+I have to find and use a better standard for updating sprites and backgrounds so that they will be compatibe with my HBlank bg effect proc.
+<br/>
+<br/>
+If crt0.s uses a good way of calling interrupts, maybe I should let the VBlank interrupt take care of all updates of sprites and backgrounds, and lock VBlank so that it can only be called when I want to render the screen. Is that a good way?
+<br/>
+<br/>
+Oh yea the question is for Miked0801 because he seems to know much about game designing (since he's professional). But you all may answer the question :P</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#18611 - poslundc - Mon Mar 29, 2004 10:12 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>LOst? wrote:</b></span></td> </tr> <tr> <td class="quote">If crt0.s uses a good way of calling interrupts, maybe I should let the VBlank interrupt take care of all updates of sprites and backgrounds, and lock VBlank so that it can only be called when I want to render the screen. Is that a good way?</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+crt0.S offers three different ways of calling interrupts, depending on what your needs are. You need to modify crt0.S to select which one you want to use.
+<br/>
+<br/>
+None of those ways are better than writing your own interrupt handler, though. (If you want to use the Fast Interrupts mode in crt0.S you may as well just write your own ISR and copy its address to 0x03007FFC. It'll be the same as doing it through crt0.S but you'll save a load and branch instruction.)
+<br/>
+<br/>
+When writing your own ISR, check to see if it is a HBlank ISR and if so service that <span style="font-style: italic">immediately</span> (you've only got 224 cycles to do it in), all other interrupts can wait. Especially if you are also using interrupts to handle VBlank processing, which lasts for almost 84,000 cycles!
+<br/>
+<br/>
+If you are doing anything more complicated in HBlank than updating a few registers (in which case you should just use HDMA anyway, which is simpler and more efficient), consider learning assembly and doing it in that. HBlank is just that short.
+<br/>
+<br/>
+I don't recommend using interrupts to handle VBlank, although others may disagree. All I would likely use the VBlank interrupt for is if I want to halt the CPU to save batteries and need the interrupt just to get it started again when VBlank arrives.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Oh yea the question is for Miked0801 because he seems to know much about game designing (since he's professional). But you all may answer the question :P</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Thanks. :P
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#18617 - Miked0801 - Mon Mar 29, 2004 11:28 pm</h4>
+    <div class="postbody"><span class="postbody">Lol - you hurt Dan's feelings :)
+<br/>
+<br/>
+For what it's worth, here what we do.
+<br/>
+<br/>
+We use VBlank for Sprite OAM copies, palette updates, and reseting of stuff that our HBlank routines fiddle with (scroll windows and register resets, Alpha Blends resets, etc.)  We also use VBlank for setting up our HBlank interrupt chains (through a request system so we don't accidently play with hblank while its trying to read a vector.  No fun like a 1 in million load half an address and jump bug.)  Using VBlank as our base function for updates works well for preventing visual gltiching and the like that is caused by playng with interrupt stuff at run time.
+<br/>
+<br/>
+For HBlanks, if we need to do anything real complex, we break the line before we want the effect to happen, do all the setup code, wait for the hblank period to begin in a tight loop, then go to town.  We use a vector table that updates a pointer after every function is called to allow an easy way to go from function to function (there is overhead involved in this, but the ease of development I believe outweighs the costs.)
+<br/>
+<br/>
+Don't know if I answered your question, but there's some info there none the less :)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#18618 - LOst? - Mon Mar 29, 2004 11:31 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>poslundc wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>LOst? wrote:</b></span></td> </tr> <tr> <td class="quote">If crt0.s uses a good way of calling interrupts, maybe I should let the VBlank interrupt take care of all updates of sprites and backgrounds, and lock VBlank so that it can only be called when I want to render the screen. Is that a good way?</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+crt0.S offers three different ways of calling interrupts, depending on what your needs are. You need to modify crt0.S to select which one you want to use.
+<br/>
+<br/>
+None of those ways are better than writing your own interrupt handler, though. (If you want to use the Fast Interrupts mode in crt0.S you may as well just write your own ISR and copy its address to 0x03007FFC. It'll be the same as doing it through crt0.S but you'll save a load and branch instruction.)
+<br/>
+<br/>
+When writing your own ISR, check to see if it is a HBlank ISR and if so service that <span style="font-style: italic">immediately</span> (you've only got 224 cycles to do it in), all other interrupts can wait. Especially if you are also using interrupts to handle VBlank processing, which lasts for almost 84,000 cycles!
+<br/>
+<br/>
+If you are doing anything more complicated in HBlank than updating a few registers (in which case you should just use HDMA anyway, which is simpler and more efficient), consider learning assembly and doing it in that. HBlank is just that short.
+<br/>
+<br/>
+I don't recommend using interrupts to handle VBlank, although others may disagree. All I would likely use the VBlank interrupt for is if I want to halt the CPU to save batteries and need the interrupt just to get it started again when VBlank arrives.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Oh yea the question is for Miked0801 because he seems to know much about game designing (since he's professional). But you all may answer the question :P</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Thanks. :P
+<br/>
+<br/>
+Dan.</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Yes 84,000 cycles! That's a dream to hear. I will try to make the VBlank handle all the updates of sprites, palettes, and backgrounds. That way I will be able to synchronize them on every frame without doing any mistakes.
+<br/>
+<br/>
+And HDMA is something I should learn to use. Still I don't know how it works (I can look it up) and how I would be able to use it fro scroll effects on backgrounds, including the first scanline (which I had to get working with a lot of hacks)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#18627 - tepples - Tue Mar 30, 2004 3:57 am</h4>
+    <div class="postbody"><span class="postbody">Getting the first scanline of an HDMA working is easy: just write the first scanline's data manually during Vblank, and then start the HDMA with the source address pointing at the second scanline's data. What "lot of hacks" did you need?<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#18648 - LOst? - Tue Mar 30, 2004 11:16 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote">Getting the first scanline of an HDMA working is easy: just write the first scanline's data manually during Vblank, and then start the HDMA with the source address pointing at the second scanline's data. What "lot of hacks" did you need?</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+void HblankS ()
+<br/>
+{
+<br/>
+   Vcnt = (u32) REG_VCOUNT;
+<br/>
+   Vcnt += 1;
+<br/>
+<br/>
+   if (Vcnt &gt; 227)
+<br/>
+      Vcnt = 0;
+<br/>
+<br/>
+   Vcnt += (screen_y &gt;&gt; bgintshift_y);
+<br/>
+   if (Vcnt &gt;= 512)
+<br/>
+      Vcnt = 1;
+<br/>
+   else if (Vcnt &lt; 0)
+<br/>
+      Vcnt = 0;
+<br/>
+<br/>
+   bg0.y_scroll = screen_y * lines_y [Vcnt];
+<br/>
+   bg0.x_scroll = screen_x * lines_x [Vcnt];
+<br/>
+<br/>
+   REG_BG0HOFS = (bg0.x_scroll &gt;&gt; bgintshift_x);
+<br/>
+   REG_BG0VOFS = (bg0.y_scroll &gt;&gt; bgintshift_y);
+<br/>
+<br/>
+   REG_IF |= INT_HBLANK;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+That's what I call hacking.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#18650 - LOst? - Tue Mar 30, 2004 11:17 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Miked0801 wrote:</b></span></td> </tr> <tr> <td class="quote">Lol - you hurt Dan's feelings :)
+<br/>
+<br/>
+For what it's worth, here what we do.
+<br/>
+<br/>
+We use VBlank for Sprite OAM copies, palette updates, and reseting of stuff that our HBlank routines fiddle with (scroll windows and register resets, Alpha Blends resets, etc.)  We also use VBlank for setting up our HBlank interrupt chains (through a request system so we don't accidently play with hblank while its trying to read a vector.  No fun like a 1 in million load half an address and jump bug.)  Using VBlank as our base function for updates works well for preventing visual gltiching and the like that is caused by playng with interrupt stuff at run time.
+<br/>
+<br/>
+For HBlanks, if we need to do anything real complex, we break the line before we want the effect to happen, do all the setup code, wait for the hblank period to begin in a tight loop, then go to town.  We use a vector table that updates a pointer after every function is called to allow an easy way to go from function to function (there is overhead involved in this, but the ease of development I believe outweighs the costs.)
+<br/>
+<br/>
+Don't know if I answered your question, but there's some info there none the less :)</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Yea that's about it! I want to do that myself. I can see how many professional games are changing the registers every frame so you can't hack it with VisualBoy Advance.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

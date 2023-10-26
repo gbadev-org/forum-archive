@@ -1,0 +1,204 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Texturing on polys (not quite as n00bish as my other topics) - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Texturing on polys (not quite as n00bish as my other topics)</h2>
+<div id="posts">
+<div class="post">
+    <h4>#111209 - djmcbell - Mon Dec 04, 2006 10:11 pm</h4>
+    <div class="postbody"><span class="postbody">I've been using the Drunken Coder's code for creating textured cubes that comes with the DevKitPro. Basically, it includes code on how to make a cube with the Drunken Coder's texture on it.
+<br/>
+<br/>
+I'm wondering how I go about making my own textures. I've created the necessary PCX in Paint Shop Pro and tried converting it how I converted my 2D backdrops using GFX2GBA, but the result is a mess. It seems that either the files are messed, or they're looking in totally the wrong place in memory.
+<br/>
+<br/>
+So, I'm wondering how it would be best to go about converting a 128x128 texture (or whatever size - I'd love a 192x192 but doubt that'd be possible) with a 256 colour palette, and putting it into the code. Nothing in depth, just a quick step-by-step guide so I can see where I'm going wrong.
+<br/>
+<br/>
+Thanks again for putting up with my n00bish-ness, maybe one day I'll find the brain the Wizard of Oz kept saying I had...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#111217 - ProblemBaby - Mon Dec 04, 2006 11:04 pm</h4>
+    <div class="postbody"><span class="postbody">Texture memory is linear not tiles. select "no tiling".</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#111292 - Sausage Boy - Tue Dec 05, 2006 2:52 pm</h4>
+    <div class="postbody"><span class="postbody">I wrote a great tool for converting textures to most of the different formats the DS supports. While gfx2gba can easily convert to the raw format, it's just not the right tool for the job. You can score a copy at <a href="http://www.gasp.boxgamex.net/?p=21" target="_blank">http://www.gasp.boxgamex.net/?p=21</a> .<br/>_________________<br/>"no offense, but this is the gayest game ever"</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#111294 - FireSlash - Tue Dec 05, 2006 3:03 pm</h4>
+    <div class="postbody"><span class="postbody">You can load PCX files directly.
+<br/>
+<br/>
+Code from LumiDS:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">   sImage pcx;                
+<br/>
+   FAT_FILE * pFile;
+<br/>
+   long lSize;
+<br/>
+   char * buffer;
+<br/>
+<br/>
+   pFile = FAT_fopen ("/data/lumiDS/base/logo_top.pcx","r");
+<br/>
+   if (!pFile) return false;
+<br/>
+   FAT_fseek (pFile , 0 , SEEK_END);
+<br/>
+   lSize = FAT_ftell (pFile);
+<br/>
+   FAT_fseek(pFile, 0, SEEK_SET);
+<br/>
+<br/>
+   // allocate memory to contain the whole file.
+<br/>
+   buffer = (char*) malloc (lSize);
+<br/>
+   if (!buffer) return false;
+<br/>
+<br/>
+   // copy the file into the buffer.
+<br/>
+   FAT_fread (buffer,1,lSize,pFile);
+<br/>
+<br/>
+   loadPCX((u8*)buffer, &amp;pcx);
+<br/>
+<br/>
+   image8to16(&amp;pcx);
+<br/>
+<br/>
+   glGenTextures(1, &amp;textures[0]);
+<br/>
+   glBindTexture(0, textures[0]);
+<br/>
+   glTexImage2D(0, 0, GL_RGB, TEXTURE_SIZE_256 , TEXTURE_SIZE_256, 0, TEXGEN_TEXCOORD, pcx.data8);
+<br/>
+<br/>
+   imageDestroy(&amp;pcx);
+<br/>
+<br/>
+   FAT_fclose (pFile);
+<br/>
+   free (buffer);</td> </tr></table><span class="postbody"><br/>_________________<br/><a class="postlink" href="http://www.fireslash.net" target="_blank">FireSlash.net</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#111382 - dannyboy - Wed Dec 06, 2006 2:14 am</h4>
+    <div class="postbody"><span class="postbody">Here's how I do it using GBFS with texture.h and texture.cpp.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">/////////////////////////// Texture.h /////////////////////////
+<br/>
+#ifndef TEXTURE_H
+<br/>
+#define TEXTURE_H
+<br/>
+<br/>
+// Needed to load pcx files
+<br/>
+#include &lt;nds/arm9/image.h&gt;
+<br/>
+#include &lt;nds/arm9/trig_lut.h&gt;
+<br/>
+<br/>
+#include &lt;gbfs.h&gt;
+<br/>
+extern const GBFS_FILE  data_gbfs;
+<br/>
+<br/>
+class CTexture
+<br/>
+{
+<br/>
+    public:
+<br/>
+        void LoadTextureSet1();
+<br/>
+        void LoadTextureSet2();
+<br/>
+    private:
+<br/>
+        void Load(int index, sImage pcx, int Size);
+<br/>
+        int   texture[15];         // Pointer for i Textures
+<br/>
+};
+<br/>
+<br/>
+#endif
+<br/>
+/////////////////////////// Texture.h /////////////////////////
+<br/>
+<br/>
+/////////////////////////// Texture.cpp /////////////////////////
+<br/>
+#include "Texture.h"
+<br/>
+<br/>
+void CTexture::Load(int index, sImage pcx, int Size) // Loads actual texture
+<br/>
+{
+<br/>
+    image8to16trans(&amp;pcx, 0);
+<br/>
+   glGenTextures(1, &amp;texture[index]);
+<br/>
+   glBindTexture(0, texture[index]);
+<br/>
+   glTexImage2D(0, 0, GL_RGB, Size , Size, 0, TEXGEN_TEXCOORD | GL_TEXTURE_WRAP_S | GL_TEXTURE_WRAP_T, pcx.data8);
+<br/>
+   imageDestroy(&amp;pcx);
+<br/>
+}
+<br/>
+<br/>
+void CTexture::LoadTextureSet1()
+<br/>
+{
+<br/>
+    sImage pcx;
+<br/>
+<br/>
+    glResetTextures();      // Clears all texture memory
+<br/>
+<br/>
+    loadPCX((u8*)gbfs_get_obj(&amp;data_gbfs, "zero.pcx", NULL), &amp;pcx);
+<br/>
+    Load(0, pcx, TEXTURE_SIZE_64);
+<br/>
+<br/>
+    loadPCX((u8*)gbfs_get_obj(&amp;data_gbfs, "one.pcx", NULL), &amp;pcx);
+<br/>
+    Load(1, pcx, TEXTURE_SIZE_128);
+<br/>
+<br/>
+    loadPCX((u8*)gbfs_get_obj(&amp;data_gbfs, "two.pcx", NULL), &amp;pcx);
+<br/>
+    Load(2, pcx, TEXTURE_SIZE_64);
+<br/>
+<br/>
+    loadPCX((u8*)gbfs_get_obj(&amp;data_gbfs, "three.pcx", NULL), &amp;pcx); 
+<br/>
+    Load(3, pcx, TEXTURE_SIZE_32);
+<br/>
+}
+<br/>
+/////////////////////////// Texture.cpp /////////////////////////</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

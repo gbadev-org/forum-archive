@@ -1,0 +1,398 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Copying data to screen in Mode 3 - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > Copying data to screen in Mode 3</h2>
+<div id="posts">
+<div class="post">
+    <h4>#10019 - Omega81 - Sun Aug 24, 2003 8:37 pm</h4>
+    <div class="postbody"><span class="postbody">I was wondering if anyone know how I can copy data from an off screen buffer to the screen in mode 3. I don't want to use Page flipping (Mode 4/5). Any ideas (an example would be great.)<br/>_________________<br/>Keep it real, keep it Free, Keep it GNU</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10022 - jenswa - Sun Aug 24, 2003 9:20 pm</h4>
+    <div class="postbody"><span class="postbody">Hmm i don't know it the buffer in ewram is big enough for your purpose.
+<br/>
+<br/>
+You could make a software buffer in ewram and then copy it to the screen, but i don't know it's fast enough.
+<br/>
+<br/>
+Hope that helps a little.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10044 - Lupin - Mon Aug 25, 2003 2:35 pm</h4>
+    <div class="postbody"><span class="postbody">Doing it that way is not fast enough... at least not for sophisticated graphical output.
+<br/>
+<br/>
+I thought of using IWRAM to do this, but with 32kb it's way too small to store 16 bit pixels, but you could use 8 bit values though and I'm sure you would get an very good speed using IWRAM (you could also use non-paletted colors or write some code wich creates the color table on the fly)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10046 - Cyberman - Mon Aug 25, 2003 4:50 pm</h4>
+    <div class="postbody"><span class="postbody">I believe what these people are trying to say (in a slightly convoluted manner) is it's not easy to do this. :) 
+<br/>
+<br/>
+240x160x2 = 76800 bytes
+<br/>
+too large for IWRAM.
+<br/>
+<br/>
+This leaves slower EWRAM for a buffer to draw into. You have a performance hit of 2 wait states for each read or write to this memory.  Copying well you could do it the conventional way.. or use memcpy or it may be possible to use ye olde dma channel 3 (not sure if you can do this with EWRAM but it might be possible). 
+<br/>
+<br/>
+I suggest if you insist on doing this work at a scan line at a time or have a line cache in IWRAM then copy to and from the EWRAM buffer. 2 wait states may not seem like a lot but it adds up quickly.  For example a 3 cycle read/write becomes a 5 cycle read write. This is killer for loops and such. To be honest it depends on what you are doing.  Perhaps instead of saying "I don't want to.. yada yada" explain what you are trying to do maybe there is a better way :)
+<br/>
+<br/>
+Cyb</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10050 - DekuTree64 - Mon Aug 25, 2003 8:08 pm</h4>
+    <div class="postbody"><span class="postbody">Actually you may be able to get a full resolution 16-bit 3D engine going with that scanline cache trick if you use an S-buffer, so you have all the spans for all the lines that you're going to render already set up. 
+<br/>
+If you use 15K of IWRAM for your cache, that gives you 32 lines. Spend one whole frame rendering spans to the S-buffer, and then render the first 32 lines into the cache during VBlank. Wait till the screen starts drawing and then start copying them in on HBlank as they actually draw, and at the same time render more lines back to the start of the cache over the ones that are already copied into VRAM (just keep a line counter and AND with 31 every time you increment it, so you loop around the cache). As long as it doesn't take so long to render each scanline to the cache that you end up more than 32 scanlines behind schedule by the end of the screen, I think it would work.
+<br/>
+According to <a href="http://www.cs.rit.edu/~tjh8300/CowBite/CowBiteSpec.htm#DMA%20Source%20Registers," target="_blank">http://www.cs.rit.edu/~tjh8300/CowBite/CowBiteSpec.htm#DMA%20Source%20Registers,</a> if you set DMA3's start mode to 3 (sound FIFO mode for DMA 1/2), it will copy scanlines as the screen draws them, so that would save some time starting up the DMA every HBlank. You'd have to reset it every 32 lines, but that wouldn't be to much trouble.
+<br/>
+<br/>
+I'm just thinking out loud though, I think it would still be a little slow for any practical use, but it would still be fun to try if I had the time.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10058 - sajiimori - Mon Aug 25, 2003 11:16 pm</h4>
+    <div class="postbody"><span class="postbody">I find some of the answers here a little strange.  For instance, saying this idea is too slow doesn't carry much meaning when Omega81 didn't specify that it had to run at 60fps.
+<br/>
+<br/>
+Anyway, here is a setup where your buffer is located right at the beginning of external work ram (0x02000000).  Do some tests to find out how long it takes to perform the copy, then you can decide if it's worth it.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#define BUFFER         ((u16*)0x02000000)
+<br/>
+#define VIDEO_MEMORY   (u16*)0x6000000
+<br/>
+<br/>
+#define REG_DM3SAD      *(volatile u32*)0x40000D4
+<br/>
+#define REG_DM3DAD      *(volatile u32*)0x40000D8
+<br/>
+#define REG_DM3CNT      *(volatile u32*)0x40000DC
+<br/>
+<br/>
+#define DMACOPY16(dst,src,len) \
+<br/>
+   REG_DM3SAD = (int)(src); \
+<br/>
+   REG_DM3DAD = (int)(dst); \
+<br/>
+   REG_DM3CNT = (len) | DMA_ENABLE | DMA_TIMING_IMMEDIATE
+<br/>
+<br/>
+#define COPY_BUFFER_TO_SCREEN \
+<br/>
+    DMACOPY16(VIDEO_MEMORY,BUFFER,240*160)
+<br/>
+<br/>
+main_loop()
+<br/>
+{
+<br/>
+   // draw stuff to buffer
+<br/>
+   // wait for vsync
+<br/>
+   COPY_BUFFER_TO_SCREEN;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+*edit for error in code comment*</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10067 - Lupin - Tue Aug 26, 2003 12:03 pm</h4>
+    <div class="postbody"><span class="postbody">I don't think that this is an good idea:
+<br/>
+<br/>
+#define BUFFER         ((u16*)0x02000000)
+<br/>
+<br/>
+because if you define an global variable in code you'll end up having the value of the var at the same address as the buffer, you'll better use an normal array:
+<br/>
+<br/>
+u16 BUFFER[38400];
+<br/>
+...or an multidimensional array...
+<br/>
+u16 BUFFER[240][160];</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10076 - tepples - Tue Aug 26, 2003 3:47 pm</h4>
+    <div class="postbody"><span class="postbody">I don't know if it's a fundamental 'ld' limitation, but the linker and link script supplied with DevKit Advance support only one .bss section, and this is usually in IWRAM. If you put an uninitialized variable into EWRAM, the toolchain will convert it to an initialized variable, taking up space in your binary.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10079 - Lupin - Tue Aug 26, 2003 4:24 pm</h4>
+    <div class="postbody"><span class="postbody">yeah, I think that's true, but the variable will still be initialized in ewram and not on rom space, there's no better way to do this I think (it's not that important thought...)
+<br/>
+<br/>
+But, would an buffer at the end of ewram be faster then at the beginning, because the dma controler wouldn't have to move the data over such an far distance...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10081 - torne - Tue Aug 26, 2003 5:37 pm</h4>
+    <div class="postbody"><span class="postbody">There is no distance associated with RAM. The time required to copy is affected solely by the type of memory you are copying from and to (iwram-&gt;vram is pretty damn fast) and the number of bytes you are copying.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10088 - sajiimori - Tue Aug 26, 2003 6:38 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+if you define an global variable in code you'll end up having the value of the var at the same address as the buffer, you'll better use an normal array
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+In Devkit Advance, C arrays are allocated in the .data section, which is located in IWRAM.  Thus, manual allocation of EWRAM (by using constants) is not unreasonable, and will not cause errors unless you modify your link script.
+<br/>
+<br/>
+More advanced developers might explicity locate a C array in EWRAM, or configure malloc() to use EWRAM.  Those developers would surely know how to convert the code I posted to a form that would be more suitable for their circumstances.  Then again, they probably wouldn't have any use for this code.  ;-)
+<br/>
+<br/>
+Edit: One more thing.  Try doing the math on that buffer you declared:
+<br/>
+<br/>
+u16 buffer[240][160];
+<br/>
+<br/>
+Notice anything?  76800 byte buffer &gt; 32768 bytes of IWRAM</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10100 - Omega81 - Wed Aug 27, 2003 2:21 am</h4>
+    <div class="postbody"><span class="postbody">Thanks alot guy, I wasn't expected so may posts ( most be a popular topic) any way  to answer sajiimori question,  am trying to implement a fire routine and I need to dynamically update the screen,  I can't use page flipping casue it will mean I will keep perfrom the same changes on both screens ( with will be a waste of cycles). for my purpose, an extra 3 cycles is not much. Also I noticed that I have the same problem displaying an Image, the image is a 38K mode 3 image and can't fit in WRAM, and from my debugging (I love insight on Linux) I noticed that the link script I am using (Jeff Forhwein's ver 1.3) truncates my Image. Anyway, I will try sajiimori idea and I think that should work. Again thanks guys.
+<br/>
+<br/>
+Charlie<br/>_________________<br/>Keep it real, keep it Free, Keep it GNU</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10106 - tepples - Wed Aug 27, 2003 3:15 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Omega81 wrote:</b></span></td> </tr> <tr> <td class="quote">Also I noticed that I have the same problem displaying an Image, the image is a 38K mode 3 image and can't fit in WRAM, and from my debugging (I love insight on Linux) I noticed that the link script I am using (Jeff Forhwein's ver 1.3) truncates my Image.</td> </tr></table><span class="postbody">
+<br/>
+If the image is something hardcoded in your program, try declaring it 'const' so that the linker will put it in ROM (or, for multiboot programs, EWRAM).<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10118 - Lupin - Wed Aug 27, 2003 3:16 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">I can't use page flipping casue it will mean I will keep perfrom the same changes on both screens ( with will be a waste of cycles)</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I don't think that this is true, because storing the buffer in ewram or iwram would mean the same as using page flipping and storing it in vram, the only advantage of having an buffer in non-video-ram is that you could use full resolution without seeing how the image slowly changes (no more flickering)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10127 - Omega81 - Wed Aug 27, 2003 6:47 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Lupin wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+<br/>
+I don't think that this is true, because storing the buffer in ewram or iwram would mean the same as using page flipping and storing it in vram, the only advantage of having an buffer in non-video-ram is that you could use full resolution without seeing how the image slowly changes (no more flickering)</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Well I am under the impression that page flipping, will mean changing the contents of two screen buffers while with a double buffer, I only need to modify on buffer. heres an example
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+<br/>
+for (x=0; x&lt;1000; x++)
+<br/>
+{
+<br/>
+    modify backbuffer...
+<br/>
+    sync...
+<br/>
+    flip VRAM ram address...
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+the flip function will change the VRAM address to the back buffer but on the next pass of the loop, the backbuffer the initial VRAM address which don't have the previous modification and so I will have to modify twice. But with a double buffer, code will look like this
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+<br/>
+for (x=0; x&lt;1000; x++)
+<br/>
+{
+<br/>
+    modify Doublebuffer...
+<br/>
+    sync...
+<br/>
+    copy Doublebuffer to VRAM
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+This only modifes one buffer ( the Doublebuffer) on ever pass of the loop and so less wasteful. 
+<br/>
+<br/>
+Please correct me if I am wrong.<br/>_________________<br/>Keep it real, keep it Free, Keep it GNU</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10131 - sajiimori - Wed Aug 27, 2003 7:05 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+I don't think that this is true, because storing the buffer in ewram or iwram would mean the same as using page flipping and storing it in vram, the only advantage of having an buffer in non-video-ram is that you could use full resolution without seeing how the image slowly changes (no more flickering)
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+You seem to be confused about what page flipping is.
+<br/>
+<br/>
+In GBA's page-flipping setup, there are two screen buffers in video ram, and a flag specifying which one should displayed.  You typically use it by drawing into one buffer while the other buffer is being displayed, then waiting for vblank, switching buffers, and starting over again.
+<br/>
+<br/>
+One of the advantages to this scheme is that you can *avoid* flickering because the entire screen changes at once when the flag is flipped.
+<br/>
+<br/>
+By now you can probably tell that this is very different from having an off-screen buffer that is copied to the screen every frame.
+<br/>
+<br/>
+All that aside, the real benefit of having an EWRAM back-buffer is the ability to have flicker-free animation in 240x160 at 15-bit color.  The drawback is that it is very slow, and 60fps is a bit of a pipe dream.
+<br/>
+<br/>
+One more thing, and not to be rude:  Considering your eariler comments about the 'distance' that data has to be copied, it would be wise to consider phrasing further posts as questions rather than opinions or criticisms.  For example, "Is this true?" rather than, "I don't think this is true."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10134 - sajiimori - Wed Aug 27, 2003 7:23 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+Well I am under the impression that page flipping, will mean changing the contents of two screen buffers while with a double buffer, I only need to modify on buffer.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Page flipping is typically used when the whole screen is being redrawn every frame, such as in games like Doom.  At that point, the real question is whether you want higher speed with a loss in color or resolution (modes 4 and 5; Doom uses mode 4), or much slower speed with full color and resolution (mode 3 with EWRAM back buffer).
+<br/>
+<br/>
+When you have to redraw the whole screen either way, it obviously doesn't make much difference whether you're drawing to the same one every frame, or if you change destinations every frame.
+<br/>
+<br/>
+Are you doing the fire effect where every frame is based on the contents of the previous frame?  If so, you could always use page flipping (redrawing the whole screen every frame) and read from the on-screen buffer (current frame) to figure out what should be in the off-screen buffer (next frame).  This would probably be faster than the double-buffer method, if you're willing to drop to 8-bit color or lower resolution (8-bit should be fine if all you want is shades of red!).</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10135 - Lupin - Wed Aug 27, 2003 7:28 pm</h4>
+    <div class="postbody"><span class="postbody">hm, I'm wondering why you think I said anything wrong, because what you wrote there is exactly what I meant...
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">the only advantage of having an buffer in non-video-ram is that you could use full resolution without seeing how the image slowly changes (no more flickering) </td> </tr></table><span class="postbody">
+<br/>
+<br/>
+...means the same like saying (it's just expressed in an more simple way I think)....
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">One of the advantages to this scheme is that you can *avoid* flickering because the entire screen changes at once when the flag is flipped. 
+<br/>
+[...]
+<br/>
+All that aside, the real benefit of having an EWRAM back-buffer is the ability to have flicker-free animation in 240x160 at 15-bit color</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+It seemed that Omega thought he'd have to calculate the same image on the backbuffer as on the frontbuffer wich is of course not true, double buffering doesn't take extra performance or so (only for the page flip of course), it's just an way to avoid flickering.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10140 - Omega81 - Wed Aug 27, 2003 8:55 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sajiimori wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+Are you doing the fire effect where every frame is based on the contents of the previous frame? If so, you could always use page flipping (redrawing the whole screen every frame) and read from the on-screen buffer (current frame) to figure out what should be in the off-screen buffer (next frame). This would probably be faster than the double-buffer method, if you're willing to drop to 8-bit color or lower resolution (8-bit should be fine if all you want is shades of red!).</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+sajiimori could you please elaborate on the aove quote, my implmentation does the following
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+loop forever
+<br/>
+   *plot pixels at bottom of screen in double buffer
+<br/>
+   
+<br/>
+   *calculate the average of each pixel with it's surround pixels and plot 
+<br/>
+    result above current pixel in double buffer.
+<br/>
+<br/>
+   * copy buffer to VRAM after sync.
+<br/>
+end loop
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+I don't see how this can be done with page flipping with out first coping the current frame into the next frame and then modifing it. Any throughs?<br/>_________________<br/>Keep it real, keep it Free, Keep it GNU</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10143 - DekuTree64 - Wed Aug 27, 2003 11:09 pm</h4>
+    <div class="postbody"><span class="postbody">If I were you, I'd just do it in mode 4. Pretty much all the old fire demos were in 8-bit mode anyway, it lets you do some better fading by having the palette go from like yellow-orange-red-dark purple-black, instead of just averaging the 15-bit colors, which is slow and will give you the effect of just orange-to-black. It will be a little tricky with the 16-bit VRAM bus, but I don't think it would be too bad. Maybe have like a 4 byte cache, so you load in the first 4 pixels, process the first 3, store the first 2 of the processed ones back to VRAM, then load in 2 new ones to the right of that, process 2, store them, load 2 more, process/store, across the screen. Keep 2 or 3 of those caches going, depending on how many pixels up/down you're averaging with.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10165 - sajiimori - Thu Aug 28, 2003 7:46 pm</h4>
+    <div class="postbody"><span class="postbody">Lupin:
+<br/>
+<br/>
+It sounded to me like you were saying the advantage of double-buffering over page-flipping is that you get flicker-free animation.  That wouldn't really make sense, as they should both deliver flicker-free animation (smooth or not).
+<br/>
+<br/>
+It also sounded like you didn't realize that in a page-flipping scheme, you're writing to a buffer that's 2 frames old, but when you're using double-buffering, you're writing to a buffer that's 1 frame old ("storing the buffer in ewram or iwram would mean the same as using page flipping and storing it in vram").
+<br/>
+<br/>
+If that's not what you were saying, please disregard.  Either way, I probably shouldn't squabble over such things. :-)
+<br/>
+<br/>
+<br/>
+Omega81:
+<br/>
+<br/>
+I agree with DekuTree64 about using mode 4.
+<br/>
+<br/>
+The algorithm you posted can be translated to a page flipping scheme.
+<br/>
+<br/>
+When getting pixels to be averaged together, check their position relative to your current position.  If I'm not mistaken, pixels that are above the current position (but not to the right) have already been written to.
+<br/>
+<br/>
+If the pixel has already been written to, you get it from the off-screen page, otherwise you get it from the on-screen page.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

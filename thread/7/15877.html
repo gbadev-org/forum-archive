@@ -1,0 +1,422 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Function in IWRAM problem - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>C/C++ > Function in IWRAM problem</h2>
+<div id="posts">
+<div class="post">
+    <h4>#161087 - brave_orakio - Mon Jul 28, 2008 3:31 am</h4>
+    <div class="postbody"><span class="postbody">I have a very strange problem. I have a sprite sorting function that works when I run it from ROM and compiled to thumb or ARM code(naturally ARM code is slower from ROM). Now when I place the function in IWRAM, it breaks completely.
+<br/>
+<br/>
+    Now here's the strange part. If I remove the loop where the OAM buffer is sorted before being copied to OAM memory, it works. Of course the sprites aren't sorted because I removed that part. Here is the function that has problems: 
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+       OBJ_ATTR update[128]; //Global array
+<br/>
+       OAM_SORT oam_buffer[128] // Basically an array of OBJ_ATTR with                 //an extra u32 variable to indicate sorted position , Also Global 
+<br/>
+   int i,i2;
+<br/>
+   
+<br/>
+   i = index;
+<br/>
+   while(i)
+<br/>
+   {
+<br/>
+      i--;
+<br/>
+      i2 = i;
+<br/>
+      while(i2)
+<br/>
+      {
+<br/>
+         i2--;
+<br/>
+         if((oam_buffer[i].OAM.attr0&amp;255) &lt; (oam_buffer[i2].OAM.attr0&amp;255))
+<br/>
+            oam_buffer[i].position++;
+<br/>
+         else
+<br/>
+            oam_buffer[i2].position++;   
+<br/>
+      }
+<br/>
+      update[oam_buffer[i].position] = oam_buffer[i].OAM;
+<br/>
+   }
+<br/>
+   
+<br/>
+//   dma3_cpy16_Vblank(OAM_MEMORY,update ,index*4);
+<br/>
+   dma3_cpy32_vblank(OAM_MEMORY,update ,index*2);
+<br/>
+<br/>
+   index = 0;
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+The while loop is the problem there. If I remove it, the dma copy works fine. Can you guys give me a suggestion for the source of this error?<br/>_________________<br/>help me</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#161090 - brave_orakio - Mon Jul 28, 2008 3:52 am</h4>
+    <div class="postbody"><span class="postbody">Also some additional info
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+<br/>
+   OBJ_ATTR objInit;
+<br/>
+   objInit.attr0 = 0xDEAD;
+<br/>
+   objInit.attr1 = 0xDEAD;
+<br/>
+   objInit.attr2 = 0xDEAD;
+<br/>
+   objInit.fill = 0xDEAD;
+<br/>
+   index = MAX_SPRITES;
+<br/>
+   
+<br/>
+   while(index)
+<br/>
+   {
+<br/>
+      index--;
+<br/>
+      update[index] = objInit;
+<br/>
+   }
+<br/>
+   dma3_cpy32_vblank(OAM_MEMORY,update ,MAX_SPRITES*2);
+<br/>
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+The code above is a modified version of my sprite_init function. When I check the update array in memory it doesn't have the 0xDEAD value. Also the update array is  not succesfuly copied into OAM(At least I don't think so but I have no way to find out because the update array doesn't even have the 0xDEAD value)<br/>_________________<br/>help me</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#161091 - eKid - Mon Jul 28, 2008 4:17 am</h4>
+    <div class="postbody"><span class="postbody">What do you mean by "break completely"?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#161092 - brave_orakio - Mon Jul 28, 2008 4:24 am</h4>
+    <div class="postbody"><span class="postbody">None of the sprites showed up at all.<br/>_________________<br/>help me</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#161093 - Miked0801 - Mon Jul 28, 2008 5:09 am</h4>
+    <div class="postbody"><span class="postbody">I am going to guess that you are going out of bounds on your update or oam_buffer arrays (leaning towards update from glancing at code).  If the code lives in ROM, you are wiping out something else and you may not notice and the code could continue to work ok.  But, as the code now lives adjacent to the buffer (more than likely), an array overwrite will now wipe-out code causing your bug.
+<br/>
+<br/>
+I am suspicious of pre-decrementing your array in your bubble? sort routine. 
+<br/>
+<br/>
+FYI, if any programmer on my team had vars named index, i, and i2 in the same function, they would be in trouble.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#161095 - DiscoStew - Mon Jul 28, 2008 5:16 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>brave_orakio wrote:</b></span></td> </tr> <tr> <td class="quote">Of course the sprites aren't sorted because I removed that part.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+What do you mean by this? Are you saying that if you remove the while loop, the dma works, and you see the unsorted sprites, or do you mean in general by removing it, you have unsorted sprites. At first glance, it looked like you said the sprites show, but are unsorted, but now that I look at it again, I'm thinking otherwise.<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#161096 - brave_orakio - Mon Jul 28, 2008 5:39 am</h4>
+    <div class="postbody"><span class="postbody">To Miked0801:
+<br/>
+   Checked the IWRAM memory and as far as I can tell, the code goes first then the array next. Although I will look into that. It might be the problem.
+<br/>
+<br/>
+To DiscoStew:
+<br/>
+   Sorry if I didn't say that clearly, With the loop, nothing shows up at all. If I remove it, the sprites show up but it is unsorted as the loop does the sorting.<br/>_________________<br/>help me</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#161098 - DensitY - Mon Jul 28, 2008 6:54 am</h4>
+    <div class="postbody"><span class="postbody">Looks like your doing a bubblesort there. Although there are faster sorting algos, lets keep things simple.
+<br/>
+<br/>
+below is a _100% untested_ bubblesort implementation without the oddness.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+const int MAX_SPRITES = 128;
+<br/>
+int i,k;
+<br/>
+<br/>
+OBJ_ATTR temp;
+<br/>
+OBJ_ATTR update[128];
+<br/>
+for(i = 0; i &lt; MAX_SPRITES - 1; i++)
+<br/>
+{
+<br/>
+  for(k= 0;k &lt; MAX_SPRITES - 1 - i; k++)
+<br/>
+  {
+<br/>
+     if(update[k+1].attr0 &amp; 255 &lt; update[k].attr0 &amp; 255)
+<br/>
+     {
+<br/>
+        temp = update[k];
+<br/>
+        update[k] = update[k+1];
+<br/>
+        update[k+1] = temp;
+<br/>
+     }
+<br/>
+  }
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#161099 - brave_orakio - Mon Jul 28, 2008 7:17 am</h4>
+    <div class="postbody"><span class="postbody">Hi guys, an update on the problem.
+<br/>
+<br/>
+  I tried Miked0801 suggestion and made the loop go upwards instead of down. Still the same behavior. Tried putting the global arrays into EWRAM, and still the same behavior. I did confirm that the arrays went into EWRAM with the 0xDEAD test. 
+<br/>
+<br/>
+Anyway I'll try your suggestion DensitY<br/>_________________<br/>help me</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#161100 - DiscoStew - Mon Jul 28, 2008 8:30 am</h4>
+    <div class="postbody"><span class="postbody">just a few more questions.
+<br/>
+<br/>
+In the first section, I assume that "index" is the number of sprites that will be loaded into OAM. Have you made sure that the value of this is correct? Having some odd number can result in going out-of-bounds with your array, bring in values not meant for it, or overwriting values assigned to other aspects of the data/code. Also consider the limitation of only 128 entries, in case you happen to exceed it.
+<br/>
+<br/>
+Is the "position" value of the oam_buffer being reset every time prior to getting to the sort portion? By not resetting the positions to 0, they'll continue to increment into out-of-bounds areas. Same reading/writing of data/code explained above.
+<br/>
+<br/>
+Is there a reason for that last bit in the first section, with "index = 0", and is it altered when you go back through to the sort function?
+<br/>
+<br/>
+<br/>
+Other than that and not having a much larger portion of your project to examine the problem, I would say to revert all your stuff back to it's working form in ROM, and slowly move it to IWRAM, testing here and there each compile to see when the problem begins.
+<br/>
+<br/>
+EDIT:
+<br/>
+<br/>
+Another thought. You say that if you remove the sort loop, you see the sprites, but they are unsorted, but when you put back in the sort, they are gone. Now, I could be wrong on this, but for this case, wouldn't that mean that in some other part of your code, you are loading your sprite data to the "update" array rather than the "oam_buffer" array? What I mean is that with your sort, your data in "oam_buffer" gets sent to the proper places in "update", but should you not have that happen, "update" doesn't get updated, so how could you have your sprites visible unless you've got your data already in "update" in the first place by some other means?
+<br/>
+<br/>
+Understand where I'm coming from? Perhaps, you are placing the info into "update" instead of "oam_buffer", leaving "oam_buffer" empty, and in the sort, you are actually placing in *empty* data into "update", therefore, you get nothing. It's a guess, but hey, it got me thinking.<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#161101 - brave_orakio - Mon Jul 28, 2008 9:17 am</h4>
+    <div class="postbody"><span class="postbody">To DiscoStew:
+<br/>
+<br/>
+    Yes sir, you are correct about "index". It is basically the number of sprites to be loaded. Every time I put an OAM entry into the buffer, "index" increases. After the sorting loop and DMA copy to OAM memory is finished, I reset "index" back to 0 and the process begins again. 
+<br/>
+<br/>
+    As for the "position", I checked again and yes it does reset to 0 when I place it into the buffer.
+<br/>
+<br/>
+    The thing is, I removed all other existing functions and left only the sprites and sorting. When I compile as ROM, everything is ok. When I compile to IWRAM, again nothing appears. This is a very strange problem.<br/>_________________<br/>help me</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#161104 - silent_code - Mon Jul 28, 2008 10:17 am</h4>
+    <div class="postbody"><span class="postbody">This is just a vague guess:
+<br/>
+<br/>
+There is 256kB of work RAM (not counting on-chip RAM).
+<br/>
+This RAM includes the user stack.
+<br/>
+<br/>
+Now, depending on how much data and code you store, adding the loop may cause the code to exceed the limits of the work RAM. Depending on the implementation of the memory mapping (I don't know if it works that way) memory addresses may warp (like VRAM block addresses) beyond the limits of the RAM, thus overwriting other content at the beginning. My guess is also, that the stack is located at the end and growing towards lower addresses, so it may be overwritten.
+<br/>
+<br/>
+This is just a theory and I don't know about the technical detail. You would have to check for it yourself.
+<br/>
+<br/>
+Good luck!<br/>_________________<br/><span style="font-size: 9px; line-height: normal"><span style="text-decoration: underline"><span style="font-weight: bold"></span></span> July 5th 08: "<span style="font-weight: bold">Volumetric Shadow Demo</span>" 1.6.0 (final) source released
+<br/>
+June 5th 08: "<span style="font-weight: bold">Zombie NDS</span>" WIP released!
+<br/>
+It's all on my page, just click <span style="font-weight: bold">WWW</span> below.</span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#161137 - brave_orakio - Tue Jul 29, 2008 2:42 am</h4>
+    <div class="postbody"><span class="postbody">To silent_code: 
+<br/>
+    The code isn't too long so that may not be the problem. Also I tried doing the loop from 0 going upwards and still the same behavior.
+<br/>
+<br/>
+    Another symptom of the problem is that the "update" buffer isn't getting the data from the "oam_buffer" buffer. this part of the code
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+update[oam_buffer[i].position] = oam_buffer[i].OAM;
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+isn't changing the what's inside of the "update" buffer.<br/>_________________<br/>help me</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#161144 - brave_orakio - Tue Jul 29, 2008 5:43 am</h4>
+    <div class="postbody"><span class="postbody">I finally fixed it! although the fix does raise some questions. On my previous post I said that 
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+update[oam_buffer[i].position] = oam_buffer[i].OAM; 
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+So i changed it to
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+dma3_cpy32(&amp;update[oam_buffer[i].position], &amp;oam_buffer[i].OAM, 2);
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+technically the same but is this slower or faster than the previous method? Isn't it a bit slow to copy only 2 words using DMA(because of the start up time) or is it actually faster?
+<br/>
+<br/>
+And thanks to all who posted. I appreciate the effort from you guys! On a side note though, I didn't notice any performance enhancement from running the code from ROM or IWRAM. maybe my sorter is really inefficient?<br/>_________________<br/>help me</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#161163 - Miked0801 - Tue Jul 29, 2008 4:51 pm</h4>
+    <div class="postbody"><span class="postbody">The sorter is very inefficent - but it depends on how many entries you are sorting.  Less than 15 or so and you'll probably not notice much difference switching to a more efficient sort.
+<br/>
+<br/>
+The DMA call is VERY in-efficient in comparison to the assignment.  One is a single half-word assign.  One is a crapload of setup code to do next to nothing.  I am very suspicious of your code that your change makes any difference at all.  Perhaps you had a run-away DMA elsewhere and your using DMA here is reseting it?  Or perhaps just the added codesize for the DMA is re-aligning your code such that an array overwrite elsewhere isn't affecting you anymore.  When debugging, did you step through the code in assembler to make sure the opcodes weren't getting wacked?  Also, did you sepcifically watch the upload occur?
+<br/>
+<br/>
+Your solution raises too many questions.  You need to investigate it further.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#161168 - Dwedit - Tue Jul 29, 2008 5:28 pm</h4>
+    <div class="postbody"><span class="postbody">"in-efficient" and "inefficient" parse oppositely when I read them, so try to spell works correctly.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#161173 - Miked0801 - Tue Jul 29, 2008 6:21 pm</h4>
+    <div class="postbody"><span class="postbody">I'll make sure to work on my works :)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#161180 - silent_code - Tue Jul 29, 2008 8:40 pm</h4>
+    <div class="postbody"><span class="postbody">Well, if that function is the only thing you have in work RAM, then it should not be a problem, but if there are other things (like data fields! [arrays]) and routines there, too, then an overwrite seems totally possible.<br/>_________________<br/><span style="font-size: 9px; line-height: normal"><span style="text-decoration: underline"><span style="font-weight: bold"></span></span> July 5th 08: "<span style="font-weight: bold">Volumetric Shadow Demo</span>" 1.6.0 (final) source released
+<br/>
+June 5th 08: "<span style="font-weight: bold">Zombie NDS</span>" WIP released!
+<br/>
+It's all on my page, just click <span style="font-weight: bold">WWW</span> below.</span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#161187 - brave_orakio - Wed Jul 30, 2008 2:03 am</h4>
+    <div class="postbody"><span class="postbody">To Miked0801:
+<br/>
+     I'm only sorting 7 objects, so I guess either something is wrong with my sorting Function or something else is slowing down the whole thing! Unfortunately I have no idea how to debug using Programmer's Notepad 2(Is it even possible?)
+<br/>
+<br/>
+     Although the array overwrite is possible, I feel it is highly unlikely because I usually set my buffers and such to a fixed size of 128 and I changed my loops to start from 0 going up and I limit the loops to the number of objects which is currently 7.
+<br/>
+<br/>
+To silent_code:
+<br/>
+      I think the only things residing in IWRAM currently is the sorting function that I mentioned and the 2 buffers I use for sorting so an overwrite is possible but highly unlikely as I explained above.
+<br/>
+<br/>
+      One of my suspects that slow down the program though is the collision function. admittedly it is slow but I was hoping that I would see a significant increase in efficiency when I moved the sorting to IWRAM and then just optimize later on.
+<br/>
+<br/>
+     another suspect is this piece of code
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+while(REG_VCOUNT&lt;=160){}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I call this before the sorting function to synchronize by frame(VSYNC). Is this piece of code necessary? Do you guys actually use something like this? Because if I remove this, the program runs significantly faster though I have no idea if it is in sync because The only call that waits for VBLANK is my dma at vblank call.
+<br/>
+<br/>
+edit: I messed around with the code again and made another fix. I returned the DMA copy to
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+update[oam_buffer[i].position] = oam_buffer[i].OAM;
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+But I also declared both buffers to be volatile. Now it work again(Still at the same speed though). Apparently the compiler got smart on me. However the above questions still apply.<br/>_________________<br/>help me</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#161613 - brave_orakio - Thu Aug 07, 2008 8:23 am</h4>
+    <div class="postbody"><span class="postbody">Hi guys, a follow up to my previous question.
+<br/>
+<br/>
+     I read up on interrupts and since I was able to turn the OAM sorter into ARM code and place it into IWRAM succesfully, I worked then to put this function into VBLANK interupt. 
+<br/>
+<br/>
+     Now then, the problem is that it it flickers and sometimes there is this weird shadow effect(like a trailing image of the sprite) from time to time when the sprites move. The code for the sorter is of course the same as the one that I posted earlier.
+<br/>
+<br/>
+    Also another question is, now that I have the OAM sorter in VBLANK interrupt, do I still need this:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+while(REG_VCOUNT&lt;160){}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+in my main loop?<br/>_________________<br/>help me</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#161619 - Kyoufu Kawa - Thu Aug 07, 2008 8:05 pm</h4>
+    <div class="postbody"><span class="postbody"><span style="font-style: italic">Nobody</span> would need <span style="font-style: italic">that</span>! Any slightly sane compiler would optimize it right out of there! I'm not the right person to try and tell you how you <span style="font-style: italic">should</span> wait for VBlank though, no matter <span style="font-style: italic">where</span>.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#161631 - brave_orakio - Fri Aug 08, 2008 10:07 am</h4>
+    <div class="postbody"><span class="postbody">OK, so can anybody tell me what is the proper way to do to vsync? 
+<br/>
+<br/>
+       I'd like to hear what other guys do to vsync. Especially also what commercial games do to vsync?<br/>_________________<br/>help me</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#161639 - Kyoufu Kawa - Fri Aug 08, 2008 7:16 pm</h4>
+    <div class="postbody"><span class="postbody">Okay, I lied -- I for one use the <span style="font-style: italic">VBlankIntrWait</span> BIOS call.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

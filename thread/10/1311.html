@@ -1,0 +1,455 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Module player (Was: NeIMOD NMOD listings) - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Audio > Module player (Was: NeIMOD NMOD listings)</h2>
+<div id="posts">
+<div class="post">
+    <h4>#6581 - wizardgsz - Thu May 29, 2003 8:12 pm</h4>
+    <div class="postbody"><span class="postbody">Thank you very much, guys. Hi really greet everyone gave an answer to my previous post!
+<br/>
+<br/>
+Let me explain my request.
+<br/>
+<br/>
+I'm going to code my own XM-player and I'm searching for good references (ie. mod players and docs, GBA specific stuff and not - I found a great C=64 XM player yeeaah!).
+<br/>
+Today I've got an experimental player/mixer skeleton working (badly)... but how many troubles! :(
+<br/>
+I'm not searching for speed or assembly code, I'd like to fix myself the
+<br/>
+code I cut&amp;pasted - I'm going to describe how I got my GBA playing... again, badly;-)
+<br/>
+<br/>
+At first
+<br/>
+========
+<br/>
+At first I used various sources (mikmod and fmod docs mainly) handling
+<br/>
+modules playback routines filling a mono single buffer (GBA implementing
+<br/>
+details later) with songs being played at wrong rates/frequencies, FASTER AS I DECREMENT THE (RE)SAMPLING FREQ.
+<br/>
+My "sound culture" is really poor (as my english) and I soon realized I've
+<br/>
+to code it using double buffering techniques hoping it resolves my playback
+<br/>
+problem. Unfortunately I cannot set up it properly:(
+<br/>
+<br/>
+This is the preamble, so let's go with details.
+<br/>
+Ehm excuse me if I got laborious...
+<br/>
+<br/>
+GBA registers (DSound, timers, DMA)
+<br/>
+===================================
+<br/>
+I got sound so, likely, the sound registers setup is exact...
+<br/>
+I'm using Timer0 for DSound to count mixing freq as stated worldwide, I'm
+<br/>
+using also Timer1 to count mixing buffer overflows (interrupt), no VBlank
+<br/>
+IRQ method...
+<br/>
+<br/>
+* Timer1 at 0x10000 - the number of samples to play and enable it with irq
+<br/>
+generation and cascade from Timer 0
+<br/>
+<br/>
+* Timer0 enable for directsound at playback (resampling) frequency 0x10000 - (cpuFreq / playbackFreq)
+<br/>
+<br/>
+* DMA1 to DS-A FIFO (source inc, dest inc, start fifo, repeat, 32bit)
+<br/>
+<br/>
+* DMA2 to DS-B FIFO
+<br/>
+<br/>
+* On Timer1 interrupts (ie mixing buffer overflows)
+<br/>
+a- stop DMAs
+<br/>
+b- swap mixing buffers
+<br/>
+c- restart/reinit DMAs
+<br/>
+<br/>
+Everything should be ok as I read so many posts/listings doing it the same
+<br/>
+way but who knows;)
+<br/>
+<br/>
+The mod player
+<br/>
+==============
+<br/>
+And what about song module-handling? Probably I am just missing something here (while cut&amp;pasting from other source code).
+<br/>
+<br/>
+* Pattern playback
+<br/>
+The row/order/break/jump/loop handling taken from listings I mentioned above and should be exact.
+<br/>
+<br/>
+* Effects
+<br/>
+I don't handle any effect (except for pattern and tempo settings)
+<br/>
+<br/>
+* Tempo setup
+<br/>
+I use the following formula to compute samples per beat:
+<br/>
+(playbackFreq * 5) / (BPM * 2)
+<br/>
+ie.
+<br/>
+playbackFreq / (BPM * 2 / 5)
+<br/>
+but I do not reset any GBA register, shouldn't I (timer??)?
+<br/>
+<br/>
+* The worker / sound poll function
+<br/>
+This is were the song being mainly updated, frame-by-frame. The skeleton is the one you already should know, it mixes MIXBUFLEN samples at a time, in pseudo code:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+function Update()
+<br/>
+begin
+<br/>
+<br/>
+ u32 tickdata;
+<br/>
+ u32 samples_to_mix;
+<br/>
+<br/>
+ u32 numsamples = MIXBUFLEN;
+<br/>
+<br/>
+ // Set up buffers for the sound to be mixed into
+<br/>
+ s8 * left  = "MixerBufferLeft";
+<br/>
+ s8 * right = "MixerBufferRight";
+<br/>
+<br/>
+ // Keep looping until we've filled the buffer
+<br/>
+ tickdata = 0;
+<br/>
+ samples_to_mix = numsamples;
+<br/>
+<br/>
+ while ( samples_to_mix )
+<br/>
+ {
+<br/>
+  u32 thiscount;
+<br/>
+<br/>
+  // Only move on to the next tick if we finished mixing the last
+<br/>
+  if ( "PlayingSong"-&gt;mixer_samplesleft == 0 )
+<br/>
+  {
+<br/>
+   // general song pattern handling
+<br/>
+   // row/order
+<br/>
+   // tick0 and inbetween fx
+<br/>
+   "UpdateTick( PlayingSong )"
+<br/>
+<br/>
+   // Set the number of samples to mix in this chunk
+<br/>
+   "PlayingSong"-&gt;mixer_samplesleft =
+<br/>
+   "PlayingSong"-&gt;mixer_samplespertick;
+<br/>
+  }
+<br/>
+<br/>
+  // Ok, so we know that we gotta mix 'mixer_samplesleft'
+<br/>
+  // samples into this buffer, see how much room we actually got
+<br/>
+  thiscount = "PlayingSong"-&gt;mixer_samplesleft;
+<br/>
+  if ( thiscount &gt; samples_to_mix )
+<br/>
+    thiscount = samples_to_mix;
+<br/>
+<br/>
+  // Make a note that we've added this amount
+<br/>
+  "PlayingSong"-&gt;mixer_samplesleft -= thiscount;
+<br/>
+  samples_to_mix -= thiscount;
+<br/>
+<br/>
+  // Now mix it!
+<br/>
+  "Mix( &amp;left[ tickdata ], &amp;right[ tickdata ], thiscount )"
+<br/>
+  tickdata += thiscount;
+<br/>
+ }
+<br/>
+<br/>
+end function Update();
+<br/>
+<br/>
+<br/>
+<br/>
+// using 16.16 fixed point math (FRAC_BITS = 16)
+<br/>
+function Mix( s8 * left, s8 * right, u32 numsamples )
+<br/>
+begin
+<br/>
+<br/>
+ "clear numsamples bytes of left/right buffers"
+<br/>
+<br/>
+ // Loop through each channel and process note data
+<br/>
+ "for each channel"
+<br/>
+ {
+<br/>
+  u32 samples_to_mix;
+<br/>
+<br/>
+  // Set up for the mix loop
+<br/>
+  s8 * mixed = "left/right according to pan settings"
+<br/>
+<br/>
+  const s8 * sample = "sample data according to channel being mixed"
+<br/>
+  fixedpoint nLength = "16.16 sample length"
+<br/>
+  fixedpoint nLoopStart = "16.16 sample repeat offset"
+<br/>
+  fixedpoint nLoopLength = ...
+<br/>
+  fixedpoint nLoopEnd = ...
+<br/>
+<br/>
+  fixedpoint freq = freq[ channel ];
+<br/>
+  fixedpoint pos = start[ channel ];
+<br/>
+  fixedpoint deltapos = fixedpoint( freq / playbackFreq );
+<br/>
+  fixedpoint mixpos = 0;
+<br/>
+<br/>
+  // Make sure I'm actually playing something
+<br/>
+  // ...
+<br/>
+<br/>
+  samples_to_mix = numsamples;
+<br/>
+  while ( samples_to_mix )
+<br/>
+  {
+<br/>
+   u32 thiscount, i;
+<br/>
+<br/>
+   // If I'm a looping sample then I need to check
+<br/>
+   // if it's time to loop back. I also need to figure out
+<br/>
+   // how many samples I can mix before I need to loop again
+<br/>
+   // omissis...
+<br/>
+<br/>
+   // inner loop
+<br/>
+   for (i=thiscount; i!=0; i--)
+<br/>
+   {
+<br/>
+    // omitting volume handling...
+<br/>
+    mixed[ mixpos++ ] += sample[ pos &gt;&gt; FRAC_BITS ];
+<br/>
+    pos += deltapos;
+<br/>
+   }
+<br/>
+   // inner loop end
+<br/>
+<br/>
+  }
+<br/>
+  // Save current position
+<br/>
+  start[ channel ] = pos;
+<br/>
+ }
+<br/>
+<br/>
+end function Mix();
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+<br/>
+The tricky code, my doubts
+<br/>
+==========================
+<br/>
+Hopefully I wrote this piece of code avoiding omissions.
+<br/>
+I doubt the tempo settings are treated properly, I dread to think I should
+<br/>
+change some DSound/timer register while setting up new BMP values...
+<br/>
+The way I use the mixing buffers (MixerBufferLeft/Right above) is probably
+<br/>
+incorrect also, I reset pointers to them frame-by-frame within the "sound
+<br/>
+poll" function (fun Update()), is it the way I have to proceed?
+<br/>
+<br/>
+And now?
+<br/>
+========
+<br/>
+Thanks again to everybody, I'd really appreciate your help.
+<br/>
+Anyhow hear you soon, bye bye.</span><span class="gensmall"><br/><br/>Last edited by wizardgsz on Mon Jun 23, 2003 2:25 pm; edited 1 time in total</span></div>    
+</div>
+<div class="post">
+    <h4>#6602 - gb_feedback - Fri May 30, 2003 9:29 am</h4>
+    <div class="postbody"><span class="postbody">I was interested to see this as I am expecting to add mod capabilities to my player engine, in the near future. For reasons not to be gone into here I have made a midi player, which contains a mixer just like any other sound program.
+<br/>
+<br/>
+What I was going to suggest is that you look on my site, click on the Midi link at the LEFT of the page, and on this midi page scroll down to the bottom. In the yellow box is a simplified explanation of how I organise the buffers; further up the page is a description of how I made it slightly more complicated for better sound. This approach works well and is certainly not original, as tepples will no doubt tell you. But it saves using the second timer, and a lot of uncertainty.<br/>_________________<br/><a class="postlink" href="http://www.bookreader.co.uk/" target="_blank">http://www.bookreader.co.uk/</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#6613 - wizardgsz - Fri May 30, 2003 3:28 pm</h4>
+    <div class="postbody"><span class="postbody">Hi everybody
+<br/>
+<br/>
+Ok, I know already the method you mentioned but my problem is probably elsewhere.
+<br/>
+Thanks</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#6615 - gb_feedback - Fri May 30, 2003 4:25 pm</h4>
+    <div class="postbody"><span class="postbody">I've read your description through 4 times. At the moment I'm having difficulty understanding what you perceive your problem to be. I'll need to read it again slowly with a piece of paper to follow the detail, but first I was trying to know what you are trying to fix.
+<br/>
+<br/>
+You say you have sound - that's always a good start! Are you saying it's distorted, or the wrong rate, or just random noise? My approach would be to get one thing right at a time - what's the one thing which most bothers you?
+<br/>
+<br/>
+I only mentioned the buffer business because you seemed to query it yourself and it's the thing which caused me most problems.<br/>_________________<br/><a class="postlink" href="http://www.bookreader.co.uk/" target="_blank">http://www.bookreader.co.uk/</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#6686 - wizardgsz - Sun Jun 01, 2003 11:02 pm</h4>
+    <div class="postbody"><span class="postbody">I must thank you again for your time and your answers!
+<br/>
+Sorry you have to read my posts 4 times;)
+<br/>
+<br/>
+I'll certainly change my code and use the VBlank to swap the active mixing
+<br/>
+buffer, probably as soon as I bugfix my tempo (bpm/speed) setup so a module being tracked to play for X seconds will not play Y seconds in my player (Y &lt; X).
+<br/>
+<br/>
+I confirm I got sound, it isn't distorted or just random noise, it is the
+<br/>
+module notes being played (with so many PC listings/docs available I cannot miss it).
+<br/>
+I haven't got panning and volume settings so I'm just playing a single
+<br/>
+channel to the left and one to the right one.
+<br/>
+When using VisualBoyAdvance to save the wave while playing a module with no effects I got shorten wave I should have.
+<br/>
+<br/>
+Without double buffering techniques I also got different wave files using
+<br/>
+different mixing frequencies - this is gone introducing double buffering.
+<br/>
+Past, decreasing mixing freq I got faster waves, being played faster as I
+<br/>
+reduce the resampling/mixing freq.
+<br/>
+<br/>
+To recap
+<br/>
+========
+<br/>
+First trouble I'm trying to fix:
+<br/>
+when using VisualBoyAdvance to save the wave while playing a module with no effects I got shorten wave I should have. For example a module tracked for 52 seconds is played for about 45 secs.
+<br/>
+<br/>
+Second thought:
+<br/>
+I doubt the tempo settings are treated properly instead, I dread to think I
+<br/>
+should change some DSound/timer register while setting up new BPM values.
+<br/>
+<br/>
+Third thought:
+<br/>
+the way I use the mixing buffers (MixerBufferLeft/Right in my previous post) is probably incorrect also, I reset pointers to them frame-by-frame within the "sound poll" function (fun Update()), is it the way I have to proceed? Shouldn't I use some "circular" buffer?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#6721 - Quirky - Mon Jun 02, 2003 8:13 am</h4>
+    <div class="postbody"><span class="postbody"><span style="font-style: italic">First trouble I'm trying to fix: 
+<br/>
+when using VisualBoyAdvance to save the wave while playing a module with no effects I got shorten wave I should have. For example a module tracked for 52 seconds is played for about 45 secs. </span>
+<br/>
+<br/>
+Although I don't know much about GBA sound, I do know not to trust emulators 100%, especially on timing issues. The difference could be due to the speed of your computer making VBA run too fast. Have you tried running your code on hardware with an on screen clock to time the mod track? That would be a more accurate assesment of your timing code.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#6731 - wizardgsz - Mon Jun 02, 2003 11:48 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quirky wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+Although I don't know much about GBA sound, I do know not to trust emulators 100%, especially on timing issues. The difference could be due to the speed of your computer making VBA run too fast. Have you tried running your code on hardware with an on screen clock to time the mod track? That would be a more accurate assesment of your timing code.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Well, my k6-3 should be.. ehm, too slow:(
+<br/>
+I print also onscreen seconds/timer value while playing my song.
+<br/>
+Unfortunately I cannot test it on real hardware as I haven't got it.
+<br/>
+<br/>
+Thanks</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

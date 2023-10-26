@@ -1,0 +1,494 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>optimising a horizontal blank function - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>C/C++ > optimising a horizontal blank function</h2>
+<div id="posts">
+<div class="post">
+    <h4>#12050 - johnny_north - Tue Oct 28, 2003 5:02 am</h4>
+    <div class="postbody"><span class="postbody">Could someone suggest how I could futher optimize this function:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void hbl(){
+<br/>
+<br/>
+   static bool skipFlag = false;
+<br/>
+   static u16 passCnt = 0;
+<br/>
+<br/>
+   if(REG_VCOUNT &lt;115){
+<br/>
+      REG_WIN0H = (circle[cnectr]&lt;&lt;8| circle[cnectr+1]); 
+<br/>
+      cnectr+=2;
+<br/>
+      skipFlag = false;
+<br/>
+      return;
+<br/>
+   }
+<br/>
+   else if(REG_VCOUNT &lt;160){
+<br/>
+      cnectr-=2;
+<br/>
+      REG_WIN0H = (circle[cnectr]&lt;&lt;8| circle[cnectr+1]); 
+<br/>
+      return;
+<br/>
+   }
+<br/>
+   else if(!skipFlag){
+<br/>
+      skipFlag = true;
+<br/>
+      passCnt++;
+<br/>
+      cnectr = passCnt*232;
+<br/>
+      REG_WIN0H = (circle[cnectr]&lt;&lt;8| circle[cnectr+1]);
+<br/>
+      cnectr+=2;
+<br/>
+   }
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+Right now, it's compiled in ARM running from IWRAM
+<br/>
+cnectr (initialized to zero) is a global u16 used as an index into the circle[] array
+<br/>
+circle[] is a large u16 array of left and right window value pairs stored in rom
+<br/>
+232 is the number of l&amp;r window pairs needed to produce one frame of the spotlight (see below).
+<br/>
+optimization -O3
+<br/>
+<br/>
+This function is called for 60 frames and produces a shrinking spotlight effect similar to the Mario games. Currently, the effect produces some garbage horizontal lines (very minimaly) that have improved as it is optimised. It appears to run too slow from THUMB/rom and hangs the hardware, but I'd like for it not to be taking up IWRAM if possible. I'm not opposed to trying asm if necessary.
+<br/>
+<br/>
+Thanks.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12052 - Burton Radons - Tue Oct 28, 2003 7:05 am</h4>
+    <div class="postbody"><span class="postbody">REG_VCOUNT is being accessed twice because it's volatile, although stashing it in a local will only be helpful if it puts it in a register.
+<br/>
+<br/>
+circle should be made so that it can be accessed as a simple u16 and fed directly into REG_WIN0H.  cnectr should be made into a pointer instead of an index.  skipFlag shouldn't be necessary - service HBlank before VBlank!
+<br/>
+<br/>
+Doing all that cuts off 45% of the instructions; here's my modified copy.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+extern const u16 circle [];
+<br/>
+const u16 *cnectr;
+<br/>
+<br/>
+void hbl ()
+<br/>
+{
+<br/>
+   static u16 passCnt = 0;
+<br/>
+   u32 vcount = REG_VCOUNT;
+<br/>
+<br/>
+   if(vcount &lt;115)
+<br/>
+      REG_WIN0H = *cnectr++;
+<br/>
+   else if(vcount &lt;160)
+<br/>
+      REG_WIN0H = *--cnectr;
+<br/>
+   else if(vcount==160){
+<br/>
+      passCnt++;
+<br/>
+      cnectr = &amp;circle[passCnt*232];
+<br/>
+      REG_WIN0H = *cnectr++;
+<br/>
+   }
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Naturally, the 232 there should be changed to whatever's appropriate.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12053 - sajiimori - Tue Oct 28, 2003 7:15 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+      passCnt++; 
+<br/>
+      cnectr = &amp;circle[passCnt*232]; 
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+If passCnt isn't being used for anything else, would it be faster to avoid the multiplication?
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+      passCnt += 232; 
+<br/>
+      cnectr = &amp;circle[passCnt]; 
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12054 - DekuTree64 - Tue Oct 28, 2003 7:20 am</h4>
+    <div class="postbody"><span class="postbody">You could also make it even smaller if you just make a table of 160 WIN0H values and then just do 
+<br/>
+REG_WIN0H = table[REG_VCOUNT];
+<br/>
+in your interrupt.
+<br/>
+Then recalculate your table on VBlank to shrink the circle or whatever. It looks like you're using a bunch of precalculated tables for your circle right now, so if you're not sure how to do it dynamically, the easiest way is to use something like the Bresenham circle drawing algorithm, except don't draw pixels, just keep track of the smallest/largest x values for each scanline. Then those will be your window values. FOr any scanlines above/below the circle, just set the window size to 0, 0 so it doesn't show.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12055 - Touchstone - Tue Oct 28, 2003 10:19 am</h4>
+    <div class="postbody"><span class="postbody">You could break it up into three seperate functions, like this:</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+static bool skipFlag = false; 
+<br/>
+static u16 passCnt = 0; 
+<br/>
+<br/>
+void hbl0()
+<br/>
+{
+<br/>
+   REG_WIN0H = (circle[cnectr]&lt;&lt;8| circle[cnectr+1]); 
+<br/>
+   cnectr+=2; 
+<br/>
+   skipFlag = false; 
+<br/>
+<br/>
+   if(REG_VCOUNT == 114)
+<br/>
+      setHBLFunction(hbl1);
+<br/>
+}
+<br/>
+<br/>
+void hbl1()
+<br/>
+{
+<br/>
+   cnectr-=2; 
+<br/>
+   REG_WIN0H = (circle[cnectr]&lt;&lt;8| circle[cnectr+1]); 
+<br/>
+<br/>
+   if( REG_VCOUNT == 159)
+<br/>
+      setHBLFunction(hbl2);
+<br/>
+}
+<br/>
+<br/>
+void hbl2()
+<br/>
+{
+<br/>
+   if(!skipFlag)
+<br/>
+   { 
+<br/>
+      skipFlag = true; 
+<br/>
+      passCnt++; 
+<br/>
+      cnectr = passCnt*232; 
+<br/>
+      REG_WIN0H = (circle[cnectr]&lt;&lt;8| circle[cnectr+1]); 
+<br/>
+      cnectr+=2; 
+<br/>
+   }
+<br/>
+<br/>
+   if (REG_VCOUNT == 227)
+<br/>
+      setHBLFunction(hbl0);
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Something like that maybe? Atleast you get the idea of splitting it into seperate quicker functions instead of just having one slower.
+<br/>
+<br/>
+If you are having problem with the hardware registers being updated to late (i.e. when the line has already begun being rendered) you can make sure that the first thing each function do is to set the hardware register and then it process and makes ready for the next line.<br/>_________________<br/>You can't beat our meat</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12056 - tom - Tue Oct 28, 2003 10:47 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>DekuTree64 wrote:</b></span></td> </tr> <tr> <td class="quote">You could also make it even smaller if you just make a table of 160 WIN0H values and then just do 
+<br/>
+REG_WIN0H = table[REG_VCOUNT];
+<br/>
+in your interrupt.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+this will also allow you to use HDMA transfers instead of the horizontal blank interrupt.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12072 - johnny_north - Tue Oct 28, 2003 11:20 pm</h4>
+    <div class="postbody"><span class="postbody">Thanks everyone for the response. I?m especially intrigued with the HDMA ? I?ve never used it before.
+<br/>
+<br/>
+Implement like this?
+<br/>
+Set up DMA 3 with increment source (&amp;circle[]), fixed dest (REG_WIN0H), DMA repeat, 16 bit transfer type, DMA start timing on hblank, interrupt at the end of word?
+<br/>
+<br/>
+If I wanted to start the transfer on the last hidden scan line (so that the operation will affect scan line 0 first) do I set bit15 to enable the DMA in the second to last hblank?
+<br/>
+<br/>
+Do I clear bit15 on the 158th hblank?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12074 - DekuTree64 - Wed Oct 29, 2003 12:00 am</h4>
+    <div class="postbody"><span class="postbody">Yeah, DMA would be the fastest. You do have to reset it on VBlank though. First set DM3CNT to 0 to disable it (otherwise it won't work on hardware) then set DM3SAD back to the start of the table and start it up again. The DMA won't trigger during the VBlank, so you don't have to worry about that. And yes, the top scanline of the screen is a problem. Since HBlank occurrs at the end of the line, you actually need to offset your table entries by one, so the first entry is the WIN0H for the second scanlinem second entry for third scanline, and last entry (159) for scanline 0, so it sets it up for the next frame at the end of the current frame.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12077 - johnny_north - Wed Oct 29, 2003 1:39 am</h4>
+    <div class="postbody"><span class="postbody">Ok, I want to change my const circle dec/def so that I can reinterpret the pairs of u8s as u16s and skip the orring:
+<br/>
+<br/>
+I change
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">const u16 circle[]={....</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+to 
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">const u8 circle[]={....</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+the compiler wont let me make the following assignment: 
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">static const u16 *cnectr = const_cast&lt;u16*&gt;circle;</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+circle is now a pointer to const u16 data and cnectr is a pointer to const u16 data. What's the correct way to do this?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12080 - tepples - Wed Oct 29, 2003 2:50 am</h4>
+    <div class="postbody"><span class="postbody">If "the compiler won't let [you] make" an assignment, what error does g++ emit? I can't suggest a solution without a verbatim copy of the error message.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12081 - johnny_north - Wed Oct 29, 2003 3:14 am</h4>
+    <div class="postbody"><span class="postbody">The compiler was complaining of a parse error before the ";" on the line:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">static const u16 *cnectr = const_cast&lt;u16*&gt;circle;</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+This works:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">static const u16 *cnectr = (const u16*)circle;</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+But I got the impression that the first was favored and the second depreciated in the current standard. I assume I'm goofing the sytax somehow.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12082 - tepples - Wed Oct 29, 2003 3:24 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>johnny_north wrote:</b></span></td> </tr> <tr> <td class="quote">The compiler was complaining of a parse error before the ";"</td> </tr></table><span class="postbody">
+<br/>
+In that case, it appears you need to <a class="postlink" href="http://www.adtmag.com/joop/crarticle.asp?ID=1550" target="_blank">surround the argument with parentheses</a>:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">static const u16 *cnectr = const_cast&lt;u16*&gt;(circle);</td> </tr></table><span class="postbody">
+<br/>
+Think of const_cast as a template function.
+<br/>
+<br/>
+But I don't think you need the const_cast here; <a class="postlink" href="http://www.acm.org/crossroads/xrds3-1/ovp3-1.html" target="_blank">const_cast is for <span style="font-style: italic">removing</span> constness</a>. C++ <span style="font-style: italic">adds</span> constness wherever implied. Use static_cast instead, and again, you need the parentheses:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">static const u16 *cnectr = static_cast&lt;u16*&gt;(circle);</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Don't use dynamic_cast if you can avoid it, as dynamic_cast will trigger run-time type information (RTTI) to be included in your program, which slows things down.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12083 - Burton Radons - Wed Oct 29, 2003 3:25 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">static const u16 *cnectr = const_cast&lt;u16*&gt;(circle);</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+It's a function, rather than a syntax primitive like a C cast.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12086 - johnny_north - Wed Oct 29, 2003 4:12 am</h4>
+    <div class="postbody"><span class="postbody">Thanks for the correction guys and for the link. Now when I compile this with the correct syntax:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">static const u16 *cnectr = const_cast&lt;u16*&gt;(circle);</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I get the error
+<br/>
+invalid static_cast from type `const unsigned char[27840]' to type 
+<br/>
+   `u16*'
+<br/>
+<br/>
+I was doing this to save myself some work by trying to get this:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">const u8 circle[] = {0, 209, 1, 208, 2, 207....</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+to be behave like:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">const u16 circle[] = {0&lt;&lt;8|209, 1&lt;&lt;8|208, 2&lt;&lt;8|207...</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+instead, I think I'm getting this behavior as the window seems to be turned inside out:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">const u16 circle[] = {209&lt;&lt;|0, 208&lt;&lt;8|1, 207&lt;&lt;|2...</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Also, for those wanting to try this at home, I also observed that
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">else if(vcount==160){ </td> </tr></table><span class="postbody">
+<br/>
+<br/>
+doesn't seem to work for me if I have the vblank interrupt turned on.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12087 - tepples - Wed Oct 29, 2003 4:24 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>johnny_north wrote:</b></span></td> </tr> <tr> <td class="quote">Now when I compile this with the correct syntax:
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">static const u16 *cnectr = const_cast&lt;u16*&gt;(circle);</td> </tr></table><span class="postbody">
+<br/>
+I get the error
+<br/>
+invalid static_cast from type `const unsigned char[27840]' to type `u16*'</span></td> </tr></table><span class="postbody">
+<br/>
+You may need to use a reinterpret_cast instead of a static_cast. As I understand it, a static_cast lets the compiler throw an error for anything but a cast to a class's parent, but a reinterpret_cast has almost exactly the same semantics as a C style cast.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">instead, I think I'm getting this behavior as the window seems to be turned inside out:
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">const u16 circle[] = {209&lt;&lt;|0, 208&lt;&lt;8|1, 207&lt;&lt;|2...</td> </tr></table><span class="postbody">
+<br/>
+</span></td> </tr></table><span class="postbody">
+<br/>
+There are two things that could screw you up:<ul><li>The GBA's ARM7TDMI processor is little-endian, which means values are stored with the least significant byte first; 0x12345678 is 0x78 0x56 0x34 0x12.</li><li>The GBA's video chip expects the <span style="font-style: italic">right</span> side of the window in the least significant byte.</li></ul>Therefore, put the right side of the window first.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">else if(vcount==160){ </td> </tr></table><span class="postbody">
+<br/>
+doesn't seem to work for me if I have the vblank interrupt turned on.</span></td> </tr></table><span class="postbody">
+<br/>
+Probably means your vblank ISR runs longer than a scanline. This isn't always a bad thing; some NES games, such as <span style="font-style: italic">Super Mario Bros.</span>, run entirely in a vblank ISR.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12092 - sajiimori - Wed Oct 29, 2003 7:45 am</h4>
+    <div class="postbody"><span class="postbody">Aren't you guys forgetting that the array is declared const, and thus stored in ROM, so all discussions of const casting and whatnot are pointless?
+<br/>
+<br/>
+BTW tepples, how the heck do you know so much about the implementation of all these console games?  It's interesting stuff.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12097 - tom - Wed Oct 29, 2003 1:08 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>DekuTree64 wrote:</b></span></td> </tr> <tr> <td class="quote">Since HBlank occurrs at the end of the line, you actually need to offset your table entries by one, so the first entry is the WIN0H for the second scanlinem second entry for third scanline, and last entry (159) for scanline 0, so it sets it up for the next frame at the end of the current frame.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Interesting, I never thought about doing it this way =)
+<br/>
+I usually set the stuff for the first scanline manually (during vblank, where i set up the hdma transfer). Simple and works fine.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12099 - tepples - Wed Oct 29, 2003 4:08 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sajiimori wrote:</b></span></td> </tr> <tr> <td class="quote">Aren't you guys forgetting that the array is declared const, and thus stored in ROM, so all discussions of const casting and whatnot are pointless?</td> </tr></table><span class="postbody">
+<br/>
+When feasible, I try to implement C or C++ programs on one platform such that a port to another platform is straightforward, and I encourage others to make similar design choices.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">BTW tepples, how the heck do you know so much about the implementation of all these console games?  It's interesting stuff.</td> </tr></table><span class="postbody">
+<br/>
+I helped in a disassembly project that in effect produced the source code for <span style="font-style: italic">Super Mario Bros.</span> I also traced a few NES games in nesticle, the old emulator that was decent for its time but which can be defeated by <a class="postlink" href="http://everything2.com/?node=nesticle" target="_blank">four lines of assembly code</a>. (I now use primarily FCE Ultra to test NES programs.)
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tom wrote:</b></span></td> </tr> <tr> <td class="quote">I usually set the stuff for the first scanline manually (during vblank, where i set up the hdma transfer). Simple and works fine.</td> </tr></table><span class="postbody">
+<br/>
+I used the method you describe in <span style="font-style: italic">TOD</span>. Unlike DekuTree's "put scanline 0 at the end of the array" method, the "update scanline 0 in vblank" method avoids a one-frame delay of scanline 0's data.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12102 - DekuTree64 - Wed Oct 29, 2003 5:56 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote">I used the method you describe in <span style="font-style: italic">TOD</span>. Unlike DekuTree's "put scanline 0 at the end of the array" method, the "update scanline 0 in vblank" method avoids a one-frame delay of scanline 0's data.</td> </tr></table><span class="postbody">
+<br/>
+Yeah, that's how I did it before too. The line 0 at the end of the table trick was just something I came up with a while back, but haven't actually had a chance to use yet. I guess it would only work for something that will stay the same every frame (good call, Tepples^_^). But still, the first entry to be copied by the DMA should be for the second scanline. 
+<br/>
+Also, about the window being inverted, the upper byte is the left side and the lower byte is the right side. Using a u8 table so you can access the left/right edges individually is a good idea if you go with the dynamic circle drawing function idea, since that will make checking if the current pixels of the circle are farther left/right than the current ones stored for each scanline easier.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

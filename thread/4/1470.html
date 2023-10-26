@@ -1,0 +1,404 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Adding Neimod to Project - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > Adding Neimod to Project</h2>
+<div id="posts">
+<div class="post">
+    <h4>#7392 - einhaender - Mon Jun 16, 2003 10:29 pm</h4>
+    <div class="postbody"><span class="postbody">Hi all,
+<br/>
+iam having a little difficulties to add sound support with the Neimod player to my project. Heres what I did so far. First I compiled one of the gcc examples using this makefile:
+<br/>
+<br/>
+ASFLAGS	=	-mthumb-interwork	-marm7tdmi
+<br/>
+all:	nmod.o
+<br/>
+nmod.o	:	nmod.s
+<br/>
+	as	$(ASFLAGS)	-o	nmod.o	nmod.s
+<br/>
+<br/>
+<br/>
+Then Iam adding nmod.o to my project using this makefile:
+<br/>
+<br/>
+LIBS	=	neimod/nmod.o
+<br/>
+OBJECTS	=	myfile.c
+<br/>
+CC	=	arm-agb-elf-gcc
+<br/>
+LDFLAGS	=	-nostartfiles	-nostdlib
+<br/>
+OBJDUMP	=	arm-agb-elf-objdump
+<br/>
+CFLAGS	=	-Wall
+<br/>
+all	:	myfile.gba
+<br/>
+myfile.gba	:	main.elf
+<br/>
+	arm-agb-elf-objcopy	-O	binary	main.elf	myfile.gba
+<br/>
+main.elf:	$(OBJECTS)
+<br/>
+	$(CC)	-mthumb-interwork	-o	main.elf	$(OBJECTS)	$(LIBS)	-lgcc	-lm
+<br/>
+.c.o:	$&lt;
+<br/>
+	$(CC)	$(CSFLAGS)	-c	-o	$@	$&lt;
+<br/>
+<br/>
+<br/>
+So far so good, but now inside my main function in myfile.c I want to start
+<br/>
+and stop a module, i assume by using the same code as in the main.cpp from the Neimod example:
+<br/>
+<br/>
+  NMOD_Play( (u32)(&amp;BIN(module)) );
+<br/>
+  NMOD_Stop()
+<br/>
+<br/>
+However, &amp;BIN(module) in the above code should be pointing to a memory location where a binary file (my module) has been loaded.
+<br/>
+How can I load the .bin into memory and how can I create a .bin from a .mod in the first place?
+<br/>
+Thanks in advance</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7404 - Quirky - Tue Jun 17, 2003 7:55 am</h4>
+    <div class="postbody"><span class="postbody">I used this bit of code in a file called sound.c :
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+extern unsigned long int  _binary_theme_mod_start[];
+<br/>
+<br/>
+void PlaySong( .... ) {
+<br/>
+  NMOD_Play( (u32)_binary_theme_mod_start );
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+The _binary_theme_mod_start comes from the fact that I have a mod file called theme.mod - which I use bin2o to convert to an .o file. My conversion step looks like this:
+<br/>
+<br/>
+bin2o .rodata theme.mod theme.o
+<br/>
+<br/>
+bin2o.bat comes with devkit advance, and basically uses objcopy to convert the binary mod file to a gcc linkable .o file. I link that .o into the project and it all works a treat. Or it did; I recently switched over to Krawall, as the nmod licence freeness for homebrew stuff is under some doubt since it was added to Catapult. Plus Krawall can be used for sound fx.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7407 - einhaender - Tue Jun 17, 2003 11:41 am</h4>
+    <div class="postbody"><span class="postbody">Ok I did this. With bin2o I get awarning like:
+<br/>
+objcopy: Warning: Output file cannot represent architecture UNKNOWN!
+<br/>
+which I can probably ignore.
+<br/>
+<br/>
+In the next step I added module.o into my makefile from above:
+<br/>
+LIBS	=	neimod/nmod.o	module.o
+<br/>
+Unfortunately now I get a: 
+<br/>
+module.o does not support interworking, whereas main.elf does
+<br/>
+warning, even tho I have the -mthumb-interworking option in the above makefile, strange.
+<br/>
+<br/>
+<br/>
+Now if I add the code snipped you gave me:
+<br/>
+<br/>
+extern unsigned long int  _binary_theme_mod_start[]; 
+<br/>
+<br/>
+void PlaySong( .... ) { 
+<br/>
+  NMOD_Play( (u32)_binary_theme_mod_start ); 
+<br/>
+} 
+<br/>
+<br/>
+into myfile.c and call PlaySong() within my main method, the game hangs on the emulator, right after it loaded. If I comment out the PlaySong() statement it works properly. Any ideas?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7408 - Quirky - Tue Jun 17, 2003 11:52 am</h4>
+    <div class="postbody"><span class="postbody">You didn't copy that literally did you? And leave the dots in and everything :p That was just a "I have some arguments here and do other stuff" sort of thing. The actual code I use is:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+void PlaySong(unsigned char nSong) {
+<br/>
+  NMOD_SetMasterVol(64,0);
+<br/>
+  NMOD_SetMasterVol(64,1);
+<br/>
+  NMOD_SetMasterVol(64,2);
+<br/>
+  NMOD_SetMasterVol(64,3);
+<br/>
+  unsigned long int regs = REG_IE;
+<br/>
+  if (nSong == 0) {
+<br/>
+    NMOD_Play( (u32)_binary_theme_mod_start );
+<br/>
+  } else {
+<br/>
+      // play another mod
+<br/>
+  }
+<br/>
+  REG_IE |= regs;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+You need to make a copy of the interrupt registers as nmod blitzs them otherwise.
+<br/>
+<br/>
+And you need the interrupt table to look a little like this (with any other interrupts you fancy added on):
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+//IntrTable for crt0
+<br/>
+void (*IntrTable[])() = {
+<br/>
+   VblankIntr, // v-blank
+<br/>
+   0, // h-blank
+<br/>
+   0, // vcount
+<br/>
+   0, // timer0
+<br/>
+   NMOD_Timer1iRQ, // timer1
+<br/>
+   0, // timer2
+<br/>
+   0, // timer3
+<br/>
+   0, // serial
+<br/>
+   0, // dma0
+<br/>
+   0, // dma1
+<br/>
+   0, // dma2
+<br/>
+   0, // dma3
+<br/>
+   0, // key
+<br/>
+   0  // cart
+<br/>
+};
+<br/>
+<br/>
+  // set up interupts like this in main()
+<br/>
+  REG_IME = 0x00; // interrupts off
+<br/>
+  REG_IE = INT_VBLANK;       // we want vblank interupts
+<br/>
+  REG_DISPSTAT = BIT03;     // switch on vblank intrpt
+<br/>
+  REG_IME = 0x1;        // interrupts on
+<br/>
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+And make sure you have the correct multiple-interrupts-at-once settings in crt0.s (make sure ".equ __MultipleInterrupts, 1" is not commented out)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7409 - einhaender - Tue Jun 17, 2003 12:07 pm</h4>
+    <div class="postbody"><span class="postbody">Holy moly, what is crt0.s ?
+<br/>
+Ive seen it with Krawall but I dont see this file being used from the Neimod examples nor is it in my project.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7411 - Quirky - Tue Jun 17, 2003 12:34 pm</h4>
+    <div class="postbody"><span class="postbody">crt0.s is the start up script. You can download it from devrs.com, or it comes with devkitadvance. I used the one from krawall with nmod, as it already has the modifications needed so that nmod's timer 1 update interrupt is never itself interrrupted.
+<br/>
+<br/>
+Your best bet is to see if you can get Krawall working first, I think. It's similar to nmod in all but function names, but has a lot more documentation. Then if you *really* must use nmod, you can easily swap between the two later.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7460 - einhaender - Wed Jun 18, 2003 9:41 am</h4>
+    <div class="postbody"><span class="postbody">Wow, I was able to set up Krawall in my project, nice. However I have difficulties using .xm files, or better the Converter tool gives me a error message with the .xm.
+<br/>
+<br/>
+Anyways, I'd really love to try out Neimod too. How exactly can I adapt Neimod to use the crt0.s that comes with Krawall? In the compile process I cant just add it or I get compile errors.
+<br/>
+Also with Krawall i had includes like:
+<br/>
+<br/>
+#include "krawall.h"
+<br/>
+#include "mtypes.h"
+<br/>
+#include "modules/modules.h"
+<br/>
+#include "modules/samples.h"
+<br/>
+<br/>
+with Neimod you would use:
+<br/>
+#include "neimod/nmodgcc.h"
+<br/>
+#include "neimod/res.h"
+<br/>
+<br/>
+instead? 
+<br/>
+<br/>
+In my main method the first I did was setting the
+<br/>
+interrupts:
+<br/>
+DISPCNT = 4 | ( 1 &lt;&lt; 10 );
+<br/>
+INT_ME = 1;					
+<br/>
+INT_IE |= ( 1 &lt;&lt; 13 ); // cart-remove-interrupt (crt0)
+<br/>
+WSCNT = ( 5 &lt;&lt; 2 ) | ( 1 &lt;&lt; 14 );	// set rom-timing
+<br/>
+<br/>
+can I keep this?
+<br/>
+Then to actually start playing:
+<br/>
+<br/>
+kragInit( KRAG_INIT_STEREO );			
+<br/>
+krapPlay( &amp;mod_bla, KRAP_MODE_LOOP, 0 );
+<br/>
+<br/>
+this will change to:
+<br/>
+NMOD_Play( (u32)(&amp;BIN(mod_bla)) );
+<br/>
+no init needed.
+<br/>
+<br/>
+in the while(1) loop I used
+<br/>
+kramWorker(); but what is it with Neimod?
+<br/>
+<br/>
+Any help is appriciated, thanks.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7463 - Quirky - Wed Jun 18, 2003 9:55 am</h4>
+    <div class="postbody"><span class="postbody">The free version of Krawall has had .xm support removed, maybe that's the error?
+<br/>
+<br/>
+As for the rest, that all sounds pretty much like what I have done, but in reverse (i.e. I started out with nmod and then moved to Krawall when I already had nmod working) 
+<br/>
+<br/>
+kramWorker doesn't have an nmod equivalent, just NMOD_Timer1iRQ on the timer 1 interrupt. To keep your other interrupts, you'll have to store REG_IE before calling NMOD_Play and then replace them afterwards as I guess Play() does the equivalent of a REG_IE = TIMER_1 as opposed to REG_IE |= TIMER_1. 
+<br/>
+<br/>
+To use the Krawall crt0.s with nmod, just link in the crt0.o that you already compiled. No other changes needed, it's just that the docs that came with nmod recommended doing the change, but without knowing asm it's a bit tricky and as it's already there in kw, may as well use it.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7526 - einhaender - Thu Jun 19, 2003 10:09 am</h4>
+    <div class="postbody"><span class="postbody">Now I got Neimod running. Thanks for all your support Quirky.
+<br/>
+I wonder which Player uses less memory, Neimod or Krawall.
+<br/>
+Anyway setting up Codewaves is next :)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7617 - wizardgsz - Sat Jun 21, 2003 12:56 pm</h4>
+    <div class="postbody"><span class="postbody">To set up NMOD I used the same Krawall example framework (plus Quirky tips) that is:
+<br/>
+<br/>
+* lnkscript
+<br/>
+* crt0.s
+<br/>
+* Makefile (just a short edit to add the nmod.s source code)
+<br/>
+<br/>
+The Krawall example main.c can be also used with a little effort and 4 easy steps.
+<br/>
+<br/>
+1) The void (*IntrTable[])() has to be edited (NMOD_Timer1iRQ substites kradInterrupt timer-1 handler).
+<br/>
+<br/>
+2) Following useful Quirky tips just remove the kragInit and krapPlay with the NMOD setup code
+<br/>
+<br/>
+  NMOD_SetMasterVol(64,0);
+<br/>
+  NMOD_SetMasterVol(64,1);
+<br/>
+  NMOD_SetMasterVol(64,2);
+<br/>
+  NMOD_SetMasterVol(64,3);
+<br/>
+<br/>
+  NMOD_Play( (u32)module );
+<br/>
+<br/>
+3) Remove the kram function-calls within the while(true) loop as you don't need them.
+<br/>
+NMOD worker is called while executing its timer-1 interrupt handler!
+<br/>
+<br/>
+4) Before compiling your code remember to add the standard GBA machine type definitions (s8, u8 and so on):
+<br/>
+<br/>
+typedef unsigned char	u8;
+<br/>
+typedef unsigned short	u16;
+<br/>
+typedef unsigned long	u32;
+<br/>
+<br/>
+typedef signed char		s8;
+<br/>
+typedef signed short	s16;
+<br/>
+typedef signed long		s32;
+<br/>
+<br/>
+<br/>
+then #include your NMOD header file, and (maybe) defines both #pragma long_calls and your module symbol (extern const unsigned char module[];).
+<br/>
+<br/>
+Et voila, now you can build your ROM, burn and launch it!<br/>_________________<br/><a href="http://www.geocities.com/gabriele_scibilia/" target="_blank">http://www.geocities.com/gabriele_scibilia/</a></span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

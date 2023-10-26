@@ -1,0 +1,243 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>A basic ASM thing. - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>ASM > A basic ASM thing.</h2>
+<div id="posts">
+<div class="post">
+    <h4>#36 - Lord Graga - Wed Jan 01, 2003 4:04 pm</h4>
+    <div class="postbody"><span class="postbody">I am making a small ASM program that deletes the SRAM completely (fills it with FF's).
+<br/>
+I have made the code in C, and tried to translate it into ASM, but with no luck...
+<br/>
+Here is the C code:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+void AGBMain (void)
+<br/>
+{
+<br/>
+   int i;
+<br/>
+   for(i=0;i&lt;32768;i++)*(unsigned char*)(0x0e000000 + i) = 0xFF;
+<br/>
+   *(volatile unsigned  long*)0x4000000 = (0x3|0x400);
+<br/>
+   while(1);
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Now i need a good translation in ASM...can you guys help me and explain it? as far as i understand there are no real loop stuff in ASM...but i think i am wrong...
+<br/>
+Thanks in Advanve.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#37 - DekuTree64 - Wed Jan 01, 2003 5:57 pm</h4>
+    <div class="postbody"><span class="postbody">Try 
+<br/>
+asm volatile("
+<br/>
+   mov r0, #0xe000000
+<br/>
+   mov r1, #32768   @careful, you can only MOV numbers that can be created by an 8-bit number and a shift
+<br/>
+   mov r2, #0xff
+<br/>
+sram_loop:
+<br/>
+   subs r1, r1, #1   @pre-decrement and set processor flags because we started at 32768, and the highest byte we'll store is at 32767
+<br/>
+   strb r2, [r0, r1]
+<br/>
+   bne sram_loop   @if r1 - 1 was not equal to 0
+<br/>
+"
+<br/>
+:
+<br/>
+:
+<br/>
+: "r0", "r1", "r2"
+<br/>
+);
+<br/>
+<br/>
+I haven't actually tested that, but it should work. That's in ARM, so make sure it's compiled that way. I've never used THUMB ASM myself, but I think it would pretty similar.sram_loop</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#38 - Lord Graga - Wed Jan 01, 2003 6:31 pm</h4>
+    <div class="postbody"><span class="postbody">It works, thank you :D</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#89 - jeff - Thu Jan 02, 2003 5:47 pm</h4>
+    <div class="postbody"><span class="postbody">Another method would be to use DMAs if you need this to be fast:
+<br/>
+<br/>
+mvn r0,#0 ; r0 = 0xFFFFFFFF
+<br/>
+str r0,[sp,#-4]! ; Push r0 onto hardware stack
+<br/>
+<br/>
+; Transfer using DMA 3
+<br/>
+mov r1,#0x4000000
+<br/>
+str sp,[r1,#0xD4]
+<br/>
+mov r2,#0xE000000
+<br/>
+str r2,[r1,#0xD8]
+<br/>
+mov r2,#0x85000000
+<br/>
+add r2,r2,#0x2000 ; 32K
+<br/>
+str r2,[r1,#0xDC]
+<br/>
+<br/>
+; Transfer done
+<br/>
+add sp,sp,#4 ; Pop 0xFFFFFFFF off the stack
+<br/>
+<br/>
+<br/>
+HTH,
+<br/>
+Jeff</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#91 - Costis - Thu Jan 02, 2003 5:52 pm</h4>
+    <div class="postbody"><span class="postbody">Hi,
+<br/>
+<br/>
+DMA won't work for what he wants because it doesn't have 8-bit bus witdh transfers, only 16 and 32 bit. The SRAM cartridge bus' width is 8-bits, so therefore DMA can't be used to copy information to it.
+<br/>
+<br/>
+Costis</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#100 - jeff - Thu Jan 02, 2003 7:17 pm</h4>
+    <div class="postbody"><span class="postbody">Ack, forgot that... :)
+<br/>
+<br/>
+My bad,
+<br/>
+<br/>
+Jeff</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#172 - sgeos - Sat Jan 04, 2003 8:40 am</h4>
+    <div class="postbody"><span class="postbody">This worked for me:
+<br/>
+<br/>
+ldr r2,=0x8000
+<br/>
+ldr r1,=0x0E000000
+<br/>
+ldr r0,=0xFF
+<br/>
+sramlop:
+<br/>
+  subs r2,r2,1
+<br/>
+  strb r0,[r1, r2]
+<br/>
+bne sramlop
+<br/>
+<br/>
+I need to go to sleep (parents).  Does anyone mind doing my homework for me?  I need to push r14 onto the stack because I'm doing lots of nested subroutine calls.  What lines do I use to push and pop it?
+<br/>
+<br/>
+bl subroutine
+<br/>
+endless:
+<br/>
+b endless
+<br/>
+<br/>
+subroutine:
+<br/>
+  ; push r14
+<br/>
+  bl subtank
+<br/>
+  bl subtank
+<br/>
+  bl subtank
+<br/>
+  ; do stuff
+<br/>
+  ; pop r14
+<br/>
+mov r15,r14
+<br/>
+<br/>
+subtank:
+<br/>
+  ; push r14
+<br/>
+  bl somethingelse
+<br/>
+  ; do stuff
+<br/>
+  ; pop r14
+<br/>
+mov r15,r14
+<br/>
+<br/>
+somethingelse:
+<br/>
+  ; no more subroutines!
+<br/>
+  ; do something else
+<br/>
+mov r15,r14
+<br/>
+<br/>
+-Brendan</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#438 - pulstar_3 - Tue Jan 07, 2003 6:36 pm</h4>
+    <div class="postbody"><span class="postbody">Okay if you are in ARM mode, you will need to use this code,
+<br/>
+<br/>
+str r13!,(register to push)
+<br/>
+<br/>
+to pop
+<br/>
+ldr r13!,(register to pop the value into).
+<br/>
+<br/>
+To do multiple register use something like this,
+<br/>
+<br/>
+stmfd r13!,{r0-r1} to push and ldmfd r13!,{r0-r1}. This will push and pop r0 and r1 onto the stack. Hope this helped.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#677 - sgeos - Thu Jan 09, 2003 6:23 pm</h4>
+    <div class="postbody"><span class="postbody">Thanks a lot!  Thats exactly what I was looking for!
+<br/>
+<br/>
+-Brendan</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

@@ -1,0 +1,125 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Building a mixer for the DS - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Building a mixer for the DS</h2>
+<div id="posts">
+<div class="post">
+    <h4>#45725 - gladius - Tue Jun 14, 2005 5:09 am</h4>
+    <div class="postbody"><span class="postbody">I need to do some generated sound on the DS, not just play a sample back.  The looping sound channel effect seems like it would be a great way to do that, but the only problem is I need a notification when it reaches the end of the buffer so I can regenerate the samples for the next playback.
+<br/>
+<br/>
+Anyone know if there are irq's on sound finish/loop?  I took a glance through the ndslib irq list and the only thing I could see in there relating to it would be timer irq's.  Anyone know/tried this already before I start fooling around with the registers?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#45726 - josath - Tue Jun 14, 2005 5:35 am</h4>
+    <div class="postbody"><span class="postbody">1. The NDS has a built in, 16-channel hardware mixer that automatically lets you mix 16 different sounds at once.
+<br/>
+2. No, even with much searching, nobody has been able to find any way to tell either How much data/samples a channel has played, or When it reaches the end of the buffer. I'm still hoping there is some secret audio irq we haven't found yet.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#45735 - headspin - Tue Jun 14, 2005 11:52 am</h4>
+    <div class="postbody"><span class="postbody">Use if( (SCHANNEL_CR(n) &amp; SCHANNEL_ENABLE) == 0) to find out whether the sample has finished playing or not.<br/>_________________<br/><a class="postlink" href="http://headsoft.com.au/index.php?category=warhawk" target="_blank">Warhawk DS</a> | <a class="postlink" href="http://headsoft.com.au/index.php?category=mmll" target="_blank">Manic Miner: The Lost Levels</a> | <a class="postlink" href="http://headsoft.com.au/index.php?category=tdg" target="_blank">The Detective Game</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#45741 - gladius - Tue Jun 14, 2005 3:32 pm</h4>
+    <div class="postbody"><span class="postbody">josath: Ok, thanks, that confirms the bad news :(.  I knew it had 16 sample playback, but that is not useful for me.  There has to be some sort of irq or notification system set up, otherwise the commercial mixers would be fugly and inaccurate as well.
+<br/>
+<br/>
+headspin: That is not useful for a looping sample, which will never turn off.  I did consider starting up another short sample when the previous one finished (in effect creating a never ending buffer), but polling the register is just ugly, and has to be done constantly if you want good accuracy (or at least consistently, which is not easy).</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#45747 - tepples - Tue Jun 14, 2005 3:51 pm</h4>
+    <div class="postbody"><span class="postbody">What happens when you set the playback rate to exactly 1065 ARM7 cycles per sample (two samples per hblank, approx. 31.5 kHz) and set up a loop 526 samples in size? Then you can derive the play and write cursors (Windows DSound terminology) from vcount.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#45862 - gladius - Wed Jun 15, 2005 10:08 pm</h4>
+    <div class="postbody"><span class="postbody">I got a mixer working using a fairly ugly hack.  I'm sure it can be done better, but in it's current format it uses 2 channels for mono playback, and 4 for stereo, along with timer 0&amp;1.  The advantage of this is you can have any size mix buffer you want, and any mixing rate you want.
+<br/>
+<br/>
+Rough pseudo-code for arm7:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+void SetupSound() {
+<br/>
+    powerON(POWER_SOUND);
+<br/>
+    SOUND_CR = SOUND_ENABLE | SOUND_VOL(0x7F);
+<br/>
+<br/>
+    TIMER0_DATA = TIMER_FREQ(32000); // 32000hz is our mixing frequency
+<br/>
+    TIMER0_CR = TIMER_DIV_1 | TIMER_ENABLE;
+<br/>
+<br/>
+    // MIXBUFSIZE is the size of your mix buffer
+<br/>
+    TIMER1_DATA = 0x10000 - MIXBUFSIZE;
+<br/>
+    TIMER1_CR = TIMER_CASCADE | TIMER_IRQ_REQ | TIMER_ENABLE;
+<br/>
+}
+<br/>
+<br/>
+In interrupt handler:
+<br/>
+<br/>
+u16 leftSoundBuffer[MIXBUFSIZE * 2];
+<br/>
+int soundCursor = 0;
+<br/>
+<br/>
+void InterruptHandler(void) {
+<br/>
+    if (IF &amp; IRQ_TIMER1) {
+<br/>
+        int channel = soundCursor == 0 ? 0 : 1;
+<br/>
+        SCHANNEL_TIMER(channel) = SOUND_FREQ(32000);
+<br/>
+        SCHANNEL_SOURCE(channel) = (uint32)&amp;leftSoundBuffer[MIXBUFSIZE - soundCursor];
+<br/>
+        SCHANNEL_LENGTH(channel) = (MIXBUFSIZE * 2) &gt;&gt; 2;
+<br/>
+        SCHANNEL_REPEAT_POINT(channel) = 0;
+<br/>
+        SCHANNEL_CR(channel) = SCHANNEL_ENABLE | SOUND_ONE_SHOT | SOUND_VOL(0x7F) | SOUND_PAN(63) | SOUND_16BIT;
+<br/>
+<br/>
+        // Mix data now
+<br/>
+        for (int i = 0; i &lt; MIXBUFSIZE; i++) leftSoundBuffer[i + soundCursor] = 0;
+<br/>
+<br/>
+        // Move sound cursor
+<br/>
+        soundCursor = MIXBUFSIZE - soundCursor;
+<br/>
+    }
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

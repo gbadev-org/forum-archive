@@ -1,0 +1,311 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>DevkitPro update broke something - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > DevkitPro update broke something</h2>
+<div id="posts">
+<div class="post">
+    <h4>#116050 - HyperHacker - Sun Jan 21, 2007 12:08 pm</h4>
+    <div class="postbody"><span class="postbody">[edit] I fixed most of the big problems, but to summarize, after updating to the latest version of DevkitPro (apparently I'd been using a very old version, thinking that running the old "updater" would update it, when in fact I had to download a new updater), some strange things happened:
+<br/>
+<br/>
+-arm-elf-blah binaries disappeared. What exactly is the difference between these and arm-eabi-blah?
+<br/>
+-Including card.h and card.c makes DS Download Play reject the file. O_o
+<br/>
+-DISP_SR is now defined only in registers_alt.h, but including that gives a bunch of warnings about redefinitions of other things. :-/
+<br/>
+-memset() no longer works? Or is using 8-bit writes? I can't use it on VRAM anymore.
+<br/>
+-I get this warning:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">warning: large integer implicitly truncated to unsigned type</td> </tr></table><span class="postbody">
+<br/>
+when passing 512*512*2 or 524288 (which of course is the same number) as the third argument to memset; no idea what this is supposed to mean, didn't happen before.
+<br/>
+<br/>
+<br/>
+This was the batch script I was compiling with before; I replaced all instances of arm-elf with arm-eabi to get it working with the new version.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">@echo off
+<br/>
+<br/>
+IF NOT DEFINED devkitarm_path GOTO noenv
+<br/>
+IF NOT DEFINED ndslib_path GOTO noenv
+<br/>
+IF NOT DEFINED nds_wmb_path GOTO noenv
+<br/>
+<br/>
+SET exe_name=motiontest
+<br/>
+SET a7src=arm7.c
+<br/>
+SET a9src=arm9.c
+<br/>
+SET logo=nds.bmp
+<br/>
+SET icon=icon.bmp
+<br/>
+SET exe_desc=Motion Sensor Test;Playing With DS Motion Card;By HyperHacker
+<br/>
+GOTO start
+<br/>
+<br/>
+:noenv
+<br/>
+ECHO The required environment variables have not been defined.
+<br/>
+ECHO Required variables are devkitarm_path, ndslib_path and nds_wmb_path.
+<br/>
+GOTO end
+<br/>
+<br/>
+:start
+<br/>
+ECHO Compiling ASM files...
+<br/>
+%devkitarm_path%\arm-elf-g++ -g -mcpu=arm7tdmi -mtune=arm7tdmi -mthumb-interwork -I%ndslib_path%\include -DARM9 -fomit-frame-pointer -ffast-math -o%devkitarm_path%\memory.o -c ..\general\memory.s
+<br/>
+IF NOT EXIST %devkitarm_path%\memory.o GOTO done
+<br/>
+<br/>
+ECHO Compiling ARM7...
+<br/>
+%devkitarm_path%\arm-elf-g++ -g -mcpu=arm7tdmi -mtune=arm7tdmi -mthumb-interwork -I%ndslib_path%\include -DARM7 -fomit-frame-pointer -ffast-math -o%devkitarm_path%\arm7.o -c %a7src%
+<br/>
+IF NOT EXIST %devkitarm_path%\arm7.o GOTO done
+<br/>
+%devkitarm_path%\arm-elf-g++ -g -mthumb-interwork -mno-fpu -specs=ds_arm7.specs %devkitarm_path%\arm7.o -L%ndslib_path%\lib -lnds7 -o%devkitarm_path%\arm7.elf 
+<br/>
+IF NOT EXIST %devkitarm_path%\arm7.elf GOTO done
+<br/>
+%devkitarm_path%\arm-elf-objcopy -O binary %devkitarm_path%\arm7.elf %devkitarm_path%\arm7.bin
+<br/>
+IF NOT EXIST %devkitarm_path%\arm7.bin GOTO done
+<br/>
+<br/>
+ECHO Compiling ARM9...
+<br/>
+%devkitarm_path%\arm-elf-g++ -g -mcpu=arm9tdmi -mtune=arm9tdmi -mthumb-interwork -I%ndslib_path%\include -DARM9 -fomit-frame-pointer -ffast-math -o%devkitarm_path%\arm9.o -c %a9src%
+<br/>
+IF NOT EXIST %devkitarm_path%\arm9.o GOTO done
+<br/>
+%devkitarm_path%\arm-elf-g++ -g -mthumb-interwork -mno-fpu -specs=ds_arm9.specs %devkitarm_path%\memory.o %devkitarm_path%\arm9.o -L%ndslib_path%\lib -lfat -lnds9 -o%devkitarm_path%\arm9.elf 
+<br/>
+IF NOT EXIST %devkitarm_path%\arm9.elf GOTO done
+<br/>
+%devkitarm_path%\arm-elf-objcopy -O binary %devkitarm_path%\arm9.elf %devkitarm_path%\arm9.bin
+<br/>
+IF NOT EXIST %devkitarm_path%\arm9.bin GOTO done
+<br/>
+<br/>
+:link
+<br/>
+ECHO Linking...
+<br/>
+%devkitarm_path%\ndstool -c %devkitarm_path%\%exe_name%.nds -7 %devkitarm_path%\arm7.bin -9 %devkitarm_path%\arm9.bin -o %devkitarm_path%\logos\%logo% -b %icon% "%exe_desc%"
+<br/>
+<br/>
+:run
+<br/>
+IF '%1' EQU '-noexec' GOTO done
+<br/>
+ECHO Running...
+<br/>
+%nds_wmb_path%\wmb -data %devkitarm_path%\%exe_name%.nds -player Banana
+<br/>
+<br/>
+:done
+<br/>
+ECHO Cleaning...
+<br/>
+PUSHD %devkitarm_path%
+<br/>
+DEL memory.o &gt; NUL
+<br/>
+DEL arm7.o &gt; NUL
+<br/>
+DEL arm9.o &gt; NUL
+<br/>
+DEL arm7.elf &gt; NUL
+<br/>
+DEL arm9.elf &gt; NUL
+<br/>
+DEL arm7.bin &gt; NUL
+<br/>
+DEL arm9.bin &gt; NUL
+<br/>
+MOVE %exe_name%.nds compiled\%exe_name%.nds
+<br/>
+POPD
+<br/>
+ECHO Done.
+<br/>
+ECHO ????????????????????????????????????????????????????????????????????????????????
+<br/>
+:end</td> </tr></table><span class="postbody">
+<br/>
+(The ??? forms a horizontal line in the console.)
+<br/>
+<br/>
+<br/>
+This is what WMB shows when I try to boot the app with card.h and card.c included:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Nintendo DS - Wireless Multiboot Application - Version 1.5
+<br/>
+<a href="http://users.belgacom.net/nds/" target="_blank">http://users.belgacom.net/nds/</a>
+<br/>
+(c) 2005 Tim Schuerewegen
+<br/>
+Device Description = Ralink RT2560 Device
+<br/>
+Device Hardware ID = PCI\VEN_1814&amp;DEV_0201&amp;SUBSYS_25601814&amp;REV_01
+<br/>
+Device Location    = PCI bus 0, device 10, function 0
+<br/>
+Driver Version     = 1.0.0.8
+<br/>
+Loading "motiontest.nds"... ok
+<br/>
+Press [x] to abort
+<br/>
+Sending multiboot beacons &amp; waiting for authentication
+<br/>
+Received authentication
+<br/>
+Received association request
+<br/>
+Received de-authentication</td> </tr></table><span class="postbody">
+<br/>
+The DS shows the file available for download, but gives a communication error as soon as I try to download it. (I had included these files because libfat was complaining of undefined references that were in them; turned out I needed to include libfat before libnds &lt;_&lt; fortunately, I don't actually need them right now.)<br/>_________________<br/>I'm a PSP hacker now, but I still &lt;3 DS.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#116105 - tepples - Mon Jan 22, 2007 12:07 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>HyperHacker wrote:</b></span></td> </tr> <tr> <td class="quote">-arm-elf-blah binaries disappeared. What exactly is the difference between these and arm-eabi-blah?</td> </tr></table><span class="postbody">
+<br/>
+EABI is a new version of the ARM application binary interface that correctly handles the absence of an FPU on an ARM9 CPU. Otherwise, it's the same thing.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">-DISP_SR is now defined only in registers_alt.h, but including that gives a bunch of warnings about redefinitions of other things. :-/</td> </tr></table><span class="postbody">
+<br/>
+Have you replaced them with REG_DISPSTAT, the name that Martin Korth's doc uses?
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">-memset() no longer works? Or is using 8-bit writes? I can't use it on VRAM anymore.
+<br/>
+-I get this warning:
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">warning: large integer implicitly truncated to unsigned type</td> </tr></table><span class="postbody">
+<br/>
+when passing 512*512*2 or 524288 (which of course is the same number) as the third argument to memset; no idea what this is supposed to mean, didn't happen before.</span></td> </tr></table><span class="postbody">
+<br/>
+Perhaps memset() doesn't work with regions larger than 64 KiB if it uses a DMA clear.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#116117 - HyperHacker - Mon Jan 22, 2007 2:24 am</h4>
+    <div class="postbody"><span class="postbody">OK, thanks. I searched all files in libnds for "0x04000004" (DISP_SR) and didn't find any others, so I guess REG_DISPSTAT is defined differently. I noticed some float troubles before, hopefully EABI fixes that. Memset maxing out at 64K sounds believable, but it seems like there should be some workaround since it works on other systems; I've just implemented my own version for now.<br/>_________________<br/>I'm a PSP hacker now, but I still &lt;3 DS.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#116282 - wintermute - Wed Jan 24, 2007 2:21 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>HyperHacker wrote:</b></span></td> </tr> <tr> <td class="quote">-arm-elf-blah binaries disappeared. What exactly is the difference between these and arm-eabi-blah?</td> </tr></table><span class="postbody">
+<br/>
+EABI is a new version of the ARM application binary interface that correctly handles the absence of an FPU on an ARM9 CPU. Otherwise, it's the same thing.
+<br/>
+</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Not quite, EABI allows the mixing of soft &amp; hard float code in the same binary and has a compatible float ABI across all processors. The old arm-elf ABI just had some serious issues with the way that was all handled.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">-DISP_SR is now defined only in registers_alt.h, but including that gives a bunch of warnings about redefinitions of other things. :-/</td> </tr></table><span class="postbody">
+<br/>
+Have you replaced them with REG_DISPSTAT, the name that Martin Korth's doc uses?
+<br/>
+</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+We've been trying to move a lot of the register naming conventions to that used in gbatek so yes, DISP_SR is now REG_DISPSTAT.
+<br/>
+<br/>
+nds/registers_alt.h should contain the old name defined to the new name where that makes sense. 
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">-memset() no longer works? Or is using 8-bit writes? I can't use it on VRAM anymore.
+<br/>
+-I get this warning:
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">warning: large integer implicitly truncated to unsigned type</td> </tr></table><span class="postbody">
+<br/>
+when passing 512*512*2 or 524288 (which of course is the same number) as the third argument to memset; no idea what this is supposed to mean, didn't happen before.</span></td> </tr></table><span class="postbody">
+<br/>
+Perhaps memset() doesn't work with regions larger than 64 KiB if it uses a DMA clear.</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+memset has no relationship to dma clear other than the former could potentially be implemented with the latter.
+<br/>
+<br/>
+memset has always used 8bit writes, that's what it does. In spite of that it should work fine on VRAM since the "bug" causes 8 bit writes to change both 8bit halves of the 16bit chunk addressed to the 8 bit value written.
+<br/>
+<br/>
+I've just tried using memset here and I don't get the warning. Are you using the correct headers? ( string.h )
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>HyperHacker wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+This was the batch script I was compiling with before; I replaced all instances of arm-elf with arm-eabi to get it working with the new version. 
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+You really should consider moving to makefiles - if you had been using one of the devkitPro templates the name change of the tools would have had no effect on you.
+<br/>
+<br/>
+That's one doozy of a batch file though O_O
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+-Including card.h and card.c makes DS Download Play reject the file
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Interesting, has that ever been mentioned before anywhere?<br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#116283 - HyperHacker - Wed Jan 24, 2007 2:26 am</h4>
+    <div class="postbody"><span class="postbody">I was considering makefiles, but batch scripts already do the job nicely. I only needed to do a simple search and replace.
+<br/>
+<br/>
+I also looked a bit closer and I think I was using my own memset() implementation for some reason. ^_^;<br/>_________________<br/>I'm a PSP hacker now, but I still &lt;3 DS.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

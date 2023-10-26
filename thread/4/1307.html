@@ -1,0 +1,479 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>UART communication - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > UART communication</h2>
+<div id="posts">
+<div class="post">
+    <h4>#6569 - OrangyTang - Thu May 29, 2003 11:10 am</h4>
+    <div class="postbody"><span class="postbody">What do I need to do to be able to receive input via the communication port? I know I have to use <b style="color:#FFA34F">UART</b> mode since the sender will be a PC via a MBv2 cable, but how do i get at the data in the GBA code?
+<br/>
+<br/>
+Do I need to bother setting interupts (rest of the app is very minimal, so cpu usage will probably not be a problem) or can I do some sort of poll every frame? All i've managed to find so far is that i need to set the RCNT register to 0 to set <b style="color:#FFA34F">UART</b> mode - then what? The SCCNT_L seems to contain all the needed setting and state flags, but where does the actual data end up?
+<br/>
+<br/>
+Thanks.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#6620 - OrangyTang - Fri May 30, 2003 10:05 pm</h4>
+    <div class="postbody"><span class="postbody">An update, and more questions:
+<br/>
+<br/>
+I found Staringmonkey's GBA keyboard project which uses <b style="color:#FFA34F">UART</b> to grab the input off of a mobile phone keyboard, and it seems to do the basics of what i'm after.
+<br/>
+<br/>
+The header/register defines:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">// Register base address
+<br/>
+#define REG_BASE          0x4000000
+<br/>
+<br/>
+// Serial IO Registers
+<br/>
+#define REG_SIOCNT        *(volatile unsigned short int *)(REG_BASE + 0x128)  // Serial control
+<br/>
+#define REG_SIODATA8      *(volatile unsigned short int *)(REG_BASE + 0x12a)  // Serial data
+<br/>
+#define REG_RCNT          *(volatile unsigned short int *)(REG_BASE + 0x134)  // General IO
+<br/>
+<br/>
+<br/>
+// <b style="color:#FFA34F">UART</b> settings
+<br/>
+#define SIO_USE_UART      0x3000
+<br/>
+<br/>
+// Baud Rate
+<br/>
+#define SIO_BAUD_9600     0x0000
+<br/>
+#define SIO_BAUD_38400    0x0001
+<br/>
+#define SIO_BAUD_57600    0x0002
+<br/>
+#define SIO_BAUD_115200   0x0003
+<br/>
+<br/>
+#define SIO_CTS           0x0004
+<br/>
+#define SIO_PARITY_ODD    0x0008
+<br/>
+#define SIO_SEND_DATA     0x0010
+<br/>
+#define SIO_RECV_DATA     0x0020
+<br/>
+#define SIO_ERROR         0x0040
+<br/>
+#define SIO_LENGTH_8      0x0080
+<br/>
+#define SIO_USE_FIFO      0x0100
+<br/>
+#define SIO_USE_PARITY    0x0200
+<br/>
+#define SIO_SEND_ENABLE   0x0400
+<br/>
+#define SIO_RECV_ENABLE   0x0800
+<br/>
+#define SIO_REQUEST_IRQ   0x4000</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+My simple initialisation (seems to work ok):
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">   // Init <b style="color:#FFA34F">UART</b>
+<br/>
+   REG_RCNT = 0;
+<br/>
+   REG_SIOCNT = 0;
+<br/>
+   REG_SIOCNT = SIO_BAUD_9600 | SIO_LENGTH_8 | SIO_SEND_ENABLE | SIO_RECV_ENABLE | SIO_USE_UART;
+<br/>
+   REG_SIOCNT |= SIO_RECV_DATA | SIO_SEND_DATA;
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+And a get input function:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">u8 GetUartChar(void)
+<br/>
+{
+<br/>
+   u8 uartbyte;
+<br/>
+<br/>
+   if ( !(REG_SIOCNT &amp; SIO_RECV_DATA) )
+<br/>
+   {
+<br/>
+      uartbyte = REG_SIODATA8;
+<br/>
+      REG_SIOCNT |= SIO_RECV_DATA | SIO_SEND_DATA;
+<br/>
+   }
+<br/>
+   else
+<br/>
+      uartbyte = 0x0;
+<br/>
+<br/>
+   return uartbyte;
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+The read function was modified to poll instead of wait until data was present, and seems to work great for single-byte transferes. I can send a single byte from my pc and have it arrive as expected on the GBA.
+<br/>
+<br/>
+However, if i send several bytes at once (testing with 4) the first will appear fine, the first and second sometimes, and the first and third sometimes.. I assume this is because i'm simply polling the first byte and it depends on the timing on when it comes in - is there some way to get a proper queue of bytes being received?
+<br/>
+<br/>
+Edit: I'm guessing i want to use the FIFO, so i'll add the FIFO enable bit to the control register in the <b style="color:#FFA34F">UART</b> init. But since the FIFO is 4 bits long, and the data register only uses 8 bits at a time, how do i get at the next 3? Some sort of 'next' operation on the queue should be lurking somewhere in these bits...
+<br/>
+<br/>
+Thanks.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#6638 - OrangyTang - Sat May 31, 2003 3:10 pm</h4>
+    <div class="postbody"><span class="postbody">Ok, after enabling the FIFO, I manage to consistantly receive 4 bytes when sent at a time, but sending more than that and the extras get dropped or only turn up very occasionally.
+<br/>
+<br/>
+I also noticed that the GetUartChar() tries to modify what is apparently a read-only bit, so i'm not even sure how that actually works. I changed it to:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">u8 GetUartChar(void)
+<br/>
+{
+<br/>
+   u8 uartbyte;
+<br/>
+<br/>
+   if ( !(REG_SIOCNT &amp; SIO_RECV_DATA) )
+<br/>
+   {
+<br/>
+      uartbyte = REG_SIODATA8;
+<br/>
+      REG_SIOCNT |= SIO_RECV_ENABLE;
+<br/>
+   }
+<br/>
+   else
+<br/>
+      uartbyte = 0x0;
+<br/>
+<br/>
+   return uartbyte;
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+but that gives the same results. I still think i'm not using the FIFO correctly..</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#6788 - JasperW - Mon Jun 02, 2003 9:15 pm</h4>
+    <div class="postbody"><span class="postbody">I've done some <b style="color:#FFA34F">UART</b> stuff on the GBA and this is what I've come up with. I'll give you some general info about <b style="color:#FFA34F">UART</b> mode first (from GBATek with some extra info):
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+  Bit   Expl.
+<br/>
+  0-1   Baud Rate  (0-3: 9600,38400,57600,115200 bps)
+<br/>
+        Self explanatory me thinks.
+<br/>
+<br/>
+  2     CTS Flag   (0=Send always/blindly, 1=Send only when SC=LOW (CTS = HIGH))
+<br/>
+        If you look at the <b style="color:#FFA34F">UART</b> cable you'll see four communication lines: RD (Receive Data), TD (Transmit Data), RTS (Request To Send) and CTS (Clear To Send). So you have 2 data lines for full-duplex transfer and 2 lines for synchronising the transfers. Whenever a client is ready to receive data it sets the RTS to high which is output on the host side as CTS so the host knows it can send data (and vice versa). Whenever the input buffer on the client becomes full, RTS is lowered so the host knows it has to stop sending data. Relatively simple.
+<br/>
+In principle you only need the 2 data lines for sending data, so some cables don't have the 2 sync lines. In that case you'll need some sort of software implementation. Look for Xon/Xoff on Google. I've never looked into this though.
+<br/>
+<br/>
+  3     Parity Control (0=Even, 1=Odd)
+<br/>
+        Used in error detection, but not really of much use unless you get a lot of noise on your line.
+<br/>
+<br/>
+  4     Send Data Flag      (0=Not Full,  1=Full)    (Read Only)
+<br/>
+        This one goes to zero when it's done sending all the bytes in the FIFO or output buffer. The byte in SIODATA8 gets put into the <b style="color:#FFA34F">UART</b> buffer almost instantly so you can write to SIODATA8 as fast a you like until you fill up your output FIFO / buffer.
+<br/>
+<br/>
+  5     Receive Data Flag   (0=Not Empty, 1=Empty)   (Read Only)
+<br/>
+        This one goes to zero when the input buffer / FIFO is full. Meaning you can read 1 / 4 bytes respectively from SIODATA8. Whenever you read from SIODATA8 the appropriate byte from the buffer / FIFO is put in there and that buffer space is cleared. So you don't need any kind of 'next' operation to get at the extra bytes.
+<br/>
+<br/>
+  6     Error Flag          (0=No Error,  1=Error)   (Read Only)
+<br/>
+        Gets set when an error occurs on the line. This has never happened to me so I don't think it's really important.
+<br/>
+<br/>
+  7     Data Length         (0=7bits,   1=8bits)
+<br/>
+        Just set to 8 bits. 7 is probably there to maintain the RS232 standard or whatever.
+<br/>
+<br/>
+  8     FIFO Enable Flag    (0=Disable, 1=Enable)
+<br/>
+        Turn on the First In First Out buffers (2x4 bytes). This way you can send and receive up 4 bytes a time. To use the FIFO first just go into <b style="color:#FFA34F">UART</b> mode and then a couple of instructions later OR this flag to the SIOCNT register. Else it might not work.
+<br/>
+<br/>
+  9     Parity Enable Flag  (0=Disable, 1=Enable)
+<br/>
+        Generate parity bit. I've never used. Used in error detection.
+<br/>
+<br/>
+  10    Send Enable Flag    (0=Disable, 1=Enable)
+<br/>
+        Indicate you want to send data. You can just turn this on and leave it on while doing comms.
+<br/>
+<br/>
+  11    Receive Enable Flag (0=Disable, 1=Enable)
+<br/>
+        When enabled this sets RTS high (if there's buffer space to receive). You can turn it on and leave it on when using hardware CTS.
+<br/>
+<br/>
+  12    Must be "1" for <b style="color:#FFA34F">UART</b> mode
+<br/>
+  13    Must be "1" for <b style="color:#FFA34F">UART</b> mode
+<br/>
+<br/>
+  14    IRQ Enable          (0=Disable, 1=IRQ when any Bit 4/5/6 become set)
+<br/>
+        IRQ's in combination with FIFO are a bit tricky, but with normal buffers this interrupt fires when: the data has been sent (bit 4 goes to zero) or data has been received (bit 5 goes to zero) or and error occurs. Use bits 4,5 &amp; 6 to determine what happened.
+<br/>
+<br/>
+  15    Not used
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+So your problem probably lies in the fact that you don't use the CTS flag. If you've got the extra lines on the cable I'd just turn it on. It makes life a lot easier. Don't forget to configure your PCs port accordingly. If you don't have the sync lines you'll have to do some manual timing. At the moment your PC probably sends extra bytes when the buffer / FIFO is already full. These bytes just get discarded. You can use a program like <a class="postlink" href="http://hp.vector.co.jp/authors/VA002416/teraterm.html" target="_blank">Tera Term Pro</a> to type the data yourself. This way all the bytes will probably arrive as the GBA probably polls much faster than you can type (even at 9600 bps :)) Anyway good luck and let me know if you need any more info. 
+<br/>
+<br/>
+Jasper</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#6794 - OrangyTang - Mon Jun 02, 2003 10:37 pm</h4>
+    <div class="postbody"><span class="postbody">Thanks for the reply, your description of the bit flags seems more complete than the ones i've been working off, but theres still some things i don't get.
+<br/>
+<br/>
+I now have my init as:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">   REG_RCNT = 0;
+<br/>
+   REG_SIOCNT = 0;
+<br/>
+   REG_SIOCNT = SIO_BAUD_9600 | SIO_LENGTH_8 | SIO_USE_UART | SIO_CTS | SIO_USE_FIFO;
+<br/>
+   REG_SIOCNT |= SIO_SEND_ENABLE | SIO_RECV_ENABLE;
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+(basically added the SIO_CTS flag to be on permenantly as you suggest above). I also set the FIFO flag again a few lines down after some graphics stuff to add the slight delay.
+<br/>
+<br/>
+Then every frame, I call ScanComPort():
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">u8 GetUartChar(void)
+<br/>
+{
+<br/>
+   u8 uartbyte = REG_SIODATA8;
+<br/>
+   return uartbyte;
+<br/>
+}
+<br/>
+<br/>
+void ScanComPort()
+<br/>
+{
+<br/>
+   // While queue not empty
+<br/>
+   while( !(REG_SIOCNT &amp; SIO_RECV_DATA) )// If reg flag and rec. bit both set, buffer is empty
+<br/>
+   {
+<br/>
+      u8 ch = GetUartChar();
+<br/>
+      AddCharacter(&amp;textBlock, ch);// Push to text display
+<br/>
+   }
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+And I have the pc app thats sending the data to wait until the CTS is set, yet i still get dropped bytes? I thought that i had everything covered with adding the CTS enable bit, but apparently not.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#6798 - JasperW - Mon Jun 02, 2003 10:56 pm</h4>
+    <div class="postbody"><span class="postbody">You need to make sure that you have FIFO disabled (= 0) when going into <b style="color:#FFA34F">UART</b> mode and enable it later to make it work. So you should remove the SIO_USE_FIFO from the main initialization. It's easier by the way to not use FIFO when starting out. FIFO is only necessary when performance becomes critical, not a 9600 bps.
+<br/>
+Furthermore make sure the COM ports on the PC have the exact same settings as the GBA. Also change this in the Windows system settings to be sure because I think they override eachother.
+<br/>
+BPS 9600
+<br/>
+Data bits: 8
+<br/>
+Parity: None
+<br/>
+Stop bits: 1
+<br/>
+Flow control: Hardware
+<br/>
+Next use Tera Term Pro and check that all the chars you type in yourself get through on the other side. It might be a faulty cable, you never know... When that's happening use it to send a small text file and see if it get through.
+<br/>
+Here are my old <b style="color:#FFA34F">UART</b> routines, although I can't guarantee the whole thing will work because I've rewritten it all to support IRQ's, FIFO and full duplex communication, it's put together by some other examples I've found on the net (be sure to remove IRQ specific code):
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+<br/>
+void InitUART(u16 speed)
+<br/>
+{
+<br/>
+   // Stick a character in the data register. This stops the GBA transmitting a
+<br/>
+   // character as soon as it goes into <b style="color:#FFA34F">UART</b> mode (?!?)
+<br/>
+   REG_SIODATA8 = 'J';
+<br/>
+<br/>
+   // Now to go into <b style="color:#FFA34F">UART</b> mode
+<br/>
+   REG_RCNT = 0;
+<br/>
+   REG_SIOCNT = speed | FLG_SIO_CTS | FLG_SIO_LENGTH_8 | VAL_SIO_USE_UART | FLG_SIO_IRQ;
+<br/>
+   REG_SIOCNT |= FLG_SIO_SEND_ENABLE | FLG_SIO_RECV_ENABLE;
+<br/>
+   REG_SIOCNT |= FLG_SIO_FIFO;
+<br/>
+<br/>
+<br/>
+   // Setup the IRQ
+<br/>
+   REG_IE |= FLG_IRQ_SERIAL;
+<br/>
+   REG_IME = 0x0001;
+<br/>
+<br/>
+   // Link should now be up
+<br/>
+}
+<br/>
+<br/>
+u16 RecvChar(void)
+<br/>
+{
+<br/>
+   // Wait until we have a full byte (The recv data flag will go to 0)
+<br/>
+   // or timeout...
+<br/>
+   u16 c;
+<br/>
+<br/>
+   // Not necessary but just to be sure...
+<br/>
+   REG_SIOCNT |= FLG_SIO_RECV_ENABLE;
+<br/>
+<br/>
+   u32 i = VAL_SIO_TIMEOUT;
+<br/>
+   while(REG_SIOCNT &amp; FLG_SIO_RECV_DATA) {
+<br/>
+      if(!(--i)) return(VAL_SIO_ERR_TIMEOUT); 
+<br/>
+   }
+<br/>
+<br/>
+   // Store char
+<br/>
+   c = REG_SIODATA8 &amp; 0x00FF;
+<br/>
+<br/>
+   // Don't except any more data (not necessary because of CTS)
+<br/>
+   REG_SIOCNT ^= FLG_SIO_RECV_ENABLE;
+<br/>
+<br/>
+   // Return the character
+<br/>
+   return(c);
+<br/>
+}
+<br/>
+<br/>
+<br/>
+u16 SendChar(u8 c)
+<br/>
+{
+<br/>
+   // Wait until we have a CTS signal or timeout...
+<br/>
+   u32 i = VAL_SIO_TIMEOUT;
+<br/>
+   while(REG_SIOCNT &amp; FLG_SIO_SEND_DATA) {
+<br/>
+      if(!(--i)) return(VAL_SIO_ERR_TIMEOUT);
+<br/>
+   }
+<br/>
+<br/>
+   // Send our byte into the data register
+<br/>
+   REG_SIODATA8 = c;
+<br/>
+   return 0;
+<br/>
+}
+<br/>
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Hope this helps. Try to debug your app using TTP first. It saves a lot of headache believe me. Good luck,
+<br/>
+<br/>
+Jasper</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#6799 - JasperW - Mon Jun 02, 2003 11:04 pm</h4>
+    <div class="postbody"><span class="postbody">By the way if you only call ScanComPort once per frame (once per 60 seconds) it's never going to poll enough. You're running at 9600 bps which means about 9600 / 10 bits = 960 bytes of data get transfered every second. So you need to poll around 1000 times per second if you don't want to drop bytes.
+<br/>
+Just set up a timer IRQ that calls the poll or use the serial IRQ (as I've said it's tricky with FIFO). At higher speeds the FIFO comes in handy as you need to poll 4 times less.
+<br/>
+Just remember when the buffer gets full chars get dropped and although CTS makes sure that should not happen polling once every frame is just not enough...
+<br/>
+<br/>
+Jasper</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#6830 - OrangyTang - Tue Jun 03, 2003 9:15 am</h4>
+    <div class="postbody"><span class="postbody">Thanks for the help, I had been experimenting with those changes, and various different ways of pinging bytes down the line, all without sucess - until i re-read the MBv2 faq and found this: <a href="http://www.devrs.com/gba/files/mbv2faqs.php#EnterUMode" target="_blank">http://www.devrs.com/gba/files/mbv2faqs.php#EnterUMode</a>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Handshaking from GBA-&gt;PC is not supported due to hardware limitations. (i.e. PC will not wait until GBA is ready. It can send data to GBA at any time.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+So i guess that explains what was going wrong. Inserting something like a 15ms sleep between sending each byte seems to reliably make sure everything gets though ok, but i'll probably change the GBA to use interupts or poll much more often which will probably mean i can reduce that number. Speed isn't a huge concern, reliability is, so this is pretty much acceptable.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

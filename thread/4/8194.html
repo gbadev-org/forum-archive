@@ -1,0 +1,216 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Sorting sprites - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > Sorting sprites</h2>
+<div id="posts">
+<div class="post">
+    <h4>#67570 - gauauu - Thu Jan 19, 2006 2:43 am</h4>
+    <div class="postbody"><span class="postbody">Hey all, I'm getting ready to start an algorithm to sort my sprite list, based on screen position (on a top-down, almost isometric view, similar to secret of mana).
+<br/>
+<br/>
+I had some ideas about how to implement it, but wanted to run my thoughts by some of you smart folk to see if anyone has any suggestions.
+<br/>
+<br/>
+Basically, I want to sort to keep my sprites on the bottom (more "front") part of the screen drawn first, so must sort them to the front of the sprite data.
+<br/>
+<br/>
+Here are the things to consider:
+<br/>
+1.  There won't be that many sprites to sort.   (gba doesn't have so many sprites, and probably more likely I'll only use 30-40 at a time)
+<br/>
+2.  Because object don't move extremely fast, the array will almost always be "almost sorted"
+<br/>
+<br/>
+<br/>
+So, my thought, which runs contrary to everything that I feel like is good and reasonable, is to do a type of bubble sort.
+<br/>
+<br/>
+Each frame, I would do ONE pass of the bubble sort, swapping entries as needed.   Then, I wouldn't worry about the remaining out-of-order sprites until the next frame of gameplay.
+<br/>
+<br/>
+Doing this way, each frame, I am guaranteed only one pass through the list.  And as most of the time, only 1 or 2 sprites will have swapped places, a simple bubble sort swap will fix them.   
+<br/>
+<br/>
+The nice things about using a bubble sort in this situation are:
+<br/>
+<br/>
+-usually if a sprite will be out of order, it will only need to be moved to an adjacent slot, not to be inserted at some completely other position
+<br/>
+<br/>
+-with other sorting methods, it's harder to isolate it down to just 1 pass through the list.  With insertion, for example, it can take 2 passes just to fix one item.  Or with something like quicksort, it mangles the list to pieces while the sorting is in process, so you have to do the sort all at once, instead of doing it a piece at a time.  The bubble sort can sort of be in a state of perpetual "sorting", where after you do one pass, you can keep using the list, even if it is slightly out of order
+<br/>
+<br/>
+<br/>
+For more complicated situations, this method might take multiple frames before it finally has the list properly sorted.  Which means that for the worst cases, there might be a few frames where sprite priorities are wrong and the screen sprites look funny.  But in all but the very nasty cases, (all sprites but one lined up on the same scanline, the one sprite passing by them all) it shouldn't be more than a small handful of frames, and be barely noticable (especially because the sprite priorities only matter when the un-sorted sprites overlap).  I figure this would probably be a fair tradeoff to guarantee that my sorting doesn't end up taking a huge amount of time.
+<br/>
+<br/>
+Anyway, am I missing something big?   Any thoughts?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#67593 - poslundc - Thu Jan 19, 2006 6:08 am</h4>
+    <div class="postbody"><span class="postbody">It's worth a shot, but if I were you I'd just sort every frame. Quicksort is good, although in the last engine I wrote I just rebuilt the entire linked list from scratch and inserted the sprites in the correct order as I processed their distance-to-camera values.
+<br/>
+<br/>
+If you write your code modularly, you should have no problem swapping out your sorting routine if performance becomes an issue.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#67594 - gauauu - Thu Jan 19, 2006 7:37 am</h4>
+    <div class="postbody"><span class="postbody">So you think the hit of a fast sort such as the quicksort every frame is, in a general sense, small enough to not cause problems?
+<br/>
+<br/>
+And good call about keeping the sorting code very modular, so I can rip it out and replace it at need.  That will make it easier.  I learned that lesson from the sound system....using krawall, then ripping it out and replacing it with AAS, then going back and ripping it out and moving back to krawall.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#67596 - DekuTree64 - Thu Jan 19, 2006 7:58 am</h4>
+    <div class="postbody"><span class="postbody">I'd probably stick with your original idea of doing a bubble sort, and just make some little optimizations knowing that it's probably mostly sorted to begin with.
+<br/>
+<br/>
+Simplest would be to make a flag variable, and set it if you have to swap 2 sprites. I you finish a pass and the flag was never set, you're done.
+<br/>
+<br/>
+Slightly more complicated, but avoids wasting an entire pass to find out that you're done, you could save out the first and last indices that changed during a pass. Then for the next pass, you only have to check oldFirst-1 through oldLast+1, since any outside that range are obviously not going to change. If only one sprite moved, you iterate over 3 entries for the 'finished check' pass, rather than the entire list.
+<br/>
+<br/>
+<br/>
+Of course, optimizing bubble sort is kind of like cleaning a dump (i.e. not going to get you very far), but as Dan said, you can swap it out later if needed.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#67597 - poslundc - Thu Jan 19, 2006 8:02 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>gauauu wrote:</b></span></td> </tr> <tr> <td class="quote">So you think the hit of a fast sort such as the quicksort every frame is, in a general sense, small enough to not cause problems?</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+For a reasonable amount of sprites, yes. I've not done much in the way of stress-testing, but then I've always seen it as something not worth prematurely optimizing.
+<br/>
+<br/>
+In the studio I work in, our games are locked to 30 Hz anyway, which is more than enough time to sort all the sprites you could want.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#67599 - gauauu - Thu Jan 19, 2006 10:02 am</h4>
+    <div class="postbody"><span class="postbody">30Hz?  Interesting. 
+<br/>
+<br/>
+I've always been of the mindset that it's hard to tell the difference once the framerate gets above 30, but there are so many people that will go on and on about how it makes a difference.   (all those people who buy $300 graphics cards so they can play Quake 17 at 437 FPS)  
+<br/>
+<br/>
+So, do people ever notice and complain about the lower framerates, or does it seem to be a matter of "don't tell them, and they don't notice?"
+<br/>
+<br/>
+Anyway, thanks for the suggestions.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#67606 - Mucca - Thu Jan 19, 2006 12:05 pm</h4>
+    <div class="postbody"><span class="postbody">I use insertion sort, its light and easy to understand, better than bubble sort, and for data that is nearly sorted it performs almost as well as quick sort. In my opinion, the complicated sorting algorithms such as quick, radix, bucket etc, are only worth it if a large amount of data needs to be sorted.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+// Sample insertion sort algorithm processing array of pointers to objects
+<br/>
+// to be sorted, eg sprites
+<br/>
+// Change sort comparison to '&gt;' for ascending
+<br/>
+<br/>
+int i, j;
+<br/>
+Object * obj;
+<br/>
+int sort;
+<br/>
+<br/>
+for (i=1; i &lt; numObjects; i++)
+<br/>
+{
+<br/>
+   obj = objects[i];
+<br/>
+   sort = obj-&gt;GetSortCode();      // e.g. y-coordinate
+<br/>
+   j = i;
+<br/>
+   while ((j &gt; 0) &amp;&amp; 
+<br/>
+( objects[j-1]-&gt;GetSortCode() &lt; sort ))     // descending
+<br/>
+   {
+<br/>
+      objects[j] = objects[j-1];
+<br/>
+      j = j - 1;
+<br/>
+   }
+<br/>
+   objects[j] = vobj;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#67632 - poslundc - Thu Jan 19, 2006 4:55 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>gauauu wrote:</b></span></td> </tr> <tr> <td class="quote">30Hz?  Interesting. 
+<br/>
+<br/>
+I've always been of the mindset that it's hard to tell the difference once the framerate gets above 30, but there are so many people that will go on and on about how it makes a difference.   (all those people who buy $300 graphics cards so they can play Quake 17 at 437 FPS)  
+<br/>
+<br/>
+So, do people ever notice and complain about the lower framerates, or does it seem to be a matter of "don't tell them, and they don't notice?"</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I can tell the difference usually between a game running at 60 Hz and the same game running at 30 Hz, but if you just give me a game that happens to be running at 30 Hz on a dinky platform like the GBA, I don't know if I'd be able to notice that I was missing anything.
+<br/>
+<br/>
+If you're gonna do bubble sort, I'd recommend either doing full bubble sort or doing it DekuTree's way. I know I'd rather have a sort that won't be relying on some constraint of game physics that is unlikely to be enforced just to make a small optimization.
+<br/>
+<br/>
+But then I would also recommend doing whatever's relatively simple to do - even insertion sort - and optimizing it when it becomes a problem.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#67655 - YopYop - Thu Jan 19, 2006 8:10 pm</h4>
+    <div class="postbody"><span class="postbody">For my part when I?ve made a RPG engine I use double link list of sprite. When you enter in a new map I load the list for this map then I add the main character into this list and I keep it sort through all characters movements. I mean you slice the moving sprite up or down in the list. It work quite well if you don?t have too much moving sprites.
+<br/>
+<br/>
+yopyop</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#67735 - gauauu - Fri Jan 20, 2006 2:02 am</h4>
+    <div class="postbody"><span class="postbody">Well, I'll play with doing a full sort (Ditch bubble sort, use a real sorting algorithm) and see if I get any problems.
+<br/>
+<br/>
+Thanks for the advice.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#67862 - Miked0801 - Fri Jan 20, 2006 11:18 pm</h4>
+    <div class="postbody"><span class="postbody">Consider shell sort - low overhead and o^1.25 performance.  works great</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

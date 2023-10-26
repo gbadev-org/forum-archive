@@ -1,0 +1,255 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>128 sprites limit, again - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > 128 sprites limit, again</h2>
+<div id="posts">
+<div class="post">
+    <h4>#22806 - pentagram - Tue Jun 29, 2004 9:22 pm</h4>
+    <div class="postbody"><span class="postbody">I've been working on a sprite multiplexing system to get more than 128 sprites per frame. I'm overwriting the OAM 6 times each frame from within the VCount ISR, and it works, the OAM gets updated, why? Everywhere is said that OAM (and VRAM and palette) can only be accessed during VBlank or HBlank, so it seems there's something I don't understand. Any thoughts?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#22811 - poslundc - Tue Jun 29, 2004 10:09 pm</h4>
+    <div class="postbody"><span class="postbody">Have you tried it on hardware? If it works at all, you will probably get artifacts (tearing) as a result.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#22821 - pentagram - Tue Jun 29, 2004 11:06 pm</h4>
+    <div class="postbody"><span class="postbody">It works perfectly on hardware. The VCount is triggered about 5 scanlines above the higher sprite's y coordinate for each group, although the copying loop takes less than a single scanline (pure asm ldmia and stmia). Even getting artifacts (its not the case) I still wonder how can I access the OAM outside the allowed access period...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#22822 - Miked0801 - Tue Jun 29, 2004 11:43 pm</h4>
+    <div class="postbody"><span class="postbody">Because, unlike the GBC, if the sprites aren't used on the lines you are doing the reload, things should be perfectly fine.  The GBA doesn't lock the bus when drawing OAMs.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#22837 - abilyk - Wed Jun 30, 2004 2:07 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>pentagram wrote:</b></span></td> </tr> <tr> <td class="quote">Everywhere is said that OAM (and VRAM and palette) can only be accessed during VBlank or HBlank, so it seems there's something I don't understand. Any thoughts?</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Actually, you've kinda got it backwards.  OAM cannot be accessed during HBlank unless the <span style="font-weight: bold">H-Blank Interval Free</span> bit (bit 5) in the <span style="font-weight: bold">REG_DISPCNT</span> register (0x4000000) is set to 1.  Setting that bit allows HBlank manipulation of OAM but at a price -- the number of OBJ rendering cycles per line is cut from 1210 to 954.
+<br/>
+<br/>
+See <a class="postlink" href="http://www.work.de/nocash/gbatek.htm" target="_blank">GBATEK</a> for more details.
+<br/>
+<br/>
+Edit:  Also, to further clarify, as far as I know the only denied access period for OAM is during HBlank.  As mentioned above, that denial can be overridden, so you should be able to access OAM at any time.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#22838 - poslundc - Wed Jun 30, 2004 2:24 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>pentagram wrote:</b></span></td> </tr> <tr> <td class="quote">It works perfectly on hardware. The VCount is triggered about 5 scanlines above the higher sprite's y coordinate for each group, although the copying loop takes less than a single scanline (pure asm ldmia and stmia). Even getting artifacts (its not the case) I still wonder how can I access the OAM outside the allowed access period...</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+The artifacts would only be on the same scanline. As tepples says, HBlank is the only "prohibited" region. HDraw is sort of considered <span style="font-style: italic">generally</span> "prohibited", only because you would get artifacts on the same scanline. But as long as you can coordinate your sprites' positions so that you can keep your multiplexer ahead of the game, you should be fine.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#22840 - jd - Wed Jun 30, 2004 3:01 am</h4>
+    <div class="postbody"><span class="postbody">Here's the relevant snippet from GBATEK:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+<span style="font-weight: bold">VRAM, OAM, and Palette RAM Access</span>
+<br/>
+These memory regions can be accessed during H-Blank or V-Blank only
+<br/>
+(unless display is disabled by Forced Blank bit in DISPCNT register).
+<br/>
+There is an additional restriction for OAM memory: Accesses during
+<br/>
+H-Blank are allowed only if 'H-Blank Interval Free' in DISPCNT is set (which'd reduce number of display-able OBJs though).
+<br/>
+The CPU appears to be able to access VRAM/OAM/Palette at any time, a
+<br/>
+waitstate (one clock cycle) being inserted automatically in case that the display controller was accessing memory simultaneously. (Ie. unlike
+<br/>
+as in old 8bit gameboy, the data will not get lost.)
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+It seems to contradict itself though - in the first sentence it says that OAM can only be accessed in H-Blank or V-Blank, but in the penultimate one it says that OAM can be accessed at any time. I assume from this that it is technically ok to access OAM during H-Draw but doing so will be slower than in H-Blank/V-Blank and might cause minor graphical glitches. Can someone confirm whether or not this interpretation is correct?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#22847 - wintermute - Wed Jun 30, 2004 12:56 pm</h4>
+    <div class="postbody"><span class="postbody">I've been having a look at a few things with GBA video hardware recently which seem to indicate that the VRAM is dual ported. I suspect that, knowing how cheap Nintendo are, I'm actually seeing writes being delayed to hblank or vblank. I still need to do some speed tests to confirm this though.
+<br/>
+<br/>
+It would also seem possible that writing isn't blocked/delayed at all but rather the video hardware loads what it needs for a given scanline and you take your chances with the timing :)
+<br/>
+<br/>
+From experiments so far, it's beginning to look as if the writes during hblank/vblank apply only to DMA and not the CPU.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#22850 - R0d Longfella - Wed Jun 30, 2004 1:54 pm</h4>
+    <div class="postbody"><span class="postbody">Perhaps a bit curious question, but why would you need 6 times more sprites? Ain't 128 sprites alot already?
+<br/>
+<br/>
+And besides the amount of sprites that can be displayed, have you thought already about where you're going to store the video data of 768 sprites, isn't there only 32kb of space?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#22851 - poslundc - Wed Jun 30, 2004 2:13 pm</h4>
+    <div class="postbody"><span class="postbody">One of the most common uses for sprite multiplexing is variable-width text systems, such as the one used by the Golden Sun games.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#22853 - Miked0801 - Wed Jun 30, 2004 3:22 pm</h4>
+    <div class="postbody"><span class="postbody">Which can (and is by us) done with BG layers or with intelligent sprite management.  But to where you'd put those sprites?  You can multi-plex sprite VRAM as easily as OAM data - not as fast, but still useful.  Reload the OAM, reload the VRAM, instant new sprite.  But truthfully, this technique is better for pre-loaded sprites (like space invaders.)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#22856 - Lord Graga - Wed Jun 30, 2004 4:09 pm</h4>
+    <div class="postbody"><span class="postbody">Golden Sun did it's text by writting 2 letters to one 16x8 sprite when the write function was called.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#22857 - poslundc - Wed Jun 30, 2004 4:15 pm</h4>
+    <div class="postbody"><span class="postbody">Man, that's crazy... I am having a hard time dreaming up a game-design scenario that would run into the kind of hardware limitations that would be best overcome by muxing both OAM <span style="font-style: italic">and</span> sprite VRAM.
+<br/>
+<br/>
+Personally, I use text BGs for my variable-width font stuff. But then I use a lot of large rot/scale sprites, so sprite rendering cycles are very valuable to me. Although another good reason to use a text BG is twice the VRAM; you can have all four BGs going with more than enough room to spare if you are frugal about it.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#22859 - tepples - Wed Jun 30, 2004 4:33 pm</h4>
+    <div class="postbody"><span class="postbody">Sure, but proportional-width text sits on a baseline and changes slowly. What would you do when porting a Neo-Geo shooter that uses up to 380 sprites? And what about the Robotron Writ Large that is <a class="postlink" href="http://www.indiegamejam.com/igj0/games.html#robodoom" target="_blank">Very Serious RoboDOOM</a>? I'd do it by muxing OAM to draw the baddies and muxing sprite cel VRAM to draw them closer and closer (no, can't use sprite scaling with that many characters on screen).<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#22860 - poslundc - Wed Jun 30, 2004 4:40 pm</h4>
+    <div class="postbody"><span class="postbody">It'd be tough to negotiate the logistics and the hardware in something like that. What do you do if the majority of your sprites share a scanline?
+<br/>
+<br/>
+This is the problem I have with my RPG: it's not the general situation where characters are scattered all over the place, but rather the exceptional situation where they line up that I will run out of sprite rendering cycles. (Which is why I'm implementing a software scaler to handle about half the load.)
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#22873 - ampz - Wed Jun 30, 2004 6:20 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>poslundc wrote:</b></span></td> </tr> <tr> <td class="quote">It'd be tough to negotiate the logistics and the hardware in something like that. What do you do if the majority of your sprites share a scanline?
+<br/>
+<br/>
+This is the problem I have with my RPG: it's not the general situation where characters are scattered all over the place, but rather the exceptional situation where they line up that I will run out of sprite rendering cycles. (Which is why I'm implementing a software scaler to handle about half the load.)
+<br/>
+<br/>
+Dan.</td> </tr></table><span class="postbody">
+<br/>
+Easy.
+<br/>
+Since it is, as you say, a exceptional situation; a perfectly good solution is to let the sprites flicker when there are more than 128 sprites sharing the same scanline.
+<br/>
+Lets say 200 sprites share the same scanline.. You draw the first 100 sprites during one frame, and then the other 100 during the next frame.
+<br/>
+The sprites will flicker somewhat, but it will be perfectly playable, and with 200 sprites on the same scanline, they will overlap eachother anyway.
+<br/>
+<br/>
+I have seen several games using this solution.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#22875 - poslundc - Wed Jun 30, 2004 6:23 pm</h4>
+    <div class="postbody"><span class="postbody">I thought about doing this but opted not to. I figured it would happen frequently and unpredictably enough to be distracting to the gameplay. :P
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#22878 - pentagram - Wed Jun 30, 2004 6:56 pm</h4>
+    <div class="postbody"><span class="postbody">I have made a couple of tests:
+<br/>
+<br/>
+Copy during HBlank, using CPU ldmia,stmia
+<br/>
+Copy during HBlank, using DMA inmediate
+<br/>
+Copy during VCount, using DMA inmediate
+<br/>
+Copy during VCount, using DMA HBlank (real transfer performed during HBlank)
+<br/>
+<br/>
+In all cases it worked, so it seems that both CPU and DMA have full access to OAM at any time. Wintermute, I would like to know about your experiments. Can you confirm my results or are you having problems with DMA transfers during hblank/hdraw? If finally this gets confirmed I'm wondering about the real purpose of the bit 5 in DISPCNT...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#22886 - Miked0801 - Wed Jun 30, 2004 8:22 pm</h4>
+    <div class="postbody"><span class="postbody">Perhaps legacy of GBC where it mattered?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#22902 - tepples - Wed Jun 30, 2004 10:32 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>poslundc wrote:</b></span></td> </tr> <tr> <td class="quote">I thought about doing this but opted not to. I figured it would happen frequently and unpredictably enough to be distracting to the gameplay.</td> </tr></table><span class="postbody">
+<br/>
+Go play Teenage Mutant Ninja Turtles II or III for NES, which had a 64 pixel per scanline limit. Then tell me whether flicker, while noticeable, is actually distracting in practice.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#22906 - poslundc - Wed Jun 30, 2004 10:42 pm</h4>
+    <div class="postbody"><span class="postbody">I remember TMNT2 quite well, and yes, I believe it can work. But TMNT2 was a fairly straightforward action game, versus my game, which is an action-based RPG, in which the user may be required to pay more attention to the "specifics" of the sprites - because of the wider variety of actions - than they are in a game like TMNT.
+<br/>
+<br/>
+It is also an aesthetic choice. One of the reasons I've developed a raycasting Mode 7 engine is so that I can use the camera's movement to create a more dramatic effect. I think that flickering sprites would detract from this a lot more than they would a simple sidescroller.
+<br/>
+<br/>
+Besides which, flickering it was always my failsafe option, but if I can scale in software instead, I may as well, no?
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#22907 - ampz - Wed Jun 30, 2004 10:43 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>poslundc wrote:</b></span></td> </tr> <tr> <td class="quote">I thought about doing this but opted not to. I figured it would happen frequently and unpredictably enough to be distracting to the gameplay.</td> </tr></table><span class="postbody">
+<br/>
+Go play Teenage Mutant Ninja Turtles II or III for NES, which had a 64 pixel per scanline limit. Then tell me whether flicker, while noticeable, is actually distracting in practice.</span></td> </tr></table><span class="postbody">
+<br/>
+Or play "Life Force" for NES. Same thing there. Nost notable example: The arms of the boss on the first level.
+<br/>
+Yes, it flickers, but it only happens in graphically messy situations and it is not very distracting.
+<br/>
+<br/>
+And really, there is no perfect solution to the problem.
+<br/>
+You can use software to eliminate sprites that are entirely overlapped by other sprites. This would be computationally intensive, and it still would not solve the problem entirely.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#22913 - pentagram - Thu Jul 01, 2004 12:51 am</h4>
+    <div class="postbody"><span class="postbody">Mike, you mean that bit 5 is there only for backward compatibility? If so perhaps this is not the only case, and there are more 'hardware features' that are only used when plugging GB/GBC carts. Also I bet that VRAM and palette memory accesses are not as restrictive as described in gbatek and other docs out there.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#22918 - tepples - Thu Jul 01, 2004 1:28 am</h4>
+    <div class="postbody"><span class="postbody">I have demonstrated, with a flash cart, that a program can read or write VRAM or palette memory at any time. Consequence of this is that I often use writes to PALRAM[0] (the backdrop color) for graphical profiling of a function.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

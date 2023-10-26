@@ -1,0 +1,455 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Proper sound streaming implementation - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Proper sound streaming implementation</h2>
+<div id="posts">
+<div class="post">
+    <h4>#125836 - M-.-n - Tue Apr 17, 2007 1:01 pm</h4>
+    <div class="postbody"><span class="postbody">Did anyone succeeded in implementing proper sound streaming without glitches ? I thought I had the method but it doesn't seem to be ok.
+<br/>
+<br/>
+What I did is the following:
+<br/>
+<br/>
+1- Hack the arm7 startSound to force looping playback
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+SCHANNEL_CR(channel)     = SCHANNEL_ENABLE | SOUND_REPEAT | SOUND_VOL(vol) | SOUND_PAN(pan) | (format==1?SOUND_8BIT:SOUND_16BIT);
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+2- In the arm9, create a ring buffer containing a certain amount of subbuffers of size RING_BUFFER_SIZE and setup an array for the sub buffer boundaries:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+   unsigned short *ringBuffer=(unsigned short *)malloc(RING_SAMPLE_SIZE*2*RING_BUFFER_COUNT);
+<br/>
+<br/>
+    for (i=0;i&lt;RING_BUFFER_COUNT;i++) {
+<br/>
+        gBoundaries[i]=ringBuffer+RING_SAMPLE_SIZE*i ;
+<br/>
+    } ;
+<br/>
+ </td> </tr></table><span class="postbody">
+<br/>
+<br/>
+3- Setup a timer that will be triggered regularly every RING_SAMPLE_SIZE. Since the DAC is running at 32768, I'm using this freq as base. It's the lower setting of DIV_1024 so for one interrupt every RING_SAMPLE_SIZE, I do:
+<br/>
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+    TIMER0_DATA =65536-RING_SAMPLE_SIZE; 
+<br/>
+    TIMER0_CR = TIMER_ENABLE | TIMER_DIV_1024 | TIMER_IRQ_REQ ;
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+4- Trigger a sound on the whole buffer at 32768
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+   TransferSoundData blaster = {
+<br/>
+      ringBuffer,      /* Sample address */
+<br/>
+      RING_SAMPLE_SIZE*RING_BUFFER_COUNT,   /* Sample length */
+<br/>
+      32768 ,            /* Sample rate */
+<br/>
+      127,            /* Volume */
+<br/>
+      64,               /* panning */
+<br/>
+      0                /* format 16 bits */
+<br/>
+    } ;
+<br/>
+    
+<br/>
+   playSound(&amp;blaster);
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+From there on, every time my timer handler is called, I should fill RING_SAMPLE_SIZE samples.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+void timerHandler() {
+<br/>
+    unsigned short period=150 ;
+<br/>
+    unsigned short *ptr=gBoundaries[gCurrentBoundary] ;
+<br/>
+    int i ;
+<br/>
+    for (i=0;i&lt;RING_SAMPLE_SIZE;i++) {
+<br/>
+        *ptr++=65535*gSample/period ;
+<br/>
+        gSample++ ;
+<br/>
+        if (gSample&gt;=period){
+<br/>
+           gSample=0 ;
+<br/>
+        }
+<br/>
+    } ;
+<br/>
+    gCurrentBoundary=(gCurrentBoundary+1)%RING_BUFFER_COUNT ;
+<br/>
+} ;
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+When I do this, even with a fair amount of sub buffers, I still get glitches that makes me think the timer and playback are not in sync. Does anyone knows if there's something obviously wrong with this ? or if it is achievable at all ?
+<br/>
+<br/>
+I've put the whole code here:
+<br/>
+<br/>
+<a href="http://rafb.net/p/VbRrvt14.html" target="_blank">http://rafb.net/p/VbRrvt14.html</a>
+<br/>
+<br/>
+Thanks for any help
+<br/>
+Marc.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#125848 - silent_code - Tue Apr 17, 2007 3:38 pm</h4>
+    <div class="postbody"><span class="postbody">you best contact simon (who's making the quake port), he's got mp3 decoding (and streaming i guess) working afaik.
+<br/>
+<br/>
+good luck!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#125849 - M-.-n - Tue Apr 17, 2007 3:45 pm</h4>
+    <div class="postbody"><span class="postbody">yes, someone from #dsdev was kind enough to send me some code.
+<br/>
+Hopefully will not be to hard to slap in !</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#125851 - 0xtob - Tue Apr 17, 2007 3:58 pm</h4>
+    <div class="postbody"><span class="postbody">I found the problem: The length of the sample is specified in bytes, not samples, i.e. only half of your ringbuffer gets played, causing a glitch when it loops. You have to change the sound struct command to:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">   TransferSoundData blaster = {
+<br/>
+      ringBuffer,      /* Sample address */
+<br/>
+      RING_SAMPLE_SIZE*RING_BUFFER_COUNT*2,   /* Sample length */
+<br/>
+      32768 ,            /* Sample rate */
+<br/>
+      127,            /* Volume */
+<br/>
+      64,               /* panning */
+<br/>
+      0                /* format 16 bits */
+<br/>
+    } ;</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Also, you should give the ringbuffer a little head start by calling the timer handler once before starting the sound.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">   timerHandler();
+<br/>
+   playSound(&amp;blaster);
+<br/>
+   irqEnable(IRQ_TIMER0); </td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Lastly, it would probably be a good idea to flush the cache after each time you wrote to the ring buffer, to make sure everything is written to RAM. See the DC_FlushRange command for this.
+<br/>
+<br/>
+Here's the fixed code:
+<br/>
+<br/>
+<a class="postlink" href="http://rafb.net/p/mKjMd923.html" target="_blank">http://rafb.net/p/mKjMd923.html</a><br/>_________________<br/><a class="postlink" href="http://blog.dev-scene.com/0xtob" target="_blank">http://blog.dev-scene.com/0xtob</a> | <a class="postlink" href="http://nitrotracker.tobw.net" target="_blank">http://nitrotracker.tobw.net</a> | <a class="postlink" href="http://dsmi.tobw.net" target="_blank">http://dsmi.tobw.net</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#125855 - M-.-n - Tue Apr 17, 2007 4:27 pm</h4>
+    <div class="postbody"><span class="postbody">very smooth indeed mr. Tracker !
+<br/>
+<br/>
+Any idea why I get the sound panned straight left ? I thought 64 would give a centered sound position.
+<br/>
+<br/>
+Thanks for that, sound is the only shard I still have to get LittleGPTracker up and running I think.. can't wait to have all piece together to see what the NDS will be able to deliver !
+<br/>
+<br/>
+&lt;3
+<br/>
+Marc.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#125856 - M-.-n - Tue Apr 17, 2007 4:52 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>M-.-n wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+Any idea why I get the sound panned straight left ? I thought 64 would give a centered sound position.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+mm.; strange. I recompiled and it is correct now. I wonder if the buffer doesn't have to be 4byte aligned or something. I had similar issue on the GP2X.
+<br/>
+<br/>
+Will dig a dug.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#125857 - 0xtob - Tue Apr 17, 2007 5:07 pm</h4>
+    <div class="postbody"><span class="postbody">No problem, looking forward to playing with the piggy on the DS :)
+<br/>
+<br/>
+As far as I know, sound buffers don't need to be aligned. But remember that DS channels are mono. So, if you want stereo, you have to use two channels and set the panning to left and right respectively.<br/>_________________<br/><a class="postlink" href="http://blog.dev-scene.com/0xtob" target="_blank">http://blog.dev-scene.com/0xtob</a> | <a class="postlink" href="http://nitrotracker.tobw.net" target="_blank">http://nitrotracker.tobw.net</a> | <a class="postlink" href="http://dsmi.tobw.net" target="_blank">http://dsmi.tobw.net</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#125858 - M-.-n - Tue Apr 17, 2007 5:17 pm</h4>
+    <div class="postbody"><span class="postbody">yeah..that's what I'm trying right now. However doing two Playsound in a row seems to have both channels to end up with the same panning.
+<br/>
+<br/>
+I'll try cutting some more in the arm7 part to be sure I'm initializing things syncroneoulsy. *scratches head* ;)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#125861 - 0xtob - Tue Apr 17, 2007 5:59 pm</h4>
+    <div class="postbody"><span class="postbody">Oh, this is actually one of the problems with the libnds sound functions:
+<br/>
+<br/>
+playSound writes the sound struct to a place in IPC RAM, from where it is read by the ARM7 in the vblank interrupt, i.e. only 60 times per second. So, if you call playSound two times directly after another, the first struct gets overwritten without being read by the ARM7. So, only the second sound gets played.
+<br/>
+<br/>
+Strangely, in the IPC transfer struct there is an array of 16 TransferSoundData structs that could be used to transfer multiple sound commands at the same time, but libnds only writes to the first element.
+<br/>
+<br/>
+Workarounds would be to use a custom transfer struct (there's one in the DS Sampling Keyboard source), or to use the FIFO.<br/>_________________<br/><a class="postlink" href="http://blog.dev-scene.com/0xtob" target="_blank">http://blog.dev-scene.com/0xtob</a> | <a class="postlink" href="http://nitrotracker.tobw.net" target="_blank">http://nitrotracker.tobw.net</a> | <a class="postlink" href="http://dsmi.tobw.net" target="_blank">http://dsmi.tobw.net</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#125864 - M-.-n - Tue Apr 17, 2007 6:14 pm</h4>
+    <div class="postbody"><span class="postbody">Ha. that's it then.
+<br/>
+<br/>
+Well, I guess anyway I should dive in the arm7 a little more since I might need some trickery there. I'm going to work on updating my makefile to take into account the double core thing (I'm using only one proc on the GP2X) and get in the custom command.
+<br/>
+<br/>
+thanks for the help !</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#125866 - silent_code - Tue Apr 17, 2007 6:48 pm</h4>
+    <div class="postbody"><span class="postbody">&lt;randomly speaking&gt; it's actually a nice (although initially unusual) thing that big n forces you to use both processors by strictly dividing tasks among them. that way less processing power gets lost.
+<br/>
+just think like ppl only used about 50% of the saturn's cpus' (that's an 's' like in multiple "cpus") power most of the time - the hw was really superior to the ps', but there were like only poo{p, r}ly performing (relative to the ps) games for it (no sir, i'm actually not even a bit of a sega fan boy, sir. quite the contrary, i may say.). game (console) programmers weren't used to the parallel nature of the system and abandoned it's possibilities. now add some rather bad doc and tools and there you have it: a money burning machine. but who cares anyway?
+<br/>
+<br/>
+ps: "double core" &lt;grin&gt; that's what you get from watching too much [fill in pc cpu maker's name] adds ;^) it's a multi processor system with two very distinct main processors. ;^p what happened to multi-cpu-pcs anyway? they used to be around a while ago - i remember them to be "big" around the 400 mhz era. i can only find (expensive) """workstations""" now... ?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#125870 - M-.-n - Tue Apr 17, 2007 7:54 pm</h4>
+    <div class="postbody"><span class="postbody">hehe; yes, I'm not good at vocabulary... I love the adds that now state 'solo core' coz it's just ridiculous
+<br/>
+<br/>
+I agree about the fact that it's good it forces you to use both CPU's and it's certainly going to have a serious impact on what I can take off the 2X after gaining this experience !
+<br/>
+<br/>
+I'm not exactly sure at what is going to be the optimal uses of the arm7 in my context. for the moment it is just a way to trigger states rather than really do processing. I'll keep it mostly that way in a first instance, especially since I need to keep cross-compatibility between GP32,GP2x, NDS, Windows and Mac (and probably linuss soon). So I'll first go for 'crude' implementation and go back to the design board in a second phase.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#125951 - M-.-n - Wed Apr 18, 2007 1:21 pm</h4>
+    <div class="postbody"><span class="postbody">Just for the records of his thread. I've done a stereo implementation of the above code. There was a one big issue worth mentioning: although driven by the same clock (I guess :)), the timers on both CPU are not in sync. Since the sound sampling frequency is generated on the Arm7, the timer for buffers NEED to run there too. In my previous sample, the play and write head would slightly go out of sync because of the timer discrepencies. 
+<br/>
+<br/>
+So basically, allocate the ring buffer on the arm9:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+    // Creates the ring buffer
+<br/>
+ 
+<br/>
+    unsigned short *ringBufferL=(unsigned short *)malloc(RING_SAMPLE_SIZE*2*RING_BUFFER_COUNT+4);
+<br/>
+    unsigned short *ringBufferR=(unsigned short *)malloc(RING_SAMPLE_SIZE*2*RING_BUFFER_COUNT+4);
+<br/>
+<br/>
+ 
+<br/>
+    // fills with zero to start with
+<br/>
+ 
+<br/>
+    memset(ringBufferL,0,RING_SAMPLE_SIZE*2*RING_BUFFER_COUNT) ;
+<br/>
+    memset(ringBufferR,0,RING_SAMPLE_SIZE*2*RING_BUFFER_COUNT) ;
+<br/>
+<br/>
+    
+<br/>
+    CommandStartEngine(ringBufferL,ringBufferR,RING_SAMPLE_SIZE*RING_BUFFER_COUNT*2) ;
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+And run the timer &amp; start sound on the Arm7:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+    TIMER0_DATA =65536-RING_SAMPLE_SIZE;
+<br/>
+    TIMER0_CR = TIMER_ENABLE | TIMER_DIV_1024 | TIMER_IRQ_REQ ;
+<br/>
+    
+<br/>
+    // Prebuffer
+<br/>
+    
+<br/>
+    timerHandler(); 
+<br/>
+<br/>
+    irqSet(IRQ_TIMER0, timerHandler);
+<br/>
+    irqEnable(IRQ_TIMER0);   
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+So that means now, I need to find the way to trigger an IRQ on the arm9 from the arm7 each time a new buffer cycle is needed.
+<br/>
+<br/>
+FIFO business I guess....</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#125953 - 0xtob - Wed Apr 18, 2007 1:36 pm</h4>
+    <div class="postbody"><span class="postbody">Good to know. Someone should make a streaming sound template, since this is a very common problem.
+<br/>
+<br/>
+Another option than using the FIFO would be to extend the Command struct for 2-way communication. I've done this in NitroTracker to notify the ARM9 when the next line is played or the pattern changes.<br/>_________________<br/><a class="postlink" href="http://blog.dev-scene.com/0xtob" target="_blank">http://blog.dev-scene.com/0xtob</a> | <a class="postlink" href="http://nitrotracker.tobw.net" target="_blank">http://nitrotracker.tobw.net</a> | <a class="postlink" href="http://dsmi.tobw.net" target="_blank">http://dsmi.tobw.net</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#125954 - M-.-n - Wed Apr 18, 2007 1:48 pm</h4>
+    <div class="postbody"><span class="postbody">Yeah.. once I got something running properly I'll dump the code somewhere. Something that will implement SDL-style callback. Maybe I could put it up your wiki.
+<br/>
+<br/>
+There is a code sample <a class="postlink" href="http://forum.gbadev.org/viewtopic.php?p=104451#104451" target="_blank">here</a> that works, with usage of FIFO too but I want to make sure I get all the details by doing my own implementation and his method is based on the VBlank which is probably fine but makes me cringe a little.
+<br/>
+<br/>
+It would be better for me to get an interrupt in the arm9 because in my architecture the sound buffers are used to rule all timing... my sort of Vblank but audiowise, so I need accuracy there.
+<br/>
+<br/>
+More on later....</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#126037 - M-.-n - Thu Apr 19, 2007 2:32 pm</h4>
+    <div class="postbody"><span class="postbody">w00t. Piggy did it's first sounds today. It's far from perfect as you can hear here:
+<br/>
+<br/>
+<a href="http://www.10pm.org/nostromo/lgpt/piggy-ds-barf.mp3" target="_blank">http://www.10pm.org/nostromo/lgpt/piggy-ds-barf.mp3</a>
+<br/>
+<br/>
+basically seems to work at half speed + some crap in there. At least it means it's getting closer !
+<br/>
+<br/>
+Plus my R4 has arrived so I'll be able to work out of no$gb and do the real thing.
+<br/>
+<br/>
+I'd say in about a week I'll have a first cut :)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#129876 - TheChuckster - Mon May 28, 2007 4:05 pm</h4>
+    <div class="postbody"><span class="postbody">The pastebin pages are down, could somebody please rehost?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#129992 - Noda - Tue May 29, 2007 10:41 pm</h4>
+    <div class="postbody"><span class="postbody">I'm also greatly interested by your stereo sound streaming engine :-)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#130165 - M-.-n - Thu May 31, 2007 11:57 am</h4>
+    <div class="postbody"><span class="postbody">All I can do is to provide the code I have for LittleGPTracker, so there will be a little bit of things to chop off as I don't have a clean code sample (It got nuked). Please try to look at:
+<br/>
+<br/>
+<a href="http://www.10pm.org/nostromo/ndsstream.zip" target="_blank">http://www.10pm.org/nostromo/ndsstream.zip</a>
+<br/>
+<br/>
+and see if you can get what you want out of if.
+<br/>
+<br/>
+Roughly we got the following:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+NDSSound::Init() - initializes the ring buffer and a few others needed by the app
+<br/>
+<br/>
+The most important is the ringBufferL &amp; ringBufferR. This is the one that will be sent to the arm7 to read. The ringBuffer has a size equal to a number of time a certain base buffer size. The 'base' buffer size is the size of data to fill each time the callback will be called.
+<br/>
+<br/>
+ That way, we can start the playback at zero and fill the buffer a little further to avoid clash between reading &amp; writing.
+<br/>
+<br/>
+In theory, we could deal with only 2 of them, but in my experience a little bigger is better.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+NDSSound::Close() - free whatever was allocated in init
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+NSSSound::Start() - sends the ARM7 a command through the FIFO that playback should be started. This will kick the arm7 to read in loop the buffer. The playback position is computed in the arm7 using a timer. When the buffer size has been played, the arm7 will send a FIFO command back to the arm9 that will trigger an IRQ and call SoundBufferCallback
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+NDSSound::Stop() - tells the ARM7 to stop reading the buffer and kill the timer notification
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Sorry that I can't get a clearer example, if you guys absolutely need a complete sample, let me know and I'll try to slam something.
+<br/>
+<br/>
+Cheers,
+<br/>
+Marc.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#130171 - Noda - Thu May 31, 2007 1:12 pm</h4>
+    <div class="postbody"><span class="postbody">Thanks, I'll take a look at it!</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

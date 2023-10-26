@@ -1,0 +1,174 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>draw pic from banks H & I doesnt work if using POWER_ALL - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > draw pic from banks H & I doesnt work if using POWER_ALL</h2>
+<div id="posts">
+<div class="post">
+    <h4>#174351 - gusano - Wed Jun 02, 2010 6:10 pm</h4>
+    <div class="postbody"><span class="postbody">Hi,
+<br/>
+<br/>
+I searched this forum and found that you can draw a 2D image from vram banks H &amp; I. Those banks add up to 48k, enough to cover 256x192. I tried the following code and it worked on both the emulator and the DS hardware:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+// Include DS hardware access class
+<br/>
+#include &lt;nds.h&gt;
+<br/>
+<br/>
+#include "logo.h"
+<br/>
+<br/>
+<br/>
+//---------------------------------------------------------------------------------
+<br/>
+int main(void) {
+<br/>
+//---------------------------------------------------------------------------------
+<br/>
+   
+<br/>
+   videoSetModeSub(MODE_5_2D | DISPLAY_BG3_ACTIVE ); 
+<br/>
+   vramSetBankH(VRAM_H_SUB_BG);   // 32k bank
+<br/>
+   vramSetBankI(VRAM_I_SUB_BG_0x06208000);   // 16k bank
+<br/>
+   int bg3 = bgInitSub(3, BgType_Bmp8, BgSize_B8_256x256, 0,0);
+<br/>
+   dmaCopy(logoBitmap, bgGetGfxPtr(bg3), 256*192);
+<br/>
+   dmaCopy(logoPal, BG_PALETTE_SUB, 256*2);
+<br/>
+<br/>
+   // Game loop
+<br/>
+   while(1)
+<br/>
+   {
+<br/>
+      swiWaitForVBlank();
+<br/>
+   }
+<br/>
+   
+<br/>
+   return 0;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+<br/>
+But I tried to add the code to an existing project and it didn't work on the DS hardware (it DID work on the emulator). My existing project has the line:
+<br/>
+<br/>
+	// Turn on all 2D hardware on the DS
+<br/>
+	REG_POWERCNT = (unsigned char)POWER_ALL;
+<br/>
+<br/>
+This causes the previous code to fail... any ideas why? AFAIK, I need to power everything because I'm trying to render 3D on the main screen, and also this image on the subscreen.
+<br/>
+<br/>
+<br/>
+EDIT: I've tried several combinations of the POWER options and still it fails on the DS hardware. I'm not sure what could be the problem.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#174353 - DiscoStew - Wed Jun 02, 2010 7:08 pm</h4>
+    <div class="postbody"><span class="postbody">CORRECTION:
+<br/>
+<br/>
+REG_POWERCNT, according to GBATek and within libnds, is a 16-bit register, but for some reason, PM_ARM9_DIRECT is used, and is set as bit 17 (BIT(16)), which is outside the range that a 16-bit (0-15) register can hold. Any particular reason for this?
+<br/>
+<br/>
+----------------------------------------------------------------------
+<br/>
+OLD:
+<br/>
+<br/>
+REG_POWERCNT is a 32-bit memory register. Casting a variable with 'unsigned char' keeps only the first 8 bits of the variable, and POWER_ALL holds information up to the 17th bit.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#define PM_ARM9_DIRECT BIT(16)
+<br/>
+/*! \enum PM_Bits
+<br/>
+\brief Power Management control bits 
+<br/>
+*/
+<br/>
+typedef enum
+<br/>
+{
+<br/>
+   PM_SOUND_AMP      = BIT(0) ,   /*!&lt; \brief Power the sound hardware (needed to hear stuff in GBA mode too) */
+<br/>
+   PM_SOUND_MUTE      = BIT(1),    /*!&lt; \brief   Mute the main speakers, headphone output will still work. */
+<br/>
+   PM_BACKLIGHT_BOTTOM   = BIT(2),    /*!&lt; \brief   Enable the top backlight if set */
+<br/>
+   PM_BACKLIGHT_TOP   = BIT(3)  ,  /*!&lt; \brief   Enable the bottom backlight if set */
+<br/>
+   PM_SYSTEM_PWR      = BIT(6) ,   /*!&lt; \brief  Turn the power *off* if set */
+<br/>
+<br/>
+   POWER_LCD      = PM_ARM9_DIRECT | BIT(0),      //!&lt;   Controls the power for both LCD screens.
+<br/>
+   POWER_2D_A      = PM_ARM9_DIRECT | BIT(1),      //!&lt;   Controls the power for the main 2D core.
+<br/>
+   POWER_MATRIX   = PM_ARM9_DIRECT | BIT(2),      //!&lt;   Controls the power for the 3D matrix.
+<br/>
+   POWER_3D_CORE   = PM_ARM9_DIRECT | BIT(3),      //!&lt;   Controls the power for the main 3D core.
+<br/>
+   POWER_2D_B      = PM_ARM9_DIRECT | BIT(9),      //!&lt;   Controls the power for the sub 2D core.
+<br/>
+   POWER_SWAP_LCDS   = PM_ARM9_DIRECT | BIT(15),      //!&lt;   Controls which screen should use the main core.
+<br/>
+   POWER_ALL_2D   = PM_ARM9_DIRECT | POWER_LCD | POWER_2D_A | POWER_2D_B,   //!&lt; power just 2D hardware
+<br/>
+   POWER_ALL      = PM_ARM9_DIRECT | POWER_ALL_2D | POWER_3D_CORE | POWER_MATRIX //!&lt; power everything
+<br/>
+<br/>
+}PM_Bits;
+<br/>
+</td> </tr></table><span class="postbody"><br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#174355 - gusano - Wed Jun 02, 2010 8:46 pm</h4>
+    <div class="postbody"><span class="postbody">Thanks a million DiscoStew!!
+<br/>
+<br/>
+That's some bad copy-pasting on my part :S
+<br/>
+<br/>
+If I just do REG_POWERCNT = POWER_ALL I get a compiler warning, but it works!
+<br/>
+<br/>
+I'll try to find out why PM_ARM9_DIRECT is used, when REG_POWERCNT is 16-bit...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#174363 - sverx - Thu Jun 03, 2010 3:31 pm</h4>
+    <div class="postbody"><span class="postbody">I guess it's because there's something can be switched on/off directly from the ARM9 and some cannot, like back-light, for instance...</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

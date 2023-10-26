@@ -1,0 +1,429 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Strange problem with DevKitArm18 GCC 4.10 - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > Strange problem with DevKitArm18 GCC 4.10</h2>
+<div id="posts">
+<div class="post">
+    <h4>#79461 - batblaster - Thu Apr 13, 2006 8:53 pm</h4>
+    <div class="postbody"><span class="postbody">Hi,
+<br/>
+<br/>
+i have updated my compiler chain to 4.10 the one released with DevKitArm18 and i found a strange problem, i made a small test to check it and yes it's a problem, i'm using No$GBA do see it and appear to go in a infinite loop...
+<br/>
+<br/>
+easy to reproduce...
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+init some vars like:
+<br/>
+<br/>
+u8 out=0;
+<br/>
+u8 dly=0;
+<br/>
+<br/>
+start a code and init the vbl interrupt, after:
+<br/>
+<br/>
+while(!out)
+<br/>
+{
+<br/>
+     if(vbl_intr)
+<br/>
+     {
+<br/>
+         if(dly++&gt;120) out=1;
+<br/>
+      }
+<br/>
+      vbl_intr=false;
+<br/>
+}
+<br/>
+<br/>
+print_out("i'm here\n");
+<br/>
+<br/>
+you can't reach this line..
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+you will nerver go out from the while , why ??? this code , of course, work fine with the 4.02 version of the compiler...
+<br/>
+<br/>
+If someone can check i'm so happy...
+<br/>
+<br/>
+Thanks...<br/>_________________<br/>Batblaster / 7 Raven Studios Co. Ltd
+<br/>
+------------------------------------------</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#79469 - Cearn - Thu Apr 13, 2006 10:02 pm</h4>
+    <div class="postbody"><span class="postbody">Is vbl_intr volatile? If not, the whole loop is optimised out.
+<br/>
+<br/>
+Edit for more detail.
+<br/>
+<br/>
+I'm assuming that vbl_intr is a non-volatile variable, updated by the VBlank isr, and starts out as false. At the start, you enter the loop as <span style="font-style: italic">out</span> is false (btw, ints if you can, bytes/halfwords if you have to). As <span style="font-style: italic">vbl_intr</span> is false, the <span style="font-style: italic">dly</span> if never happens. As <span style="font-style: italic">vbl_intr</span> <span style="font-weight: bold">stays</span> false inside the loop scope, the check will <span style="font-weight: bold">never</span> happen, so out will always be false, so the loop comes down to an endless loop.
+<br/>
+<br/>
+Unless vbl_intr is volatile, in which case anything goes.
+<br/>
+<br/>
+Additionally, the point of using interrupts for vsyncing is so that you can avoid the busy-wait loop by using VBlankIntrWait() to shut down the CPU and thus save power. If you're not using that, then you might as well check REG_VCOUNT or REG_DISPSTAT.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#79541 - batblaster - Fri Apr 14, 2006 5:43 am</h4>
+    <div class="postbody"><span class="postbody">Hi,
+<br/>
+<br/>
+all you say is right but believe me if you compile all with the 4.02 , and previous all work fine... Only with 4.10 i get this problem... This is an example if you will compile this small source you can see didn't work well...
+<br/>
+<br/>
+Cu..<br/>_________________<br/>Batblaster / 7 Raven Studios Co. Ltd
+<br/>
+------------------------------------------</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#79562 - Dwedit - Fri Apr 14, 2006 10:16 am</h4>
+    <div class="postbody"><span class="postbody">Not properly declaring things as "volatle" is a bug on the programmer's side, not the compiler.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#79583 - batblaster - Fri Apr 14, 2006 12:37 pm</h4>
+    <div class="postbody"><span class="postbody">I don't think is my problem , i try many different things including somethings like this:
+<br/>
+<br/>
+for(i=0;i&lt;120;i++)
+<br/>
+   VBlankIntrWait();
+<br/>
+<br/>
+this loop didn't finish but work very well with gcc 4.02 , if is my problem because i code bad why work well with 4.02 and can't with 4.10 ???<br/>_________________<br/>Batblaster / 7 Raven Studios Co. Ltd
+<br/>
+------------------------------------------</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#79585 - keldon - Fri Apr 14, 2006 12:42 pm</h4>
+    <div class="postbody"><span class="postbody">If you have not declared the variable as volatile then the compiler can treat it any way it likes. So one version could take it one way, one version could take it another way - it does not need to be specified by the compiler as not declaring it as volatile means you do not care if it is. Declaring as volatile tells the compiler that it CAN be changed by something other than the loop.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#79605 - Cearn - Fri Apr 14, 2006 2:33 pm</h4>
+    <div class="postbody"><span class="postbody">From your thread at the HAM forum:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">int main(void)
+<br/>
+{
+<br/>
+    u8 out,dly;
+<br/>
+<br/>
+    ham_Init();
+<br/>
+<br/>
+    ham_StartIntHandler(INT_TYPE_VBL,(void *)&amp;vblFunc);
+<br/>
+<br/>
+    // Loop
+<br/>
+    out=0;
+<br/>
+    dly=0;
+<br/>
+    while(!out)
+<br/>
+    {
+<br/>
+        // It's a new frame?
+<br/>
+        if(g_NewFrame)
+<br/>
+        {
+<br/>
+            if(dly++&gt;120)     //if you will comment this line the code work and go out from the loop...
+<br/>
+            {
+<br/>
+                out=1;
+<br/>
+            }
+<br/>
+<br/>
+            // Frames isn't new anymore
+<br/>
+            g_NewFrame=FALSE;
+<br/>
+        }
+<br/>
+    }
+<br/>
+ham_VBAText("I'm out\n");
+<br/>
+    return 0;
+<br/>
+} </td> </tr></table><span class="postbody">
+<br/>
+<br/>
+And as this is very similar to the structure in every HAM sample:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">u8 g_NewFrame= 0;
+<br/>
+<br/>
+void vblFunc()
+<br/>
+{
+<br/>
+    g_NewFrame= 1;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+The point we've been making is that g_NewFrame isn't volatile. Without that, the compiler assumes that the variable can only be modified locally in the code, in this case the while(!out) loop. Because it's never set to 1 here, the if(g_NewFrame) can't ever happen, so that out can never be set to 1 either and the whole while acts as an endless loop. 
+<br/>
+<br/>
+It should never have compiled any other way; the only reason older compilers allowed it is because their optimizers didn't do a proper job.
+<br/>
+<br/>
+At this point, there are 3 possible solutions:
+<br/>
+<br/>
+1) define g_NewFrame as volatile, which tells the compiler it can be modified from anywhere at any time and is unavailable for optimisation.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">volatile u8 g_NewFrame= 0;</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+2) screw the whole interrupt thing and check via REG_VCOUNT, as the current structure essentially <a class="postlink" href="http://user.chem.tue.nl/jakvijn/tonc/video.htm#sec-vsync1" target="_blank">vsyncs via a busy-wait loop</a> anyway.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+// NOTE: check for the definition of REG_VCOUNT
+<br/>
+void vid_vsync()
+<br/>
+{
+<br/>
+    while(REG_VCOUNT &gt;= 160);   // wait till VDraw
+<br/>
+    while(REG_VCOUNT &lt; 160);    // wait till VBlank
+<br/>
+}
+<br/>
+<br/>
+int main(void)
+<br/>
+{
+<br/>
+    int ii; // ints where you can
+<br/>
+<br/>
+    ham_Init();
+<br/>
+    
+<br/>
+    // wait 120 frames
+<br/>
+    for(ii=0; ii&lt;120; ii++)
+<br/>
+        vid_vsync();
+<br/>
+<br/>
+    ham_VBAText("I'm out\n");
+<br/>
+    return 0;
+<br/>
+} 
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Notice how much simpler the code is now.
+<br/>
+<br/>
+3) Use interrupts and use <a class="postlink" href="http://user.chem.tue.nl/jakvijn/tonc/swi.htm#sec-vsync2" target="_blank">VBlankIntrWait()</a>, which is the preferred method, though I'm not sure if HAM's interrupt dispacher is properly set up for it. Probably not. In fact, I'm not even sure if it even has BIOS routine support.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+// extra stuff that may or may not be required :/
+<br/>
+#ifndef(__thumb__)
+<br/>
+#define swi_call(x)   asm volatile("swi\t"#x ::: "r0", "r1", "r2", "r3")
+<br/>
+#else
+<br/>
+#define swi_call(x)   asm volatile("swi\t"#x"&lt;&lt;16" ::: "r0", "r1", "r2", "r3")
+<br/>
+#endif
+<br/>
+<br/>
+#define REG_IFBIOS  (*(vu16*)0x03007FF8)
+<br/>
+<br/>
+#define IF_VBLANK    0x0001
+<br/>
+<br/>
+void VBlankIntrWait()  {   swi_call(0x05);    }
+<br/>
+<br/>
+// we now continue with our regular programming
+<br/>
+void vlbFunc()
+<br/>
+{
+<br/>
+    // hope this is correct; it's been a while since I had to do this manually :P
+<br/>
+    REG_IFBIOS = REG_IF &amp; IF_VBLANK;
+<br/>
+}
+<br/>
+<br/>
+int main()
+<br/>
+{
+<br/>
+    int ii;
+<br/>
+<br/>
+    ham_Init();
+<br/>
+    ham_StartIntHandler(INT_TYPE_VBL, vblFunc); // (void*) cast should not be required
+<br/>
+<br/>
+    // wait 120 frames
+<br/>
+    for(ii=0; ii&lt;120; ii++)
+<br/>
+        VBlankIntrWait();
+<br/>
+<br/>
+    ham_VBAText("I'm out\n");
+<br/>
+    return 0;
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Not 100% if the last one will work immediately with HAM, but you should be able to get it working with a little tinkering. If not, use the vid_vsync() version.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#79712 - batblaster - Sat Apr 15, 2006 3:39 pm</h4>
+    <div class="postbody"><span class="postbody">Did you try all with 4.10 ???
+<br/>
+<br/>
+very strange...
+<br/>
+<br/>
+All work fine with 4.02 with or without using ham, my project didn't use any lib except some map scroll routines... I'm using the Bios calls because nintendo say is required to save power, i only say is strange a simple loop work and was compiled well with 4.02 and previous and didn't work with 4.10
+<br/>
+<br/>
+I'm using already in my project the VBL you mean thanks i'm only wrote the question for the community , if someone switch from 4.02 to 4.10 and didn't have the code clear maybe can have problem...
+<br/>
+<br/>
+I also wrote it in the ham forum because there there are many users who can have the same problem...
+<br/>
+<br/>
+That's all...
+<br/>
+<br/>
+Thanks...<br/>_________________<br/>Batblaster / 7 Raven Studios Co. Ltd
+<br/>
+------------------------------------------</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#79715 - Cearn - Sat Apr 15, 2006 4:27 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>batblaster wrote:</b></span></td> </tr> <tr> <td class="quote">Did you try all with 4.10 ???</td> </tr></table><span class="postbody">
+<br/>
+Yes I did. And the solution that's been suggested three times now works: make g_NewFrame volatile.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>batblaster wrote:</b></span></td> </tr> <tr> <td class="quote">very strange...</td> </tr></table><span class="postbody">
+<br/>
+No, it's not. We've already explained why it's <span style="font-weight: bold">supposed</span> to fail: g_NewFrame is never never changed inside the loop, so code that rlies on it being one can never be executed and is therefore thrown out.
+<br/>
+<br/>
+From the generated assembly:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">   ldrb   r2, [r1]   @ read the global gNewFrame
+<br/>
+   mov    r3, #0     @ init dly
+<br/>
+.L120:
+<br/>
+   cmp   r2, #0     @ if gNewFrame==0, goto .L120
+<br/>
+   beq   .L120      @ -&gt; lock up
+<br/>
+   cmp   r3, #120   @ if dly&gt;120, jump out
+<br/>
+   bhi   .L112
+<br/>
+.L121:
+<br/>
+   add   r3, r3, #1    @ dly++;
+<br/>
+   lsl   r3, r3, #24   @ - wasteful instructions to keep dly as a byte
+<br/>
+   lsr   r3, r3, #24   @ /
+<br/>
+   mov   r2, #0   @ \
+<br/>
+   cmp   r2, #0   @ - if gNewFrame==0, goto .L120
+<br/>
+   beq   .L120    @ /
+<br/>
+   cmp   r3, #120
+<br/>
+   bls   .L121   @
+<br/>
+.L112:
+<br/>
+    @ rest of code
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+The first instruction loads gNewFrame into r2. The two instructions after .L120 check whether r2 (=gNewFrame) is 0, which it will be, and then jump back to .L120, since the contents of r2 are never changed in these two instructions it forms an endless loop. If it ran in 4.02 (which it doesn't actually), then the compiler was in error.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>batblaster wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+I'm using the Bios calls because nintendo say is required to save power</td> </tr></table><span class="postbody"> Perhaps, but <span style="font-style: italic">where</span> did you use it? If you did it in the place of that dly check, the code never gets there. VBlankIntrWait() is supposed to be used instead of gNewFrame, not in tandem. If you did it like I showed in a previous post then, yes, that might be considered strange.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#79733 - tepples - Sat Apr 15, 2006 5:41 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Cearn wrote:</b></span></td> </tr> <tr> <td class="quote">VBlankIntrWait() is supposed to be used instead of gNewFrame, not in tandem.</td> </tr></table><span class="postbody">
+<br/>
+Is it a bad habit from NES programming? On the NES, there is no wait-for-interrupt instruction, and there is no VCOUNT, so most games have the vblank ISR set a flag that the main program spin-loops on.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

@@ -1,0 +1,163 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>GFX FIFO DMAage - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > GFX FIFO DMAage</h2>
+<div id="posts">
+<div class="post">
+    <h4>#147992 - simonjhall - Mon Dec 31, 2007 3:42 pm</h4>
+    <div class="postbody"><span class="postbody">I've recently rejigged loads of my rendering code to use display lists, and I'm lovin' the speed increase.
+<br/>
+However, reading the code in glCallList I'm just interested in a comment in there:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">GL_STATIC_INL void glCallList(const u32* list) {
+<br/>
+   u32 count = *list++;
+<br/>
+   
+<br/>
+   // flush the area that we are going to DMA
+<br/>
+   DC_FlushRange(list, count*4);
+<br/>
+   
+<br/>
+   // don't start DMAing while anything else is being DMAed because FIFO DMA is touchy as hell
+<br/>
+   //    If anyone can explain this better that would be great. -- gabebear
+<br/>
+   while((DMA_CR(0) &amp; DMA_BUSY)||(DMA_CR(1) &amp; DMA_BUSY)||(DMA_CR(2) &amp; DMA_BUSY)||(DMA_CR(3) &amp; DMA_BUSY));
+<br/>
+   
+<br/>
+   // send the packed list asynchronously via DMA to the FIFO
+<br/>
+   DMA_SRC(0) = (uint32)list;
+<br/>
+   DMA_DEST(0) = 0x4000400;
+<br/>
+   DMA_CR(0) = DMA_FIFO | count;
+<br/>
+   while(DMA_CR(0) &amp; DMA_BUSY);
+<br/>
+}</td> </tr></table><span class="postbody">Although I don't actually use this function (I use something I wrote myself which does it asynchronously), Im a little worried by the comment right in the middle. Has anyone else had troubles with DMA to the graphics FIFO at the same time as other DMAs?
+<br/>
+<br/>
+I don't bother wait for other DMAs whilst doing it and it works fine for me... Assuming there is some issue with doing other DMAs at the same time, what if ARM7 DMA is being used at the same time as the GFX DMA?
+<br/>
+<br/>
+Unrelated: although the ARM7 can't talk to the 3D hardware, can ARM7 DMA transfer data to the GFX FIFO?
+<br/>
+EDIT: no, it can't
+<br/>
+<br/>
+Peace.<br/>_________________<br/><span style="font-weight: bold"><a class="postlink" href="https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&amp;business=simonjhall%40gmail%2ecom&amp;no_shipping=2&amp;no_note=1&amp;tax=0&amp;currency_code=GBP&amp;lc=GB&amp;bn=PP%2dDonationsBF&amp;charset=UTF%2d8" target="_blank">Big thanks to everyone who donated for Quake2</a></span></span><span class="gensmall"><br/><br/>Last edited by simonjhall on Mon Dec 31, 2007 6:12 pm; edited 1 time in total</span></div>    
+</div>
+<div class="post">
+    <h4>#147995 - Peter - Mon Dec 31, 2007 4:08 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>simonjhall wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+ // flush the area that we are going to DMA
+<br/>
+ DC_FlushRange(list, count*4);
+<br/>
+</td> </tr></table><span class="postbody"></span></td> </tr></table><span class="postbody">
+<br/>
+Note sure if this still applies, but a couple of months ago I figured out the following:
+<br/>
+<br/>
+DC_FlushRange does not test if the data to flush is larger than the cache. If you flush-range 100kb, it flushes the whole 100kb where a DC_FlushAll would be quite faster.
+<br/>
+<br/>
+Also, once the memory location where the displaylist is located is flushed, you don't need to flush it again, unless you modify it of course. 
+<br/>
+<br/>
+imo it makes little sense to flush-range in a render-call. In my program, during level loading, I load all displaylists in memory, then DC_FlushAll and don't need to flush them anymore. Works like a charm that way for me.
+<br/>
+<br/>
+PS: I also don't wait for DMA and haven't noticed a problem so far.<br/>_________________<br/>Kind Regards,
+<br/>
+Peter</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#148001 - simonjhall - Mon Dec 31, 2007 4:56 pm</h4>
+    <div class="postbody"><span class="postbody">If you try and flush 100kb but none of that is in the cache, it should be instant - right? So I'd imagine that there's gotta be an upper bound on the amount of time it takes to flush a range of data, and this can't be more than flushing the entire cache...
+<br/>
+Having said that, I have noticed that flushing a range is often mush slower than flushing the entire cache :-)
+<br/>
+<br/>
+One final gotcha I found recently:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void *ptr = malloc(size);
+<br/>
+invalidate_range(ptr, size);
+<br/>
+dma(source, ptr, size);
+<br/>
+flush_range(ptr, size);</td> </tr></table><span class="postbody">When you flush or invalidate an area of memory, it's going to be rounded up to the nearest 32 bytes, since that's the size of a cache line. So this fragment of code can be dodgy if size isn't a multiple of 32 bytes as some mallocs store information in the memory around the allocated block. malloc/free won't be happy if this information is invalidated away :-)
+<br/>
+...this took ages for me to figure out!
+<br/>
+<br/>
+To summarise, kids if you're gonna invalidate parts of your cache make sure it's a size that's a multiple of the size of a cache line!<br/>_________________<br/><span style="font-weight: bold"><a class="postlink" href="https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&amp;business=simonjhall%40gmail%2ecom&amp;no_shipping=2&amp;no_note=1&amp;tax=0&amp;currency_code=GBP&amp;lc=GB&amp;bn=PP%2dDonationsBF&amp;charset=UTF%2d8" target="_blank">Big thanks to everyone who donated for Quake2</a></span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#148004 - kusma - Mon Dec 31, 2007 5:07 pm</h4>
+    <div class="postbody"><span class="postbody">Funny note: I'm currently doing my own roll-out of glCallList to avoid waiting for the DMA in a safe way. I posted about it in the "Coding"-forum yesterday. ;)
+<br/>
+<br/>
+My idea is to reserve one DMA for the gfx-fifo, and making a queue of dma-jobs to perform. New jobs can be started from the dma-irq. To make this work robustly, you need a queue which is either atomic, or some locks to make it atomic. This is what I'm currently working on. Some other logic is needed, like not flushing until the queue is finished and so on.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#148017 - wintermute - Mon Dec 31, 2007 7:31 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>simonjhall wrote:</b></span></td> </tr> <tr> <td class="quote">If you try and flush 100kb but none of that is in the cache, it should be instant - right? So I'd imagine that there's gotta be an upper bound on the amount of time it takes to flush a range of data, and this can't be more than flushing the entire cache...
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Actually it would probably make more sense to either invalidate the entire cache if the size is greater than the size of the cache. DC_FlushRange currently flushes a line at a time for the entire range given so it's likely to be a tad slower.
+<br/>
+<br/>
+I keep meaning to have a look at the ARM cache control again and see if there's a way to determine if a cache line is within a particular range. That way we could just check each line &amp; flush/invalidate instead of doing it for an entire address range.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+One final gotcha I found recently:
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void *ptr = malloc(size);
+<br/>
+invalidate_range(ptr, size);
+<br/>
+dma(source, ptr, size);
+<br/>
+flush_range(ptr, size);</td> </tr></table><span class="postbody">When you flush or invalidate an area of memory, it's going to be rounded up to the nearest 32 bytes, since that's the size of a cache line. So this fragment of code can be dodgy if size isn't a multiple of 32 bytes as some mallocs store information in the memory around the allocated block. malloc/free won't be happy if this information is invalidated away :-)
+<br/>
+...this took ages for me to figure out!
+<br/>
+</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I bet, that's not even something I've ever thought about to be honest. Cache coherency is such a nightmare.<br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

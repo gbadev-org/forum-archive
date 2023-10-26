@@ -1,0 +1,684 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Fast Fixed Point Arc Tan function - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > Fast Fixed Point Arc Tan function</h2>
+<div id="posts">
+<div class="post">
+    <h4>#3378 - KashinKoji - Sun Feb 23, 2003 9:01 pm</h4>
+    <div class="postbody"><span class="postbody">Hi,
+<br/>
+Does anyone know a fast method of doing and inverse tangent? Basically, I want a direction from one point to another. The X and Y values that would be the parameters are sfp32, 1:15:16, and I just want an integer value returned for the angle, between 0 and 360. Right now I convert to float and use the math function for tan inverse, but doing those float computations very often (I want to use arc tan at least once every cycle) will probably slow things down in the future. 
+<br/>
+<br/>
+So what I am looking for is this:
+<br/>
+<br/>
+u16 ArcTan(sfp32 Y, sfp32 X)
+<br/>
+{
+<br/>
+u16 Angle
+<br/>
+<br/>
+//please help me here, something faster than:
+<br/>
+// Angle = (u16)ArcTan(Y/X)
+<br/>
+//where Y and X are converted to floats from sfp32
+<br/>
+<br/>
+return Angle;
+<br/>
+}
+<br/>
+<br/>
+Anyone have any thoughts? Thanks in advance.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#3385 - mbcook - Sun Feb 23, 2003 9:44 pm</h4>
+    <div class="postbody"><span class="postbody">The fastest method is to use a lookup table. You just make a table of values, and lookup things in it. Something like:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">angle = table[(y * 10) / (x * 10)];</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+The basic idea of the code above is to keep you from needing a table of 2^64 values, which would take up way too much memory. You'll sacrifice some accuracy, but it shouldn't matter for a simple game. If you need more accuracy, make it "* 100" or more. You'll have to figure out just how many entries your table will need, but that won't be hard to do. As for the table it's self, you can make a very simple C program to make one for you that you can directly import into source code.
+<br/>
+<br/>
+If you need more help, I'll be glad to try. Does this help?<br/>_________________<br/>--Michael</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#3386 - KashinKoji - Sun Feb 23, 2003 10:06 pm</h4>
+    <div class="postbody"><span class="postbody">Thanks for the reply, mbcook. I use a lookup table of course for the sin and cosine, which works out really well because the input for a sin or cos is in my case an integer and I only need a table of 450 values to do it, easily filled by a simple C program. 
+<br/>
+<br/>
+But for Arc Tan I was looking for more accuracy. I guess if I am going to cast my result to an int anyway I shouldn't be so picky. The input ratio of X/Y can have infinite values, and I could just trim it down to a reasonable estimate for a lookup table. 
+<br/>
+<br/>
+I wonder how big trig lookup tables are on the average calculator? I bet Texas Instruments uses some proprietary estimation algorithms instead tables. 
+<br/>
+<br/>
+Thanks mbcook.
+<br/>
+Anybody else have any suggestions?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#3390 - tepples - Sun Feb 23, 2003 10:33 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>KashinKoji wrote:</b></span></td> </tr> <tr> <td class="quote">The input ratio of X/Y can have infinite values</td> </tr></table><span class="postbody">
+<br/>
+That can be worked around.  Either the absolute value of Y/X is less than or equal to 1, or the absolute value of X/Y is less than 1.  If you make your arctan2() function take both a <span style="font-style: italic">y</span> and an <span style="font-style: italic">x</span> value, you need only store values for 0 &lt; y/x &lt; 1, turn the fraction over if abs(y) &gt; abs(x), and linearly interpolate values between the ones stored in the table.  The arctan2() function becomes a divide, a multiply, and a few comparisons and additions.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">I bet Texas Instruments uses some proprietary estimation algorithms [in its calculators].</td> </tr></table><span class="postbody">
+<br/>
+Proprietary?  The graphing calculators probably use piecewise Taylor series approximations.  Taylor series were <a class="postlink" href="http://www-gap.dcs.st-and.ac.uk/~history/Mathematicians/Taylor.html" target="_blank">invented before 1715</a>; any patent on Taylor series has long since expired.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#3396 - mbcook - Mon Feb 24, 2003 12:45 am</h4>
+    <div class="postbody"><span class="postbody">Tepples is right about the taylor seires, but even if it didn't use that, a table would be a waste of rom. While arctan and such may be "slow" on a GBA, when you have a calculator with an operator who can't even react faster than 1/20th of a second (very rough number) the speed doesn't matter as long as it's not much longer than that. It will still appear to be instantaneous. Much cheaper than a table in most cases, I'd assume.<br/>_________________<br/>--Michael</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#3403 - tepples - Mon Feb 24, 2003 2:53 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>mbcook wrote:</b></span></td> </tr> <tr> <td class="quote">a table would be a waste of rom</td> </tr></table><span class="postbody">
+<br/>
+A table might be a waste of ROM on a calculator but not in a GBA game.  I just coded up a linear interpolated approximation to arctan() in Maple, and even an approximation with a 9-point table (from y/x = 0 to 1 by 1/8) is never off by more than 0.075 degree.  Such a small error shouldn't practically affect object direction calculation.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#3404 - dukope - Mon Feb 24, 2003 3:41 am</h4>
+    <div class="postbody"><span class="postbody">an atan table needs only 1/4th as many entries as you have angles. 128 integers (given 512 possible angles) is hardly a waste of ROM. still, to use such a table requires a binary search for the correct y/x ratio. 
+<br/>
+<br/>
+here's what you really want: <a class="postlink" href="http://www.dspguru.com/comp.dsp/tricks/alg/fxdatan2.htm" target="_blank">Fixed-Point Atan2 With Self Normalization</a></span><span class="gensmall"><br/><br/>Last edited by dukope on Mon Feb 24, 2003 5:04 am; edited 2 times in total</span></div>    
+</div>
+<div class="post">
+    <h4>#3406 - mbcook - Mon Feb 24, 2003 4:08 am</h4>
+    <div class="postbody"><span class="postbody">I agree, I think you guys missed my point though. In a gameboy where you might have to use the table hundreds of times per second, it's not only a waste, it's a good idea. But on a simple scientific calculator that you can buy for $10 where you don't need the speed, it's a waste. I love off topic discussions.<br/>_________________<br/>--Michael</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#3421 - zeuhl - Mon Feb 24, 2003 2:34 pm</h4>
+    <div class="postbody"><span class="postbody">concerning the table array ...
+<br/>
+<br/>
+better use powers of 2 (e.g 64, 128, 256, ...) rather than 10 or 100 for premultipliers. The resulting assembly code will be more compact, hence faster. The ARM processor is able to perform a shift (can be used for multiplications by a power of 2) and an addition in a single instruction. this just rocks.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#3425 - col - Mon Feb 24, 2003 5:10 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>dukope wrote:</b></span></td> </tr> <tr> <td class="quote">...here's what you really want: <a class="postlink" href="http://www.dspguru.com/comp.dsp/tricks/alg/fxdatan2.htm" target="_blank">Fixed-Point Atan2 With Self Normalization</a></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+except that it uses a divide which is very slow on gba. Interesting link though :)
+<br/>
+<br/>
+cheers
+<br/>
+<br/>
+col.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#3427 - col - Mon Feb 24, 2003 5:16 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>KashinKoji wrote:</b></span></td> </tr> <tr> <td class="quote">...I wonder how big trig lookup tables are on the average calculator? I bet Texas Instruments uses some proprietary estimation algorithms instead tables. ...
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Most calculators used to use a variation on the '<b style="color:#FFA34F">cordic</b>' (COrdinate Rotation DIgital Computer) approach - this can be implemented very cheaply in hardware as it uses shifts and adds.
+<br/>
+<br/>
+"The <b style="color:#FFA34F">CORDIC</b> algorithm is a shift-add algorithm for computing trigonometric, hyperbolic trigonometric and linear functions and their inverses. It can also be used for log, exponent and square root. Common uses are sine and cosine generation, vector magnitude, polar-cartesian conversions, and vector rotation."
+<br/>
+<br/>
+do a google on <b style="color:#FFA34F">cordic</b> - there's tons of info out there.
+<br/>
+<br/>
+<br/>
+cheers
+<br/>
+<br/>
+col.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#3441 - KashinKoji - Mon Feb 24, 2003 10:50 pm</h4>
+    <div class="postbody"><span class="postbody">Wow, 
+<br/>
+Thanks everybody for the input. Here's what I cooked up: (in pseudocode)
+<br/>
+<br/>
+sfp16 ArcTanTable[90];
+<br/>
+<br/>
+for(i = 0;  i &lt; i++)
+<br/>
+{
+<br/>
+  ArcTanTable[90]  = tan(RADIAN(i)) &lt;&lt; 8SHIFT;
+<br/>
+}
+<br/>
+<br/>
+//that is how I generate the 90 point table in sfp16, (to be hardcoded) and I use a macro to //get the values from it into sfp32
+<br/>
+<br/>
+#define GetTanVal(a)  ArcTanTable[(a)] &lt;&lt; 8SHIFT;
+<br/>
+<br/>
+u16 MyArcTan(sfp32 DeltaX, sfp32 DeltaY)
+<br/>
+{
+<br/>
+sfp32 Ratio;
+<br/>
+u16 Angle;
+<br/>
+//check for special cases first, X or Y equalling 0, then get on to the good stuff
+<br/>
+<br/>
+if(abs(DeltaX) &gt; abs(DeltaY))
+<br/>
+  Ratio = abs(DeltaX) / abs(DeltaY);
+<br/>
+else
+<br/>
+  Ratio = abs(DeltaY) / abs(DeltaX);
+<br/>
+<br/>
+// now a quick binary sort to find the nearest ratio in the table. getting an upper and lower 
+<br/>
+//bound than a quick comparison to find which is closest, and setting the angle to that table
+<br/>
+//index. I won't bore you with the details, but what it gives me is the nearest acute angle.
+<br/>
+<br/>
+//so then I just check which quadrant from the point of the sprite that  
+<br/>
+//my angle is in by the signs of DeltaX and DeltaY, and determine the final angle based 
+<br/>
+//on which ratio i used, X/Y or Y/X.
+<br/>
+<br/>
+if(DeltaX &gt; 0)
+<br/>
+  {
+<br/>
+     if(DeltaY &gt; 0)  //quadrant III
+<br/>
+        {
+<br/>
+         if abs(DeltaY) &gt; abs(DeltaX)
+<br/>
+            return 180 - Angle;
+<br/>
+        else 
+<br/>
+            return 90 + Angle;
+<br/>
+        }  
+<br/>
+     if(DeltaY &lt; 0) // quadrant II
+<br/>
+       {
+<br/>
+         if(abs(DeltaY) &gt; abs(DeltaX))
+<br/>
+             return 180 + Angle;
+<br/>
+        else 
+<br/>
+             return 270 - Angle;
+<br/>
+       }
+<br/>
+  }
+<br/>
+else if(Delta X &lt; 0)
+<br/>
+  {
+<br/>
+     if(DeltaY &gt; 0)  // quadrant IV
+<br/>
+        {
+<br/>
+          if(abs(DeltaY) &gt; abs(DeltaX))
+<br/>
+             return Angle;
+<br/>
+          else
+<br/>
+             return 90 - Angle;
+<br/>
+        }
+<br/>
+      else if(DeltaY &lt; 0)  //quadrant I
+<br/>
+        {
+<br/>
+           if(abs(DeltaY) &gt; abs(DeltaX))
+<br/>
+              return 360 - Angle;
+<br/>
+           else
+<br/>
+              return 270 + Angle;
+<br/>
+        }
+<br/>
+     }
+<br/>
+  }
+<br/>
+}
+<br/>
+<br/>
+My actual code looks a lot different than that, but you get the idea. This scheme works out rather well for me, since I am only looking for whole angle values. So thanks everybody for the input. (and if you have comments on that pseudocode algorithm I would welcome those as well) 
+<br/>
+<br/>
+Thanks especially Teppels, it was your comment on switching the y/x and x/y for a ratio always less than 1 that really helped me. The kind of thing that you look at and think, "why didn't I think of that?" Except for the binary sort, which uses division by 2 (actually a left shift of 1) It is just a bunch of comparisons and some addition or subtraction. No interpolation needed at all.
+<br/>
+<br/>
+Here's a question out of curiousity:
+<br/>
+When I call this function, would it be faster to add a couple of variables to store the absolute value of DeltaX and DeltaY, or would it be faster to continually call the abs function? 
+<br/>
+Is it the case that the more local variables you have in  a function the greater the overhead when that function is called?
+<br/>
+<br/>
+Thanks again.
+<br/>
+[edited: I had a bunch of spaces in there to make the pseudocode readable, but they got discarded byt he message board, so sorry for the mess.]</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#3458 - peebrain - Tue Feb 25, 2003 8:43 am</h4>
+    <div class="postbody"><span class="postbody">Um... no one has suggested BIOS?
+<br/>
+<br/>
+Copied from CowBite Spec:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+0x09: ArcTan 
+<br/>
+<br/>
+Input: r0 = Tangent(angle) (16-bit; 1 bit sign, 1 bit integral, 14 bit decimal)
+<br/>
+Output: r0 = "-PI/2&lt;THETA/&lt;PI/2" in a range of 0xC000h-0x4000.
+<br/>
+Note: There is a problem in accuracy with "THETA&lt;-PI/4, PI/4&lt;THETA" 
+<br/>
+<br/>
+0x0A: ArcTan2 
+<br/>
+<br/>
+Note: I'm unsure about this one, since there is conflicting info about its purpose, and I have not tested it.
+<br/>
+Version 1:
+<br/>
+Calculates the arctangent of the given point.
+<br/>
+Input: r0 = X (signed 16-bit), r1 = Y (signed 16-bit)
+<br/>
+Output: r0=arctan
+<br/>
+<br/>
+Version 2:
+<br/>
+Calculates the arctangent after correction processing.
+<br/>
+Input: r0 = Tangent(angle) (16-bit; 1 bit sign, 1 bit integral, 14 bit decimal)
+<br/>
+Output: r0 = 0000h-FFFFh for 0&lt;=THETA&lt;2PI 
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+~Sean<br/>_________________<br/><a href="http://www.pbwhere.com" target="_blank">http://www.pbwhere.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#3645 - AnthC - Mon Mar 03, 2003 11:03 pm</h4>
+    <div class="postbody"><span class="postbody">#define PI 	                (4*atan(1))
+<br/>
+#define SCALE		(1&lt;&lt;26)
+<br/>
+<br/>
+S32 Tan2Tab[32];
+<br/>
+<br/>
+void maketab(void)
+<br/>
+{
+<br/>
+	S32 *p=Tan2Tab;
+<br/>
+<br/>
+	for (double i=0;i&lt;32;i++)
+<br/>
+	{
+<br/>
+		/* tan(a)=2^-n a = atan(2^-n) */
+<br/>
+<br/>
+		double j=2.0;
+<br/>
+		double tmp=pow(j,-i);
+<br/>
+				 tmp=atan(tmp);
+<br/>
+<br/>
+		*p++=tmp*SCALE;
+<br/>
+	}
+<br/>
+}
+<br/>
+<br/>
+/* atan2 function in degs using <b style="color:#FFA34F">cordic</b> rotator */
+<br/>
+<br/>
+S32 atan2c(S32 y,S32 x)
+<br/>
+{
+<br/>
+	S32 tmp,ang=0,*p=Tan2Tab;
+<br/>
+	U32 tmp1;
+<br/>
+<br/>
+	/* 'normalise' for accuracy */
+<br/>
+<br/>
+	if (x&lt;0)
+<br/>
+	{
+<br/>
+		x=-x;y=-y;
+<br/>
+		ang=PI*SCALE;
+<br/>
+	} 
+<br/>
+<br/>
+	tmp1=x;
+<br/>
+<br/>
+	if (y&gt;0)
+<br/>
+	{
+<br/>
+		tmp1|=y;
+<br/>
+		ang=-ang;
+<br/>
+	}
+<br/>
+	else tmp1|=-y;
+<br/>
+<br/>
+	while(!(tmp1 &amp; 0x20000000)) {tmp1&lt;&lt;=1;x&lt;&lt;=1;y&lt;&lt;=1;}
+<br/>
+<br/>
+	/* 12 is good number */
+<br/>
+<br/>
+	for (int i=0;i&lt;32;i++) 
+<br/>
+	{
+<br/>
+		if (y&lt;0)
+<br/>
+		{
+<br/>
+			ang-=*p++;
+<br/>
+			tmp=x-(y&gt;&gt;i);
+<br/>
+			y+=(x&gt;&gt;i);
+<br/>
+			x=tmp;
+<br/>
+		}
+<br/>
+		else
+<br/>
+		{
+<br/>
+			ang+=*p++;
+<br/>
+			tmp=x+(y&gt;&gt;i);
+<br/>
+			y-=(x&gt;&gt;i);
+<br/>
+			x=tmp;
+<br/>
+		}
+<br/>
+	}
+<br/>
+<br/>
+	return ang;
+<br/>
+}
+<br/>
+<br/>
+S32 acosc(S32 x)
+<br/>
+{
+<br/>
+	S32 y=sqrt(1.0*SCALE*SCALE-1.0*x*x);
+<br/>
+	return atan2c(y,x);
+<br/>
+}
+<br/>
+<br/>
+void main(void)
+<br/>
+{
+<br/>
+	maketab();
+<br/>
+<br/>
+#if 1 /* atan2 */
+<br/>
+<br/>
+	for (double ang=0;ang&lt;360;ang+=1)
+<br/>
+	{
+<br/>
+		double a=ang*PI/180;
+<br/>
+<br/>
+		S32 x=cos(a)*SCALE;
+<br/>
+		S32 y=sin(a)*SCALE;
+<br/>
+<br/>
+		double angi=atan2c(x,y)*1.0/SCALE;
+<br/>
+		double angf=atan2(x,y);
+<br/>
+<br/>
+		printf("int %lf fpu %lf\n",angi,angf);
+<br/>
+	}
+<br/>
+#else /* acos */
+<br/>
+<br/>
+	for (double ang=0;ang&lt;360;ang+=1)
+<br/>
+	{
+<br/>
+		double a=ang*PI/180;
+<br/>
+<br/>
+		S32 x= cos(a)*SCALE;
+<br/>
+<br/>
+		double angi=acosc(x)*1.0/SCALE;
+<br/>
+		double angf=acos(1.0*x/SCALE);
+<br/>
+<br/>
+		printf("int %lf fpu %lf %lf\n",angi,angf,100.0*angi/angf);
+<br/>
+	}
+<br/>
+<br/>
+#endif
+<br/>
+}</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#4204 - excessus - Sun Mar 23, 2003 12:43 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>peebrain wrote:</b></span></td> </tr> <tr> <td class="quote">Um... no one has suggested BIOS?
+<br/>
+<br/>
+Copied from CowBite Spec:
+<br/>
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+0x09: ArcTan 
+<br/>
+<br/>
+Input: r0 = Tangent(angle) (16-bit; 1 bit sign, 1 bit integral, 14 bit decimal)
+<br/>
+Output: r0 = "-PI/2&lt;THETA/&lt;PI/2" in a range of 0xC000h-0x4000.
+<br/>
+Note: There is a problem in accuracy with "THETA&lt;-PI/4, PI/4&lt;THETA" 
+<br/>
+<br/>
+0x0A: ArcTan2 
+<br/>
+<br/>
+Note: I'm unsure about this one, since there is conflicting info about its purpose, and I have not tested it.
+<br/>
+Version 1:
+<br/>
+Calculates the arctangent of the given point.
+<br/>
+Input: r0 = X (signed 16-bit), r1 = Y (signed 16-bit)
+<br/>
+Output: r0=arctan
+<br/>
+<br/>
+Version 2:
+<br/>
+Calculates the arctangent after correction processing.
+<br/>
+Input: r0 = Tangent(angle) (16-bit; 1 bit sign, 1 bit integral, 14 bit decimal)
+<br/>
+Output: r0 = 0000h-FFFFh for 0&lt;=THETA&lt;2PI 
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+~Sean</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Oh yeah bios swi is the key to fast physics calculatios. Here are few SWI math function lookalike inline assembler defines (whee) that I fumbled up.
+<br/>
+Just use big integer numbers to get some precision. I use 1024x times bigger than "real" values. So if you are doing physics that needs trigonometry you need 4 things: cos, sin, atan and square root. My advice is to use lookup tables for cos and sin ( lets say like 360 integer entries in array ), then use SWI calls for square root and arc tan. That swi atan func below returns degree as in integer not radian/float. Same goes for square root, eats int pukes int. See those above cowbite specs for more specific declaration for those ints. 
+<br/>
+<br/>
+-ari rusakko
+<br/>
+<br/>
+ps. If this didn't make much sense, I could try to explain it in detail in email or AIM (email: <a href="mailto:rusakko@lut.fi">rusakko@lut.fi</a> / AIM: ruzakko)
+<br/>
+<br/>
+pps. these SWI calls are _fast_
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#define SWIsqrt(x) (\
+<br/>
+{\
+<br/>
+u16 __value ;\
+<br/>
+u32 __arg = (x);\
+<br/>
+__asm volatile (\
+<br/>
+   " mov r0,%1  \n\
+<br/>
+     swi 0x80000 \n\
+<br/>
+     mov %0,r0"\
+<br/>
+     : "=r" (__value) \
+<br/>
+     : "r" (__arg)    \
+<br/>
+     : "r0");\
+<br/>
+__value;\
+<br/>
+})
+<br/>
+<br/>
+#define SWIatanDEC(x,y) (\
+<br/>
+{\
+<br/>
+s16 __value     ;\
+<br/>
+s16 __arg1 = (x);\
+<br/>
+s16 __arg2 = (y);\
+<br/>
+__asm volatile (\
+<br/>
+   " mov r0,%1  \n\
+<br/>
+     mov r1,%2  \n\
+<br/>
+     swi 0xa0000 \n\
+<br/>
+     mov %0,r0"\
+<br/>
+     : "=r" (__value) \
+<br/>
+     : "r" (__arg1)   \
+<br/>
+     , "r" (__arg2)   \
+<br/>
+     : "r0", "r1");\
+<br/>
+(__value/180);\
+<br/>
+})
+<br/>
+</td> </tr></table><span class="postbody"><br/>_________________<br/>Current binary for my pinball game demo:
+<br/>
+<a href="http://www.lut.fi/~rusakko/gba/flibu.gba" target="_blank">www.lut.fi/~rusakko/gba/flibu.gba</a></span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

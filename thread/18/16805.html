@@ -1,0 +1,357 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>SMF format decoding problem - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > SMF format decoding problem</h2>
+<div id="posts">
+<div class="post">
+    <h4>#169773 - hacker013 - Mon Aug 03, 2009 11:22 am</h4>
+    <div class="postbody"><span class="postbody">Heey everybody,
+<br/>
+<br/>
+I'm trying to get smf files working with nitro engine 6.0. So I changed to code so that it uses textures and libnds timers (and ripped out the palib stuff)  but when I fade out to black (to start the movie), it stays black. Maybe see you guys what i'm doing wrong, here is my code:
+<br/>
+<br/>
+UZSmf.h
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#ifdef UZ_USE_SMF
+<br/>
+<br/>
+#ifndef __UZ_SMF_H_
+<br/>
+#define __UZ_SMF_H_
+<br/>
+<br/>
+#include &lt;UZMain.h&gt;
+<br/>
+#include &lt;stdio.h&gt;
+<br/>
+#include &lt;gba-jpeg-decode.h&gt;
+<br/>
+<br/>
+void smfPlay(char * filename);
+<br/>
+void smfInit();
+<br/>
+<br/>
+// for loading jpg...
+<br/>
+unsigned short screen_bitmap[49152];
+<br/>
+NE_Material* texture;
+<br/>
+<br/>
+struct VIDEO_HEADER
+<br/>
+{
+<br/>
+  short   height;
+<br/>
+  int      framecount;
+<br/>
+  int      vidoffset;
+<br/>
+  int      taboffset;
+<br/>
+} vidhead;
+<br/>
+<br/>
+char * buffer;
+<br/>
+u32 frame_offset;
+<br/>
+u16 frame_count;
+<br/>
+u16 pixSize;
+<br/>
+char* pixBuf;
+<br/>
+u32 rawSize; // 22050/12 = 1/12 second of sound?
+<br/>
+u32 audio_offset; //was 58
+<br/>
+u16 sndBufPointer;
+<br/>
+FILE* vidFile;
+<br/>
+<br/>
+//int zoom=256;
+<br/>
+//int zoom1=256;
+<br/>
+<br/>
+#endif
+<br/>
+<br/>
+#endif
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+UZSmf.c
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#ifdef UZ_USE_SMF
+<br/>
+#include &lt;UZSmf.h&gt;
+<br/>
+<br/>
+void drawTexture()
+<br/>
+{
+<br/>
+   NE_2DViewInit();
+<br/>
+   GFX_POLY_FORMAT = POLY_ALPHA(31) | POLY_ID(1) | NE_CULL_NONE;
+<br/>
+   NE_2DDrawTexturedQuad(0,0,256,192,1,texture);
+<br/>
+}
+<br/>
+<br/>
+void decodeSound()
+<br/>
+{
+<br/>
+   if(vidhead.framecount &gt;= frame_count)
+<br/>
+   {
+<br/>
+      sndBufPointer++;
+<br/>
+      if (sndBufPointer == 4) sndBufPointer = 0;
+<br/>
+      audio_offset=(58+(float)1837.5*(frame_count+6)); // 1837.5 = 22050/12
+<br/>
+      audio_offset = audio_offset &gt;&gt;1 &lt;&lt;1; // must be even number for some reason.
+<br/>
+      fseek (vidFile , audio_offset , SEEK_SET);
+<br/>
+      fread(&amp;buffer[sndBufPointer * rawSize],1,rawSize,vidFile);
+<br/>
+      timerStart(0, ClockDivider_1024, 512, decodeSound);
+<br/>
+   }
+<br/>
+}
+<br/>
+<br/>
+void decodeFrame()
+<br/>
+{
+<br/>
+   if(vidhead.framecount &gt;= frame_count)
+<br/>
+   {
+<br/>
+      fseek(vidFile , frame_offset, SEEK_SET);
+<br/>
+      fread(&amp;pixSize,2,1,vidFile);
+<br/>
+      memset(pixBuf,0,16000);   // 98304
+<br/>
+      fread(pixBuf, 1, pixSize, vidFile);
+<br/>
+      frame_offset+=2+pixSize;
+<br/>
+      memset(screen_bitmap,0,98304);   // 98304
+<br/>
+      if(!JPEG_DecompressImage((u8*)pixBuf, &amp;screen_bitmap[256*((192-vidhead.height)/2)+0], 256, 192))
+<br/>
+      {
+<br/>
+         UZ_ERROR("Failed to decompres frame!");
+<br/>
+      }
+<br/>
+      if(!NE_MaterialTexLoad(texture, GL_RGB, 256, 192, TEXGEN_TEXCOORD, &amp;screen_bitmap))
+<br/>
+      {
+<br/>
+         UZ_ERROR("Failed to load texture!");
+<br/>
+      }
+<br/>
+      frame_count++;
+<br/>
+      timerStart(1, ClockDivider_1024, 85, decodeFrame);
+<br/>
+   }
+<br/>
+}
+<br/>
+<br/>
+void smfPlay(char * filename)
+<br/>
+{
+<br/>
+   rawSize = 11500; // 22050/12 = 1/12 second of sound?
+<br/>
+   audio_offset = 0; //was 58
+<br/>
+   sndBufPointer = 0;
+<br/>
+   //frame_offset;
+<br/>
+   frame_count=0;
+<br/>
+   pixSize=0;
+<br/>
+   pixBuf = (char*) malloc(16000);
+<br/>
+   buffer = (char*) malloc(sizeof(char)*rawSize*4);
+<br/>
+   if(pixBuf==NULL)
+<br/>
+   {
+<br/>
+      UZ_ERROR("Failed to allocate pixBuffer!");
+<br/>
+   }
+<br/>
+   if(buffer==NULL)
+<br/>
+   {
+<br/>
+      UZ_ERROR("Failed to allocate buffer!");
+<br/>
+   }
+<br/>
+<br/>
+   int frm_number[250]; // 250 frame numbers for progress bar
+<br/>
+   int frm_offset[250]; // 250 locations for progress bar
+<br/>
+   
+<br/>
+   FILE* vidFile;
+<br/>
+   vidFile = fopen (filename, "rb"); //rb = read
+<br/>
+   if(vidFile==NULL)
+<br/>
+   {
+<br/>
+      char str[256];
+<br/>
+      sprintf(str, "Failed to open smf file: %s", filename);
+<br/>
+      UZ_ERROR(str);
+<br/>
+   }
+<br/>
+   // read the file header
+<br/>
+   fread(&amp;vidhead.height,2,1,vidFile); // either 192 or 144   
+<br/>
+   fread(&amp;vidhead.framecount,4,1,vidFile);
+<br/>
+   fread(&amp;vidhead.vidoffset,4,1,vidFile);
+<br/>
+   fread(&amp;vidhead.taboffset,4,1,vidFile);
+<br/>
+   // read the progress bar data
+<br/>
+   fseek (vidFile , vidhead.taboffset , SEEK_SET);
+<br/>
+   fread(&amp;frm_offset[0],4,250,vidFile);
+<br/>
+   fread(&amp;frm_number[0],4,250,vidFile);
+<br/>
+<br/>
+   frame_offset = vidhead.vidoffset;
+<br/>
+   
+<br/>
+   //Create texture
+<br/>
+   texture = NE_MaterialCreate();
+<br/>
+<br/>
+   //Set Timers
+<br/>
+   //timerStart(0, ClockDivider_1, 512, decodeSound);
+<br/>
+   //timerStart(1, ClockDivider_1, 85, decodeFrame);
+<br/>
+   decodeSound();
+<br/>
+   decodeFrame();
+<br/>
+<br/>
+   while(vidhead.framecount &gt;= frame_count)
+<br/>
+   {
+<br/>
+      //Draw Screens
+<br/>
+      UZ_Process(NULL, drawTexture);
+<br/>
+      UZ_WaitForVBL();
+<br/>
+   }
+<br/>
+   
+<br/>
+   fclose(vidFile);
+<br/>
+   NE_MaterialDelete(texture);
+<br/>
+   free(pixBuf);
+<br/>
+   free(buffer);
+<br/>
+   //Disable Timer
+<br/>
+}
+<br/>
+<br/>
+void smfInit()
+<br/>
+{
+<br/>
+<br/>
+}
+<br/>
+<br/>
+#endif
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I didn't start on the sound decoding yet so it just skips the sound part. I was thinking about using discostew wave streamer for that or just replace the sound from smf with ogg and use tremolo for it. But it would be great if you can help me find the bug ^^. Excuse me for the mess in my code :(<br/>_________________<br/><a class="postlink" href="http://imetal.nl/" target="_blank">Website / Blog</a>
+<br/>
+<br/>
+Let the nds be with you.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#169800 - hacker013 - Tue Aug 04, 2009 11:32 am</h4>
+    <div class="postbody"><span class="postbody">anybody, i need this fix :(
+<br/>
+<br/>
+EDIT:
+<br/>
+<br/>
+nvm, I found the bug but it is still extreemly choppy, does somebody know some speed ups ?<br/>_________________<br/><a class="postlink" href="http://imetal.nl/" target="_blank">Website / Blog</a>
+<br/>
+<br/>
+Let the nds be with you.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

@@ -1,0 +1,244 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Drawing Buffers directly to 2 Displays - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Drawing Buffers directly to 2 Displays</h2>
+<div id="posts">
+<div class="post">
+    <h4>#102065 - Moeity - Sun Sep 10, 2006 12:55 pm</h4>
+    <div class="postbody"><span class="postbody">I'm making a small ebook app. I'm using a font library to draw antialiased fonts to a buffer image. What is the easiest possible way I can draw  two 256*192 uint32 buffers, one to each screen?
+<br/>
+<br/>
+So far, I've tried this:
+<br/>
+<br/>
+Setting to framebuffer mode, I can draw a page of text to one screen, no problem by writing directly to VRAM_A. For example, when I write a background color to the screen:
+<br/>
+<br/>
+videoSetMode(MODE_FB0);
+<br/>
+vramSetBankA(VRAM_A_LCD);
+<br/>
+for(int i = 0; i &lt; SCREEN_HEIGHT * SCREEN_WIDTH; i++)
+<br/>
+        VRAM_A[i] = RGB15(BACK_R, BACK_G, BACK_B);
+<br/>
+<br/>
+This is very simple, and works fine. I can't seem to get anything to display on both screens though.
+<br/>
+<br/>
+Is there a way I can write the same way to the second display? Could I switch the main screen to the bottom display, then call the same code to print to both screens? Or should I be using different video modes entirely?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#102067 - HotChilli - Sun Sep 10, 2006 1:26 pm</h4>
+    <div class="postbody"><span class="postbody">RTFM. =) I.e. this manual - <a href="http://www.patatersoft.info/manual.html" target="_blank">http://www.patatersoft.info/manual.html</a>
+<br/>
+<br/>
+AFAIU, you should set appropriate memory banks (A, B, C...) for main and sub screens. And write to these memory adresses. In manual above ready demo works with both screens.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#102069 - Sausage Boy - Sun Sep 10, 2006 1:34 pm</h4>
+    <div class="postbody"><span class="postbody">While this approach works fine, it's recommended that you use mode 5 and extended rotation backgrounds instead. Why? If you ever want to add more layers, a mouse cursor, debug text or something, you will have to code everything manually if you use the framebuffer. With an extrot bg, you can make the DS's graphics hardware do the work instead.
+<br/>
+<br/>
+Anyways, to the implemention. I havn't tested this code, so there might be some minor errors somewhere.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+<br/>
+vidoeSetMode(MODE_5_2D);
+<br/>
+videoSetModeSub(MODE_5_2D); //Set up the sub screen
+<br/>
+<br/>
+vramSetBankA(VRAM_A_MAIN_BG); //Use bank a for main screen gfx
+<br/>
+vramSetBankC(VRAM_C_SUB_BG);  //Use bank c for sub screen gfx
+<br/>
+<br/>
+BG3_CR = BG_BMP16_256x256;       //Set up our bg's for framebuffer
+<br/>
+SUB_BG3_CR = BG_BMP16_256x256;
+<br/>
+//Note that the BG is 256 pixels high, but only the first 192 rows are visibe.
+<br/>
+<br/>
+//Rotation and scaling stuff. Never mind this. If you want to use it some time, remember that it's fixed point.
+<br/>
+BG3_XDX = 1 &lt;&lt; 8;
+<br/>
+BG3_XDY = 0;
+<br/>
+BG3_YDX = 0;
+<br/>
+BG3_YDY = 1 &lt;&lt; 8;
+<br/>
+<br/>
+BG3_CX = 0;
+<br/>
+BG3_CY = 0; //This is what we'd change to scroll the background
+<br/>
+<br/>
+//and for the sub screen
+<br/>
+SUB_BG3_XDX = 1 &lt;&lt; 8;
+<br/>
+SUB_BG3_XDY = 0;
+<br/>
+SUB_BG3_YDX = 0;
+<br/>
+SUB_BG3_YDY = 1 &lt;&lt; 8;
+<br/>
+<br/>
+SUB_BG3_CX = 0;
+<br/>
+SUB_BG3_CY = 0;
+<br/>
+<br/>
+<br/>
+//Finally, to display stuff...
+<br/>
+<br/>
+//Main screen, nice and blue
+<br/>
+for(int i = 0; i &lt; 256*256; i++)
+<br/>
+   BG_GFX[i] = RGB15(0, 0, 31) | BIT(15); //Bit 15 controls transparency, if you leave it out, you'll get a black screen.
+<br/>
+<br/>
+//Let's do a green sub screen
+<br/>
+for(int i = 0; i &lt; 256*256; i++)
+<br/>
+   SUB_BG_GFX[i] = RGB15(0, 31, 0) | BIT(15); //DON'T forget bit 15
+<br/>
+<br/>
+</td> </tr></table><span class="postbody"><br/>_________________<br/>"no offense, but this is the gayest game ever"</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#102237 - Moeity - Tue Sep 12, 2006 3:24 am</h4>
+    <div class="postbody"><span class="postbody">Great, both comments were very useful, I have what I wanted working now.
+<br/>
+<br/>
+I was confused, and thinking that to use mode 5 I had to have my background as a set of tiles. I didn't realize I could write directly to the screen, and thought you could only do that with the framebuffer. Thanks for clearing that up.
+<br/>
+<br/>
+But now I am a little confused... if I can write directly to a layer of a hardware layering mode, what use is the framebuffer mode at all? In what situations would it be preferable to use the framebuffer rather than using a background layer?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#102238 - tepples - Tue Sep 12, 2006 3:42 am</h4>
+    <div class="postbody"><span class="postbody">The "extended rotation" modes allow everything that the "framebuffer" mode allows. As far as I can tell, the "framebuffer" mode was added so that GBA mode could use the 2D hardware yet still have a way to translate between the GBA's frame rate (59.7275 Hz) and the DS's (59.8983 Hz), which is a fraction of a percent faster.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#102240 - TJ - Tue Sep 12, 2006 3:49 am</h4>
+    <div class="postbody"><span class="postbody">Wait, so you <span style="font-style: italic">can</span> draw directly on the screen when you aren't in frame buffer mode? I was under the same impression, that you had to specifically be in FB mode to draw primitives on the screen.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#102303 - Lick - Tue Sep 12, 2006 7:53 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>TJ wrote:</b></span></td> </tr> <tr> <td class="quote">Wait, so you <span style="font-style: italic">can</span> draw directly on the screen when you aren't in frame buffer mode?</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Yes!<br/>_________________<br/><a class="postlink" href="http://licklick.wordpress.com" target="_blank">http://licklick.wordpress.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#110124 - mysteryegg - Sat Nov 25, 2006 8:02 pm</h4>
+    <div class="postbody"><span class="postbody">For a fancy e-book reader's page flip effect, would it make more sense to animate manually in the frame buffer... or to transfer the contents of the screen to a 3D object and apply the rotating effect there?
+<br/>
+<br/>
+For my purposes, actually, I would be happy with a stiff (like cardboard) quad object for the user to scribble on either side for cases like signing the back of a photo or making 2-sided flash cards.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#110126 - tepples - Sat Nov 25, 2006 8:05 pm</h4>
+    <div class="postbody"><span class="postbody">If all you need is one quad, you can do that in any mode but 0 by changing the matrix of a rotation layer or extended rotation layer.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#110139 - mysteryegg - Sat Nov 25, 2006 9:54 pm</h4>
+    <div class="postbody"><span class="postbody">While that sounds reasonable, all I can figure out how to do with the matrix would be a "squish" or "stretch" effect. What transormation would I need to apply to rotate about the y-axix to introduce some depth?
+<br/>
+<br/>
+If this is documented somewhere, point me in the right direction.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#110141 - mysteryegg - Sat Nov 25, 2006 10:31 pm</h4>
+    <div class="postbody"><span class="postbody">I had overlooked the GBA discussions on this topic. Looking into TONC now. Hopefully I should be fine...
+<br/>
+<br/>
+But for future reference, has anybody made a nice fluid "page flip" effect?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#110149 - Cearn - Sun Nov 26, 2006 12:28 am</h4>
+    <div class="postbody"><span class="postbody">Flipping-over effect as seen from an oblique projection. Semi-tested. Apologies for the crummy ascii art.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+  &lt;-- D -&gt;
+<br/>
+   _________________________
+<br/>
+^ |\     |                  \
+<br/>
+| | \    '                   \
+<br/>
+W |  \  /                     \
+<br/>
+| | φ \/_______________________\
+<br/>
+v |_.-' ____________________|
+<br/>
+<br/>
+r = D/W
+<br/>
+<br/>
+Matrix:
+<br/>
+A = | 1   r?sin(φ)  |
+<br/>
+    | 0     cos(φ)  |
+<br/>
+<br/>
+GBA/NDS matrix:
+<br/>
+P = A^-1
+<br/>
+  = | 1   -r?tan(φ) |
+<br/>
+    | 0    1/cos(φ) |
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+&amp;phi; is the angle that the page makes with respect to its normal position. 
+<br/>
+<span style="font-style: italic">r</span> is an obliqueness ratio, indicating how much you see it from the side. <span style="font-style: italic">r</span> = 0 would mean you see the page head-on, which wouldn't give much of a flipping effect (boils down to a 1D scaling). Start with, say, <span style="font-style: italic">r</span> = 0.5 (or -0.5) and fiddle until it looks nice enough. 
+<br/>
+<br/>
+I'm assuming you're holding the DS vertically here; if not, I think switching the columns of the matrix should suffice. As always, watch your fixed point.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

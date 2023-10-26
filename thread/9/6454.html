@@ -1,0 +1,242 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>8x8 tiles acting funny - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Graphics > 8x8 tiles acting funny</h2>
+<div id="posts">
+<div class="post">
+    <h4>#49609 - paladine - Sun Jul 31, 2005 10:00 pm</h4>
+    <div class="postbody"><span class="postbody">I am using mode 0 and 3 backgrounds for display.  BG0 is my main map display, BG1 is used for text and BG2 is used as a window to show the text.  I  am coding the graphics for the window manually since it's just a few pixels to display.  I am experience some weird color/palette problems when display some of my tiles.  Here is an example of a tile -
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+static const u16 leftside[16] = {
+<br/>
+  0x2341,0x1111,
+<br/>
+  0x2341,0x1111,
+<br/>
+  0x2341,0x1111,
+<br/>
+  0x2341,0x1111,
+<br/>
+  0x2341,0x1111,
+<br/>
+  0x2341,0x1111,
+<br/>
+  0x2341,0x1111,
+<br/>
+  0x2341,0x1111,
+<br/>
+};
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I have a topside and leftside variable.  The top is topside, the bottom is topside with a vertical flip, the left side is leftside, and the right side is leftside with a horizontal flip.  The top and bottom displays work perfectly.  However the colors/palettes don't match up for the left hand side.  My palette is as follows , 1-&gt;blue, 2-&gt;white, 3-&gt;gray,4-&gt;darker gray.  So the left side should appear as white-&gt;gray-&gt;darker gray-&gt;blue.  But what I see on screen is blue-&gt;darker gray-&gt;gray-&gt;white-&gt;blue-&gt;blue-&gt;blue-&gt;blue... which doesn't really make any sense to me.  
+<br/>
+The strange thing is I can redefine the array as 0x2222 and it appears totally white.  I can even set it to 0x2222,0x0000 ... and it appears white on the left half and blue on the right.  However when I use 0x2341,0x1111 it never works correctly!  Very strange!  A long shot perhaps, any suggestions?  I can post more code if it'll help.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+void EnterTalkMode(const char *pText)
+<br/>
+{
+<br/>
+  volatile u16 empty;
+<br/>
+  int i;
+<br/>
+  u16 *screenBase = SCREEN_BASE_BLOCK(15);
+<br/>
+  u16 *charBase   = CHAR_BASE_BLOCK(1);
+<br/>
+  u16 *palette = BG_PALETTE_INDEX(14);
+<br/>
+  // -----------------------------------------------------------------------------
+<br/>
+  // set palette
+<br/>
+  palette[0] = 0;
+<br/>
+  palette[1] = RGB(0,0,31);   // blue
+<br/>
+  palette[2] = RGB(30,31,30); // off-white
+<br/>
+  palette[3] = RGB(24,24,24); // slightly gray
+<br/>
+  palette[4] = RGB(12,14,14); // slightly darker
+<br/>
+  // -----------------------------------------------------------------------------
+<br/>
+  // create first tile of transparency
+<br/>
+  empty = 0;
+<br/>
+  DMACopy((u16*)&amp;empty,charBase,16,DMA_16NOW | DMA_SOURCE_FIXED);
+<br/>
+  // create second tile of blue
+<br/>
+  empty = 0x1111;
+<br/>
+  DMACopy((u16*)&amp;empty,charBase+16,16,DMA_16NOW | DMA_SOURCE_FIXED);
+<br/>
+  // create third tile of upper row
+<br/>
+  DMACopy(toprow,charBase+32,16,DMA_16NOW);
+<br/>
+  // create fourth tile of left sides
+<br/>
+  DMACopy(leftside,charBase+48,16,DMA_16NOW);
+<br/>
+  // create fifth tile of corners
+<br/>
+  DMACopy(upperleftcorner,charBase+64,16,DMA_16NOW);
+<br/>
+  // -----------------------------------------------------------------------------
+<br/>
+  // now fill with blue, clear middle section
+<br/>
+  empty = (14 &lt;&lt; TILE_PALETTE_SHIFT) | 1;
+<br/>
+  DMACopy((u16*)&amp;empty,screenBase+32,32*8,DMA_16NOW | DMA_SOURCE_FIXED);
+<br/>
+  // clear all tiles (set to the first tile which will be transparent)
+<br/>
+  empty = (14 &lt;&lt; TILE_PALETTE_SHIFT);
+<br/>
+  DMACopy((u16*)&amp;empty,screenBase+(32*10),32*22,DMA_16NOW | DMA_SOURCE_FIXED);  
+<br/>
+  // fill top row is tile 2 (third tile)
+<br/>
+  empty = (14 &lt;&lt; TILE_PALETTE_SHIFT) | 2;
+<br/>
+  DMACopy((u16*)&amp;empty,screenBase,32,DMA_16NOW | DMA_SOURCE_FIXED);
+<br/>
+  // bottom row is tile 2, vertical flip
+<br/>
+  empty = (14 &lt;&lt; TILE_PALETTE_SHIFT) | TILE_VERTICAL_FLIP | 2;
+<br/>
+  DMACopy((u16*)&amp;empty,screenBase+32*9,32,DMA_16NOW | DMA_SOURCE_FIXED);
+<br/>
+  // left side is tile 3 (fourth tile)
+<br/>
+  for (i=0;i&lt;32*10;i+=32)
+<br/>
+  {
+<br/>
+    screenBase[i] = (14 &lt;&lt; TILE_PALETTE_SHIFT) | 3;
+<br/>
+    screenBase[i+29] = (14 &lt;&lt; TILE_PALETTE_SHIFT) | (TILE_HORIZONTAL_FLIP) | 3;
+<br/>
+  }
+<br/>
+  // do the corners
+<br/>
+  screenBase[0] = (14 &lt;&lt; TILE_PALETTE_SHIFT) | 4;
+<br/>
+  
+<br/>
+  
+<br/>
+  
+<br/>
+  // ok now create the NEXT background which is used for the text
+<br/>
+  screenBase = SCREEN_BASE_BLOCK(23);
+<br/>
+  charBase = CHAR_BASE_BLOCK(2);
+<br/>
+  palette = BG_PALETTE_INDEX(15);
+<br/>
+  // fill palette
+<br/>
+  palette[0] = 0;
+<br/>
+  palette[1] = RGB(31,31,31); // this is the text color
+<br/>
+  // clear all tiles (set to the first tile which will be transparent)
+<br/>
+  empty = (15 &lt;&lt; TILE_PALETTE_SHIFT);
+<br/>
+  DMACopy((u16*)&amp;empty,screenBase,(256/8)*(256/8),DMA_16NOW | DMA_SOURCE_FIXED);
+<br/>
+  // set some tiles
+<br/>
+  DrawParagraph(screenBase,pText);
+<br/>
+  // set one tile to something
+<br/>
+  // create first tile of transparency
+<br/>
+  empty = 0;
+<br/>
+  DMACopy((u16*)&amp;empty,charBase,16,DMA_16NOW | DMA_SOURCE_FIXED);
+<br/>
+  // copy font tiles
+<br/>
+  DMACopy(font.imageData,charBase+16,sizeof(font.imageData)/2,DMA_16NOW);
+<br/>
+        
+<br/>
+    
+<br/>
+  REG_BG2CNT = 0 | (1 &lt;&lt; TILE_DATA_SHIFT) | (15 &lt;&lt; TILE_MAP_SHIFT) | TEXTBG_SIZE_256_256;
+<br/>
+  REG_BG1CNT = 0 | (2 &lt;&lt; TILE_DATA_SHIFT) | (23 &lt;&lt; TILE_MAP_SHIFT) | TEXTBG_SIZE_256_256;
+<br/>
+  REG_DISPCNT |= BG1_ENABLE | BG2_ENABLE;
+<br/>
+  
+<br/>
+  
+<br/>
+  // scroll to 0,0
+<br/>
+  REG_BG1HOFS = 0;
+<br/>
+  REG_BG1VOFS = 0;
+<br/>
+  REG_BG2HOFS = 0;
+<br/>
+  REG_BG2VOFS = 0;
+<br/>
+  // set the mode now
+<br/>
+  pLastMode = g_pMode;
+<br/>
+  g_pMode = &amp;talkingMode;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#49657 - Cearn - Mon Aug 01, 2005 9:23 am</h4>
+    <div class="postbody"><span class="postbody">The GBA is little-endian in both bit and byte formats, so lower nybbles represent leftmost pixels. In other words:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">// pixel order:
+<br/>
+u16 0x3210, 0x7654
+<br/>
+</td> </tr></table><span class="postbody">With that in mind getting the pixels as 1,4,3,2,1,1,1,1,1 makes perfect sense. So what you probably want is 0x1432, 0x1111. Or you could use u32 as the type, which is fully mirrored and use 0x11111432.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#49670 - paladine - Mon Aug 01, 2005 2:53 pm</h4>
+    <div class="postbody"><span class="postbody">Ugh.  Now it sounds so simple!  My graphic tools output in byte format so that's why I've never run into it before.  Thanks for the tip!</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

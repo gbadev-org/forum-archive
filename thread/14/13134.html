@@ -1,0 +1,466 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Sprites garbled, every other line displayed. - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Beginners > Sprites garbled, every other line displayed.</h2>
+<div id="posts">
+<div class="post">
+    <h4>#127793 - Huitzilopoctli - Sat May 05, 2007 1:43 am</h4>
+    <div class="postbody"><span class="postbody">Hello. I've been experimenting with trying to display sprites, and not enjoying it. The most frustrating part being that I'm pretty sure that I know what the problem is.
+<br/>
+<br/>
+<a href="http://i6.photobucket.com/albums/y209/Cacographer/Error.jpg">[Images not permitted - Click here to view it]</a>
+<br/>
+<br/>
+As you can see, every other line of the sprite, (which should be a lovely smiley face) seems transparent.
+<br/>
+<br/>
+In fact, what's happening is that the first pixel of the image is displayed in the correct place. However, the next pixel is placed where the third should be. The third is where the fifth should be, and so on. It has occured to me that it might have been a problem with the size of the types between the sprite's array and the SpriteData array. As in, it's putting a single pixel's data into the space reserved for two. For instance, if I define the tiles in SpriteData as containing unsigned ints, instead of unsigned shorts, then the problem gets twice as worse. However, filling it with chars obviously doesn't fix the problem :p
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">////////////////////////////////////////////////////////////
+<br/>
+// A lot of defines
+<br/>
+////////////////////////////////////////////////////////////
+<br/>
+<br/>
+// the u16 type defined
+<br/>
+typedef unsigned short u16;
+<br/>
+<br/>
+//macro to change the video mode
+<br/>
+#define SetMode(mode) REG_DISPCNT = (mode)
+<br/>
+<br/>
+//define some video addresses
+<br/>
+#define REG_DISPCNT *(volatile unsigned short*)0x4000000
+<br/>
+#define BGPaletteMem ((unsigned short*)0x5000000)
+<br/>
+#define REG_VCOUNT *(volatile unsigned short*)0x4000006
+<br/>
+#define REG_DISPSTAT *(volatile unsigned short *)0x4000004
+<br/>
+<br/>
+//define object attribute memory state address
+<br/>
+#define SpriteMem ((unsigned short*)0x7000000)
+<br/>
+<br/>
+//define object attribute memory image address
+<br/>
+#define SpriteData ((unsigned short*)0x6010000)
+<br/>
+<br/>
+//define object attribute memory palette address
+<br/>
+#define SpritePal ((unsigned short*)0x5000200)
+<br/>
+<br/>
+//misc sprite constants
+<br/>
+#define OBJ_MAP_2D 0x0
+<br/>
+#define OBJ_MAP_1D 0x40
+<br/>
+#define OBJ_ENABLE 0x1000
+<br/>
+<br/>
+//attribute0 stuff
+<br/>
+#define ROTATION_FLAG 0x100
+<br/>
+#define SIZE_DOUBLE 0x200
+<br/>
+#define MODE_NORMAL 0x0
+<br/>
+#define MODE_TRANSPARENT 0x400
+<br/>
+#define MODE_WINDOWED 0x800
+<br/>
+#define MOSAIC 0x1000
+<br/>
+#define COLOR_16 0x0000
+<br/>
+#define COLOR_256 0x2000
+<br/>
+#define SQUARE 0x0
+<br/>
+#define TALL 0x4000
+<br/>
+#define WIDE 0x8000
+<br/>
+<br/>
+//attribute1 stuff
+<br/>
+#define ROTDATA(n) ((n) &lt;&lt; 9)
+<br/>
+#define HORIZONTAL_FLIP 0x1000
+<br/>
+#define VERTICAL_FLIP 0x2000
+<br/>
+#define SIZE_8 0x0
+<br/>
+#define SIZE_16 0x4000
+<br/>
+#define SIZE_32 0x8000
+<br/>
+#define SIZE_64 0xC000
+<br/>
+<br/>
+//attribute2 stuff
+<br/>
+#define PRIORITY(n) ((n) &lt;&lt; 10)
+<br/>
+#define PALETTE(n) ((n) &lt;&lt; 12)
+<br/>
+<br/>
+#define RGB(r, g, b) (unsigned short)(r + (g &lt;&lt; 5) + (b &lt;&lt; 10))
+<br/>
+#include "ship.hpp"
+<br/>
+<br/>
+//sprite structs
+<br/>
+typedef struct tagSprite
+<br/>
+{
+<br/>
+unsigned short attribute0;
+<br/>
+unsigned short attribute1;
+<br/>
+unsigned short attribute2;
+<br/>
+unsigned short attribute3;
+<br/>
+}Sprite,*pSprite;
+<br/>
+<br/>
+//create an array of 128 sprites equal to OAM
+<br/>
+Sprite sprites[128];
+<br/>
+<br/>
+//function prototypes
+<br/>
+void WaitForVsync(void);
+<br/>
+void UpdateSpriteMemory(void);
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">////////////////////////////////////////////////////////////
+<br/>
+// The general body of code
+<br/>
+////////////////////////////////////////////////////////////
+<br/>
+int main(void) {
+<br/>
+    int n;
+<br/>
+<br/>
+    //set the video mode--mode 2 with sprites
+<br/>
+    SetMode(2 | OBJ_ENABLE | OBJ_MAP_1D);
+<br/>
+<br/>
+    //move all sprites offscreen to hide them
+<br/>
+    for(n = 0; n &lt; 128; n++)
+<br/>
+    {
+<br/>
+        sprites[n].attribute0 = 160;
+<br/>
+        sprites[n].attribute1 = 240;
+<br/>
+    }
+<br/>
+<br/>
+    //set the sprite palette
+<br/>
+    for(n = 0; n &lt; 256; n++)
+<br/>
+        SpritePal[n] = shipPalette[n];
+<br/>
+<br/>
+    //copy the sprite image into memory
+<br/>
+    for(n = 0; n &lt; 64; n++)
+<br/>
+        SpriteData[n] = shipData[n];
+<br/>
+<br/>
+    //setup the first sprite
+<br/>
+    sprites[0].attribute0 = COLOR_256 | 8;
+<br/>
+    sprites[0].attribute1 = SIZE_8 | 8;
+<br/>
+<br/>
+    while(1)
+<br/>
+    {
+<br/>
+        //wait for vertical retrace
+<br/>
+        WaitForVsync();
+<br/>
+<br/>
+        //display the sprite
+<br/>
+        UpdateSpriteMemory();
+<br/>
+    }
+<br/>
+}
+<br/>
+////////////////////////////////////////////////////////////
+<br/>
+// Function: WaitForVsync
+<br/>
+// Waits for the vertical retrace
+<br/>
+////////////////////////////////////////////////////////////
+<br/>
+void WaitForVsync(void)
+<br/>
+{
+<br/>
+while((REG_DISPSTAT &amp; 1));
+<br/>
+}
+<br/>
+////////////////////////////////////////////////////////////
+<br/>
+// Function: UpdateSpriteMemory
+<br/>
+// Copies the sprite array into OAM memory
+<br/>
+////////////////////////////////////////////////////////////
+<br/>
+void UpdateSpriteMemory(void)
+<br/>
+{
+<br/>
+int n;
+<br/>
+unsigned short* temp;
+<br/>
+temp = (unsigned short*)sprites;
+<br/>
+for(n = 0; n &lt; 128*4; n++)
+<br/>
+SpriteMem[n] = temp[n];
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+<br/>
+And the graphics file:</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#define ship_WIDTH 8
+<br/>
+#define ship_HEIGHT 8
+<br/>
+const u16 shipData[] = {
+<br/>
+   0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF,
+<br/>
+   0xFF, 0x00, 0xFB, 0xFB, 0xFB, 0xFB, 0x00, 0xFF,
+<br/>
+   0x00, 0xFB, 0x00, 0xFB, 0xFB, 0x00, 0xFB, 0x00,
+<br/>
+   0x00, 0xFB, 0x00, 0xFB, 0xFB, 0x00, 0xFB, 0x00,
+<br/>
+   0x00, 0xFB, 0xFB, 0xFB, 0xFB, 0xFB, 0xFB, 0x00,
+<br/>
+   0x00, 0xFB, 0xFB, 0xFB, 0xFB, 0xFB, 0xFB, 0x00,
+<br/>
+   0xFF, 0x00, 0xFB, 0xFB, 0xFB, 0xFB, 0x00, 0xFF,
+<br/>
+   0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF
+<br/>
+};
+<br/>
+<br/>
+const u16 shipPalette[] = {
+<br/>
+   0x00000, 0x00010, 0x00200, 0x00210, 0x04000, 0x04010, 0x04200, 0x06318,
+<br/>
+   0x0E378, 0x07B34, 0x00088, 0x0008C, 0x00090, 0x00094, 0x00098, 0x0009C,
+<br/>
+   0x00100, 0x00104, 0x00108, 0x0010C, 0x00110, 0x00114, 0x00118, 0x0011C,
+<br/>
+   0x00180, 0x00184, 0x00188, 0x0018C, 0x00190, 0x00194, 0x00198, 0x0019C,
+<br/>
+   0x00200, 0x00204, 0x00208, 0x0020C, 0x00210, 0x00214, 0x00218, 0x0021C,
+<br/>
+   0x00280, 0x00284, 0x00288, 0x0028C, 0x00290, 0x00294, 0x00298, 0x0029C,
+<br/>
+   0x00300, 0x00304, 0x00308, 0x0030C, 0x00310, 0x00314, 0x00318, 0x0031C,
+<br/>
+   0x00380, 0x00384, 0x00388, 0x0038C, 0x00390, 0x00394, 0x00398, 0x0039C,
+<br/>
+   0x02000, 0x02004, 0x02008, 0x0200C, 0x02010, 0x02014, 0x02018, 0x0201C,
+<br/>
+   0x02080, 0x02084, 0x02088, 0x0208C, 0x02090, 0x02094, 0x02098, 0x0209C,
+<br/>
+   0x02100, 0x02104, 0x02108, 0x0210C, 0x02110, 0x02114, 0x02118, 0x0211C,
+<br/>
+   0x02180, 0x02184, 0x02188, 0x0218C, 0x02190, 0x02194, 0x02198, 0x0219C,
+<br/>
+   0x02200, 0x02204, 0x02208, 0x0220C, 0x02210, 0x02214, 0x02218, 0x0221C,
+<br/>
+   0x02280, 0x02284, 0x02288, 0x0228C, 0x02290, 0x02294, 0x02298, 0x0229C,
+<br/>
+   0x02300, 0x02304, 0x02308, 0x0230C, 0x02310, 0x02314, 0x02318, 0x0231C,
+<br/>
+   0x02380, 0x02384, 0x02388, 0x0238C, 0x02390, 0x02394, 0x02398, 0x0239C,
+<br/>
+   0x04000, 0x04004, 0x04008, 0x0400C, 0x04010, 0x04014, 0x04018, 0x0401C,
+<br/>
+   0x04080, 0x04084, 0x04088, 0x0408C, 0x04090, 0x04094, 0x04098, 0x0409C,
+<br/>
+   0x04100, 0x04104, 0x04108, 0x0410C, 0x04110, 0x04114, 0x04118, 0x0411C,
+<br/>
+   0x04180, 0x04184, 0x04188, 0x0418C, 0x04190, 0x04194, 0x04198, 0x0419C,
+<br/>
+   0x04200, 0x04204, 0x04208, 0x0420C, 0x04210, 0x04214, 0x04218, 0x0421C,
+<br/>
+   0x04280, 0x04284, 0x04288, 0x0428C, 0x04290, 0x04294, 0x04298, 0x0429C,
+<br/>
+   0x04300, 0x04304, 0x04308, 0x0430C, 0x04310, 0x04314, 0x04318, 0x0431C,
+<br/>
+   0x04380, 0x04384, 0x04388, 0x0438C, 0x04390, 0x04394, 0x04398, 0x0439C,
+<br/>
+   0x06000, 0x06004, 0x06008, 0x0600C, 0x06010, 0x06014, 0x06018, 0x0601C,
+<br/>
+   0x06080, 0x06084, 0x06088, 0x0608C, 0x06090, 0x06094, 0x06098, 0x0609C,
+<br/>
+   0x06100, 0x06104, 0x06108, 0x0610C, 0x06110, 0x06114, 0x06118, 0x0611C,
+<br/>
+   0x06180, 0x06184, 0x06188, 0x0618C, 0x06190, 0x06194, 0x06198, 0x0619C,
+<br/>
+   0x06200, 0x06204, 0x06208, 0x0620C, 0x06210, 0x06214, 0x06218, 0x0621C,
+<br/>
+   0x06280, 0x06284, 0x06288, 0x0628C, 0x06290, 0x06294, 0x06298, 0x0629C,
+<br/>
+   0x06300, 0x06304, 0x06308, 0x0630C, 0x06310, 0x06314, 0x07BFF, 0x05294,
+<br/>
+   0x04210, 0x0001F, 0x083E0, 0x083FF, 0x07C00, 0x07C1F, 0x0FFE0, 0x0FFFF
+<br/>
+};
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+I've looked through a lot of tutorials online and I've gathered that the error is possibly due to some kind of confusion between 256 and 16 colour sprites. The frustrating thing is, I still can't figure out how to fix it! I'm a fairly proficient programmer, (learned on RPG Maker XP originally ^^), but I'm struggling a little to get used to all the hardware involved here. Any help is appreciated.<br/>_________________<br/>The fifth is my <span style="font-style: italic">least</span> favourite interval!</span><span class="gensmall"><br/><br/>Last edited by Huitzilopoctli on Sat May 05, 2007 2:32 am; edited 1 time in total</span></div>    
+</div>
+<div class="post">
+    <h4>#127799 - tepples - Sat May 05, 2007 2:12 am</h4>
+    <div class="postbody"><span class="postbody">Did you draw the sprite as a bitmap (.bmp, .pcx, .gif, .png) and convert it to GBA format, or did you hand-code the sprite within the program? What is your program's source code?<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127801 - Huitzilopoctli - Sat May 05, 2007 2:35 am</h4>
+    <div class="postbody"><span class="postbody">Hmm I've - feeling quite sily for having forgotain to now - edited in the code. I kicked off using Janathan Harbour's book.
+<br/>
+<br/>
+The results are the same for arrays I've written and this one, which I converted with AGBconvert14. I'm pretty sure the file itself is correct.<br/>_________________<br/>The fifth is my <span style="font-style: italic">least</span> favourite interval!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127804 - tepples - Sat May 05, 2007 4:00 am</h4>
+    <div class="postbody"><span class="postbody">Could you please paste your code and your sprite data into a post in this topic?<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127810 - keldon - Sat May 05, 2007 8:23 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Huitzilopoctli wrote:</b></span></td> </tr> <tr> <td class="quote">Janathan Harbour's book.</td> </tr></table><span class="postbody">
+<br/>
+That might explain it.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127819 - Cearn - Sat May 05, 2007 10:11 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Huitzilopoctli wrote:</b></span></td> </tr> <tr> <td class="quote">Hmm I've - feeling quite silly for having forgotten to now - edited in the code. I kicked off using Jonathan Harbour's book.
+<br/>
+<br/>
+The results are the same for arrays I've written and this one, which I converted with AGBconvert14. I'm pretty sure the file itself is correct.</td> </tr></table><span class="postbody">
+<br/>
+It's not.
+<br/>
+<br/>
+The graphics data you have look like byte (u8) data, but the array itself are halfwords (u16). While the data may look the same on paper, they're actually quite different where it counts -- in memory. For example:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">// Array definitions
+<br/>
+const u8 data8[4]= { 1, 2, 3, 4 };
+<br/>
+const u16 data16[4]= { 1, 2, 3, 4 };
+<br/>
+<br/>
+// In memory:
+<br/>
+data8  : 01 02 03 04
+<br/>
+data16 : 01 00 02 00 03 00 04 00
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Halfwords have two bytes, even though the number may only take up one. The halfword 0x01 is actually 0x0001, and because the GBA is little endian, this goes into memory as "01 00".
+<br/>
+<br/>
+It's probably done because you can't write bytes to VRAM, but changing the array-type itself isn't going to fix that: you need to cast the array when copying, not the definition itself. This, however, can have its own set of problems, as discussed at <a class="postlink" href="http://www.coranac.com/tonc/text/bitmaps.htm#ssec-data-align" target="_blank">tonc:data alignment</a>. The rest of the section should be useful as well for dealing with data.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>keldon wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Huitzilopoctli wrote:</b></span></td> </tr> <tr> <td class="quote">Jonathan Harbour's book.</td> </tr></table><span class="postbody">
+<br/>
+That might explain it.</span></td> </tr></table><span class="postbody">
+<br/>
+The problem wasn't there in this case, but there are plenty of other problems in the book. I've written down a number of annotations for someone so he could steer away from the bad stuff in the book, which I've been thinking about releasing, but it's not quite ready yet.
+<br/>
+<br/>
+The summary of that: nearly every example project in the book is flawed on one or more points. There is no consistency in nomenclature anywhere, much of the routines are dreadfully inefficient and a good portion doesn't even work properly. Be <span style="font-style: italic">very</span> careful of what you use from the example code. Use <a class="postlink" href="http://www.coranac.com/tonc/text/toc.htm" target="_blank">tonc</a> for the correct information. Use its demos and/or the libgba examples that come with <a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro</a> for your code base.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127829 - Huitzilopoctli - Sat May 05, 2007 12:50 pm</h4>
+    <div class="postbody"><span class="postbody">Ahhh :p I'd considered that at one point, but my attempted solution, (bitshifting and oring to make a new array) didn't seem to work. Thanks!
+<br/>
+<br/>
+Edit:
+<br/>
+Now I realise that I had been doing the right thing to correct the image source, but the wrong tiles shifted *sigh*<br/>_________________<br/>The fifth is my <span style="font-style: italic">least</span> favourite interval!</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

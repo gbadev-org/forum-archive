@@ -1,0 +1,82 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Time of Day Palette Transitions - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Time of Day Palette Transitions</h2>
+<div id="posts">
+<div class="post">
+    <h4>#178133 - fluffypants - Wed Dec 04, 2013 6:06 am</h4>
+    <div class="postbody">I'm experimenting with a time of day system, but running into some architectural decisions that I could use a fresh perspective on.<br/>
+<br/>
+I have arrived at a night time look that I like in photoshop by tweaking the Color Correction filter with weighting that favors more blues and by darkening the palette overall.  I'm happy enough having recorded the effect and applied it to several tilesets.  But because the process in photoshop isn't easy to reverse engineer (for me), I ended up hacking up a lookup table for each color channel that represents the color correction.  I use this in-game to do the color grading so I don't need 2 versions of every tile-set/sprite-sheet.<br/>
+<br/>
+Since I need a graduated effect that depends on the time of day, I need to lerp between the regular palette and night LUT on the fly.  So here's my question:<br/>
+<br/>
+Given that I have to copy the palette over to VRAM quite often, and the lookup means I can't copy chunks at a time via swiCopy, is there a better way to do transitional palette effects?  It seems like using a for loop would be slow, especially with extended palettes on both tiles and sprites.<br/>
+<br/>
+Thanks for reading!</div>    
+</div>
+<div class="post">
+    <h4>#178134 - sverx - Wed Dec 04, 2013 9:48 am</h4>
+    <div class="postbody">I would prepare the new palettes in a temporary area and swiCopy them when it's done. If the math involved in the preparing the palettes is slow, you could break the process in chunks...</div>    
+</div>
+<div class="post">
+    <h4>#178135 - Dwedit - Wed Dec 04, 2013 3:28 pm</h4>
+    <div class="postbody">The simplest way to do the math is to use fixed point numbers.<br/>
+You have a source RGB, a target RGB, and a number of frames to perform the fade.<br/>
+For each RGB component, calculate (final - initial) / number_of_frames, this gives you the amount to add each frame.<br/>
+You can speed up the division by using a power of 2 for number of frames, or multiplying by a precalculated reciprocal.<br/>
+<br/>
+If you're not familiar with fixed point arithmetic, it's basically a way of using a bigger number to store fractional precision.  For example, you could use a 16-bit number, and have 5 bits for the integer part of the value, and 11 bits for the fractional part of the value.  Whenever you want to convert an integer to this kind of fixed point number, you shift it left by 11.  Then when you want the integer part, you can shift right by 11.<br/>
+So you'd do (final - initial) * 2048 / number_of_frames if you were using 11 fractional bits.  This result is an integer.</div>    
+</div>
+<div class="post">
+    <h4>#178136 - fluffypants - Thu Dec 05, 2013 1:58 am</h4>
+    <div class="postbody">Thanks sverx and dwedit for the quick replies!<br/>
+<br/>
+Dwedit, I love the idea of using fixed point math to do my blending, currently I'm just using integers between 0-100 to represent the blend values and then applying that as a weight when mixing src and dst palette colors.  It's clunky but looks correct.  My question wasn't very clear though, I'm more concerned with how to copy my results to VRAM given the bottleneck of a look up table.  My worry is that writing to VRAM 16 bits at a time will be too slow.<br/>
+<br/>
+I think I'll need to do something akin to what sverx mentioned, and just have a temporary palette that I can swiCopy to VRAM once the math is finished.<br/>
+<br/>
+sverx, do you think that writing from WRAM --(LUT)--> VRAM without the aid of fast copies is slower than writing twice via WRAM --(LUT)--> WRAM --(swiCopy)--> VRAM?  <br/>
+<br/>
+Thanks everone for the help so far.</div>    
+</div>
+<div class="post">
+    <h4>#178137 - Dwedit - Thu Dec 05, 2013 5:44 am</h4>
+    <div class="postbody">If you are writing directly to VRAM from CPU code, you are using non-sequential writes.  Non-sequential 16-bit writes to VRAM take 4 cycles, and non-sequential 32-bit writes to VRAM take 5 cycles.  You can combine two VRAM writes into one 32-bit write using a orr and bitshift instruction, for an effective speed of 6 cycles per 32-bit write.<br/>
+<br/>
+2048 32-bit palette writes per frame is about 1% CPU usage, so actually writing to the palette isn't the bottleneck.<br/>
+<br/>
+The other choice is to do sequential reads/writes using DMA to copy from a buffer to VRAM.  This might look appealing since everything is sequential access timings, which is 2 cycles for main memory, and 2 cycles for VRAM.  It takes 4 cycles for each 32-bit word copied from RAM to VRAM.  But you're better off skipping the buffer and writing directly to VRAM here, especially since you will hit the 8-cycle main memory penalty (for memory that's not in cache) many times when building your buffer.<br/>
+<br/>
+NDS has 4k of data cache, so eventually your lookup tables will find their way into cache.  It takes 26 cycles to fill 8 words of cache on a cache miss.</div>    
+</div>
+<div class="post">
+    <h4>#178138 - fluffypants - Thu Dec 05, 2013 9:32 pm</h4>
+    <div class="postbody">Wow, thanks Dwedit.  That was exactly the technical breakdown I needed.  I have to be more careful about profiling issues as my intuition is almost always wrong (>_<) .  I'll just do the non-sequential writes; a 1% hit in the worst case scenario is fine with me.  Thanks again.</div>    
+</div>
+<div class="post">
+    <h4>#178139 - sverx - Fri Dec 06, 2013 10:56 am</h4>
+    <div class="postbody">If you end up populating a temporary palette buffer in Main RAM and then copy it to VRAM when the right moment comes, I suggest you to dmaCopy Main RAM to VRAM, as it's surely (I clocked it myself - see <a class="postlink" href="http://adshomebrewersdiary.blogspot.com/2012/02/unequivocal-answer.html">here</a>) the faster choice.<br/>
+This way the temporary palette won't even disturb data cache as the data cache is allocated on (CPU-)read operations ONLY (and you only write to it with CPU and read from it with DMA so - no allocation at all).</div>    
+</div>
+<div class="post">
+    <h4>#178141 - fluffypants - Mon Dec 09, 2013 4:53 am</h4>
+    <div class="postbody">Just looked at those timing results on your blog, sverx.  It's really interesting that dmaCopy comes out so far ahead when copying from main to vram, but fares poorly in every other scenario.  I'll certainly remember to use dmaCopy for MAIN->VRAM from now on.</div>    
+</div>
+</div>
+
+    </body>
+</html>

@@ -1,0 +1,153 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Need some help with setting up screens - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Need some help with setting up screens</h2>
+<div id="posts">
+<div class="post">
+    <h4>#137004 - Jeremysr - Tue Aug 07, 2007 8:24 am</h4>
+    <div class="postbody"><span class="postbody">Hi, after using DSLua and PAlib for a while I decided to try using just libnds. So far for my game I'm using framebuffer mode for the top screen and it works good, but now I want to use the same sort of mode for the bottom screen. From <a class="postlink" href="http://www.double.co.nz/nintendo_ds/nds_develop10.html" target="_blank">this tutorial</a> I found out I have to use an extended background for the sub screen. So I tried it and tried filling the sub screen with white, but it just remains black. So can someone tell me what I'm doing wrong?
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#include "tiledata.h"
+<br/>
+#include "fontdata.h"
+<br/>
+#include "tile.h"
+<br/>
+#include "font.h"
+<br/>
+#include "levels.h"
+<br/>
+#include "run.h"
+<br/>
+<br/>
+int main(void) {
+<br/>
+//   int won;
+<br/>
+//   int program[] = { 2,2,2,5 };
+<br/>
+   int i;
+<br/>
+<br/>
+   irqInit();
+<br/>
+   irqEnable(IRQ_VBLANK);
+<br/>
+   
+<br/>
+   // Main screen turn on
+<br/>
+   videoSetMode(MODE_FB0);
+<br/>
+   vramSetBankA(VRAM_A_LCD);
+<br/>
+<br/>
+   // Sub screen turn on
+<br/>
+   videoSetModeSub(MODE_5_2D | DISPLAY_BG2_ACTIVE);
+<br/>
+   vramSetBankC(VRAM_C_SUB_BG);
+<br/>
+   BG2_CR = BG_BMP16_256x256;
+<br/>
+<br/>
+//   loadLevel(0);
+<br/>
+//   won = run(program);
+<br/>
+//   
+<br/>
+//   if (won) {
+<br/>
+//      printStringCenter("You Won!");
+<br/>
+//   } else {
+<br/>
+//      printStringCenter("You Lost!");
+<br/>
+//   }
+<br/>
+<br/>
+   for (i = 0; i &lt; 256*256; i++)
+<br/>
+      VRAM_C[i] = RGB15(31, 31, 31) | BIT(15);
+<br/>
+<br/>
+   while (1) {
+<br/>
+      swiWaitForVBlank();
+<br/>
+   }
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#137015 - tepples - Tue Aug 07, 2007 1:08 pm</h4>
+    <div class="postbody"><span class="postbody">A few things to try: <ul><li>Get the extended background working on the main screen first. That is, instead of frame buffer on main and extended rotation on sub, you will have extended rotation on both. </li><li>Make sure to set SUB_BG2_CR (which affects the sub screen) in addition to BG2_CR (which affects only the main screen). </li><li>This may not be necessary, but make sure the rotation matrices (BG2_XDX, SUB_BG2_XDX, etc.) are how you want them (i.e. {256, 0, 0, 256, 0, 0} for the common case). </li></ul><br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#137037 - knight0fdragon - Tue Aug 07, 2007 4:10 pm</h4>
+    <div class="postbody"><span class="postbody">A few things, each background has its own control register, each for main and each for sub, so one thing you would want to change is this:
+<br/>
+BG2_CR = BG_BMP16_256x256;  to SUB_BG2_CR = BG_BMP16_256x256; 
+<br/>
+<br/>
+Next, you cannot write to VRAM C directly in frame buffer mode, it is instead mapped to address 0x06200000, which is what this function does:
+<br/>
+vramSetBankC(VRAM_C_SUB_BG); 
+<br/>
+<br/>
+so instead of writing to VRAM_C, you would want to write to BG_GFX_SUB
+<br/>
+<br/>
+and like tepples said, you need to add the additional affine matrix registers
+<br/>
+<br/>
+SUB_BG2_XDX = 1 &lt;&lt; 8;
+<br/>
+SUB_BG2_XDY = 0 &lt;&lt;8;
+<br/>
+SUB_BG2_YDX = 0 &lt;&lt; 8;
+<br/>
+SUB_BG2_YDY = 1 &lt;&lt; 8;
+<br/>
+<br/>
+<br/>
+the reason for 1 &lt;&lt; 8 is because it is 8.8 fixed point<br/>_________________<br/><a href="http://www.myspace.com/knight0fdragonds" target="_blank">http://www.myspace.com/knight0fdragonds</a>
+<br/>
+<br/>
+MK DS FC: Dragon 330772 075464 
+<br/>
+AC WW FC: Anthony SamsClub 1933-3433-9458 
+<br/>
+MPFH: Dragon 0215 4231 1206</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#137107 - Jeremysr - Wed Aug 08, 2007 12:03 am</h4>
+    <div class="postbody"><span class="postbody">Thanks everyone, I got it working! :)</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

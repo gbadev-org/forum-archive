@@ -1,0 +1,296 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Where should I place the WaitVBlank function? - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > Where should I place the WaitVBlank function?</h2>
+<div id="posts">
+<div class="post">
+    <h4>#58326 - Nacho - Sat Oct 22, 2005 6:27 pm</h4>
+    <div class="postbody"><span class="postbody">Hello there! I?m making a simple 3D raster in C (mode 4). I?ve been reading Harbour?s book because I need to learn about timers and found out that in his demo?s main loop he calls the WaitVBlank() function twice: at the beginning and in the end. This has been my game loop so far:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+    while(iFlag) {
+<br/>
+      GameMain(&amp;RendCont);      
+<br/>
+      WaitVBlank();
+<br/>
+        FlipPages();
+<br/>
+        FillScreen(); // Erases the back buffer.
+<br/>
+    } // End while.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+but now I?ve seen Harbour?s code I?m quite confused.  What?s the proper scheme to use? Thanks in advance for your help!
+<br/>
+<br/>
+--Nacho</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#58334 - poslundc - Sat Oct 22, 2005 7:22 pm</h4>
+    <div class="postbody"><span class="postbody">I don't know Harbour's book, but the model you are using should work.
+<br/>
+<br/>
+The one thing to keep in mind is that if your GameMain() function is still really short (as is often the case when you're just starting out), it might be completing before the VBlank period is over. This means you can hit WaitVBlank() before the next actual rendering cycle has hit... depending on how your WaitVBlank() code functions, if it doesn't recognize that it's still the same VBlank (and that it needs to wait for the next one), it can throw off the timing of your game.
+<br/>
+<br/>
+Using interrupts for your VBlank routine inherently handles this. If, on the other hand, you're hanging in a tight loop waiting while (REG_VCOUNT != 160), it's often normal to add the following wait at the <span style="font-style: italic">end</span> of your VBlank phase:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">while (REG_VCOUNT == 160);</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+... just to make sure that the above misfire doesn't occur. Perhaps this is what Harbour's book was doing.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#58335 - tepples - Sat Oct 22, 2005 7:23 pm</h4>
+    <div class="postbody"><span class="postbody">It's probably a 30fps engine.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+while(still_playing))
+<br/>
+{
+<br/>
+  WaitVblank();
+<br/>
+  DoSomeProcessing();
+<br/>
+  WaitVblank();
+<br/>
+  DoMoreProcessing();
+<br/>
+}
+<br/>
+<br/>
+</td> </tr></table><span class="postbody"><br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#58340 - Cearn - Sat Oct 22, 2005 7:42 pm</h4>
+    <div class="postbody"><span class="postbody">If memory serves correctly, there are at least three inconsistent (and possibly wrong) versions of WaitVBlank in the book, so it's not surprising that it'd be confusing. Don't consider it your only source for GBA programming; check the FAQ and main site for other/better alternatives. 
+<br/>
+For the correct Vsync procedure, do what poslundc suggested. Then when you get comfortable with interrupts, switch to <a class="postlink" href="http://user.chem.tue.nl/jakvijn/tonc/swi.htm#sec-vsync2" target="_blank">VSync with VBlankIntrWait</a>.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#58364 - Nacho - Sat Oct 22, 2005 10:50 pm</h4>
+    <div class="postbody"><span class="postbody">Thanks for your replies!
+<br/>
+<br/>
+@ poslundc:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>poslundc wrote:</b></span></td> </tr> <tr> <td class="quote">... depending on how your WaitVBlank() code functions, if it doesn't recognize that it's still the same VBlank (and that it needs to wait for the next one), it can throw off the timing of your game.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Here?s the code for my VBlank function:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+void
+<br/>
+WaitVBlank(void)
+<br/>
+{
+<br/>
+    while(*g_lpScanlineCounter&lt;160);
+<br/>
+} /* End WaitVBlank() */
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+There?s something I don?t get about this VBlank thing. Does the value inside g_lpScanlineCounter equal 160 during the entire period the screen "pointer" repositions itself back to the top of the screen? I?ve been searching on the Internet for the answer to this question and haven?t found it.
+<br/>
+<br/>
+I also found the following solution in the document Cearn suggested:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+void vid_vsync()
+<br/>
+{
+<br/>
+    while(REG_VCOUNT &gt;= 160);   // wait till VDraw
+<br/>
+    while(REG_VCOUNT &lt; 160);    // wait till VBlank
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Is this solution as effective as the one you propose?
+<br/>
+<br/>
+@ tepples: Harbour doesn?t mention anything about being a 30 fps engine. Maybe he made a mistake in his code.
+<br/>
+<br/>
+@ Cearn: The document you suggested in very interesting! Thanks a lot! I?ll try the interrupt approach later.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#58370 - poslundc - Sat Oct 22, 2005 11:16 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Nacho wrote:</b></span></td> </tr> <tr> <td class="quote">Here?s the code for my VBlank function:
+<br/>
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+void
+<br/>
+WaitVBlank(void)
+<br/>
+{
+<br/>
+    while(*g_lpScanlineCounter&lt;160);
+<br/>
+} /* End WaitVBlank() */
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+There?s something I don?t get about this VBlank thing. Does the value inside g_lpScanlineCounter equal 160 during the entire period the screen "pointer" repositions itself back to the top of the screen? I?ve been searching on the Internet for the answer to this question and haven?t found it.</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+The answers to most of your technical questions can be found at the <a class="postlink" href="http://www.cs.rit.edu/~tjh8300/CowBite/CowBiteSpec.htm" target="_blank">Cowbite Virtual Hardware Spec</a> and <a class="postlink" href="http://www.work.de/nocash/gbatek.htm" target="_blank">GBATEK</a>. (Cowbite is a bit of an easier read, whereas GBATEK is considered to be the more definitive resource of the two.)
+<br/>
+<br/>
+The GBA cycles over a course of 228 scanlines: 160 VDraw followed by 68 VBlank. So at the end of the VBlank phase, REG_VCOUNT will be 227, then roll over to 0 as the next frame's VDraw phase commences.
+<br/>
+<br/>
+In the case of your VBlank function, imagine the following timeline:
+<br/>
+<br/>
+1. Your game loop function completes, and WaitVBlank is called.
+<br/>
+2. WaitVBlank waits until REG_VCOUNT is 160, then returns.
+<br/>
+3. Your VBlank routine begins... say it only takes 5 scanlines; REG_VCOUNT is now 165.
+<br/>
+4. Your VDraw routine begins again... say it only takes another 10 scanlines. REG_VCOUNT is now 175.
+<br/>
+5. WaitVBlank is called... but the VBlank condition you are testing for is <span style="font-style: italic">still true from the previous frame</span> because your draw routine didn't take long enough for REG_VCOUNT to roll over to 0. And so your code spins out of control.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">I also found the following solution in the document Cearn suggested:
+<br/>
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+void vid_vsync()
+<br/>
+{
+<br/>
+    while(REG_VCOUNT &gt;= 160);   // wait till VDraw
+<br/>
+    while(REG_VCOUNT &lt; 160);    // wait till VBlank
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Is this solution as effective as the one you propose?</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Yes; the order of the timing considerations are shifted but it pretty much amounts to the same thing.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#58375 - Nacho - Sat Oct 22, 2005 11:57 pm</h4>
+    <div class="postbody"><span class="postbody">Thanks for the links and for the big explanation!
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>poslundc wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+3. Your VBlank routine begins... say it only takes 5 scanlines; REG_VCOUNT is now 165.
+<br/>
+4. Your VDraw routine begins again... say it only takes another 10 scanlines. REG_VCOUNT is now 175.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I think I understand your point, but what do you mean by VBlank and VDraw routines? My rendering code (which plots pixels to the backbuffer) is inside GameMain, is that approach correct?
+<br/>
+<br/>
+In any case, the GameMain function is quite CPU intensive (lots of matrix computation and pixel plotting going on) and I?m not an optimization guru, so I don?t think the whole function is taking less than the vertical blank period :)
+<br/>
+<br/>
+Thanks again for all your help!
+<br/>
+<br/>
+--Nacho</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#58398 - poslundc - Sun Oct 23, 2005 6:24 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Nacho wrote:</b></span></td> </tr> <tr> <td class="quote">I think I understand your point, but what do you mean by VBlank and VDraw routines? My rendering code (which plots pixels to the backbuffer) is inside GameMain, is that approach correct?</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+GBA games are structured around the timing of the hardware. Routines that update the game's state or visual elements that aren't currently being rendered on the screen (such as the back buffer in Mode 4) are typically done while the screen is being rendered, aka VDraw. Routines that actually update what appears on the display are run while the screen is inactive - aka VBlank - to prevent screen artifacts from occurring. It's up to the programmer to make sure that the machine is in the correct state when their code is being run, which is why the main loop of a GBA game cycles around waiting for VBlank to occur.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#58416 - Nacho - Sun Oct 23, 2005 1:23 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>poslundc wrote:</b></span></td> </tr> <tr> <td class="quote">[...] Routines that update the game's state or visual elements that aren't currently being rendered on the screen (such as the back buffer in Mode 4) are typically done while the screen is being rendered, aka VDraw. Routines that actually update what appears on the display are run while the screen is inactive - aka VBlank - to prevent screen artifacts from occurring.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+But since I?m working in a double buffered mode, do I need to make the distinction you mention or can I just update and render to the backbuffer all the game?s elements and use the VBlank period to perform page flipping?
+<br/>
+<br/>
+--Nacho</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#58430 - tepples - Sun Oct 23, 2005 3:47 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Nacho wrote:</b></span></td> </tr> <tr> <td class="quote">can I just update and render to the backbuffer all the game?s elements and use the VBlank period to perform page flipping?</td> </tr></table><span class="postbody">
+<br/>
+Yes. But you'll probably have to install a vblank interrupt handler to count the number of vblanks that your code misses so that you can adjust the game engine's frameskip accordingly.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#58445 - Nacho - Sun Oct 23, 2005 5:43 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote">Yes. But you'll probably have to install a vblank interrupt handler to count the number of vblanks that your code misses so that you can adjust the game engine's frameskip accordingly.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Gotcha. That would also solve the framerate issue I?ve been talking about in the other thread. I?ll look into vblank interrupts then. Thanks a lot tepples!
+<br/>
+<br/>
+--Nacho</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

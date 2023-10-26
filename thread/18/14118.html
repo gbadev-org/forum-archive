@@ -1,0 +1,587 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>question to console and colors - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > question to console and colors</h2>
+<div id="posts">
+<div class="post">
+    <h4>#139939 - Diddl - Tue Sep 11, 2007 9:27 pm</h4>
+    <div class="postbody"><span class="postbody">I understand function of console with consoleInitDefault() and iprintf() and escape chars. But I have problems to understand colour palette things.
+<br/>
+<br/>
+I want to write chars direct to screen. I have initialize code like this:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">    BG_PALETTE_SUB[0xff] = RGB15(31,31,31);   
+<br/>
+<br/>
+   consoleInitDefault((u16*)SCREEN_BASE_BLOCK_SUB(31), (u16*)CHAR_BASE_BLOCK_SUB(0), 16);
+<br/>
+   screen = (u16*)SCREEN_BASE_BLOCK_SUB(31);</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+now I can directly write to screen with 
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">    *(screen +column + row*MAX_COLS) = 0xf000 | chr;</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+wonderful! 
+<br/>
+<br/>
+<br/>
+But I don't understand how to write chars with other colour than white on black. I thought I can initialize palette with
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">   BG_PALETTE_SUB[0xf2] = RGB15(0,0,31);   // BLUE
+<br/>
+   BG_PALETTE_SUB[0xf1] = RGB15(0,31,0);   // GREEN
+<br/>
+   BG_PALETTE_SUB[0xf0] = RGB15(31,0,0);   // RED
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+But why is 0xf000 = white and why no other colour code does work for me? And is it possible to invert colour (write black on white)?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#139940 - Lick - Tue Sep 11, 2007 9:31 pm</h4>
+    <div class="postbody"><span class="postbody">I might be wrong, but I think the console uses only 2 palette entries. One for the background, one for the foreground. That means you can't have multiple foreground-colors, unless you write your own procedures for this.<br/>_________________<br/><a class="postlink" href="http://licklick.wordpress.com" target="_blank">http://licklick.wordpress.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#139947 - Cearn - Tue Sep 11, 2007 11:22 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Diddl wrote:</b></span></td> </tr> <tr> <td class="quote">But why is 0xf000 = white and why no other colour code does work for me?</td> </tr></table><span class="postbody">
+<br/>
+0xf000 isn't white, it's the screen-entry code for using sub-palette 15 (i.e., palette indices 0xF0-0xFF) when using 4bpp tiled backgrounds (<a class="postlink" href="http://nocash.emubase.de/gbatek.htm#lcdvrambgscreendataformatbgmap" target="_blank">gbatek:screen data</a>). consoleInitDefault() sets up the font's character data in VRAM so that the foreground pixels use the palette index 0xFF for the color. adding 15&lt;&lt;12 is necessary for 4bpp BGs, otherwise you'd use palette index 15 (0x0F). This is also the reason colors 0xF1 etc don't work: those aren't referenced by the character data. Color 0xF0 doesn't work because pixel values of 0 are transparent.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Diddl wrote:</b></span></td> </tr> <tr> <td class="quote">And is it possible to invert colour (write black on white)?</td> </tr></table><span class="postbody">The console uses color 0 for background and 255 for foreground. By changing these, you change the ink and background colors of the text. However, you will also change it for all the other pixels that make use of those colors, so be careful. A possible complication for color 0 is that it's the transparency index. If the text bg is the only one active this is alright because it's also used as the backdrop color, but if not, you'd need to modify the character data so that it doesn't use 0 anymore. 
+<br/>
+<br/>
+For example, orring all words of the characters in VRAM with 0xEEEEEEEE  would result in the use of 0x<span style="font-style: italic">n</span>E for the background color and 0x<span style="font-style: italic">n</span>F for the foreground color. <span style="font-style: italic">n</span> is the sub-palette index here. Technically you'd have to use <span style="font-style: italic">n</span>=F because that's where the default foreground color (0xFF) is stored, but if you set up other sub-palette ranges, you can use any value for <span style="font-style: italic">n</span>. This provides you with a mechanism for using different colored text. <a class="postlink" href="http://www.coranac.com/tonc/text/text.htm#ssec-demo-se1" target="_blank">This example</a> from tonc shows how these things could be done. 
+<br/>
+<br/>
+If you want to see exactly how consoleInit(Default) works, get the libnds source and look under libnds/source/arm9/console.c.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#140011 - Diddl - Wed Sep 12, 2007 6:52 pm</h4>
+    <div class="postbody"><span class="postbody">Thank you very much! Now it's much clearer for me.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#140581 - Diddl - Mon Sep 17, 2007 9:59 pm</h4>
+    <div class="postbody"><span class="postbody">Thanks for your help. Textmode works fine for me now with different colors and very very fast.
+<br/>
+<br/>
+Is it possible to use <span style="font-weight: bold">BOTH SCREENS</span> same time for textmode applications and how can I do it? My textmode initialization is stolen from different sample applications:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+static u16 *screen;
+<br/>
+<br/>
+<br/>
+int TextmodeInit()
+<br/>
+{
+<br/>
+   int      i, c, r, g, b;
+<br/>
+<br/>
+   videoSetMode(0);   //not using the main screen
+<br/>
+   videoSetModeSub(MODE_0_2D | DISPLAY_BG0_ACTIVE);   //sub bg 0 will be used to print text
+<br/>
+   vramSetBankC(VRAM_C_SUB_BG);
+<br/>
+<br/>
+   SUB_BG0_CR = BG_MAP_BASE(31);
+<br/>
+<br/>
+   // FILL COLOR PALETTE
+<br/>
+   for(i=0;i&lt;16;i++)
+<br/>
+   {
+<br/>
+      c = i&amp;8?0x1f:0x13;
+<br/>
+      b=    i%2 * c;
+<br/>
+      r=(i/2)%2 * c;
+<br/>
+      g=(i/4)%2 * c;
+<br/>
+      BG_PALETTE_SUB[(i &lt;&lt; 4)| 0xf] = RGB15(r,g,b);
+<br/>
+   }
+<br/>
+<br/>
+   consoleInitDefault((u16*)SCREEN_BASE_BLOCK_SUB(31), (u16*)CHAR_BASE_BLOCK_SUB(0), 16);
+<br/>
+   screen = (u16*)SCREEN_BASE_BLOCK_SUB(31);
+<br/>
+      consoleClear();
+<br/>
+<br/>
+   Test();
+<br/>
+   return 0;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#140776 - strager - Wed Sep 19, 2007 7:19 pm</h4>
+    <div class="postbody"><span class="postbody">Yes; to have it show up on the main screen, copy-paste your sub screen code and make necessary changes (remove SUB_ in some places, _SUB in others).  Also, be sure to set the video mode properly for the main screen, as well as assign the main screen a VRAM bank.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#140790 - Diddl - Wed Sep 19, 2007 8:51 pm</h4>
+    <div class="postbody"><span class="postbody">oh, - so simple. thanks, now I understand the topic main and sub in this declerations!
+<br/>
+<br/>
+<br/>
+I have problems to show change the background color. This font which libnds console uses is a 8KB binary (256 chars * 32 bytes, one char has 64 pixel, 2 pixel uses 1 byte) with only x0 and x1. InitConsole changes all 1 to F so color of letter is 4 and 4 bytes and I can choose between 16 colors (0f,1f,2f ... ff).
+<br/>
+<br/>
+If I change font, - all 0 nibbles (4 bit) to e. So I could make 16 background colors (0e, 1e, 2e, ... fe). The problem with this, - I have only 16 combinations of color. cause first nibble is same for background and forground color, right? Is there another way to to it (without to use bitmap grafic mode)? 
+<br/>
+<br/>
+or is the only way to make 4 times the same font with different background colors?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#140795 - strager - Wed Sep 19, 2007 9:36 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Diddl wrote:</b></span></td> </tr> <tr> <td class="quote">If I change font, - all 0 nibbles (4 bit) to e. So I could make 16 background colors (0e, 1e, 2e, ... fe). The problem with this, - I have only 16 combinations of color. cause first nibble is same for background and forground color, right? Is there another way to to it (without to use bitmap grafic mode)? 
+<br/>
+<br/>
+or is the only way to make 4 times the same font with different background colors?</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+If I understand you correctly, you want to change the background colour of each individual tile.  You can't do this with the current method.  If you change the data to read from palette index E, it will do just that; it won't change the background colour, only where the foreground colour is located.
+<br/>
+<br/>
+To change the background colour, you want to change palette index 0.  However, palette index 0 is transparent in 16-colour mode.  You don't want a transparent background for those characters, I'd guess.  You need to change the background index from 0 to something else, and change the colour palette entry to change the background.
+<br/>
+<br/>
+Example of what the tile data is now:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">0000000F
+<br/>
+000000FF
+<br/>
+00000FFF
+<br/>
+0000FFFF
+<br/>
+000FFFFF
+<br/>
+00FFFFFF
+<br/>
+0FFFFFFF
+<br/>
+FFFFFFFF</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+These 0's are transparent, and the F's are your foreground colour.  You want something like this:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">2222222F
+<br/>
+222222FF
+<br/>
+22222FFF
+<br/>
+2222FFFF
+<br/>
+222FFFFF
+<br/>
+22FFFFFF
+<br/>
+2FFFFFFF
+<br/>
+FFFFFFFF</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Here, the 2's are the background and are not transparent.
+<br/>
+<br/>
+I hope I'm clear.  =X</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#140946 - Diddl - Thu Sep 20, 2007 9:28 pm</h4>
+    <div class="postbody"><span class="postbody">Thanks for help. 
+<br/>
+<br/>
+I have now 14 colors on black and 2 invers (blue/yellow and white/red).</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#141153 - Diddl - Sat Sep 22, 2007 5:35 pm</h4>
+    <div class="postbody"><span class="postbody">Need help again please ...
+<br/>
+<br/>
+<br/>
+Code works fine on emulator. but on real NDS upper screen (main screen) is dark (displays nothing)???
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">   powerON( POWER_LCD | POWER_2D_A | POWER_2D_B );
+<br/>
+<br/>
+   // initialise the irq dispatcher
+<br/>
+   irqInit();
+<br/>
+   // a vblank interrupt is needed to use swiWaitForVBlank()
+<br/>
+   // since the dispatcher handles the flags no handler is required
+<br/>
+   irqSet(IRQ_VBLANK, VblankHandler);
+<br/>
+   irqEnable(IRQ_VBLANK);
+<br/>
+<br/>
+<br/>
+<br/>
+   videoSetMode(MODE_0_2D | DISPLAY_BG0_ACTIVE);      //sub bg 0 will be used to print text
+<br/>
+   vramSetBankD(VRAM_D_MAIN_BG);
+<br/>
+   BG0_CR = BG_MAP_BASE(31);
+<br/>
+<br/>
+   videoSetModeSub(MODE_0_2D | DISPLAY_BG0_ACTIVE);   //sub bg 0 will be used to print text
+<br/>
+   vramSetBankC(VRAM_C_SUB_BG);
+<br/>
+   SUB_BG0_CR = BG_MAP_BASE(31);
+<br/>
+<br/>
+   // FILL COLOR PALETTE
+<br/>
+   for(i=0;i&lt;16;i++)
+<br/>
+   {
+<br/>
+      switch(i)
+<br/>
+      {
+<br/>
+         case 0:
+<br/>
+         col1 = RGB15(0x1f,0x1f,0);      //YEL
+<br/>
+         col2 = RGB15(0,0,0x1f);         //BLUE
+<br/>
+         break;
+<br/>
+         case 8:
+<br/>
+         col1 = RGB15(0x1f,0,0);         //
+<br/>
+         col2 = RGB15(0x1f,0x1f,0x1f);      //
+<br/>
+         break;
+<br/>
+         default:
+<br/>
+         c = i&amp;8?0x1f:0x13;
+<br/>
+         b=    i%2 * c;
+<br/>
+         r=(i/2)%2 * c;
+<br/>
+         g=(i/4)%2 * c;
+<br/>
+         col1 = RGB15(r,g,b);
+<br/>
+         col2 = RGB15(0,0,0);
+<br/>
+         break;
+<br/>
+      }
+<br/>
+      BG_PALETTE_SUB[(i &lt;&lt; 4)| 0xf]    = col1;
+<br/>
+      BG_PALETTE[(i &lt;&lt; 4)| 0xf]       = col1;
+<br/>
+      BG_PALETTE_SUB[(i &lt;&lt; 4)| 0xe]    = col2;
+<br/>
+      BG_PALETTE[(i &lt;&lt; 4)| 0xe]       = col2;
+<br/>
+   }
+<br/>
+<br/>
+   //consoleInitDefault((u16*)SCREEN_BASE_BLOCK_SUB(31), (u16*)CHAR_BASE_BLOCK_SUB(0), 16);
+<br/>
+   map = (u16*)SCREEN_BASE_BLOCK_SUB(31);
+<br/>
+   charBase = (u16*)CHAR_BASE_BLOCK_SUB(0);
+<br/>
+   bitDepth = 16;
+<br/>
+   consoleInit((u16*)default_font_bin, charBase, 256, 0, map, CONSOLE_USE_COLOR255, bitDepth);
+<br/>
+      consoleClear();
+<br/>
+<br/>
+   map = (u16*)SCREEN_BASE_BLOCK(31);
+<br/>
+   charBase = (u16*)CHAR_BASE_BLOCK(0);
+<br/>
+   bitDepth = 16;
+<br/>
+   consoleInit((u16*)default_font_bin, charBase, 256, 0, map, CONSOLE_USE_COLOR255, bitDepth);
+<br/>
+      consoleClear();
+<br/>
+<br/>
+   // SCREEN &amp; ROW POINTER
+<br/>
+   screen1 = (u16*)SCREEN_BASE_BLOCK_SUB(31);         //sub
+<br/>
+   screen2 = (u16*)SCREEN_BASE_BLOCK(31);            //main
+<br/>
+   for(i=0; i&lt;CONSOLE_HEIGHT; i++)
+<br/>
+   {
+<br/>
+      row[i] = screen2 + i * CONSOLE_WIDTH;
+<br/>
+      row[i +CONSOLE_HEIGHT] = screen1 + i * CONSOLE_WIDTH;
+<br/>
+   }
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#141374 - Diddl - Mon Sep 24, 2007 8:34 pm</h4>
+    <div class="postbody"><span class="postbody">does no one has an idea why this code works only in emul (not on a real NDS)??</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#141375 - strager - Mon Sep 24, 2007 8:39 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Diddl wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">   // SCREEN &amp; ROW POINTER
+<br/>
+   screen1 = (u16*)SCREEN_BASE_BLOCK_SUB(31);         //sub
+<br/>
+   screen2 = (u16*)SCREEN_BASE_BLOCK(31);            //main
+<br/>
+   for(i=0; i&lt;CONSOLE_HEIGHT; i++)
+<br/>
+   {
+<br/>
+      row[i] = screen2 + i * CONSOLE_WIDTH;
+<br/>
+      row[i +CONSOLE_HEIGHT] = screen1 + i * CONSOLE_WIDTH;
+<br/>
+   }
+<br/>
+</td> </tr></table><span class="postbody"></span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Where is the row variable coming from?  It looks awful suspicious to me, and same goes with how it's used.  Perhaps it isn't getting initialized properly?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#141383 - Diddl - Mon Sep 24, 2007 9:13 pm</h4>
+    <div class="postbody"><span class="postbody">row variable is for speed purposes, so I don't need to multiply every time I need to calculate a pointer to screen.
+<br/>
+<br/>
+and of course i make one big screen from two screens. for my text function lib it appears like one big screen (32 columns * 48 rows).
+<br/>
+<br/>
+<br/>
+it works fine in DSmuMe. lower screen works fine on my NDS. but upper screen is only black.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#141386 - GPFerror - Mon Sep 24, 2007 9:53 pm</h4>
+    <div class="postbody"><span class="postbody">maybe alpha bit needs to be set ?
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">         col1 = RGB15(r,g,b) | BIT(15);
+<br/>
+         col2 = RGB15(0,0,0) | BIT(15); </td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Troy(GPF)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#141412 - tepples - Tue Sep 25, 2007 2:31 am</h4>
+    <div class="postbody"><span class="postbody">Alpha bits don't do anything in indexed 2D video on the GBA or DS. I maintain several DS programs that use 4-bit tiled modes: Lockjaw, libfat speed tester, RAC, and memtestARM (which uses the graphic engine from RAC). Nothing disappears when I don't turn on the alpha bit in the palette. Only color index 0 is treated as transparent.
+<br/>
+<br/>
+As far as I can tell, in 2D video on the DS, the alpha bit applies only in 16-bit extended rotation backgrounds, where values 0x0000 through 0x7FFF are treated as transparent. Some of the PC-based DS emulators seem to follow the Game Boy Color practice of using the color value of the rearmost transparent pixel when all pixels in the stack are transparent; the DS does not. I haven't done exhaustive tests, but based on what I've seen on the GBA, I'd wager a guess that the DS instead uses the Game Boy Advance practice of always using palette entry 0.
+<br/>
+<br/>
+Another thing is to make sure that you actually have VRAM mapped where you think you have VRAM mapped. I had sprites disappear in Lockjaw 0.34 when the libnds video header changed out from under me: it was mapping engine A's sprite VRAM where I wasn't expecting.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#141449 - Diddl - Tue Sep 25, 2007 7:15 pm</h4>
+    <div class="postbody"><span class="postbody">Yippee!
+<br/>
+<br/>
+It works, I don't really understand what I did. But your advice with vram maybe was right. I have compared my code with other sample code and now it works fine on my NDS.
+<br/>
+<br/>
+This is right initialization for BOTH screens:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">   videoSetMode(MODE_0_2D | DISPLAY_BG0_ACTIVE);   //sub bg 0 will be used to print text
+<br/>
+   BG0_CR = BG_MAP_BASE(31);
+<br/>
+<br/>
+   videoSetModeSub(MODE_0_2D | DISPLAY_BG0_ACTIVE);   //sub bg 0 will be used to print text
+<br/>
+   SUB_BG0_CR = BG_MAP_BASE(31);
+<br/>
+<br/>
+   vramSetMainBanks(VRAM_A_MAIN_BG, VRAM_B_LCD, VRAM_C_SUB_BG, VRAM_D_LCD);
+<br/>
+<br/>
+   // FILL COLOR PALETTE
+<br/>
+   for(i=0;i&lt;16;i++)
+<br/>
+   {
+<br/>
+      switch(i)
+<br/>
+      {
+<br/>
+               case 0:
+<br/>
+         col1 = RGB15(0x1f,0x1f,0);      //YEL
+<br/>
+         col2 = RGB15(0,0,0x1f);         //BLUE
+<br/>
+         break;
+<br/>
+          case 8:
+<br/>
+         col1 = RGB15(0x1f,0,0);         //
+<br/>
+         col2 = RGB15(0x1f,0x1f,0x1f);      //
+<br/>
+         break;
+<br/>
+          default:
+<br/>
+         c = i&amp;8?0x1f:0x13;
+<br/>
+         b=    i%2 * c;
+<br/>
+         r=(i/2)%2 * c;
+<br/>
+         g=(i/4)%2 * c;
+<br/>
+         col1 = RGB15(r,g,b);
+<br/>
+         col2 = RGB15(0,0,0);
+<br/>
+         break;
+<br/>
+      }
+<br/>
+      BG_PALETTE_SUB[(i &lt;&lt; 4)| 0xf]    = col1;
+<br/>
+      BG_PALETTE[(i &lt;&lt; 4)| 0xf]       = col1;
+<br/>
+      BG_PALETTE_SUB[(i &lt;&lt; 4)| 0xe]    = col2;
+<br/>
+      BG_PALETTE[(i &lt;&lt; 4)| 0xe]       = col2;
+<br/>
+   }
+<br/>
+<br/>
+   //consoleInitDefault((u16*)SCREEN_BASE_BLOCK_SUB(31), (u16*)CHAR_BASE_BLOCK_SUB(0), 16);
+<br/>
+   map = (u16*)SCREEN_BASE_BLOCK(31);
+<br/>
+   charBase = (u16*)CHAR_BASE_BLOCK(0);
+<br/>
+   bitDepth = 16;
+<br/>
+   consoleInit((u16*)default_font_bin, charBase, 256, 0, map, CONSOLE_USE_COLOR255, bitDepth);
+<br/>
+   //consoleClear();
+<br/>
+<br/>
+   map = (u16*)SCREEN_BASE_BLOCK_SUB(31);
+<br/>
+   charBase = (u16*)CHAR_BASE_BLOCK_SUB(0);
+<br/>
+   bitDepth = 16;
+<br/>
+   consoleInit((u16*)default_font_bin, charBase, 256, 0, map, CONSOLE_USE_COLOR255, bitDepth);
+<br/>
+<br/>
+   // SCREEN &amp; ROW POINTER
+<br/>
+   screen1 = (u16*)SCREEN_BASE_BLOCK_SUB(31);         //sub
+<br/>
+   screen2 = (u16*)SCREEN_BASE_BLOCK(31);            //main
+<br/>
+<br/>
+   *screen1 = CharCol('#', COL_WHITE);
+<br/>
+   *screen2 = CharCol('#', COL_WHITE);
+<br/>
+   while(1);
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#141533 - strager - Wed Sep 26, 2007 6:46 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Diddl wrote:</b></span></td> </tr> <tr> <td class="quote">row variable is for speed purposes, so I don't need to multiply every time I need to calculate a pointer to screen.
+<br/>
+<br/>
+and of course i make one big screen from two screens. for my text function lib it appears like one big screen (32 columns * 48 rows).</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Try comparing the values in the row array, and compare the data pointed to by those pointers (which I am assuming they are; otherwise it didn't make any sense to me).
+<br/>
+<br/>
+You don't lose much speed from the multiply; in reality, gcc compiles that as a shift left by five for the *32.
+<br/>
+<br/>
+Eh, just noticed you posted your "solution" that didn't use the row variable.  I guess that was what the problem was.
+<br/>
+Maybe it would be best if you made a putChar(x, y, c) function for convenience and removing more possibilities of errors in the future.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#141539 - Diddl - Wed Sep 26, 2007 7:19 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>strager wrote:</b></span></td> </tr> <tr> <td class="quote">Eh, just noticed you posted your "solution" that didn't use the row variable.  I guess that was what the problem was.
+<br/>
+Maybe it would be best if you made a putChar(x, y, c) function for convenience and removing more possibilities of errors in the future.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+no, this problem has nothing to do with the row pointers. I reduced the code to 
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">   *screen1 = CharCol('#', COL_WHITE);
+<br/>
+   *screen2 = CharCol('#', COL_WHITE);
+<br/>
+   while(1); </td> </tr></table><span class="postbody">
+<br/>
+<br/>
+and changed the initialization code until working.
+<br/>
+<br/>
+with old code the # only appears on lower (sub) screen. upper screen was blanc.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

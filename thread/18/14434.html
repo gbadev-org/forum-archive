@@ -1,0 +1,185 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>How to shrink sprites? - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > How to shrink sprites?</h2>
+<div id="posts">
+<div class="post">
+    <h4>#144254 - felix123 - Tue Oct 30, 2007 10:40 pm</h4>
+    <div class="postbody"><span class="postbody">I'm having a problem with scaling. I want to shrink something at a constant rate from double size to half size in one second, and assuming a framerate of 60fps, I worked out the following code:</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+function spriteScale(u8 spriteindex, u16 scale) {
+<br/>
+    // modify OAM
+<br/>
+}
+<br/>
+<br/>
+// ...
+<br/>
+<br/>
+int main() {
+<br/>
+<br/>
+    // ...
+<br/>
+<br/>
+    u8 x=1;
+<br/>
+    spriteScale(0, 128);
+<br/>
+<br/>
+    while (true) {
+<br/>
+<br/>
+        // ...
+<br/>
+<br/>
+        spritescale(0, (u16)pow(2,7+(x/30));
+<br/>
+        x++;
+<br/>
+<br/>
+        swiWaitForVblank();
+<br/>
+    }
+<br/>
+<br/>
+    return 0;
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+However, math.h doesn't seem to be supported, and with no floating point hardware, I assume this would be too time-consuming. Is there a better way to do this?<br/>_________________<br/><a class="postlink" href="http://en.wikipedia.org/wiki/NDSh" target="_blank">Nintendo DS homebrew on Wikipedia</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#144257 - Lick - Tue Oct 30, 2007 10:45 pm</h4>
+    <div class="postbody"><span class="postbody">Try fixed-point arithmetic, and try to find a pow() implementation for fixed-point numbers.<br/>_________________<br/><a class="postlink" href="http://licklick.wordpress.com" target="_blank">http://licklick.wordpress.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#144267 - knight0fdragon - Wed Oct 31, 2007 12:18 am</h4>
+    <div class="postbody"><span class="postbody">shifting bits left or right raises and lowers the values by the power of 2
+<br/>
+<br/>
+so 
+<br/>
+(1 &lt;&lt; 0) = 2^0
+<br/>
+(1 &lt;&lt; 1) = 2^1
+<br/>
+(1 &lt;&lt; 2) = 2^2
+<br/>
+<br/>
+so just replace (u16)pow(2,7+(x/30)); with (u16)(1 &lt;&lt; (7 + (x / 30)));
+<br/>
+<br/>
+These work for integer based values btw<br/>_________________<br/><a href="http://www.myspace.com/knight0fdragonds" target="_blank">http://www.myspace.com/knight0fdragonds</a>
+<br/>
+<br/>
+MK DS FC: Dragon 330772 075464 
+<br/>
+AC WW FC: Anthony SamsClub 1933-3433-9458 
+<br/>
+MPFH: Dragon 0215 4231 1206</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#144274 - tepples - Wed Oct 31, 2007 1:55 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>knight0fdragon wrote:</b></span></td> </tr> <tr> <td class="quote">shifting bits left or right raises and lowers the values by the power of 2
+<br/>
+<br/>
+so 
+<br/>
+(1 &lt;&lt; 0) = 2^0
+<br/>
+(1 &lt;&lt; 1) = 2^1
+<br/>
+(1 &lt;&lt; 2) = 2^2
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+But do the bitwise shift operators treat a fractional shift amount as an exponent in the way that one would expect? I'm pretty sure they don't in standard C (don't have a copy of the standard handy to check though), and I don't know of any compiler that provides it as an extension.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">so just replace (u16)pow(2,7+(x/30)); with (u16)(1 &lt;&lt; (7 + (x / 30)));</td> </tr></table><span class="postbody">
+<br/>
+If x is an integer, the division will be truncated to an integer. If &lt;&lt; doesn't support fractional shift amounts, the quantity (7.0 + x / 30.0) will be truncated to an integer. In either case, the result won't be smooth; it'll jump from double directly to single and half size. Try this linear interpolation code (untested but should show you how I'd do it):
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#define N_LERP_STEPS 16  // linear interpolated steps per keyframe
+<br/>
+#define LEN(array) (sizeof(array)/sizeof(array[0]))
+<br/>
+<br/>
+// 128 is double size; 256 is full size; 512 is half size
+<br/>
+const int scalingKeyframes[7] = {128, 161, 203, 256, 322, 406, 512};
+<br/>
+<br/>
+void scalingAnimation() {
+<br/>
+  for (int keyframe = 0; keyframe &lt; LEN(scalingKeyframes) - 1; ++keyframe) {
+<br/>
+    int thisKfValue = scalingKeyframes[keyframe];
+<br/>
+    int nextKfValue = scalingKeyframes[keyframe + 1];
+<br/>
+<br/>
+    for (int lerpStep = 1; lerpStep &lt;= N_LERP_STEPS; ++lerpStep) {
+<br/>
+      int thisFrameValue = thisKfValue + (nextKfValue - thisKfValue) * lerpStep / N_LERP_STEPS;
+<br/>
+      setSpriteScaleFactorTo(thisFrameValue);
+<br/>
+      vsync();
+<br/>
+    }
+<br/>
+  }
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody"><br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#144276 - Yota_VGA - Wed Oct 31, 2007 2:05 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote">But do the bitwise shift operators treat a fractional shift amount as an exponent in the way that one would expect? I'm pretty sure they don't in standard C (don't have a copy of the standard handy to check though), and I don't know of any compiler that provides it as an extension.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+This can't be made fast, and the shift operator isn't made for the multiplication and division, but only for the shift. Multiplication and division are only an application of this operator.
+<br/>
+It isn't C89 neiter C99, surely, and I doubt that a man can have interest to have an operation that do exactly a division between floating values with a strange syntax :)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#144286 - knight0fdragon - Wed Oct 31, 2007 3:57 am</h4>
+    <div class="postbody"><span class="postbody">well that is why I said it was integer based<br/>_________________<br/><a href="http://www.myspace.com/knight0fdragonds" target="_blank">http://www.myspace.com/knight0fdragonds</a>
+<br/>
+<br/>
+MK DS FC: Dragon 330772 075464 
+<br/>
+AC WW FC: Anthony SamsClub 1933-3433-9458 
+<br/>
+MPFH: Dragon 0215 4231 1206</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#144290 - felix123 - Wed Oct 31, 2007 5:00 am</h4>
+    <div class="postbody"><span class="postbody">Thanks, got it working.<br/>_________________<br/><a class="postlink" href="http://en.wikipedia.org/wiki/NDSh" target="_blank">Nintendo DS homebrew on Wikipedia</a></span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

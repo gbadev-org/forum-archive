@@ -1,0 +1,135 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Interrupt handlers and Crt0.s - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Beginners > Interrupt handlers and Crt0.s</h2>
+<div id="posts">
+<div class="post">
+    <h4>#9558 - Domovoi - Fri Aug 08, 2003 6:11 pm</h4>
+    <div class="postbody"><span class="postbody">So, I'm looking into interrupts, and having a hard time. Apparently, one has to use a special Crt0.s script file when compiling, which, if I get all this correctly, places a small function in IWRAM which sends control to a function (table) you need to specify yourself, and places the adress of itself in a certain place in BIOS, right?
+<br/>
+<br/>
+This all seems really awkward. Isn't it possible, in C/C++, to just define a (small) function that handles interrupts, use __attribute to place it in IWRAM, compile it in ARM mode, and then write the contents of a function pointer pointing to that function (i.e., the adress of the function), to the specified memory adress?
+<br/>
+<br/>
+It beats having to edit the ctr0.s and makefile every time you start a new project, plus it looks to me as if it gives you just that bit more control.
+<br/>
+<br/>
+So, is this possible? How would one go about doing this? define a function with the .iwram attribute, create a pointer to the bios adress, and write the function adress to said pointer? What type should these pointers be? unsigned long?
+<br/>
+<br/>
+Or am I completly off track here?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#9559 - DekuTree64 - Fri Aug 08, 2003 6:30 pm</h4>
+    <div class="postbody"><span class="postbody">Yeah, the way you're wanting to do it is how I did it for a long time, but then I decided to rewrite my handler in ASM for speed, but I figured why write my own when the one in Crt0.S is about as optimized as it gets, so I started using it. You can just make modifications to Crt0.S once and copy that to your new projects, instead of re-modifying the original every time. It's just like any other file you reuse from your old projects.
+<br/>
+But if you want to do it with a C/C++ function, just do like 
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#define INTR_VECTOR *((volatile u32*)0x3007ffc)
+<br/>
+INTR_VECTOR = (u32)InterruptHandler;
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Where InterruptHandler is your function, compiled to ARM, and prefferably in IWRAM. It's ok to have it in ROM though, it will just be slower, which is generally bad for interrupts.
+<br/>
+You can also define INTR_VECTOR as a function pointer for clarity, but I just use a u32 cause it works, and I find it simpler.
+<br/>
+<br/>
+Oh, and if you want to use the fast handler in Jeff's Crt0.S, but you want to use DevKitAdv's Crt0, you can just make your own .S file and paste the handler into that, and set it it up the same way as the C/C++ handler.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#9567 - Domovoi - Fri Aug 08, 2003 11:57 pm</h4>
+    <div class="postbody"><span class="postbody">Yeah, I'll probably end up using Jeff's handler eventually, but since I'm still learning, I want to be able to do things for myself, rather than rely on someone's mysterious code of which I am not sure how it works. 
+<br/>
+<br/>
+Once I get my own way up and running, I'm confident that I know exactly how things work. From then on, I'll probably switch to the more optimized method. I find that I learn the most, that way.
+<br/>
+<br/>
+Anyway, the way you described everything is pretty much how I figured it to work. I just had a hard time getting the address in the function pointer into the 0x3007ffc address... Those function pointers are complex. Your u32 way sounds like it'll work best... I'll try it out tomorrow.
+<br/>
+<br/>
+Anyway, back to the Crt0.s... Where can I find a detailed description of what to do with it? Where do I place the file? Do I need the linkscript file too? Should I use some command line option to get it to use a specific Crt0 file?
+<br/>
+<br/>
+Oh, and why would I want to use only Jeff's handler, but DevKitAdv's Crt0? Are there disadvantages to using Jeff's Crt0 file?
+<br/>
+<br/>
+Also, you say "make your own .S file and paste the handler into that." Just Jeff's handler? Or DevkitAdv's Crt0? Where do I find the contents of that? I don't have a Crt0 file that came with DevKitAdv....
+<br/>
+<br/>
+Anyway, thanks for the help!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#9571 - DekuTree64 - Sat Aug 09, 2003 3:57 am</h4>
+    <div class="postbody"><span class="postbody">Well this computer's floppy drive doesn't work, and my programming computer's CD-ROM doesn't work, so I don't have any way to get files from one to the other, so I haven't upgraded to DKA r5 yet. I've just heard some stuff around here about it having a Crt0 that doesn't have interrupt support, so I was just going off that. As such, I don't know the answers to most of your other questions. I don't really know the differences between Jeff's and DKA's Crt0 files, I just figured you might have it working without Jeff's already, so it would be easier to just leave it as it is, and I was pointing out that you could still use the interrupt code without changing the whole Crt0. For that, you'd open up Jeff's Crt0.S in a text editor, go find the interrupt handler, copy it, and paste it into a whole new blank file you create yourself, called irq.S or whatever you want. Then you compile that with gcc ike you would a C file. 
+<br/>
+<br/>
+But for now, just make your own in C. It's much easier to learn that way.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#9579 - Domovoi - Sat Aug 09, 2003 12:28 pm</h4>
+    <div class="postbody"><span class="postbody">Hmm... I'm having difficulties writing the function pointer to the bios address... I'm declaring and defining my InterruptHandler function (of type void, with the .iwram attribute) in a separate source file, which I compile using the -marm switch.
+<br/>
+<br/>
+That works. But now I need to write its address to INTR_VECTOR... I figure it has to be one of the first things done at startup, so I put the line 
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">INTR_VECTOR = (u32)InterruptHandler;</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+at the very start of main(). That's in a different source file though, and naturally it can't find InterruptHandler(), since it's not declared in that same file.
+<br/>
+<br/>
+I figured I could simply use 
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">extern void InterruptHandler();</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+before the definition of main() to let the compiler know that InterruptHandler() is defined in a different source file, but no luck. I get the error:
+<br/>
+<br/>
+GBAIrq.o: in function 'main':
+<br/>
+GBAIrq.o(.text+0xa): undefined reference to 'InterruptHandler'
+<br/>
+<br/>
+What's going on here? If I understand, it claims that the reference to InterruptHandler is undefined? But it -is- defined, in a separate source file. What's going on here?
+<br/>
+[/code]</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#9593 - Domovoi - Sat Aug 09, 2003 6:06 pm</h4>
+    <div class="postbody"><span class="postbody">Well, fixed it.. my bad. I forgot to add the filename to a certain line in the makefile. That caused a few headaches...  Oh well. Works perfect, so far! Thanks for the help!</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

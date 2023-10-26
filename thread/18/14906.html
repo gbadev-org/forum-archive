@@ -1,0 +1,155 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Stuck at displaying sprites over 3D - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Stuck at displaying sprites over 3D</h2>
+<div id="posts">
+<div class="post">
+    <h4>#149736 - M3d10n - Thu Jan 24, 2008 6:26 pm</h4>
+    <div class="postbody"><span class="postbody">Hello, I'm having issues displaying sprites along with 3D. They don't show up at all, both on emulators or actual hardware. 
+<br/>
+<br/>
+There is one thing I don't quite understand: is SPRITE_GFX the correct place to copy my sprite graphics, even if I'm using VRAM bank F for sprites?
+<br/>
+<br/>
+(I know I could use 2D quads for these sprites, but eventually I'll need to change my sprite management code so it works on the subscreen as well, so they need to be sprites).
+<br/>
+<br/>
+The video mode:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">videoSetMode(MODE_2_3D | DISPLAY_BG0_ACTIVE | 
+<br/>
+               DISPLAY_SPR_ACTIVE | DISPLAY_SPR_1D_LAYOUT);</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+VRAM mapping:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+vramSetBankA(VRAM_A_TEXTURE);
+<br/>
+vramSetBankB(VRAM_B_TEXTURE);
+<br/>
+vramSetBankC(VRAM_C_SUB_BG);
+<br/>
+vramSetBankD(VRAM_D_MAIN_BG_0x06000000);   
+<br/>
+vramSetBankF(VRAM_F_MAIN_SPRITE);
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Sprite image loading:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+void SpriteManager::loadImage(Sprite *sprt)
+<br/>
+{   
+<br/>
+   int bytes  = sprt-&gt;width*sprt-&gt;heigth;
+<br/>
+   int offset = sprt-&gt;gfxId*(8*8); //8x8 pixels
+<br/>
+<br/>
+   //Copy shorts
+<br/>
+   //dmaCopy(sprt-&gt;image.image.data16, SPRITE_GFX, bytes/2);   
+<br/>
+   int start = offset/2;
+<br/>
+   for(int i = start; i&lt;start+bytes/2; i++)
+<br/>
+      SPRITE_GFX[i] = sprt-&gt;image.image.data16[i];
+<br/>
+<br/>
+   for(int i = 0; i &lt; 256; i++)
+<br/>
+      SPRITE_PALETTE[i] = sprt-&gt;image.palette[i];   
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+And this is the function that copies the sprites to OAM:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void SpriteManager::render()
+<br/>
+{      
+<br/>
+   int spriteIndex = 0;
+<br/>
+   Sprite *obj = mRootSprite;   
+<br/>
+   while (obj)
+<br/>
+   {   
+<br/>
+      uint16 *attr = &amp;mSpriteCache[spriteIndex].attribute[0];
+<br/>
+      attr[0] = ATTR0_COLOR_256 | ATTR0_SQUARE | (obj-&gt;y &amp; 0x00FF);
+<br/>
+      attr[1] = ATTR1_SIZE_32 | (obj-&gt;x &amp; 0x01FF);
+<br/>
+      attr[2] = obj-&gt;gfxId;
+<br/>
+<br/>
+      obj = obj-&gt;next;
+<br/>
+      spriteIndex++;
+<br/>
+   }   
+<br/>
+<br/>
+   //Clear other sprites
+<br/>
+   for (int i=spriteIndex; i&lt;128; i++)
+<br/>
+      mSpriteCache[spriteIndex].attribute[0] = ATTR0_DISABLED;
+<br/>
+<br/>
+   //Copy to OAM
+<br/>
+   for(int i = 0; i &lt; 128 * sizeof(SpriteEntry) / 4 ; i++)
+<br/>
+   {
+<br/>
+      ((uint32*)OAM)[i] = ((uint32*)mSpriteCache)[i];
+<br/>
+   }
+<br/>
+}</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#149740 - M3d10n - Thu Jan 24, 2008 6:55 pm</h4>
+    <div class="postbody"><span class="postbody">Oh damn.
+<br/>
+<br/>
+The code above is 100% ok... it was the goddamned image loading code that was failing to load the image, thus the width and height were both 0. I just filled the sprite with 32x32 random stuff and it worked.
+<br/>
+<br/>
+/punches self</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#149743 - ingramb - Thu Jan 24, 2008 7:16 pm</h4>
+    <div class="postbody"><span class="postbody">&gt;There is one thing I don't quite understand: is SPRITE_GFX the correct place to copy my sprite graphics, even if I'm using VRAM bank F for sprites?
+<br/>
+<br/>
+Whichever vram bank is mapped to sprite graphics will show up at address SPRITE_GFX (6400000h+).  Each vram bank is mapped to a different address depending on what its function is.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

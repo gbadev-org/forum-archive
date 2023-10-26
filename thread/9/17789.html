@@ -1,0 +1,159 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>rendering on different layers - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Graphics > rendering on different layers</h2>
+<div id="posts">
+<div class="post">
+    <h4>#177075 - blessingta@hotmail.co.uk - Tue Dec 06, 2011 2:08 am</h4>
+    <div class="postbody"><span class="postbody">I'm trying to render on different layers but what's happening is that I dont know where I can make the layers point in the oam data where I store my sprites (not the memory address as its doing now)
+<br/>
+<br/>
+//all the layers shown below are pointing to the character data instead:
+<br/>
+// how do i make them point the prite location of the memory
+<br/>
+<br/>
+#define OBJ_32BIT_SPRITE (unsigned int*)0x06010000	
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+ 
+<br/>
+   // Graphics mode controls
+<br/>
+   //Pointer to area which controls  the graphics modes
+<br/>
+   REG_DISPCNT = (BG3_ENABLE | BG2_ENABLE | BG1_ENABLE | BG0_ENABLE | MODE_0);
+<br/>
+   REG_BG1CNT = (4 &lt;&lt; 8); //point to the sprite memoory location
+<br/>
+   REG_BG2CNT = (4 &lt;&lt; 8); //point to the sprite memoory location 
+<br/>
+   REG_BG2CNT = (4 &lt;&lt; 8); //point to the sprite memoory location
+<br/>
+   REG_BG3CNT = (4 &lt;&lt; 8); //point to the sprite memoory location
+<br/>
+   </td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177076 - Dwedit - Tue Dec 06, 2011 5:39 am</h4>
+    <div class="postbody"><span class="postbody">It sounds like you're a little confused here.
+<br/>
+OAM (Object Attribute Memory) is the table that lists the sprites which will be drawn, and contains their coordinates, tiles, and other properties.
+<br/>
+<br/>
+Sprites don't have layers, only tilemapped backgrounds have layers.  But sprites can have different priority settings, so they can be in front of some background layers and behind others.
+<br/>
+<br/>
+VRAM (Video RAM) is divided into two sections, one for tilemapped backgrounds (0x06000000), and one section for sprites (0x06010000).  Sprites may only use the VRAM devoted to sprites, and tilemapped backgrounds may only use the VRAM dedicated to tilemapped backgrounds.  They can not be shared.  The only exception is one of the bitmap modes which lets you use the first half of sprite VRAM as framebuffer pixels, then that area can't be used for sprites, but bitmap modes are generally pointless anyway.
+<br/>
+<br/>
+Here's the specification of the BGxCNT registers (from GBATEK):
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+4000008h - BG0CNT - BG0 Control (R/W) (BG Modes 0,1 only)
+<br/>
+400000Ah - BG1CNT - BG1 Control (R/W) (BG Modes 0,1 only)
+<br/>
+400000Ch - BG2CNT - BG2 Control (R/W) (BG Modes 0,1,2 only)
+<br/>
+400000Eh - BG3CNT - BG3 Control (R/W) (BG Modes 0,2 only)
+<br/>
+<br/>
+  Bit   Expl.
+<br/>
+  0-1   BG Priority           (0-3, 0=Highest)
+<br/>
+  2-3   Character Base Block  (0-3, in units of 16 KBytes) (=BG Tile Data)
+<br/>
+  4-5   Not used (must be zero)
+<br/>
+  6     Mosaic                (0=Disable, 1=Enable)
+<br/>
+  7     Colors/Palettes       (0=16/16, 1=256/1)
+<br/>
+  8-12  Screen Base Block     (0-31, in units of 2 KBytes) (=BG Map Data)
+<br/>
+  13    Display Area Overflow (0=Transparent, 1=Wraparound; BG2CNT/BG3CNT only)
+<br/>
+  14-15 Screen Size (0-3)
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+The highest value for a character base block is 3, since there are two bits dedicated to that field.  You can't specify 4 and share it with the sprites, that instead puts a 1 in the "not used" field.  If you specify base block 3, and attempt to use high-numbered tiles which would be inside sprite memory, it draws some vertical stripes instead of tile graphics.
+<br/>
+But you still need to specify where you want to put your tilemap map.  It's specified in 2KB units.  Leaving this at 0 for all 4 layers is not the correct way to do it.  The memory area for the maps is shared with the memory area for tile graphics.  After you have your maps set up and working, you will see some garbage-looking tiles in a Tile Viewer, that's your map displayed as tile graphics.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177082 - blessingta@hotmail.co.uk - Wed Dec 07, 2011 2:56 pm</h4>
+    <div class="postbody"><span class="postbody">Oh sorry I meant to say that my issue was that because of Rg_bg1cnt... (which I had to put to stop the background being littered with random squares). But now the issue is that my sprite "redcircle no longer renders on screen"
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code"> // Graphics mode controls 
+<br/>
+   //Pointer to area which controls  the graphics modes 
+<br/>
+   REG_DISPCNT = (BG3_ENABLE | BG2_ENABLE | BG1_ENABLE | BG0_ENABLE | MODE_0); 
+<br/>
+   REG_BG1CNT = (4 &lt;&lt; 8); //point to the sprite memoory location 
+<br/>
+   REG_BG2CNT = (4 &lt;&lt; 8); //point to the sprite memoory location 
+<br/>
+   REG_BG2CNT = (4 &lt;&lt; 8); //point to the sprite memoory location 
+<br/>
+   REG_BG3CNT = (4 &lt;&lt; 8); //point to the sprite memoory location 
+<br/>
+   </td> </tr></table><span class="postbody">
+<br/>
+<br/>
+<a href="http://postimage.org/image/bkbea23i7/8669132f/" target="_blank">http://postimage.org/image/bkbea23i7/8669132f/</a>
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+void redcircle_sprites()
+<br/>
+{//2x2 size
+<br/>
+//priority = leayer
+<br/>
+int i_layer = 1;
+<br/>
+int i_x_sp = 0, i_y_sp = 0;
+<br/>
+   psMy_OAM_Sprites16[1 * 4 + 0] = ((0&lt;&lt;14)|(0&lt;&lt;7)|(i_y_sp&lt;&lt;0));
+<br/>
+    psMy_OAM_Sprites16[1 * 4 + 1] = ((1&lt;&lt;14)|(0&lt;&lt;13)|(0&lt;&lt;12)|(0&lt;&lt;8)|(i_x_sp&lt;&lt;0));
+<br/>
+    psMy_OAM_Sprites16[1 * 4 + 2] = ((0&lt;&lt;12)|(i_layer&lt;&lt;10)|(0&lt;&lt;8)|(8&lt;&lt;0));
+<br/>
+    psMy_OAM_Sprites16[1 * 4 + 3] = 0; 
+<br/>
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177087 - blessingta@hotmail.co.uk - Thu Dec 08, 2011 4:41 pm</h4>
+    <div class="postbody"><span class="postbody">problem solved, forgot to activate objs</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

@@ -1,0 +1,143 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Handle-based memory allocation system to reduce fragmenta..? - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Handle-based memory allocation system to reduce fragmenta..?</h2>
+<div id="posts">
+<div class="post">
+    <h4>#154541 - Dwedit - Thu Apr 17, 2008 8:07 pm</h4>
+    <div class="postbody"><span class="postbody">I was thinking about a different way to do memory allocation, in order to heavily reduce fragmentation, but at the cost of convenience.
+<br/>
+When you allocate memory, instead of getting a pointer, you get a Handle to a memory block.  The address of your allocated memory would not be constant, there would be a defragmenting system to automatically defragment the memory as necessary.  When you want to use the memory, you call a Lock function to say that the memory is currently being used, then you get a pointer for the memory.  When you're done reading or writing the memory, you call an Unlock function.
+<br/>
+Locked memory blocks would not be moved around, but any blocks that aren't locked would be moved around.
+<br/>
+This would help heavily reduce fragmentation.
+<br/>
+<br/>
+The major problems is that any program or library would need to be heavily modified to use such a system, and there would be slightly lower performance from having to call Lock and Unlock all the time.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#154547 - ingramb - Thu Apr 17, 2008 9:36 pm</h4>
+    <div class="postbody"><span class="postbody">This is how the OS manages memory on the TI-89 (as you probably already know).  Assuming you really need to dynamically allocate lots of different sizes of memory, this is probably a good approach.
+<br/>
+<br/>
+Using fixed length block allocators can also work well.  Choose some common sizes like 8, 16, and 32, and keep linked lists of blocks of each size.  Then whenever you ask for a block of less than 8 bytes, grab a block from the first linked list.  If it's less than 16 bytes, use the second list.  If it's bigger than 32, you have to go to the main heap.  But if most of your allocations come from the fixed length blocks, you will have very little fragmentation.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#154549 - Miked0801 - Thu Apr 17, 2008 9:40 pm</h4>
+    <div class="postbody"><span class="postbody">What you are proposing works but:
+<br/>
+<br/>
+1. You have extra overhead associated with a seperate memory vector lookup table, though this isn't large.
+<br/>
+<br/>
+2. You get to manage your own garbage collector each low priority or whenever loop to clean up memory.
+<br/>
+<br/>
+3. Locks and Unlocks would slow down access and would add to overall codesize depending on how often you locked.
+<br/>
+<br/>
+4. Any sort of global pointer to memory becomes impossible.  You'd need to either leave it locked forever or lock/unlock each use.
+<br/>
+<br/>
+So yes, it could work and would reduce your fragmentation.  Your call if you wanted to pay the CPU hit.  For the most part, as long as you are careful in what order you allocate/deallocate stuff, fragmentation isn't so bad.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#154561 - M3d10n - Fri Apr 18, 2008 3:55 am</h4>
+    <div class="postbody"><span class="postbody">Having pre-defined memory regions for different kinds of data based on your project needs also helps, specially if you keep short-term (like temporary file buffers) and long-term (like model geometry) apart. 
+<br/>
+<br/>
+The worst thing is loading a file into RAM that you'll parse to create one or more objects. When you're done parsing, the space occupied by that file will be fragmented. Do that for each object and you'll get lots of holes in your RAM in no time.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#154572 - nanou - Fri Apr 18, 2008 10:10 am</h4>
+    <div class="postbody"><span class="postbody">I haven't had problems with malloc wasting much memory. It may be a consequence of my code: metadata in files is usually loaded to local variables and I place objects contiguously on the heap -- I can load directly into the live data array. Often, the only space that's wasted is the file buffers. Aisde: My current project calls malloc 3 times and never calls free, when it is expanded to need more allocations (ones that get freed) they'll all be called after the permenant allocations.
+<br/>
+<br/>
+Code design should be the first thing used to address the problem. Even if you catch yourself wasting a lot of space due to fragmentation after using smarter allocations you can always call realloc or memmove to fix it.
+<br/>
+<br/>
+But even if malloc sucks for some reason or other, you can't rightly say "malloc sucks" -- there are countless algorithms for allocating memory and returning pointers, which all get named "malloc" when it comes to calling the function. Some are optimized for contiguity or locality or even multithreading. The allocator we have available is probably pretty good but maybe it could be better optimized for the platform.
+<br/>
+<br/>
+As for handles... all this locking/unlocking and willy-nilly reallocation is going to waste CPU time, possibly at the worst of times. Even more importantly, existing libraries sometimes require pointers to pointers and I'd never put up with working out that nonsense in my code. More importantly still, existing libraries use malloc.<br/>_________________<br/>- nanou</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#154582 - anomalous_underdog - Fri Apr 18, 2008 3:29 pm</h4>
+    <div class="postbody"><span class="postbody">is that some memory pool allocation scheme discussion I see there? I want to try stuff like these out too sometime</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#154681 - tepples - Sun Apr 20, 2008 8:01 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Dwedit wrote:</b></span></td> </tr> <tr> <td class="quote">I was thinking about a different way to do memory allocation, in order to heavily reduce fragmentation, but at the cost of convenience.
+<br/>
+When you allocate memory, instead of getting a pointer, you get a Handle to a memory block.  The address of your allocated memory would not be constant, there would be a defragmenting system to automatically defragment the memory as necessary.
+<br/>
+<span style="font-style: italic">[continues to explain how memory allocation under classic Mac OS worked]</span></td> </tr></table><span class="postbody">
+<br/>
+If you look at the operating system that runs on the emulated machine inside Mini vMac, you'll see exactly this principle used. Do any of your emulators emulate an MC68000?<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#154684 - TwentySeven - Sun Apr 20, 2008 8:17 am</h4>
+    <div class="postbody"><span class="postbody">Yeah I use multiple non-fixed blocksize handle-based memory allocators like this in my current project.  My assets are all fairly random access, so theres a couple of interesting things going on to prevent fragmentation.
+<br/>
+<br/>
+First of all, the total heap is broken up into smaller pools based on what they're going to hold, so I allocate say, 256kb for models, 512kb for animation data, etc.   
+<br/>
+<br/>
+Secondly, I keep "last frame accessed" counters on all of the handles, which lets me free rendering assets up if they havn't been used in a while.  Sort of a poor mans garbage collection.
+<br/>
+<br/>
+Thirdly, I have a simple defragment algorithm that can be run a single step at a time, so I can defrag a pool over multiple frames during the spare time before vblank.  It's fairly straightforward;  I find a "free'd" handle with its block of ram, and swap it for a still allocated block that follows immediately after.
+<br/>
+<br/>
+eg:
+<br/>
+ABCDEF___
+<br/>
+<br/>
+ABC_EF___
+<br/>
+D is marked as free. 
+<br/>
+<br/>
+What was D is swapped with E, which becomes:
+<br/>
+ABCE_F___
+<br/>
+then finally with F:
+<br/>
+ABCEF____</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#156789 - Dwedit - Tue May 13, 2008 11:42 pm</h4>
+    <div class="postbody"><span class="postbody">Sorry for necroposting, but I just noticed that if you were to use a handle-based memory allocation system, it could make it much more transparent to swap to disk.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#156797 - Maxxie - Tue May 13, 2008 11:56 pm</h4>
+    <div class="postbody"><span class="postbody">There is even support for this in x86 hardware by selectors/descriptor tables.
+<br/>
+<br/>
+However flat memory design with pagetables have succeeded against the descriptor model in the OSes.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

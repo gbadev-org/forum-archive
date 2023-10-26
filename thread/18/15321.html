@@ -1,0 +1,118 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>divf32 and small denominators - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > divf32 and small denominators</h2>
+<div id="posts">
+<div class="post">
+    <h4>#153665 - Rajveer - Thu Apr 03, 2008 5:04 pm</h4>
+    <div class="postbody"><span class="postbody">I've found a bug in my collision code which allows division of a really large number by a really small number, problem is I can't do anything about the algorithm because it's sound on floating point systems e.g. in one case:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">divf32( 1005201,1) = -177664000</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+If converting this to floating point, this would be:
+<br/>
+<br/>
+(1005201/4096) / (1/4096) = 1005201
+<br/>
+<br/>
+Am I right? If so why is this? Maybe I should do this part in floating point and convert to fixed after the floating divide? *shudder*
+<br/>
+<br/>
+EDIT: Ahah! It's only when the denominator is 1 or -1, otherwise it's the correct value. Why does this happen?
+<br/>
+<br/>
+EDIT2: Nope, I'm wrong. When doing divf32( 1123008, x) I get the wrong answer when x is between -2 and 2. Any help?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#153670 - DiscoStew - Thu Apr 03, 2008 6:11 pm</h4>
+    <div class="postbody"><span class="postbody">I believe I know what you problem is. Your variables (as well as the divide) are based on 32-bit values, and the value can only go so high/low, and you are crossing the threshold of the signed value, as the divide affects the very last bit that decides is the value is negative or positive.
+<br/>
+<br/>
+As for your thought about divide, the way dividing works for fixed numbers isn't quite that way. To divide 2 fixed numbers of the same type, the following formula is used.
+<br/>
+<br/>
+(a &lt;&lt; x) / b
+<br/>
+Where a is the numerator, b is the denominator, and x is the fixed length that a and b are based off of. This is so that the resulting value is the same fixed-type as the values used.
+<br/>
+<br/>
+With your values, this is what is happening
+<br/>
+<br/>
+(1005201 &lt;&lt; 12) / 1
+<br/>
+(4117303296) / 1 = 4117303296
+<br/>
+<br/>
+Now, convert that to hexadecimal, and you get
+<br/>
+<br/>
+0xF5691000
+<br/>
+<br/>
+Take note, that the defined value is "f32", which means it is not only 32-bits long, but it is signed as well. So, what is the true value of that hex number as a value of "f32"? It is exactly what you gave us, which is
+<br/>
+<br/>
+-177664000
+<br/>
+<br/>
+I hope that helps you understand the problem, as well as figure out a solution to it.<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#153673 - elhobbs - Thu Apr 03, 2008 8:22 pm</h4>
+    <div class="postbody"><span class="postbody">to put it another way 245.4104 /0.000244 = 1005201 or 4117303296 when converted to an f32. This exceeds the 19 bits of precision for the integer portion of an f32. This assumes that the values in your example were already in f32 format. if they were not then the same thing applies to your input value of 1005201, it is too large to be expressed as an f32.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#153712 - Rajveer - Fri Apr 04, 2008 10:38 am</h4>
+    <div class="postbody"><span class="postbody">Cheers for the detailed explanations guys. I'm not sure how I'd correct this: I could use floating-point as a worst case scenario but I don't want to. I can't use a long long as divf32 returns DIV_RESULT32, so if I want the result as a 64-bit should I write my own function and use DIV_RESULT64?
+<br/>
+<br/>
+What would you guys do for a solution?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#153719 - elhobbs - Fri Apr 04, 2008 1:31 pm</h4>
+    <div class="postbody"><span class="postbody">it really depends on what you are trying to accomplish and what the results are being used for. can you provide a little background?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#153720 - Rajveer - Fri Apr 04, 2008 1:45 pm</h4>
+    <div class="postbody"><span class="postbody">Yep, it's for use during my swept collision intersection test. As part of my test, I project the player's OBB and the triangle onto several axis and use the separating axis test, I also project the player's velocity (for sweeping). However there are cases where the projected velocity gives small numbers for the speed along the axis, even around the size of 1 and -1. In some cases I'll be finding the time to intersect by dividing the difference between the projected OBB's range and the projected triangle's range by this speed, which is where it messes up!
+<br/>
+<br/>
+The results will be used to keep track of the first and last collision times, so that after the whole routine has finished I can move the player the correct amount, so it's pretty critical that I get this part right :)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#153730 - elhobbs - Fri Apr 04, 2008 5:19 pm</h4>
+    <div class="postbody"><span class="postbody">when you say 1 or -1, is this value already in fixed point format?
+<br/>
+<br/>
+you could try clamping the velocity 1/4096 is pretty slow. or you could do your calulations in 64 bit values. you may need to rearrange some of the math to get it right though.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#153747 - Rajveer - Sat Apr 05, 2008 1:49 am</h4>
+    <div class="postbody"><span class="postbody">Yep, the projected speed is in fixed point format. I'm looking into clamping the values, but also process some of my math with 64-bit values. Since the ARM9 is a 32-bit processor, is it slower at processing 64-bits?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#153750 - sajiimori - Sat Apr 05, 2008 2:30 am</h4>
+    <div class="postbody"><span class="postbody">Well, you already have a special case for zero to avoid dividing by zero, right?  Just treat small numbers as if they're zero.  That is, if you collide at all, just say it's at t=0.
+<br/>
+<br/>
+This case should be handled inside the collision test, not outside.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

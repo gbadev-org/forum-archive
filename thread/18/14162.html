@@ -1,0 +1,332 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Using a Larger Stack and other issues. - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Using a Larger Stack and other issues.</h2>
+<div id="posts">
+<div class="post">
+    <h4>#140521 - goruka - Mon Sep 17, 2007 1:58 am</h4>
+    <div class="postbody"><span class="postbody">Hi! I'm porting an opernsource audio app to the Nintendo DS using libnds
+<br/>
+However, it has some heavy recursion in some places and needs more than 16k of stack for some operations... 
+<br/>
+I know i can probably remap the stack to the main memory area somehow.. i'd need about 128k of stack.
+<br/>
+<br/>
+At the same time, since this is an audio app, the really intensive processing should be done in an interrupt, so i need a quick stack at the IRQ handler. 
+<br/>
+<br/>
+How does one change the link script to use 128k of main ram for stack?
+<br/>
+<br/>
+Thanks!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#140524 - DekuTree64 - Mon Sep 17, 2007 2:27 am</h4>
+    <div class="postbody"><span class="postbody">You'll probably be better off only switching the stack to main RAM for the function calls that need it, so the rest of the code doesn't get slowed down. It will involve a bit of assembly code, but nothing too difficult. Maybe something like this:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">u8 *gMainRamStack;
+<br/>
+<br/>
+void InitMainRamStack()
+<br/>
+{
+<br/>
+    // Set the pointer to the top of it, since the stack grows downward.
+<br/>
+    // Make sure you subtract 0x20000 if you ever free the memory.
+<br/>
+    gMainRamStack = malloc(0x20000) + 0x20000;
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">@ void CallFunctionWithMainRamStack(void (*function)(void));
+<br/>
+.arm
+<br/>
+.align 2
+<br/>
+.global CallFunctionWithMainRamStack
+<br/>
+CallFunctionWithMainRamStack:
+<br/>
+ldr r1, =gMainRamStack  @ Load the global symbol
+<br/>
+ldr r1, [r1]         @ Load the value, so r1 points to the top of the main RAM stack
+<br/>
+stmfd r1!, {sp, lr}  @ Push original sp, and return address, onto the main RAM stack
+<br/>
+mov sp, r1           @ Switch the actual sp to the main RAM stack
+<br/>
+mov lr, pc           @ Set return address for the user function
+<br/>
+bx r0                @ Call the user function
+<br/>
+ldmfd sp, {sp, lr}   @ Pop original sp back to the sp register, and our return address to lr
+<br/>
+bx lr                @ And return</td> </tr></table><span class="postbody">
+<br/>
+That's NOT nesting safe though. You can use it in an interrupt, but just make sure that the interrupt won't fire while another function is currently using the main RAM stack.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#140525 - goruka - Mon Sep 17, 2007 2:49 am</h4>
+    <div class="postbody"><span class="postbody">Thanks! but how do I use that second chunk of code? as in, where do i put it?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#140526 - DekuTree64 - Mon Sep 17, 2007 2:57 am</h4>
+    <div class="postbody"><span class="postbody">Just make a file with extention .s, and the makefile should find it.
+<br/>
+<br/>
+Oh, and you'll need to prototype that function as extern "C" if you're using C++.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#140607 - goruka - Tue Sep 18, 2007 4:01 am</h4>
+    <div class="postbody"><span class="postbody">I must be doing something wrong, as I get:
+<br/>
+<br/>
+/usr/local/devkitPro/devkitARM/lib/gcc/arm-eabi/4.1.1/../../../../arm-eabi/lib/crt0.o: In function `start':
+<br/>
+/home/davem/projects/devkitpro/buildscripts/newlib-1.15.0/libgloss/arm/crt0.S:302: undefined reference to `main'
+<br/>
+/tmp/ccFskLyG.o: In function `CallFunctionWithMainRamStack':
+<br/>
+(.text+0x20): undefined reference to `gMainRamStack'
+<br/>
+/usr/local/devkitPro/devkitARM/lib/gcc/arm-eabi/4.1.1/../../../../arm-eabi/lib/libc.a(lib_a-exit.o): In function `exit':
+<br/>
+(.text+0x28): undefined reference to `_exit'
+<br/>
+/usr/local/devkitPro/devkitARM/lib/gcc/arm-eabi/4.1.1/../../../../arm-eabi/lib/libc.a(lib_a-sbrkr.o): In function `_sbrk_r':
+<br/>
+(.text+0x1c): undefined reference to `_sbrk'
+<br/>
+collect2: ld returned 1 exit status</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#140774 - strager - Wed Sep 19, 2007 7:15 pm</h4>
+    <div class="postbody"><span class="postbody">It seems gcc is trying to link the .s you compiled.  Maybe you're missing a -c argument to gcc?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#145319 - tempest - Wed Nov 14, 2007 12:39 am</h4>
+    <div class="postbody"><span class="postbody">Bumping this up because I have a very similar problem: I need a larger stack, let's say 256kb instead of 16kb.
+<br/>
+<br/>
+I've searched the web and found the port of Python for Nintendo DS, which modifies <span style="font-weight: bold">ds_arm9.ld</span>, changing this section:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">rom      : ORIGIN = 0x08000000, LENGTH = 32M
+<br/>
+ewram : ORIGIN = 0x02000000, LENGTH = 4M - 4k
+<br/>
+dtcm   : ORIGIN = 0x0b000000, LENGTH = 16K
+<br/>
+itcm   : ORIGIN = 0x01000000, LENGTH = 32K
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+to this:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">rom      : ORIGIN = 0x08000000, LENGTH = 32M
+<br/>
+ewram   : ORIGIN = 0x02000000, LENGTH = 4M - 260k  /* original length - 256kb */
+<br/>
+dtcm   : ORIGIN = 0x023bf000, LENGTH = 260K - 4k   /* origin relocated in ewram, length = 256kb */
+<br/>
+itcm   : ORIGIN = 0x01000000, LENGTH = 32K
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+without any trick in the code like the one suggested by DekuTree64, it seems to do everything from the toolchain. However, I've tried this memory setup, but it produces weird results on hardware and crashes emulators even on the simple 3d examples of libnds (examples/nds/Graphics/3D/Misc/Simple_Tri for instance). I've investigated a little and found out that maybe <span style="font-weight: bold">ds_arm9_crt0.s</span> needs to be updated as well, since I've found sections like this:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">@---------------------------------------------------------------------------------
+<br/>
+@ Protection Unit Setup added by Sasq
+<br/>
+@---------------------------------------------------------------------------------
+<br/>
+...
+<br/>
+   ldr   r0, =__dtcm_start
+<br/>
+   orr   r0,r0,#0x0a
+<br/>
+   mcr   p15, 0, r0, c9, c1,0      @ DTCM base = __dtcm_start, size = 16 KB
+<br/>
+...
+<br/>
+   @-------------------------------------------------------------------------
+<br/>
+   @ Region 4 - DTCM
+<br/>
+   @-------------------------------------------------------------------------
+<br/>
+   ldr   r0,=__dtcm_start
+<br/>
+   orr   r0,r0,#(PAGE_16K | 1)
+<br/>
+   mcr   p15, 0, r0, c6, c4, 0
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+that still seem to use the old size. However, I don't really know how to update them, nor if there are even more places in the toolchain that have to be updated too. Still, I'd like to get stack enlargement this way, since at the price of slower execution (the stack is relocated in ewram) I'd get lots of more stack without having to mess with the program code.
+<br/>
+<br/>
+Can someone help? Thanks in advance!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#145325 - HyperHacker - Wed Nov 14, 2007 2:30 am</h4>
+    <div class="postbody"><span class="postbody">Might I suggest you look at ways to reduce stack usage to avoid the need to enlarge it? Move temporary variables to malloc()'d structs or globals/static, etc?<br/>_________________<br/>I'm a PSP hacker now, but I still &lt;3 DS.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#145342 - tempest - Wed Nov 14, 2007 9:59 am</h4>
+    <div class="postbody"><span class="postbody"><span style="font-weight: bold">HyperHacker</span>: I cannot do what you propose, at least not without rewriting large parts of a library I'm trying to port. I'd just like to understand what I'm missing, because there's no reason stack relocation can't be done.
+<br/>
+<br/>
+I understand your perplexity about needing more than 16kb of stack, but you know that many useful open source libraries, that could be useful to ds homebrew, haven't really been designed with embedded platform limitations in mind. Stack relocation+enlargement is useful at least to have a test drive with these.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#145345 - simonjhall - Wed Nov 14, 2007 10:20 am</h4>
+    <div class="postbody"><span class="postbody">I found that moving the stack broke stuff in unexpected ways. For instance, printf with %f stopped working. Uh-huh...
+<br/>
+The person who's most likely to know what will break what when moving the stack would be wintermute. I seem to remember that we've all discussed this before, and breakable things were mentioned...<br/>_________________<br/><span style="font-weight: bold"><a class="postlink" href="https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&amp;business=simonjhall%40gmail%2ecom&amp;no_shipping=2&amp;no_note=1&amp;tax=0&amp;currency_code=GBP&amp;lc=GB&amp;bn=PP%2dDonationsBF&amp;charset=UTF%2d8" target="_blank">Big thanks to everyone who donated for Quake2</a></span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#145409 - tempest - Thu Nov 15, 2007 12:41 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>simonjhall wrote:</b></span></td> </tr> <tr> <td class="quote">The person who's most likely to know what will break what when moving the stack would be wintermute. I seem to remember that we've all discussed this before, and breakable things were mentioned...</td> </tr></table><span class="postbody">
+<br/>
+I think you're talking about this: <a class="postlink" href="http://forum.gbadev.org/viewtopic.php?t=12924" target="_blank">Relocating the stack with the PU</a>. Yes, some breakable things are mentioned by DekuTree64:
+<br/>
+<ul>
+<br/>
+<span style="font-weight: bold">IRQ stack</span> (position defined in ds_arm9.ld with <span style="font-style: italic">__irq_flags</span> and <span style="font-style: italic">__irq_vector</span>?)
+<br/>
+<span style="font-weight: bold">SVC stack</span> (position defined in ds_arm9.ld with <span style="font-style: italic">__sp_svc</span>, <span style="font-style: italic">__sp_irq</span> and <span style="font-style: italic">__sp_usr</span>?)
+<br/>
+<span style="font-weight: bold">IPC</span> (should be the memory used by arm7 and arm9 to communicate, but where is it defined? The only reference I could find to it is from a changelog of dualis emulator: <span style="font-style: italic">MMU: Mirrored RTC data to new IPC location (0x23FFxxx)</span>)
+<br/>
+</ul>
+<br/>
+To summarize, then wintermute suggests not to move the stack at runtime and modify the linker script instead. He says that libnds once contained absolute addresses that made relocation from linker script ineffective - maybe there are some more still hidden in the code?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#145416 - HyperHacker - Thu Nov 15, 2007 2:46 am</h4>
+    <div class="postbody"><span class="postbody">IPC is in a header file, ipc.h IIRC. You'd be better off just defining your own elsewhere, but I'm not sure if libFAT will work then. It uses the time fields for file access times.<br/>_________________<br/>I'm a PSP hacker now, but I still &lt;3 DS.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#145426 - simonjhall - Thu Nov 15, 2007 8:48 am</h4>
+    <div class="postbody"><span class="postbody">LOL, didn't realise it was me who made that thread! &lt;looks a bit embarassed&gt;
+<br/>
+So yeah, let us know how you get on! I've love to know if printf %f still works when you do it...and also why it stopped for me whenever I moved the stack!<br/>_________________<br/><span style="font-weight: bold"><a class="postlink" href="https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&amp;business=simonjhall%40gmail%2ecom&amp;no_shipping=2&amp;no_note=1&amp;tax=0&amp;currency_code=GBP&amp;lc=GB&amp;bn=PP%2dDonationsBF&amp;charset=UTF%2d8" target="_blank">Big thanks to everyone who donated for Quake2</a></span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#147336 - tempest - Wed Dec 19, 2007 12:02 am</h4>
+    <div class="postbody"><span class="postbody">I've spent some more time on this and I'm officially out of clues...
+<br/>
+<br/>
+For those joining the thread now, I'm trying to get more stack space (16kb -&gt; 256kb) by relocating it from dtcm into ewram. I just modified the linker script to let ld do the work for me (see a couple posts above for details).
+<br/>
+<br/>
+I discovered that in this state several <span style="font-weight: bold">swi</span> instructions are broken: for instance, after the execution of swiWaitForVBlank (which is implemented IIRC as <span style="font-style: italic">swi 5; bx lr</span>) variables currently on the stack randomly change values.
+<br/>
+<br/>
+One of my guesses: if swi irq handlers are placed at the end of ewram (notice that "- 4k" in the linker script above), just before 0x02400000, then after changing ewram value in the linker, pointers to them become wrong and random code is executed instead of the proper swi irq handlers. Don't know where to start to verify this one, though.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#147367 - chishm - Wed Dec 19, 2007 8:17 am</h4>
+    <div class="postbody"><span class="postbody">Don't change the location of DTCM. Instead, change the location of the stack itself (the user stack, the rest should remain in DTCM for speed of interrupt handling).
+<br/>
+<br/>
+Honestly, I'd look at your code and find another way of doing things. Allocate large arrays on the heap instead of as local variables. If you're recursing through many levels, implement a separate stack and use a loop within the function instead of repeatedly calling itself. There is more than one way to skin a cat.<br/>_________________<br/><a class="postlink" href="http://chishm.drunkencoders.com" target="_blank">http://chishm.drunkencoders.com</a>
+<br/>
+<a class="postlink" href="http://dldi.drunkencoders.com" target="_blank">http://dldi.drunkencoders.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#147374 - tempest - Wed Dec 19, 2007 9:52 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Don't change the location of DTCM. Instead, change the location of the stack itself (the user stack, the rest should remain in DTCM for speed of interrupt handling).</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Sounds promising, but how do I do it? I thought that redefining dtcm in ds_arm9.ld was the only way to relocate the stack. Is there a way to tell the toolchain that the user stack should not be placed in dtcm anymore?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#147375 - qw3rky - Wed Dec 19, 2007 10:02 am</h4>
+    <div class="postbody"><span class="postbody">I'm not half as experienced of a coder as chishm, but even I can tell you that trying to mess around with the stack is a foolish idea. It'll take a little extra work up front, but you need to dive into the library code and move any large local variable allocations to the heap or to globals/statics, and any deep recursion to iteration.
+<br/>
+<br/>
+It may seem unnecessary, but messing with the already finely tuned linker scripts is most likely a bigger headache than you bargained for. Not to mention, you haven't even said what library you're trying to port over. Is it a secret? If you told us what exactly you're trying to accomplish, I think we could help you do it with the least pain possible.<br/>_________________<br/>I've coded about 17 different implementations of Pong. It's the game dev's "hello, world".
+<br/>
+<a class="postlink" href="http://brian.grogan.jr.googlepages.com/dual_scheme.zip" target="_blank">DualScheme - Scheme Interpreter for DS</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#147376 - chishm - Wed Dec 19, 2007 10:28 am</h4>
+    <div class="postbody"><span class="postbody">There are many ways to change the stack pointer. You could change __sp_usr in the link script, you could change the crt0 to use a value other than __sp_usr, or you can fiddle with it using inline ASM. The first two methods require you to mess with the tool chain, which is not really a good idea. Using inline ASM will require some delicate coding so as not to corrupt the stack while moving it. All of these options are messier than refactoring your code.<br/>_________________<br/><a class="postlink" href="http://chishm.drunkencoders.com" target="_blank">http://chishm.drunkencoders.com</a>
+<br/>
+<a class="postlink" href="http://dldi.drunkencoders.com" target="_blank">http://dldi.drunkencoders.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#147574 - tempest - Sun Dec 23, 2007 9:00 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>chishm wrote:</b></span></td> </tr> <tr> <td class="quote">There are many ways to change the stack pointer. You could change __sp_usr in the link script [...]</td> </tr></table><span class="postbody">
+<br/>
+I played with this and it seems to work much better than my previous solution (see some posts above). Here's how I modified the <span style="font-weight: bold">ewram</span> and <span style="font-weight: bold">__sp_usr</span> entries in ds_arm9.ld:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">// Original
+<br/>
+ewram   : ORIGIN = 0x02000000, LENGTH = 4M - 4k
+<br/>
+__sp_usr   =   __sp_irq - 0x100;
+<br/>
+</td> </tr></table><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">// Modified
+<br/>
+ewram   : ORIGIN = 0x02000000, LENGTH = 4M - 260k
+<br/>
+__sp_usr   =   __ewram_end + 0x40000;
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Which essentially means "steal 256kb from ewram, and let the user stack pointer start right at the end of that stolen ewram". Things seem to work this way; I managed to run my library successfully and printf's with %f work fine (see simonjhall's posts above).
+<br/>
+<br/>
+Anyway, I've run across significant performance penalty doing this trick (as one could expect...); even examples from libnds run noticeably slower, so I'll probably go the refactoring route to see if I can reduce stack usage in my library.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>qw3rky wrote:</b></span></td> </tr> <tr> <td class="quote">Not to mention, you haven't even said what library you're trying to port over. Is it a secret?</td> </tr></table><span class="postbody">
+<br/>
+Not at all, it's just that it's not public; it's a 3d library I wrote for fun during my computer graphics classes, back in the days of university.
+<br/>
+<br/>
+Thanks to everyone!</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

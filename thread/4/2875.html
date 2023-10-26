@@ -1,0 +1,524 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>too many sprites....not enough space - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > too many sprites....not enough space</h2>
+<div id="posts">
+<div class="post">
+    <h4>#16451 - slboytoy - Mon Feb 16, 2004 9:46 pm</h4>
+    <div class="postbody"><span class="postbody">i'm trying to work in mode 4 (or any of the bitmodes if necessary) and i'm trying to build a program that uses a lot of sprites.  at this point i have two problems so if anybody has any idea how to fix either one, let me know.
+<br/>
+<br/>
+1) is there any way to extend the OAM memory so i can include 1 or two more sprites (each extra sprite will be 16x16)?  
+<br/>
+<br/>
+2) is there any reason why plotting pisels using 
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">VideoBuffer[xpos+ypos*240] = RGB16(0,15,15)</td> </tr></table><span class="postbody">
+<br/>
+isn't working?  all it does is blank the entire screen (including the sprites that are drawn to the screen when the pixel plotting code is removed)
+<br/>
+<br/>
+any help would be appreciated</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#16453 - poslundc - Mon Feb 16, 2004 11:30 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>slboytoy wrote:</b></span></td> </tr> <tr> <td class="quote">1) is there any way to extend the OAM memory so i can include 1 or two more sprites (each extra sprite will be 16x16)?</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+OAM is designed to allow up to 128 sprites <span style="font-style: italic">on screen at any one time</span>. Do you really need more than 128 on at any given moment?
+<br/>
+<br/>
+(In other words, there is no practical limit to how many sprites you use <span style="font-style: italic">in your game</span>, just how many are onscreen at the same time.)
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">2) is there any reason why plotting pisels using 
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">VideoBuffer[xpos+ypos*240] = RGB16(0,15,15)</td> </tr></table><span class="postbody">
+<br/>
+isn't working?  all it does is blank the entire screen (including the sprites that are drawn to the screen when the pixel plotting code is removed)</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+There could be a million reasons. Post your code and maybe we'll be able to help more specifically.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#16455 - yaustar - Tue Feb 17, 2004 12:32 am</h4>
+    <div class="postbody"><span class="postbody">Doesnt mode four use a palette? or is it me being naive again?<br/>_________________<br/>[<a class="postlink" href="http://parabellumgames.no-ip.org" target="_blank">Blog</a>] [<a class="postlink" href="http://yaustar.no-ip.org" target="_blank">Portfolio</a>]</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#16463 - Krakken - Tue Feb 17, 2004 9:10 am</h4>
+    <div class="postbody"><span class="postbody">Yes modes: 0, 1, 2 and 4 use a palette. You would only use that code for modes 3 and 5 which read the RGB value from the actual display data. Don't forget about the writing 2 bytes at a time to the VRAM in mode 4 too.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#16483 - slboytoy - Tue Feb 17, 2004 8:09 pm</h4>
+    <div class="postbody"><span class="postbody">sorry, i didn't mean OAM memory, i meant the character memory holding the sprite info.  including a background palette to work with the VideoBuffer function help but it seems that this draws over my sprites.  anybody see any reason why?  here's the full code
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#include "gba.h"       //GBA register definitions
+<br/>
+#include "keypad.h"     //button registers
+<br/>
+#include "dispcnt.h"    //REG_DISPCNT register #defines
+<br/>
+#include "sprit.h"      //my generic sprite header file
+<br/>
+#include "modemenu.h"   //mode menu info
+<br/>
+#include "voltmenu.h"   //volt menu info
+<br/>
+#include "linemenu.h"   //line menu info
+<br/>
+#include "palette.h"   //palette info
+<br/>
+<br/>
+#define MULTIBOOT const int __gba_multiboot
+<br/>
+MULTIBOOT = 1;
+<br/>
+<br/>
+#define RGB16(r,g,b)  ((r)+(g&lt;&lt;5)+(b&lt;&lt;10)) 
+<br/>
+<br/>
+//create an OAM variable and make it point to the address of OAM
+<br/>
+u16* OAM = (u16*)0x7000000;
+<br/>
+u16 flag = 0;
+<br/>
+<br/>
+//create the array of sprites (128 is the maximum)
+<br/>
+OAMEntry sprites[128];
+<br/>
+<br/>
+//create the rotation and scaling array (overlaps the OAMEntry array memory)
+<br/>
+pRotData rotData = (pRotData)sprites;
+<br/>
+<br/>
+//animated sprite structure required
+<br/>
+typedef struct
+<br/>
+{
+<br/>
+   u16 x;         //x and y position on screen
+<br/>
+   u16 y;
+<br/>
+   u16 spriteFrame;        //animation frame
+<br/>
+   int activeFrame;        //which frame is active
+<br/>
+}Sprite;
+<br/>
+<br/>
+//using the structure for different sprites
+<br/>
+Sprite modeSprite;
+<br/>
+Sprite voltSprite;
+<br/>
+Sprite lineSprite;
+<br/>
+<br/>
+//Copy our sprite array to OAM
+<br/>
+void CopyOAM()
+<br/>
+{
+<br/>
+   u16 loop;
+<br/>
+   u16* temp;
+<br/>
+   temp = (u16*)sprites;
+<br/>
+   for(loop = 0; loop &lt; 128*4; loop++)
+<br/>
+   {
+<br/>
+      OAM[loop] = temp[loop];
+<br/>
+   }
+<br/>
+}
+<br/>
+<br/>
+//Set sprites to off screen
+<br/>
+void InitializeSprites()
+<br/>
+{
+<br/>
+   u16 loop;
+<br/>
+   for(loop = 0; loop &lt; 128; loop++)
+<br/>
+   {
+<br/>
+      sprites[loop].attribute0 = 160;  //y to &gt; 159
+<br/>
+      sprites[loop].attribute1 = 240;  //x to &gt; 239
+<br/>
+   }
+<br/>
+}
+<br/>
+<br/>
+//wait for the screen to stop drawing
+<br/>
+void WaitForVsync()
+<br/>
+{
+<br/>
+   while((volatile u16)REG_VCOUNT != 160){}
+<br/>
+}
+<br/>
+<br/>
+void GetInput()
+<br/>
+{
+<br/>
+   u16 wait, a;
+<br/>
+<br/>
+   if(!(*KEYS &amp; KEY_UP))      //if the up key is pressed
+<br/>
+   {
+<br/>
+      for (wait=0; wait&lt;=10000; wait++)
+<br/>
+      {
+<br/>
+         a = a + wait;
+<br/>
+         a = 0;
+<br/>
+      }
+<br/>
+   }
+<br/>
+   if(!(*KEYS &amp; KEY_DOWN))         //if the up down is pressed
+<br/>
+   {
+<br/>
+       for (wait=0; wait&lt;=10000; wait++)
+<br/>
+      {
+<br/>
+         a = a + wait;
+<br/>
+         a = 0;
+<br/>
+      }
+<br/>
+   }
+<br/>
+   if(!(*KEYS &amp; KEY_LEFT))      //if the left key is pressed
+<br/>
+   {
+<br/>
+       for (wait=0; wait&lt;=10000; wait++)
+<br/>
+      {
+<br/>
+         a = a + wait;
+<br/>
+         a = 0;
+<br/>
+      }
+<br/>
+   }
+<br/>
+   if(!(*KEYS &amp; KEY_RIGHT))         //if the right key is pressed
+<br/>
+   {
+<br/>
+       for (wait=0; wait&lt;=10000; wait++)
+<br/>
+      {
+<br/>
+         a = a + wait;
+<br/>
+         a = 0;
+<br/>
+      }
+<br/>
+   }
+<br/>
+   if(!(*KEYS &amp; KEY_A))         //if the a key is pressed
+<br/>
+   {
+<br/>
+       for (wait=0; wait&lt;=10000; wait++)
+<br/>
+      {
+<br/>
+         a = a + wait;
+<br/>
+         a = 0;
+<br/>
+      }
+<br/>
+      //extending the menus
+<br/>
+      modeSprite.x = 11;
+<br/>
+      modeSprite.y = 35;
+<br/>
+      voltSprite.x = 93;
+<br/>
+      voltSprite.y = 35;
+<br/>
+      lineSprite.x = 177;
+<br/>
+      lineSprite.y = 45;
+<br/>
+   }
+<br/>
+   if(!(*KEYS &amp; KEY_B))         //if the b key is pressed
+<br/>
+   {
+<br/>
+       for (wait=0; wait&lt;=10000; wait++)
+<br/>
+      {
+<br/>
+         a = a + wait;
+<br/>
+         a = 0;
+<br/>
+      }
+<br/>
+      //minimizing the menu
+<br/>
+      modeSprite.x = 240;
+<br/>
+      modeSprite.y = 160;
+<br/>
+      voltSprite.x = 240;
+<br/>
+      voltSprite.y = 160;
+<br/>
+      lineSprite.x = 240;
+<br/>
+      lineSprite.y = 160;
+<br/>
+   }
+<br/>
+   if(!(*KEYS &amp; KEY_START))         //if the start key is pressed
+<br/>
+   {
+<br/>
+       for (wait=0; wait&lt;=10000; wait++)
+<br/>
+      {
+<br/>
+         a = a + wait;
+<br/>
+         a = 0;
+<br/>
+      }
+<br/>
+   }
+<br/>
+}
+<br/>
+<br/>
+int main()
+<br/>
+{
+<br/>
+   u16 loop;       //generic loop variable
+<br/>
+   int xpos, ypos;
+<br/>
+<br/>
+   //set initial sprite locations
+<br/>
+   modeSprite.x = 240;
+<br/>
+   modeSprite.y = 160;
+<br/>
+<br/>
+   voltSprite.x = 240;
+<br/>
+   voltSprite.y = 160;
+<br/>
+<br/>
+   lineSprite.x = 240;
+<br/>
+   lineSprite.y = 160;
+<br/>
+<br/>
+<br/>
+      SetMode(MODE_4 | OBJ_ENABLE | OBJ_MAP_1D | BG2_ENABLE); //set mode 4, enable sprites, 1d mapping and enable background 2
+<br/>
+<br/>
+   for(loop = 0; loop &lt; 256; loop++)          //load the palette into object memory
+<br/>
+      OBJPaletteMem[loop] = Palette[loop];
+<br/>
+   for(loop = 0; loop &lt; 256; loop++)          //load the palette into background memory
+<br/>
+      BGPaletteMem[loop] = Palette[loop];
+<br/>
+<br/>
+   InitializeSprites();
+<br/>
+<br/>
+   //load the sprite data into memory
+<br/>
+   for(loop = 8192; loop &lt; 8192+2048; loop++)                       //load sprite image data
+<br/>
+   {
+<br/>
+      OAMData[loop] = modeData[loop-8192];
+<br/>
+   }
+<br/>
+<br/>
+   for(loop = 10240; loop &lt; 10240+3072; loop++)
+<br/>
+   {
+<br/>
+      OAMData[loop] = voltData[loop-10240];
+<br/>
+   }
+<br/>
+<br/>
+   for(loop = 13312; loop &lt; 13312+3072; loop++)
+<br/>
+   {
+<br/>
+      OAMData[loop] = lineData[loop-13312];
+<br/>
+   }
+<br/>
+<br/>
+<br/>
+   while(1)                                //main loop
+<br/>
+        {
+<br/>
+         //colouring the background
+<br/>
+         for(xpos=0; xpos&lt;120; xpos++)   //loop through all x
+<br/>
+         {
+<br/>
+            for(ypos=0; ypos&lt;160; ypos++)  //loop through all y
+<br/>
+            {
+<br/>
+               VideoBuffer[xpos+ypos*120] = RGB16(0,20,24);
+<br/>
+            }
+<br/>
+         }
+<br/>
+<br/>
+         //initilaize the sprite attributes
+<br/>
+         sprites[0].attribute0 = COLOR_256 | TALL | 20;   //setup sprite info, 256 colour, shape and y-coord
+<br/>
+         sprites[0].attribute1 = SIZE_64 | 15;           //size 64x32 and x-coord
+<br/>
+         sprites[0].attribute2 = 512 | PRIORITY(3);      //pointer to tile where sprite starts
+<br/>
+<br/>
+         sprites[1].attribute0 = COLOR_256 | TALL | 20;   //setup sprite info, 256 colour, shape and y-coord
+<br/>
+         sprites[1].attribute1 = SIZE_64 | 100;          //size 64x32 and x-coord
+<br/>
+         sprites[1].attribute2 = 640 | PRIORITY(3);      //pointer to tile where sprite starts
+<br/>
+<br/>
+         sprites[2].attribute0 = COLOR_256 | TALL | 17;   //setup sprite info, 256 colour, shape and y-coord
+<br/>
+         sprites[2].attribute1 = SIZE_64 | 180;          //size 64x32 and x-coord
+<br/>
+         sprites[2].attribute2 = 832 | PRIORITY(3);      //pointer to tile where sprite starts
+<br/>
+         
+<br/>
+         sprites[3].attribute0 = COLOR_256 | TALL | modeSprite.y;   //setup sprite info, 256 colour, shape and y-coord
+<br/>
+         sprites[3].attribute1 = SIZE_64 | modeSprite.x;             //size 64x32 and x-coord
+<br/>
+         sprites[3].attribute2 = 576 | PRIORITY(1);
+<br/>
+<br/>
+         sprites[4].attribute0 = COLOR_256 | TALL | voltSprite.y;   //setup sprite info, 256 colour, shape and y-coord
+<br/>
+         sprites[4].attribute1 = SIZE_64 | voltSprite.x;             //size 64x32 and x-coord
+<br/>
+         sprites[4].attribute2 = 704 | PRIORITY(1);
+<br/>
+<br/>
+         sprites[5].attribute0 = COLOR_256 | TALL | voltSprite.y+25;   //setup sprite info, 256 colour, shape and y-coord
+<br/>
+         sprites[5].attribute1 = SIZE_64 | voltSprite.x-7;             //size 64x32 and x-coord
+<br/>
+         sprites[5].attribute2 = 768 | PRIORITY(1);
+<br/>
+<br/>
+         sprites[6].attribute0 = COLOR_256 | TALL | lineSprite.y;   //setup sprite info, 256 colour, shape and y-coord
+<br/>
+         sprites[6].attribute1 = SIZE_64 | lineSprite.x;             //size 64x32 and x-coord
+<br/>
+         sprites[6].attribute2 = 896 | PRIORITY(1);
+<br/>
+<br/>
+         sprites[7].attribute0 = COLOR_256 | TALL | lineSprite.y+25;   //setup sprite info, 256 colour, shape and y-coord
+<br/>
+         sprites[7].attribute1 = SIZE_64 | lineSprite.x-6;             //size 64x32 and x-coord
+<br/>
+         sprites[7].attribute2 = 960 | PRIORITY(1);
+<br/>
+<br/>
+         GetInput();
+<br/>
+         WaitForVsync();         //waits for the screen to stop drawing
+<br/>
+         CopyOAM();         //Copies sprite array into OAM.
+<br/>
+   }
+<br/>
+}
+<br/>
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#16486 - poslundc - Tue Feb 17, 2004 8:47 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>slboytoy wrote:</b></span></td> </tr> <tr> <td class="quote">sorry, i didn't mean OAM memory, i meant the character memory holding the sprite info.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Sorry, I don't have time at the moment to look over your code, but in response to your first query you can swap some of the character data in and out of VRAM during VBlank, so like OAM you're only limited to the 32K of sprite VRAM available <span style="font-style: italic">per frame</span>, not in your game.
+<br/>
+<br/>
+Timing may be an issue depending on how many sprites you want to swap in and out of each frame; for more information on that see tepples' excellent <a class="postlink" href="http://www.pineight.com/gba/managing-sprite-vram.txt" target="_blank">Sprite VRAM memory management FAQ</a>.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

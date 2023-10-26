@@ -1,0 +1,529 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>EEPROM Troubles - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > EEPROM Troubles</h2>
+<div id="posts">
+<div class="post">
+    <h4>#20096 - jd - Sat May 01, 2004 11:51 pm</h4>
+    <div class="postbody"><span class="postbody">Hi all,
+<br/>
+<br/>
+Sorry for the long post - I didn't want to leave out any vital information by mistake.
+<br/>
+<br/>
+Anyway, I've written some code to read and write to EEPROM (see below). It reads from EEPROM first and displays the first byte as a number on screen (on VBA this is always zero when the EEPROM is uninitialised, but I would be surprised if I can rely on this in hardware). It then increments this number and writes it back. Then, it repeats the procedure. This allows the user to increment the counter an arbitrary number of times, with the last value stored in EEPROM. If the machine is switched off then the count should continue from its previous state.
+<br/>
+<br/>
+Unfortunately, I only get this behaviour in VBA. On real hardware it hangs on the EEPROM write with a Flash Advance Xtreme 512M (presumeably because I'm not checking for timeouts yet), which I'm guessing means that cart doesn't support EEPROM saves. However, it's on a Flash2Advance 64M cart that things get really weird. Everything works exactly as it should, except for the counter goes up by 3 each time, rather than by 1.
+<br/>
+<br/>
+Ok, here are my questions:
+<br/>
+<br/>
+1) Does the Flash Advance Xtreme 512M support EEPROM?
+<br/>
+2) Any ideas why the counter goes up by 1 with VBA but by 3 on hardware with a Flash2Advance 64M cart? (Any suggestions would be welcome - I'm completely stumped right now.)
+<br/>
+3) Is there any way to detect if the EEPROM hasn't been written to before? At the moment, the only way I can think of to test this is to check for a magic value but that's a nasty kludge that I'd rather avoid if possible.
+<br/>
+<br/>
+Thanks for any assistance you can offer!
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#define EEPROM_ADDRESS (volatile u16*)0xD000000
+<br/>
+#define REG_EEPROM  (*(volatile u16*)0xD000000)
+<br/>
+#define REG_DM3SAD  (*(volatile u32*)0x40000D4)
+<br/>
+#define REG_DM3DAD  (*(volatile u32*)0x40000D8)
+<br/>
+#define REG_DM3CNT  (*(volatile u32*)0x40000DC)
+<br/>
+<br/>
+void EEPROM_SendPacket( u16* packet, int size )
+<br/>
+{
+<br/>
+   REG_DM3SAD = (u32)packet;
+<br/>
+   REG_DM3DAD = (u32)EEPROM_ADDRESS;
+<br/>
+   REG_DM3CNT = 0x80000000 + size;
+<br/>
+}
+<br/>
+<br/>
+void EEPROM_ReceivePacket( u16* packet, int size )
+<br/>
+{
+<br/>
+   REG_DM3SAD = (u32)EEPROM_ADDRESS;
+<br/>
+   REG_DM3DAD = (u32)packet;
+<br/>
+   REG_DM3CNT = 0x80000000 + size;
+<br/>
+}
+<br/>
+<br/>
+void EEPROM_Read( int offset, u8* dest ) // dest must point to 8 bytes
+<br/>
+{
+<br/>
+   u16 packet[68];
+<br/>
+   u8* out_pos;
+<br/>
+   u16* in_pos;
+<br/>
+   u8 out_byte;
+<br/>
+   int byte, bit;
+<br/>
+   
+<br/>
+   // Read request
+<br/>
+   packet[0] = 1;
+<br/>
+   packet[1] = 1;
+<br/>
+   
+<br/>
+   // 6 bits eeprom address (MSB first)
+<br/>
+   packet[2] = offset&gt;&gt;5;
+<br/>
+   packet[3] = offset&gt;&gt;4;
+<br/>
+   packet[4] = offset&gt;&gt;3;
+<br/>
+   packet[5] = offset&gt;&gt;2;
+<br/>
+   packet[6] = offset&gt;&gt;1;
+<br/>
+   packet[7] = offset;
+<br/>
+   
+<br/>
+   // End of request
+<br/>
+   packet[8] = 0;
+<br/>
+   
+<br/>
+   // Do transfers
+<br/>
+   EEPROM_SendPacket( packet, 9 );
+<br/>
+   EEPROM_ReceivePacket( packet, 68 );
+<br/>
+   
+<br/>
+   // Extract data
+<br/>
+   in_pos = &amp;packet[4];
+<br/>
+   out_pos = dest;
+<br/>
+   for( byte = 7; byte &gt;= 0; --byte )
+<br/>
+   {
+<br/>
+      out_byte = 0;
+<br/>
+      for( bit = 7; bit &gt;= 0; --bit )
+<br/>
+      {
+<br/>
+         out_byte += (*in_pos++)&lt;&lt;bit;
+<br/>
+      }
+<br/>
+      *out_pos++ = out_byte;
+<br/>
+   }
+<br/>
+}
+<br/>
+<br/>
+void EEPROM_Write( int offset, u8* source ) // source must point to 8 bytes
+<br/>
+{
+<br/>
+   u16 packet[73];
+<br/>
+   u8* in_pos;
+<br/>
+   u16* out_pos;
+<br/>
+   u8 in_byte;
+<br/>
+   int byte, bit;
+<br/>
+   
+<br/>
+   // Write request
+<br/>
+   packet[0] = 1;
+<br/>
+   packet[1] = 0;
+<br/>
+   
+<br/>
+   // 6 bits eeprom address (MSB first)
+<br/>
+   packet[2] = offset&gt;&gt;5;
+<br/>
+   packet[3] = offset&gt;&gt;4;
+<br/>
+   packet[4] = offset&gt;&gt;3;
+<br/>
+   packet[5] = offset&gt;&gt;2;
+<br/>
+   packet[6] = offset&gt;&gt;1;
+<br/>
+   packet[7] = offset;
+<br/>
+   
+<br/>
+   // Extract data
+<br/>
+   in_pos = source;
+<br/>
+   out_pos = &amp;packet[8];
+<br/>
+   for( byte = 7; byte &gt;= 0; --byte )
+<br/>
+   {
+<br/>
+      in_byte = *in_pos++;
+<br/>
+      for( bit = 7; bit &gt;= 0; --bit )
+<br/>
+      {
+<br/>
+         *out_pos++ = in_byte&gt;&gt;bit;
+<br/>
+      }
+<br/>
+   }
+<br/>
+   
+<br/>
+   // End of request
+<br/>
+   packet[72] = 0;
+<br/>
+   
+<br/>
+   // Do transfers
+<br/>
+   EEPROM_SendPacket( packet, 73 );
+<br/>
+   
+<br/>
+   // Wait for EEPROM to finish (should timeout after 10 ms)
+<br/>
+   while( (REG_EEPROM &amp; 1) == 0 );
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+int AgbMain(void) 
+<br/>
+{
+<br/>
+   u8 buffer[8];
+<br/>
+<br/>
+   // Edited out some set up stuff here
+<br/>
+<br/>
+   // Set up waitstates for EEPROM access etc.
+<br/>
+   *(volatile unsigned short *)0x04000204 = 0x4317;
+<br/>
+<br/>
+   do
+<br/>
+   {
+<br/>
+        EEPROM_Read( 0, buffer );
+<br/>
+        printf_special( "%d\n", buffer[0] );
+<br/>
+        ++buffer[0];
+<br/>
+        EEPROM_Write( 0, buffer );
+<br/>
+   }
+<br/>
+   while( 1 );
+<br/>
+<br/>
+   return 1;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+(printf_special is a routine which outputs text to the screen and waits for user input - it's been tested thoroughly so the problem definitely isn't there.)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#20101 - dagamer34 - Sun May 02, 2004 1:16 am</h4>
+    <div class="postbody"><span class="postbody">I made a test on my EZFA to see what happens. Your code seems to hang on reading because I flashed over a VBA save file but I still ended up with zero being displayed when run. It did successfully work in VBA though.
+<br/>
+<br/>
+By the way, the EZFA fully supports all save types, so my guess leans more towards code than the flash cart being the problem.<br/>_________________<br/>Little kids and Playstation 2's don't mix. :(</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#20102 - jd - Sun May 02, 2004 1:37 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>dagamer34 wrote:</b></span></td> </tr> <tr> <td class="quote">I made a test on my EZFA to see what happens. Your code seems to hang on reading because I flashed over a VBA save file but I still ended up with zero being displayed when run.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+If it displayed something then the code can't have hung on reading (the display is done after the read). Did the number increment as it should when you pressed a button?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#20103 - dagamer34 - Sun May 02, 2004 2:13 am</h4>
+    <div class="postbody"><span class="postbody">Whoops. 
+<br/>
+<br/>
+I checked again, printing after every operation, and the code hangs on writing. It's funny, though, it doesn't display the number it should anyway because I flashed over a .sav file just to make sure it's loading something.<br/>_________________<br/>Little kids and Playstation 2's don't mix. :(</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#20104 - jd - Sun May 02, 2004 2:19 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>dagamer34 wrote:</b></span></td> </tr> <tr> <td class="quote">Whoops. 
+<br/>
+<br/>
+I checked again, printing after every operation, and the code hangs on writing. It's funny, though, because it doesn't display the number it should anyway.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Yes, it could well be that it's not reading properly either, it just doesn't actually hang until the write - almost certainly because it waits indefinitely for the EEPROM to be ready, but it never is. (I'll add a timeout in the final code, although of course that doesn't fix the current problem.)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#20105 - dagamer34 - Sun May 02, 2004 2:46 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>jd wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>dagamer34 wrote:</b></span></td> </tr> <tr> <td class="quote">Whoops. 
+<br/>
+<br/>
+I checked again, printing after every operation, and the code hangs on writing. It's funny, though, because it doesn't display the number it should anyway.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Yes, it could well be that it's not reading properly either, it just doesn't actually hang until the write - almost certainly because it waits indefinitely for the EEPROM to be ready, but it never is. (I'll add a timeout in the final code, although of course that doesn't fix the current problem.)</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Hope you post the finished code so no one else will go through what you did!<br/>_________________<br/>Little kids and Playstation 2's don't mix. :(</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#20106 - jd - Sun May 02, 2004 3:51 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>dagamer34 wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+Hope you post the finished code so no one else will go through what you did!</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Sure, no problem. Now I just need to actually get it to work. :)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#20110 - phonymike - Sun May 02, 2004 8:11 am</h4>
+    <div class="postbody"><span class="postbody">I have a flash xtreme 512, and I think its eeprom function is broke. I have another 128 xtreme card, and a turbo, and certain games save fine on those, but not at all on the 512. Maybe your card broke too.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#20114 - jd - Sun May 02, 2004 12:46 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>phonymike wrote:</b></span></td> </tr> <tr> <td class="quote">I have a flash xtreme 512, and I think its eeprom function is broke. I have another 128 xtreme card, and a turbo, and certain games save fine on those, but not at all on the 512. Maybe your card broke too.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+That could well be the case, but since the code also fails completely on an EZFA and partially on an F2A, I'm pretty sure there's something wrong with the code as well.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#20116 - sajiimori - Sun May 02, 2004 4:30 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+out_byte += (*in_pos++)&lt;&lt;bit;
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Forgive my ignorance (I've never used EEPROM before), but are the high bits of incoming packet halfwords guaranteed to be 0?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#20119 - jd - Sun May 02, 2004 5:11 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sajiimori wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+Forgive my ignorance (I've never used EEPROM before), but are the high bits of incoming packet halfwords guaranteed to be 0?</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Sajiimori, you are a god! I changed the code you quoted to..
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+out_byte += ((*in_pos++)&amp;1)&lt;&lt;bit;
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+..and now it works perfectly on both VBA and the F2A cart! Thanks!  Dagamer34, does this new code work on the EZFA?
+<br/>
+<br/>
+There are a couple of things that are still puzzling me though:
+<br/>
+<br/>
+1) The code doesn't work properly on BatGBA. The read seems to work but the write seems to always write 0. Any ideas what's going wrong there?
+<br/>
+<br/>
+2) Is there an official way to check if the EEPROM has been written to before?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#20126 - dagamer34 - Sun May 02, 2004 7:07 pm</h4>
+    <div class="postbody"><span class="postbody">I have tested it again with the new code and found out that the new code doesn't hang on writes, but it doesn't read or write correctly either. I don't know why. :(
+<br/>
+<br/>
+Should have gotten a F2A.<br/>_________________<br/>Little kids and Playstation 2's don't mix. :(</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#20138 - jd - Mon May 03, 2004 12:12 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>dagamer34 wrote:</b></span></td> </tr> <tr> <td class="quote">I have tested it again with the new code and found out that the new code doesn't hang on writes, but it doesn't read or write correctly either. I don't know why. :(
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Try adding the following to the end of EEPROM_Read() and EEPROM_Write():
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+// Waste some clock cycles
+<br/>
+REG_DISPCNT = REG_DISPCNT;
+<br/>
+   
+<br/>
+// Wait for transfer to finish (add timeout?)
+<br/>
+while( REG_DM3CNT_H &amp; 0x8000 );
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+This has no noticeable effect for me, but it's possible that the DMA transfers act differently on the EZFA.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>dagamer34 wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+Should have gotten a F2A.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Right now it looks likely that the problem is still with the code rather than the cart.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#20140 - dagamer34 - Mon May 03, 2004 1:25 am</h4>
+    <div class="postbody"><span class="postbody">I did some MORE testing, and I found out that it actually writes the data correctly (1 down, 1 to go), but doesn't read it properly. That is why it appears as if nothing happened.
+<br/>
+<br/>
+If you want to know what I did:
+<br/>
+<br/>
+1) I created a sav file in VBA with a certain value (I had 85).
+<br/>
+2) I then flashed over the sav file to my cart
+<br/>
+3) Then on my EZFA, I pressed the A button 5 times (the screen showed showed 20)
+<br/>
+4) Then I extracted the sav file and tested it in VBA. And the number 90 appeared, yay!
+<br/>
+<br/>
+I keep playing around with your code to see what is wrong.<br/>_________________<br/>Little kids and Playstation 2's don't mix. :(</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#20141 - jd - Mon May 03, 2004 1:36 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>dagamer34 wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+1) I created a sav file in VBA with a certain value (I had 85).
+<br/>
+2) I then flashed over the sav file to my cart
+<br/>
+3) Then on my EZFA, I pressed the A button 5 times (the screen showed showed 20)
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+So it started at a displayed value of 15 and incremented by 1 each time you pressed A?
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>dagamer34 wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+4) Then I extracted the sav file and tested it in VBA. And the number 90 appeared, yay!
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Interesting. So is the value it reads/displays on EZFA always 70 less than the true value saved on the cart?
+<br/>
+<br/>
+This would imply either:
+<br/>
+<br/>
+a) It mangles the data when it reads it, then exactly unmangles it when it writes it.
+<br/>
+<br/>
+or
+<br/>
+<br/>
+b) There's something wrong with the way the value is being displayed.
+<br/>
+<br/>
+By the way, did the DMA thing I mentioned above make any difference?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#20187 - jd - Tue May 04, 2004 4:34 am</h4>
+    <div class="postbody"><span class="postbody">I guess not many people around here use EEPROM then?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#20197 - tepples - Tue May 04, 2004 4:45 pm</h4>
+    <div class="postbody"><span class="postbody">Most "people around here" seem to develop on flash carts, which have SRAM.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#20202 - Miked0801 - Tue May 04, 2004 6:51 pm</h4>
+    <div class="postbody"><span class="postbody">Or the people who are forced to use them use the Nintendo libs to access them :)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#20216 - jd - Tue May 04, 2004 10:16 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote">Most "people around here" seem to develop on flash carts, which have SRAM.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Miked0801 wrote:</b></span></td> </tr> <tr> <td class="quote">Or the people who are forced to use them use the Nintendo libs to access them :)</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+True. Ah well, it was worth a shot.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

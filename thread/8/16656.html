@@ -1,0 +1,114 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Set carry? - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>ASM > Set carry?</h2>
+<div id="posts">
+<div class="post">
+    <h4>#168661 - Dwedit - Wed May 13, 2009 10:05 pm</h4>
+    <div class="postbody"><span class="postbody">What's the easiest way to set the carry flag in one instruction?<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#168662 - Ruben - Wed May 13, 2009 11:30 pm</h4>
+    <div class="postbody"><span class="postbody">My guess is to compare/subtract a number &gt; 0 to 0</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#168668 - Dwedit - Thu May 14, 2009 9:36 am</h4>
+    <div class="postbody"><span class="postbody">Ah yes, the curse of knowing the Z80, where the carry flag is opposite of the ARM when doing subtraction.
+<br/>
+In other words, "CMP pc,#0" sets the carry flag in all practical uses.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#168675 - eKid - Fri May 15, 2009 7:56 am</h4>
+    <div class="postbody"><span class="postbody">Or any register... 0 minus 0 should set carry too I believe.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#168682 - Miked0801 - Fri May 15, 2009 4:05 pm</h4>
+    <div class="postbody"><span class="postbody">That makes no sense to me.  -0 shifts nothing to carry.  Are you looking to do it non destructively?  If so, not sure.  Otherwise, move r0,#1,lsr 1 would probably do it.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#168683 - Ruben - Fri May 15, 2009 4:11 pm</h4>
+    <div class="postbody"><span class="postbody">Well, I'm not sure either... I got that result after testing with changing instructions in no$</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#168694 - eKid - Fri May 15, 2009 9:37 pm</h4>
+    <div class="postbody"><span class="postbody">Think of it as "register + 2^32 - 0". So cmp rr, #0 or subs rr, #0 should both set carry without killing the registers.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#168698 - Miked0801 - Sat May 16, 2009 1:42 am</h4>
+    <div class="postbody"><span class="postbody">But setting carry on a 0 subtract with destroy sbc type commands.
+<br/>
+<br/>
+subs  ro,r1,0
+<br/>
+sbcs  r0,r2,r3
+<br/>
+<br/>
+or whatever.  A zero subtract would throw off multiple register subtracts.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#168704 - eKid - Sat May 16, 2009 3:03 am</h4>
+    <div class="postbody"><span class="postbody">Eh? :| 
+<br/>
+<br/>
+If you're going to be setting the carry then it isn't going to be in the middle of a multiple register arithmetic operation thing.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#168705 - Cearn - Sat May 16, 2009 10:00 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Miked0801 wrote:</b></span></td> </tr> <tr> <td class="quote">But setting carry on a 0 subtract with destroy sbc type commands.
+<br/>
+<br/>
+subs  ro,r1,0
+<br/>
+sbcs  r0,r2,r3
+<br/>
+<br/>
+or whatever.  A zero subtract would throw off multiple register subtracts.</td> </tr></table><span class="postbody">It won't. SBC is actually Rn-Op2+<span style="font-weight: bold">Carry-1</span>, rather than just +Carry. Because of this, it'll work out.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">Rn : (r2&lt;&lt;32) + r0
+<br/>
+Rs : (r3&lt;&lt;32) + r1
+<br/>
+Rn -= Rs
+<br/>
+<br/>
+@ Examples
+<br/>
+<br/>
+@ Rn - 0
+<br/>
+subs    r0, r0, #0   @ Subtract low. Sets Carry. C=1
+<br/>
+sbc     r2, r2, #0   @ Substract hi. Uses +C-1 = +0
+<br/>
+<br/>
+@ 0 - 1. R0= r2= r3= 0. r1= 1
+<br/>
+subs    r0, r0, r1   @ Effectively does 0x1:0000:0000 - 1 = 0x0:FFFF:FFFF. C=0
+<br/>
+sbc     r2, r2, r3   @ 0-0 + C-1 = 0 + 0-1 = -1 = 0xFFFF:FFFF
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Also note that the -CS condition means 'unsigned higher or same'. This effectively corresponds to what eKid said: Rd = Rn+2³² - Rs. Something like `cmp Rx, Rx' should work as well.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#168728 - Miked0801 - Sun May 17, 2009 8:05 pm</h4>
+    <div class="postbody"><span class="postbody">Fair enough.  Thanks for the explanation.  I cut my teeth on the DMG/GBC where carry ops were very common.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

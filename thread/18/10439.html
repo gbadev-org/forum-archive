@@ -1,0 +1,131 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>NORMAL_PACK - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > NORMAL_PACK</h2>
+<div id="posts">
+<div class="post">
+    <h4>#93523 - tciny - Wed Jul 19, 2006 6:10 pm</h4>
+    <div class="postbody"><span class="postbody">Hi,
+<br/>
+<br/>
+I'm currently writing a viewer (on Windows/OSX) for checking files that were saved in a model format that I'm developing for the NDS.
+<br/>
+Now, to save time, i store normals in the format that NORMAL_PACK returns already.
+<br/>
+<br/>
+My problem now is: I want to get the v10 values out of there as floats again. I tried pretty long and hard, but I keep losing the sign. (Negative numbers like -0.5 appear as 1.5; very odd)
+<br/>
+<br/>
+This is what I wrote so far:
+<br/>
+#define v10tofloat(n) (((float)(n)) / (1&lt;&lt;9))
+<br/>
+#define NORMAL_UNPACK_X(x) ((v10)((x) &amp; 0x3FF))
+<br/>
+#define NORMAL_UNPACK_Y(y) ((v10)(((y) &gt;&gt; 10) &amp; 0x3FF))
+<br/>
+#define NORMAL_UNPACK_Z(z) ((v10)((z) &gt;&gt; 20))
+<br/>
+<br/>
+The corresponding defines from the devkit are
+<br/>
+#define floattov10(n) ((v10)((n)*(1&lt;&lt;9)))
+<br/>
+#define NORMAL_PACK(x,y,z) (((x)&amp;0x3FF) | (((y) &amp; 0x3FF)&lt;&lt;10) | ((z)&lt;&lt;20))
+<br/>
+<br/>
+It works fine for positive numbers... any ideas where the problem might be?
+<br/>
+<br/>
+Also: Am I correct when I think that values like 1.0 are very problematic as they occupy the same bit as the sign would? Right now, while exporing, I conver values like 1.0 to something like 0.999...
+<br/>
+<br/>
+Any help is greatly appreciated! :)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#93540 - ecurtz - Wed Jul 19, 2006 7:59 pm</h4>
+    <div class="postbody"><span class="postbody">You're going to need to mask off and test the sign bit yourself.
+<br/>
+<br/>
+Something like:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#define v10tofloat(n) ((n) &amp; (1&lt;&lt;9)) ? -((float)(n) / (1&lt;&lt;8)) : ((float)(n) / (1&lt;&lt;8))</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Of course if you're using macros like that you need to make sure you don't have an expression for n...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#93644 - tciny - Thu Jul 20, 2006 11:12 am</h4>
+    <div class="postbody"><span class="postbody">Thanks, but I'm still getting very weird errors. -256 now becomes 3...
+<br/>
+<br/>
+Here's what I do for debugging:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#define floattov10(n)       ((v10)((n) * (1 &lt;&lt; 9) ))
+<br/>
+#define v10tofloat(n)      ((n) &amp; (1&lt;&lt;9)) ? -((float)(n) / (1&lt;&lt;8)) : ((float)(n) / (1&lt;&lt;8))
+<br/>
+#define NORMAL_PACK(x,y,z)  (((x) &amp; 0x3FF) | (((y) &amp; 0x3FF) &lt;&lt; 10) | ((z) &lt;&lt; 20))
+<br/>
+#define NORMAL_UNPACK_X(x)   ((v10)((x) &amp; 0x3FF))
+<br/>
+<br/>
+<br/>
+uint32   pack = (uint32)( NORMAL_PACK( floattov10( -0.5f ), floattov10( 0.5f ), floattov10( 1.0f ) ) );
+<br/>
+v10   unpackedX = NORMAL_UNPACK_X(pack);
+<br/>
+float   unpackedFX = v10tofloat(unpackedX);
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Any suggestions where the problem might be?
+<br/>
+Best regards</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#93802 - hellfire - Fri Jul 21, 2006 10:30 am</h4>
+    <div class="postbody"><span class="postbody">negative numbers are negated.
+<br/>
+what needs to be done is un-negating the lower 10bits and re-negating the whole again:
+<br/>
+-(~n+1) = -(0x3ff-n+1) = (n-0x400)
+<br/>
+<br/>
+so, in your context, this should work:
+<br/>
+#define v10tofloat(n) (n &amp; 0x200) ? ((float)(n-0x400) / 512.0f) : ((float)n / 512.0f)
+<br/>
+<br/>
+but normals should actually be scaled by 511.5 (depending on your platforms floating-point rounding behaviour), otherwise an absolutely legal normal of (1,0,0) would overflow to (-1,0,0).</span><span class="gensmall"><br/><br/>Last edited by hellfire on Fri Jul 21, 2006 11:35 am; edited 2 times in total</span></div>    
+</div>
+<div class="post">
+    <h4>#93805 - tciny - Fri Jul 21, 2006 11:14 am</h4>
+    <div class="postbody"><span class="postbody">hey, thanks a lot, that actually did the trick.
+<br/>
+<br/>
+about the overflows, I changed the exporter so that a 1.0f normal become something like 0.99f. So 512 can never be reached.
+<br/>
+<br/>
+Thanks a lot for your help!!</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

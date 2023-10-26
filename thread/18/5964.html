@@ -1,0 +1,301 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>NDSLib problem with texture sizes - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > NDSLib problem with texture sizes</h2>
+<div id="posts">
+<div class="post">
+    <h4>#44987 - TheChuckster - Tue Jun 07, 2005 2:28 am</h4>
+    <div class="postbody"><span class="postbody">Any texture size up to but not including 256x256 works fine but when I try to have a texture at 256x256 or higher, it simply does not work. 256x128 and vice versa does work. When I try these larger sized textures, I get a white polygon instead of the actual texture. The texture conversion utility I am using has been proven to work fine in other cases. I am quite certain that my code is correct, but here it is nonetheless:
+<br/>
+<br/>
+My Vram banks are set as:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">vramSetBankA(VRAM_A_TEXTURE_SLOT0); vramSetBankB(VRAM_B_TEXTURE_SLOT1); vramSetBankC(VRAM_C_TEXTURE_SLOT2); vramSetBankD(VRAM_D_TEXTURE_SLOT3);</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+And I'm using:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">glTexImage2D(0, 0, GL_RGBA, TEXTURE_SIZE_256, TEXTURE_SIZE_256, 0, TEXGEN_TEXCOORD, (u8*)texture);</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I and the #dsdev IRC chatters just think it's running out of memory or something else that is the fault of ndslib due to its hacky OpenGL implementation. Anyone have any suggestions on how I could go about fixing this problem?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#45060 - exoticorn - Tue Jun 07, 2005 12:52 pm</h4>
+    <div class="postbody"><span class="postbody">This is a combination of two bugs in ndslib - it won't let you use the last byte of your vram banks and it won't let you use any other than the first vram bank... Since one 256x256x16bit texture is exactly the size of one vram bank ndslib isn't able to place it in vram.
+<br/>
+You can fix this by changing two functions in videoGL.c:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+int vramIsTextureBank(uint16 *addr)
+<br/>
+{
+<br/>
+   uint16* vram = vramGetBank(addr);
+<br/>
+<br/>
+   if(vram == VRAM_A)
+<br/>
+   {
+<br/>
+      if((VRAM_A_CR &amp; 3) == ((VRAM_A_TEXTURE) &amp; 3))
+<br/>
+         return 1;
+<br/>
+      else return 0;
+<br/>
+   }
+<br/>
+   else if(vram == VRAM_B)
+<br/>
+   {
+<br/>
+      if((VRAM_B_CR &amp; 3) == ((VRAM_B_TEXTURE) &amp; 3))
+<br/>
+         return 1;
+<br/>
+      else return 0;
+<br/>
+   }
+<br/>
+   else if(vram == VRAM_C)
+<br/>
+   {
+<br/>
+      if((VRAM_C_CR &amp; 3) == ((VRAM_C_TEXTURE) &amp; 3))
+<br/>
+         return 1;
+<br/>
+      else return 0;
+<br/>
+   }
+<br/>
+   else if(vram == VRAM_D)
+<br/>
+   {
+<br/>
+      if((VRAM_D_CR &amp; 3) == ((VRAM_D_TEXTURE) &amp; 3))
+<br/>
+         return 1;
+<br/>
+      else return 0;
+<br/>
+   }
+<br/>
+   else 
+<br/>
+      return 0;
+<br/>
+   
+<br/>
+}
+<br/>
+uint32* getNextTextureSlot(int size)
+<br/>
+{
+<br/>
+   uint32* result = nextBlock;
+<br/>
+   nextBlock += size &gt;&gt; 2;
+<br/>
+<br/>
+   //uh-oh...out of texture memory in this bank...find next one assigned to textures
+<br/>
+   while(!vramIsTextureBank((uint16*)nextBlock - 1) &amp;&amp; nextBlock &lt;= (uint32*)VRAM_E)
+<br/>
+   {
+<br/>
+      nextBlock = (uint32*)vramGetBank((uint16*)result) + (0x20000 &gt;&gt; 2); //next bank
+<br/>
+      result = nextBlock;        
+<br/>
+      nextBlock += size &gt;&gt; 2;
+<br/>
+   }
+<br/>
+<br/>
+   if(nextBlock &gt; (uint32*)VRAM_E)
+<br/>
+      return 0;
+<br/>
+<br/>
+   else return result;   
+<br/>
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Using these changes we were able to render a simple 3d scene using 3 256x256x8 and 4 128x128x8 textures.
+<br/>
+I hope this helps you,
+<br/>
+exo</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#45140 - TheChuckster - Tue Jun 07, 2005 11:08 pm</h4>
+    <div class="postbody"><span class="postbody">Worked like a charm. Thanks man.
+<br/>
+<br/>
+NDSLib ought to be updated to include these changes.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#45175 - dovoto - Wed Jun 08, 2005 7:52 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>TheChuckster wrote:</b></span></td> </tr> <tr> <td class="quote">Worked like a charm. Thanks man.
+<br/>
+<br/>
+NDSLib ought to be updated to include these changes.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Done..thanks exoticorn<br/>_________________<br/><a href="http://www.drunkencoders.com" target="_blank">www.drunkencoders.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#45239 - TheChuckster - Wed Jun 08, 2005 10:56 pm</h4>
+    <div class="postbody"><span class="postbody">Well, to continue reporting bugs, now I am having problems utilizing multiple textures in one app. Either texture works individually and on both objects. What I am doing is basically what any GL programmer would expect to do:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">glGenTextures(2,&amp;(textureID[0]));
+<br/>
+<br/>
+glBindTexture(0, textureID[0]);
+<br/>
+glTexImage2D(0, 0, GL_RGBA, TEXTURE_SIZE_512, TEXTURE_SIZE_512, 0, TEXGEN_TEXCOORD, (u8*)texture);   
+<br/>
+<br/>
+glBindTexture(0, textureID[1]);
+<br/>
+glTexImage2D(0, 0, GL_RGBA, TEXTURE_SIZE_512, TEXTURE_SIZE_512, 0, TEXGEN_TEXCOORD, (u8*)texture_bin);</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">glBindTexture(0, textureID[0]);
+<br/>
+DrawQuad();
+<br/>
+<br/>
+glBindTexture(0, textureID[1]);
+<br/>
+DrawQuad2();</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Yet only the first object drawn has a texture regardless.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#45259 - Ethos - Thu Jun 09, 2005 2:26 am</h4>
+    <div class="postbody"><span class="postbody">Is this on emus?
+<br/>
+<br/>
+I have no problem using multiple textures.
+<br/>
+<br/>
+note: your texture size is HUGE, two textures fill all 4 main banks, you must first have a bank fix and also dedicate all vram to textures<br/>_________________<br/><a class="postlink" href="http://ethos.oddigytitanium.com" target="_blank">Ethos' Homepage (Demos/NDS 3D Tutorial)</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#45268 - dovoto - Thu Jun 09, 2005 3:28 am</h4>
+    <div class="postbody"><span class="postbody">I think there is a good chance my texture load code does not support textures larger than a bank..this is just due to crapy memory management on my part (but maybe this is not the case).  But as he said 512x512x2 is 512KB (all 4 main banks) with a single texture...there is not enough vram total for 2 of them.<br/>_________________<br/><a href="http://www.drunkencoders.com" target="_blank">www.drunkencoders.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#45300 - TheChuckster - Thu Jun 09, 2005 11:54 am</h4>
+    <div class="postbody"><span class="postbody">Wow. This is very limiting for what I'm trying to do. What do commercial developers do for textures? 8 or so 64x64 256 color ones?
+<br/>
+<br/>
+And I had no luck with palette textures. Is that because the if(palette) line is commented out in teximage2D?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#45303 - Ethos - Thu Jun 09, 2005 1:14 pm</h4>
+    <div class="postbody"><span class="postbody">Reduce the size and stretch it over a surface...its not like the DS has super high resolution graphics :)<br/>_________________<br/><a class="postlink" href="http://ethos.oddigytitanium.com" target="_blank">Ethos' Homepage (Demos/NDS 3D Tutorial)</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#45305 - FluBBa - Thu Jun 09, 2005 2:05 pm</h4>
+    <div class="postbody"><span class="postbody">TheChuckster:
+<br/>
+A 512x512 texture rendered on a 256x192 display is limiting? wow...<br/>_________________<br/>I probably suck, my not is a programmer.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#45342 - dovoto - Thu Jun 09, 2005 8:51 pm</h4>
+    <div class="postbody"><span class="postbody">You currently have to load the palette manualy (As i am not certain how to handle multiple palettes yet):
+<br/>
+<br/>
+&lt;warning crapy psuedo code&gt;
+<br/>
+<br/>
+setVramBankE(VRAM_E_LCD); //unlock it
+<br/>
+dma(pal, VRAM_E, 256); //write the palette
+<br/>
+setVramBankE(VRAM_E_TEXTURE_PALETTE); //set it up for texture palettes
+<br/>
+<br/>
+&lt;/crap code&gt;
+<br/>
+<br/>
+<a href="http://www.drunkencoders.com/documents/DS/ndslib.htm#_VRAM_Defines:" target="_blank">http://www.drunkencoders.com/documents/DS/ndslib.htm#_VRAM_Defines:</a>
+<br/>
+<br/>
+For the actual defines and function definitions<br/>_________________<br/><a href="http://www.drunkencoders.com" target="_blank">www.drunkencoders.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#45908 - duencil - Thu Jun 16, 2005 12:24 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>exoticorn wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+Using these changes we were able to render a simple 3d scene using 3 256x256x8 and 4 128x128x8 textures.
+<br/>
+I hope this helps you,
+<br/>
+exo</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Did your 7 textures share the same palette? Or did you figure out how to specify the location of the current palette as well?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#45973 - exoticorn - Fri Jun 17, 2005 12:02 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>duencil wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>exoticorn wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+Using these changes we were able to render a simple 3d scene using 3 256x256x8 and 4 128x128x8 textures.
+<br/>
+I hope this helps you,
+<br/>
+exo</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Did your 7 textures share the same palette? Or did you figure out how to specify the location of the current palette as well?</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+All 7 textures shared one palette. I wrote a textureconverter for this which reads in a number of images and generates textures from then with one optimized palette.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#45978 - mike260 - Fri Jun 17, 2005 1:32 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>duencil wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>exoticorn wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+Using these changes we were able to render a simple 3d scene using 3 256x256x8 and 4 128x128x8 textures.
+<br/>
+I hope this helps you,
+<br/>
+exo</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Did your 7 textures share the same palette? Or did you figure out how to specify the location of the current palette as well?</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+FYI, the palette address register appears to live at 0x040004AC.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

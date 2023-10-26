@@ -1,0 +1,200 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Decoding a FIFO display list - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Decoding a FIFO display list</h2>
+<div id="posts">
+<div class="post">
+    <h4>#88814 - ikaris - Wed Jun 21, 2006 6:53 pm</h4>
+    <div class="postbody"><span class="postbody">Hi everyone,
+<br/>
+<br/>
+I'd like to write an exporter for Maya to generate the .h directly.
+<br/>
+<br/>
+(I know there's one for Max, but you have to copy and paste a TXT file, then run it through a processor...)
+<br/>
+<br/>
+However, I have to say that the FIFO code is not as easy to understand as Immediate Mode rendering !
+<br/>
+<br/>
+Can anyone translate this for me ? (its from the display list 1 example... which is crashing for me in Dualis 20.3... see my other post :) )
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">u32 triangle[] = 
+<br/>
+{
+<br/>
+   12,
+<br/>
+   FIFO_COMMAND_PACK(FIFO_BEGIN, FIFO_COLOR, FIFO_VERTEX16, FIFO_COLOR),
+<br/>
+   GL_TRIANGLE,
+<br/>
+   RGB15(31,0,0),
+<br/>
+   VERTEX_PACK(inttov16(-1),inttov16(-1)), VERTEX_PACK(0,0),
+<br/>
+   RGB15(0,31,0),
+<br/>
+   FIFO_COMMAND_PACK(FIFO_VERTEX16, FIFO_COLOR, FIFO_VERTEX16, FIFO_END),
+<br/>
+   VERTEX_PACK(inttov16(1),inttov16(-1)), VERTEX_PACK(0,0),
+<br/>
+   RGB15(0,0,31),
+<br/>
+   VERTEX_PACK(inttov16(0),inttov16(1)), VERTEX_PACK(0,0),
+<br/>
+};</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I understand that first there's a "FIFO_COMMAND_PACK" that contains the data it will be expecting (i.e. the first one is expecting to begin, get some color info, then vertex position info, then color info again).
+<br/>
+<br/>
+However, the sequence and why its looking for color twice and vertex position data once before moving onto the next pack is beyond me !
+<br/>
+<br/>
+Can anyone clear this one up ?
+<br/>
+<br/>
+I've seen this post:
+<br/>
+<br/>
+<a href="http://forum.gbadev.org/viewtopic.php?t=9830" target="_blank">http://forum.gbadev.org/viewtopic.php?t=9830</a>
+<br/>
+<br/>
+but it really didn't clear it up for me any more...
+<br/>
+<br/>
+Thanks !</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#88817 - Mighty Max - Wed Jun 21, 2006 7:18 pm</h4>
+    <div class="postbody"><span class="postbody">You want to send 4 commandparts. each set of commands takes the command info (the PACK) and the parameters to each part of that pack. Thats 4 possible subcommands.
+<br/>
+<br/>
+The original code would do 
+<br/>
+<br/>
+glBegin,
+<br/>
+  glColor,glVertex
+<br/>
+  glColor,glVertex
+<br/>
+  glColor,glVertex
+<br/>
+glEnd
+<br/>
+<br/>
+Which are 8 commands and have to be devided into 2 packs.  with the cut at the 2nd color/vertex pair
+<br/>
+<br/>
+At least thats what i understand it from the code snipset<br/>_________________<br/><a class="postlink" href="http://mightymax.org/gbamp_multiboot.html" target="_blank">GBAMP Multiboot</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#88819 - ikaris - Wed Jun 21, 2006 7:28 pm</h4>
+    <div class="postbody"><span class="postbody">OK that clears things up a tiny bit...
+<br/>
+<br/>
+so:
+<br/>
+<br/>
+- the FIFO_COMMAND_PACK command can have up to four elements inside the brackets ()... the first should have FIFO_BEGIN and the last should have FIFO_END at the end...
+<br/>
+<br/>
+- possible commands are: FIFO_BEGIN, FIFO_COLOR, FIFO_VERTEX16, FIFO_END
+<br/>
+<br/>
+- possible commands INSIDE each pack are: RGB15(), VERTEX_PACK
+<br/>
+<br/>
+However, one question still remains:
+<br/>
+<br/>
+How does the VERTEX_PACK work ?
+<br/>
+<br/>
+Here is JUST the VERTEX_PACK commands:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+VERTEX_PACK(inttov16(-1),inttov16(-1)),
+<br/>
+VERTEX_PACK(0,0), 
+<br/>
+<br/>
+VERTEX_PACK(inttov16(1),inttov16(-1)),
+<br/>
+VERTEX_PACK(0,0), 
+<br/>
+<br/>
+VERTEX_PACK(inttov16(0),inttov16(1)),
+<br/>
+VERTEX_PACK(0,0), 
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+These obviously make up the three triangles... however, why are there 4 numbers for each, instead of 3 ?  Why are there TWO commands instead of one per vertex ?  Shouldn't each represent an XYZ value ?
+<br/>
+<br/>
+Also, why do some numbers need to have inttov16 and others do not ?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#88836 - Mighty Max - Wed Jun 21, 2006 8:38 pm</h4>
+    <div class="postbody"><span class="postbody">The vertex needs to send 3 data chunks(the components), yes. Each coordinate needs 16 bits to encode, so that 2 components pack into one 32bit word. The second command is to pad the 3rd component into the second 32bit word passed. 
+<br/>
+<br/>
+The triangle rendered in your example is obvious flat, so that the last component is 0, and as inttov16(0)==0 this conversation is dropped.
+<br/>
+<br/>
+It should be VERTEX_PACK(x,y) , VERTEX_PACK(z,0)<br/>_________________<br/><a class="postlink" href="http://mightymax.org/gbamp_multiboot.html" target="_blank">GBAMP Multiboot</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#88844 - ikaris - Wed Jun 21, 2006 9:02 pm</h4>
+    <div class="postbody"><span class="postbody">Thanks a bunch !
+<br/>
+<br/>
+One last question: What if the amount of data is not a perfect multiple of 4 ?
+<br/>
+<br/>
+I'll post the Maya converter (for those interested) once its done, now that I understand the format better !</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#88867 - ikaris - Wed Jun 21, 2006 11:06 pm</h4>
+    <div class="postbody"><span class="postbody">To answer my own question:
+<br/>
+<br/>
+It looks like the "FIFO_NOP" command is used when there's no elements in side a FIFO_COMMAND_PACK
+<br/>
+<br/>
+For example, this pack only has two elements... a texture coordinates command and a vertex command... so FIFO_NOP is used for the other two.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+FIFO_COMMAND_PACK(FIFO_TEX_COORD, FIFO_VERTEX16, FIFO_NOP,FIFO_NOP),
+<br/>
+TEXTURE_PACK(floatot16(0.000000),floatot16(0.000000)),
+<br/>
+VERTEX_PACK(floatov16(10.000000),floatov16(0.000000)),VERTEX_PACK(floatov16(10.000000),0),
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

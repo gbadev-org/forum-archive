@@ -1,0 +1,155 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Help needed. Moving from use of floats to fixed point in 3D. - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Help needed. Moving from use of floats to fixed point in 3D.</h2>
+<div id="posts">
+<div class="post">
+    <h4>#103910 - Dark Knight ez - Mon Sep 25, 2006 10:32 am</h4>
+    <div class="postbody"><span class="postbody">Hey all.
+<br/>
+<br/>
+I need to speed up some things in my game.
+<br/>
+So far, I've been using only floats. It worked, but with lots of 3D objects to display, the game slows down.
+<br/>
+<br/>
+So, I've been converting this code:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">glBindTexture(GL_TEXTURE_2D, textureSurroundings[0]); // front
+<br/>
+glBegin(GL_QUADS);
+<br/>
+    glColor3f(surroundingsColorRPerc, surroundingsColorGPerc, surroundingsColorBPerc);
+<br/>
+    glTexCoord2f(0.0f, 0.0f); glVertex3f(-EDGE,  EDGE, -EDGE);
+<br/>
+    glTexCoord2f(0.0f, 1.0f); glVertex3f( EDGE,  EDGE, -EDGE);
+<br/>
+    glTexCoord2f(1.0f, 1.0f); glVertex3f( EDGE, -EDGE, -EDGE);
+<br/>
+    glTexCoord2f(1.0f, 0.0f); glVertex3f(-EDGE, -EDGE, -EDGE);
+<br/>
+glEnd();</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+To this:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">glBindTexture(GL_TEXTURE_2D, textureSurroundings[0]); // front
+<br/>
+glBegin(GL_QUADS);
+<br/>
+    glColor3f(surroundingsColorRPerc, surroundingsColorGPerc, surroundingsColorBPerc);
+<br/>
+    glTexCoord2t16(floattot16(0.0f), floattot16(0.0f)); glVertex3v16(floattov16(-EDGE), floattov16( EDGE), floattov16(-EDGE));
+<br/>
+    glTexCoord2t16(floattot16(0.0f), floattot16(1.0f)); glVertex3v16(floattov16( EDGE), floattov16( EDGE), floattov16(-EDGE));
+<br/>
+    glTexCoord2t16(floattot16(1.0f), floattot16(1.0f)); glVertex3v16(floattov16( EDGE), floattov16(-EDGE), floattov16(-EDGE));
+<br/>
+    glTexCoord2t16(floattot16(1.0f), floattot16(0.0f)); glVertex3v16(floattov16(-EDGE), floattov16(-EDGE), floattov16(-EDGE));
+<br/>
+glEnd();</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Of course, glColor3f could be done with glColorb as well, I guess.
+<br/>
+Anyway, I tried this out and it appears it's not working correctly.
+<br/>
+The quad does exist, and with the glColor3f enabled, it also appears in a colour (although weird enough, that colour appears to be "random"... not white as is specified [the values are all 1.0f]).
+<br/>
+When I comment out the glColor3f line, the quad is just black.
+<br/>
+<br/>
+So my questions are:
+<br/>
+1) Am I moving from floats to fixed points in the right way? (And does this indeed gain in speed?)
+<br/>
+2) How do I get the texture binding to work properly again?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#103932 - toa - Mon Sep 25, 2006 3:05 pm</h4>
+    <div class="postbody"><span class="postbody">If you look at the implementation of glTexCoord2t16 in libnds:
+<br/>
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">//---------------------------------------------------------------------------------
+<br/>
+void glTexCoord2f(float s, float t) {
+<br/>
+//---------------------------------------------------------------------------------
+<br/>
+   glTexCoord2t16(floattot16(s*127), floattot16(t*127));
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+And the implementation of glTexCoord2t16 in libnds:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">GL_STATIC_INL void glTexCoord2t16(t16 u, t16 v) { GFX_TEX_COORD = TEXTURE_PACK(u,v); }
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Aren't your version missing the *127 done using the normal glTexCoord2f?
+<br/>
+<br/>
+<br/>
+On Speed:
+<br/>
+(1) The approach, as shown, dosn't really help you that much (if at all). The idea is right though: going from float to fixed. To get a speed increase you need to precalucate, for example, the texture values <span style="font-style: italic">before</span> you start rendering and used the precalucated values <span style="font-style: italic">during</span> rendering.
+<br/>
+<br/>
+<br/>
+(2) Improvement: Pack u and v values into a single texture value using TEXTURE_PACK:
+<br/>
+<br/>
+Pre-rendering:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">uint 32 packedUV = TEXTURE_PACK(floattot16((floating_u)*127),floattot16((floating_v)*127));
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+During rendering use this version for setting texture coordinates:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">glTexCoord1i(packedUV);</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+(3) Improvement: Pack x&amp;y values into a single value using:
+<br/>
+<br/>
+pre-rendering:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">int yx = (floattov16(floating_y) &lt;&lt; 16) | (floattov16(floating_x) &amp; 0xFFFF);
+<br/>
+v16 z =  floattov16(floating_z);</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+During rendring use:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">glVertex2v16(yx, z);</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+(all grapped uncerimoneusly by urolling videoGL calls in libnds :-))
+<br/>
+that'll give you a rendering time reduced at least 50% compared using the float "standard" gl-versions from the libnds examples. To go even faster precompile display-list and disregard using the gl-methods at all.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#103940 - Dark Knight ez - Mon Sep 25, 2006 3:53 pm</h4>
+    <div class="postbody"><span class="postbody">Thank you for your clear explenation, toa. Very helpful. :)</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

@@ -1,0 +1,449 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Questions about memory placements... (have tried searching) - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > Questions about memory placements... (have tried searching)</h2>
+<div id="posts">
+<div class="post">
+    <h4>#16810 - Burre - Wed Feb 25, 2004 10:43 am</h4>
+    <div class="postbody"><span class="postbody">Just the other day I found a strange behaviour in my GBA compiler. For some reason global object are not within the global scope. Primitive types defined on the global space are accessable, like they should, but arrays of object pointers are <span style="font-style: italic">not</span>.
+<br/>
+<br/>
+This is valid:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+Cell map[5][5]; //Cell is a struct
+<br/>
+<br/>
+This is (for some reason) not valid:
+<br/>
+GameObject* list[3] = {
+<br/>
+  new Platform(),
+<br/>
+  new Platform(),
+<br/>
+  new Platform()
+<br/>
+};</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I know about IWRAM and EWRAM but not entirely sure where some values are stored (though I know that they can be forced to be placed elsewhere than default). I'm guessing that IWRAM are mainly for stack memory and globals. EWRAM is probably heap memory, but I'm mainly guessing. I suspect that that there are a problem with accessing variables across the different memory types. I've heard of "Long calls" but I'm not sure about what it is for (address de-MUX?), anyways HAMs IWRAM macro are using it.
+<br/>
+<br/>
+I've narrowed the source of error down to something to do with object placement in memory, because this doesn't work either.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+levelAPI* levelHandler = new levelAPI();
+<br/>
+<br/>
+void VBL()
+<br/>
+{
+<br/>
+   int value;
+<br/>
+   levelHandler-&gt;publicMember = value;
+<br/>
+}
+<br/>
+<br/>
+void main()
+<br/>
+{
+<br/>
+  ...
+<br/>
+  ...
+<br/>
+  // Load VBL as IRQ func
+<br/>
+  ...
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+My theory is that the array list[] is placed in IWRAM and the objects (new Platform();) are placed in EWRAM and later when trying to access the object list[i] I get runtime errors.
+<br/>
+<br/>
+I've tried similar things in win32 C++ and it works (so it is not bad syntax), but GBA GCC doesn't.
+<br/>
+<br/>
+<br/>
+And a "runner up" question...
+<br/>
+<br/>
+Does anyone else using Krawall have any problem when placing its IRQ function in IWRAM? I'm placing the IRQ handler in IWRAM, picking the proper IRQ function (based on the IF reg) from a func ptr table run the function an remove the flag. It works great in ROM and when calling other IRQ functions (like VBL) but only delivers noise when calling Krawall(timer) IRQ. The kramworker() is called from within a VBL IRQ function. So any ideas as to why it works perfectly (although probably a little slow) from ROM but not from IWRAM? Is it perhaps a ARM/Thumb problem? And if so. How do one "force" (manually) different blocks of code to be either ARM or Thumb? I have a registered version and not the free one.
+<br/>
+<br/>
+All and any help highly appreciated!<br/>_________________<br/>"The best optimizer is between your ears..."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#16833 - Miked0801 - Wed Feb 25, 2004 6:23 pm</h4>
+    <div class="postbody"><span class="postbody">Can't help with the first part, but we are using Krawall here and I might be able to help with the 2nd.
+<br/>
+<br/>
+What part are you attempting to put into IWRAM?  Krawall expects some code in EWRAM and some in IWRAM.  Are you attempting to put the EWARM in IWRAM as well to speed it up?  
+<br/>
+<br/>
+Oh wait, you're talking about the kramWorker - my bad.  On our system, only kramWorkerStub is in ROM which basically wrappers a (long) call to kramWorker that already lives within IWRAM (copied there on bootup.)  
+<br/>
+<br/>
+How familiar are you with how ARM works?  (A question, not an insult)
+<br/>
+<br/>
+On ARM, there is no way of storing directly (most) 32-bit value into registers (this includes calls and branches.)  So to get such a value, the compiler drops a local copy of the address in ROM close to the call and then use an 8-bit offseted load to get the value into the register.  It is then possible to launch the PC to wherever in code.  Without the stub (or the long call attribute on newer GCCs), the compiler stupidly grabs only part of the address (lowest 8-bits I believe, Dan?) and jumps there causing mass chaos and destruction.  I believe this is what is happening in your first question as well, but my C++ skills aren't the best in the group so I'll leave the to other people to confirm or deny.
+<br/>
+<br/>
+Hope this helps.  If not, fire off a few more questions and we'll see if we can resolve this for you :)
+<br/>
+<br/>
+Mike</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#16839 - Burre - Wed Feb 25, 2004 7:47 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Miked0801 wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+What part are you attempting to put into IWRAM?  Krawall expects some code in EWRAM and some in IWRAM.  Are you attempting to put the EWARM in IWRAM as well to speed it up?</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+The Krawall system requires, as you probably know (being a user and all), triggering of the kradInterrupt at about every 3-4 frame to sync FIFO buffering. I'm simply trying to load the kradInterrupt out of my function table in the IRQ handler (a function placed in IWRAM). The VBL itself (which calls kramworker) is not in IWRAM (although it wouldn't hurt to put it there), but I assume that this function works and gets called properly since gameplay is unaffected. So basicly what I want is putting all IRQ handling (which is fairly slim) into IWRAM to speed up the frequent access (feels wrong to pay 3 turns of waitstate if I use a rapid timer etc). Perhaps there's a more clever way, but that's how I figured it out.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+Oh wait, you're talking about the kramWorker - my bad.  On our system, only kramWorkerStub is in ROM which basically wrappers a (long) call to kramWorker that already lives within IWRAM (copied there on bootup.)  
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+How heavy (in size) is kramworker? Afaik that is where all the mixing goes, or it might seem so when profilings since execution is proportional to music calculations (sfx, channel fx, pans etc). According to the documentation there are several configurations that partition mem usage differently but are there any more detailed information about what goes where?
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+How familiar are you with how ARM works?  (A question, not an insult)
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+No offence taken. I'm not to familiar with ARM as such (only hobbyist type of knowledge really), but I'm quite familiar with CPU's in general (Intel and MC68000 mostly) from a degree in Microprocessor Technology at Royal Institute of technology (abbreviated KTH in Swedish) in Sweden. So don't be afraid to pitch me some tough explanations.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+On ARM, there is no way of storing directly (most) 32-bit value into registers (this includes calls and branches.)  So to get such a value, the compiler drops a local copy of the address in ROM close to the call and then use an 8-bit offseted load to get the value into the register.  It is then possible to launch the PC to wherever in code.  Without the stub (or the long call attribute on newer GCCs), the compiler stupidly grabs only part of the address (lowest 8-bits I believe, Dan?) and jumps there causing mass chaos and destruction.  I believe this is what is happening in your first question as well, but my C++ skills aren't the best in the group so I'll leave the to other people to confirm or deny.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Sounds like a kind of adress demultiplexing (which most sytems use to some degree I guess). It seems like this long call (or stub as you call it) is a way to circumvent the lack of adresslines to be able to load adresses from the "off-die"-memory (EWRAM). 
+<br/>
+<br/>
+Question: So how do I perform long calls from within IWRAM? Jeffs crt file talks about something called 'FarProcedure', am I correct to assume that this might be used to perform long calls? And if so, how do I actually call it in C/C++?
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+Hope this helps.  If not, fire off a few more questions and we'll see if we can resolve this for you :)
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+While it didn't produced any real solutions it sure did confirm some of my assumtions about the nature of the problem. Seems like the two problems might be closely tied together.
+<br/>
+<br/>
+Thanks a bundle.<br/>_________________<br/>"The best optimizer is between your ears..."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#16955 - poslundc - Fri Feb 27, 2004 9:55 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Miked0801 wrote:</b></span></td> </tr> <tr> <td class="quote">On ARM, there is no way of storing directly (most) 32-bit value into registers (this includes calls and branches.)  So to get such a value, the compiler drops a local copy of the address in ROM close to the call and then use an 8-bit offseted load to get the value into the register.  It is then possible to launch the PC to wherever in code.  Without the stub (or the long call attribute on newer GCCs), the compiler stupidly grabs only part of the address (lowest 8-bits I believe, Dan?) and jumps there causing mass chaos and destruction.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I just noticed my name... were you asking me about this? ;P
+<br/>
+<br/>
+According to ARM's documentation, functions on the ARM processor are normally called with the branch-and-link instruction (BL), which takes an immediate 24-bit offset to the program counter. This offset is then multiplied by four allowing an immediate branch of +/- 32MB.
+<br/>
+<br/>
+The only problem with this is that sometimes you need to jump distances greater than 32MB - for example, the distance from the ROM address space to either EWRAM or IWRAM is greater than 32MB - which is why gcc supports the long_call attribute on functions (or their prototypes) when targetting the ARM processor.
+<br/>
+<br/>
+So the long_call attribute indicates to the compiler that instead of just branching and linking (which takes one instruction with no memory accesses) it needs to load the absolute location of the destination function into a register (one instruction plus memory access), save the PC in the link register (another instruction) and finally branch to the destination (third instruction).
+<br/>
+<br/>
+The upshot of all of this is you only need to worry about making long calls when attempting to call code located in EWRAM/IWRAM from ROM, or vice-versa.
+<br/>
+<br/>
+Also to clarify: long_calls are a compiler attribute intended specifically for ARM processors (although they may be relevant on some other ones as well) and are not particular to the GBA hardware exclusively. You will get a "branch out of range" error upon linking if you needed to make a long call when you didn't. It is unlikely that any other type of error would be a result of misusing long_calls.
+<br/>
+<br/>
+Burre: You can specify a function as requiring a long call by declaring it in its prototype:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">extern __attribute__ ((long_call)) void myFarFunction(void);</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I believe the __FarFunction and __FarProcedure in devkit advance are provided as an alternative to using the attribute to instead explicitly call a far procedure (although it appears to work from ROM to IWRAM/EWRAM only, not the other way around). You would use it as follows:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">__FarFunction(myFarFunction);</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+This method takes a few extra cycles, though, not that it really matters &lt;shrug&gt;. Also, in the version of dka that I have there is no difference between __FarFunction and __FarProcedure.
+<br/>
+<br/>
+I can't comment on the C++ code (pretty much ANSI C over here) except to say I am suspicious of global variables being initialized with the "new" operator, since a constructor can contain executable code, which is generally not allowed in a global variable initialization. This is the kind of thing which, even if it's allowed by the C++ specs, some gcc installs may have trouble with (I know mine is quirky when it comes to initializing large structs).
+<br/>
+<br/>
+Sorry I can't be more useful than that.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#16978 - tepples - Sat Feb 28, 2004 3:54 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>poslundc wrote:</b></span></td> </tr> <tr> <td class="quote">Also to clarify: long_calls are a compiler attribute intended specifically for ARM processors (although they may be relevant on some other ones as well)</td> </tr></table><span class="postbody">
+<br/>
+MIPS32 (of PS1, N64, PS2, PSP) is another architecture that may use long_call. Jump instructions in MIPS take a 26-bit immediate operand, which is shifted left by 2 (to 28 bits) and combined with the upper four bits of the program counter to form the new program counter.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#16999 - Burre - Sat Feb 28, 2004 4:31 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>poslundc wrote:</b></span></td> </tr> <tr> <td class="quote">Burre: You can specify a function as requiring a long call by declaring it in its prototype:
+<br/>
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">extern __attribute__ ((long_call)) void myFarFunction(void);</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I believe the __FarFunction and __FarProcedure in devkit advance are provided as an alternative to using the attribute to instead explicitly call a far procedure (although it appears to work from ROM to IWRAM/EWRAM only, not the other way around). You would use it as follows:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">__FarFunction(myFarFunction);</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+This method takes a few extra cycles, though, not that it really matters &lt;shrug&gt;. Also, in the version of dka that I have there is no difference between __FarFunction and __FarProcedure.
+<br/>
+<br/>
+I can't comment on the C++ code (pretty much ANSI C over here) except to say I am suspicious of global variables being initialized with the "new" operator, since a constructor can contain executable code, which is generally not allowed in a global variable initialization. This is the kind of thing which, even if it's allowed by the C++ specs, some gcc installs may have trouble with (I know mine is quirky when it comes to initializing large structs).</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+So if this adress "conversion" takes a few cycles, do I actually gain anything by putting the IRQHandler in IWRAM? Sure, ROM have waitstates and all but it sounds like this evens it out, or?
+<br/>
+<br/>
+Another strange thing about my Krawall problem is that since I use the MEM_FUNC_IN_IWRAM macro provided by HAM which is defined as such:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#define MEM_FUNC_IN_IWRAM __attribute__ ((section (".iwram"), long_call))</td> </tr></table><span class="postbody">
+<br/>
+So it already uses long_calls to access the IRQHandler. The weird thing though is that it has absolutely no problem calling regular VBL functions (declared as usual and therefore residing in ROM) from within the IRQHandler but have problems calling krawall IRQ. Isn't that strange?
+<br/>
+<br/>
+About the C++ objects. As far as I know objects derived from classes are stored much like structs but with function pointers, v-table and this pointer. Member functions are stored in ROM and called from the object, so the possible overhead would be bareable. And since the new operator stores the object on the global scope (heap) I don't see any difference in using them locally since one often passes around the object pointer anyways. Their primary function is to act as a resource. Actually I won't mind allocating them locally, but it feels less intuitive.
+<br/>
+<br/>
+But one thing that I DO need is the ability to reach my LeveAPI object from within a regular function. Because that function holds my VBL calls and since one can't store member function pointers as regular pointers (well except for statics) I need that object to be accessible from within that function. And due to the above problem it is not. Any ideas on how to solve this? If one have another suggestion which provide the same functionality without the hassle of calling between memories, I'm all ears...<br/>_________________<br/>"The best optimizer is between your ears..."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#17002 - poslundc - Sat Feb 28, 2004 4:53 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Burre wrote:</b></span></td> </tr> <tr> <td class="quote">So if this adress "conversion" takes a few cycles, do I actually gain anything by putting the IRQHandler in IWRAM? Sure, ROM have waitstates and all but it sounds like this evens it out, or?</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Don't kid yourself about the value of zero-waitstate memory. Branches are very expensive for code running from ROM, and because ROM code is usually Thumb code there tends to be a lot more of them.
+<br/>
+<br/>
+Even if that was all there was, though, there's a much more signficant advantage to running code from IWRAM. IWRAM has a 32-bit bus, whereas ROM has a 16-bit bus. This is why Thumb (16-bit) code is usually run from ROM, because it takes twice as long to load each ARM (32-bit) instruction. Code running in IWRAM, however, loads 32-bit instructions as quickly as 16-bit instructions, so it makes it much more practical to use the ARM instruction set, which is much, <span style="font-style: italic">much</span> more powerful than the Thumb set.
+<br/>
+<br/>
+So for your couple of extra cycles to branch to IWRAM, you could potentially run a time-critical routine in an order of magnitude fewer cycles than running it from ROM.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Another strange thing about my Krawall problem is that since I use the MEM_FUNC_IN_IWRAM macro provided by HAM which is defined as such:
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#define MEM_FUNC_IN_IWRAM __attribute__ ((section (".iwram"), long_call))</td> </tr></table><span class="postbody">
+<br/>
+So it already uses long_calls to access the IRQHandler. The weird thing though is that it has absolutely no problem calling regular VBL functions (declared as usual and therefore residing in ROM) from within the IRQHandler but have problems calling krawall IRQ. Isn't that strange?</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I don't know what a VBL function is. Is it something to do with VBlank? If so, what is a "normal VBlank function"?
+<br/>
+<br/>
+I have never looked at krawall's code, so I can't offer any speculation as to what it does.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">About the C++ objects. As far as I know objects derived from classes are stored much like structs but with function pointers, v-table and this pointer. Member functions are stored in ROM and called from the object, so the possible overhead would be bareable. And since the new operator stores the object on the global scope (heap) I don't see any difference in using them locally since one often passes around the object pointer anyways. Their primary function is to act as a resource. Actually I won't mind allocating them locally, but it feels less intuitive.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+It's not a question about what the new operator does; it's the fact that it <span style="font-style: italic">does anything</span>. Global variables can only be initialized with constants. You cannot even initialize a global variable with another variable; try it and you'll see.
+<br/>
+<br/>
+If the C++ compiler is smart and sees that your new operator only assigns constants based on its parameters and nothing else, it should be able to replace your new-operators with effective loading of the constants. But I don't hold that much faith in the compiler, personally, and since I don't have an ARM-targetted C++ compiler available to me I can't test it to find out.
+<br/>
+<br/>
+<span style="font-weight: bold">EDIT:</span> Of course the new operator won't work... all you've declared is an object pointer in memory... the new operator has to then allocate memory for the object, which is clearly more than assigning a constant! I don't know why one of the C++ pushers on this board doesn't get in on this thread.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">But one thing that I DO need is the ability to reach my LeveAPI object from within a regular function. Because that function holds my VBL calls and since one can't store member function pointers as regular pointers (well except for statics) I need that object to be accessible from within that function. And due to the above problem it is not. Any ideas on how to solve this? If one have another suggestion which provide the same functionality without the hassle of calling between memories, I'm all ears...</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Why don't you just write an initialization routine? eg.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void InitSystem(void)
+<br/>
+{
+<br/>
+   levelHandler = new levelAPI();
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Then call the initialization function when your program begins.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#17005 - torne - Sat Feb 28, 2004 5:18 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>poslundc wrote:</b></span></td> </tr> <tr> <td class="quote"><span style="font-weight: bold">EDIT:</span> Of course the new operator won't work... all you've declared is an object pointer in memory... the new operator has to then allocate memory for the object, which is clearly more than assigning a constant! I don't know why one of the C++ pushers on this board doesn't get in on this thread.</td> </tr></table><span class="postbody">
+<br/>
+I don't know if you're allowed to initialise a global pointer with new inline, but the original poster should probably try moving the new call to the beginning of main() to see if that makes any difference. =)
+<br/>
+Alternatively, if you only ever use the value in that pointer, and never change it again (i.e. the object that should be created by that new is the only one), you should make it into an explicit object declaration rather than a pointer with new. You can declare global objects and they will be constructed at startup before main() using the table in the .ctors section (this should be handled for you by crt0).</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#17018 - Paul Shirley - Sun Feb 29, 2004 12:00 am</h4>
+    <div class="postbody"><span class="postbody">removed</span><span class="gensmall"><br/><br/>Last edited by Paul Shirley on Sun Mar 28, 2004 9:06 pm; edited 1 time in total</span></div>    
+</div>
+<div class="post">
+    <h4>#17044 - Burre - Sun Feb 29, 2004 2:08 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>poslundc wrote:</b></span></td> </tr> <tr> <td class="quote">Don't kid yourself about the value of zero-waitstate memory. Branches are very expensive for code running from ROM, and because ROM code is usually Thumb code there tends to be a lot more of them.
+<br/>
+<br/>
+So for your couple of extra cycles to branch to IWRAM, you could potentially run a time-critical routine in an order of magnitude fewer cycles than running it from ROM.</td> </tr></table><span class="postbody">
+<br/>
+Ok, I didn't know how servere this waitstate duration was, hence the question. I misinterpreted that "shrugging" as an ironic comment on your statement about "few cycles", meaning that it might been more severe than you implied. Sorry about that, and thank you for pointing that out.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">I don't know what a VBL function is. Is it something to do with VBlank? If so, what is a "normal VBlank function"?
+<br/>
+<br/>
+I have never looked at krawall's code, so I can't offer any speculation as to what it does.</td> </tr></table><span class="postbody">
+<br/>
+Yes I took the liberty to abbreviate VBlank as VBL. By normal (normal ROM function that is, as opposed to forced in IWRAM) I ment the function being loaded in the VBL place in my function pointer stack. I'm not sure about all the nitpicks about Krawall either, so I guess I'll have to keep it a guessing game until I figure it out.<br/>_________________<br/>"The best optimizer is between your ears..."</span><span class="gensmall"><br/><br/>Last edited by Burre on Sun Feb 29, 2004 2:26 pm; edited 1 time in total</span></div>    
+</div>
+<div class="post">
+    <h4>#17047 - Burre - Sun Feb 29, 2004 2:18 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Paul Shirley wrote:</b></span></td> </tr> <tr> <td class="quote">1st: didn't bother with the original request because after reading it several times I never worked out what the problem was never mind find a solution. Phrased as clear as mud.</td> </tr></table><span class="postbody">
+<br/>
+Well, since English is not really my mother toungue I might have some difficulties expressing myself. So if there are some things unclear in my post I'll be happy to explain it further.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">2nd: That use of new is perfectly legal and supported by gcc (and every standard compliant compiler). It has a clearly specified meaning: call all the new's and assign their result to the array elements <span style="font-weight: bold">before calling main()</span>.
+<br/>
+<br/>
+Unfortunately that is insufficient to guarantee working code because global constructor execution order is undefined/illdefined. It might work (something like <span style="font-style: italic">new int[100]</span> always will) but it might fail if there are any constructor dependencies. By and large if you used code like that in a paid job you would get a severe bollocking.
+<br/>
+<br/>
+C++ allows a lot of things that shouldn't be used, this is one of them.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I assumed that this indeed was bad codepraxis, I mainly tried to use it in conjunction with a prototype. My question was more in the nature of <span style="font-style: italic">why</span> it wouldn't work since I assumed that allocation with the new operator was the same wherever it was used.<br/>_________________<br/>"The best optimizer is between your ears..."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#17060 - Paul Shirley - Sun Feb 29, 2004 4:37 pm</h4>
+    <div class="postbody"><span class="postbody">removed</span><span class="gensmall"><br/><br/>Last edited by Paul Shirley on Sun Mar 28, 2004 9:07 pm; edited 1 time in total</span></div>    
+</div>
+<div class="post">
+    <h4>#17062 - Burre - Sun Feb 29, 2004 4:44 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Paul Shirley wrote:</b></span></td> </tr> <tr> <td class="quote">I've had a quick look at this now: it looks like a bug in the runtime support. I can see constructors running successfully, <span style="font-weight: bold">new</span> is working plausibly. It <span style="font-style: italic">nearly</span> works... still looking for the actual bug. It looks like the global pointer is written using the wrong base pointer.
+<br/>
+<br/>
+All I can suggest is move all the global newed objects into explicit startup code or make them static till the bug gets found/fixed. Its a dangerous technique anyway.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Ok thanks.
+<br/>
+<br/>
+Any idea on why this doesn't work (related?):
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+//Outside main
+<br/>
+#include "levelapi.h"
+<br/>
+<br/>
+LevelAPI *levelHandler;
+<br/>
+<br/>
+void VBL();
+<br/>
+<br/>
+void main()
+<br/>
+{
+<br/>
+   levelHandler = new LevelAPI(/*params*/);
+<br/>
+}
+<br/>
+<br/>
+void VBL()
+<br/>
+{
+<br/>
+   levelHandler-&gt;publicFunction();
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+???<br/>_________________<br/>"The best optimizer is between your ears..."</span><span class="gensmall"><br/><br/>Last edited by Burre on Sun Feb 29, 2004 4:48 pm; edited 1 time in total</span></div>    
+</div>
+<div class="post">
+    <h4>#17063 - Burre - Sun Feb 29, 2004 4:45 pm</h4>
+    <div class="postbody"><span class="postbody">*** DOUBLE POST ***<br/>_________________<br/>"The best optimizer is between your ears..."</span><span class="gensmall"><br/><br/>Last edited by Burre on Sun Feb 29, 2004 4:49 pm; edited 1 time in total</span></div>    
+</div>
+<div class="post">
+    <h4>#17064 - Burre - Sun Feb 29, 2004 4:47 pm</h4>
+    <div class="postbody"><span class="postbody">Oops! Accidently hit quote instead of edit...
+<br/>
+<br/>
+To bad one cannot delete one's own posts...<br/>_________________<br/>"The best optimizer is between your ears..."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#17065 - poslundc - Sun Feb 29, 2004 4:58 pm</h4>
+    <div class="postbody"><span class="postbody">You might try telling us what happens when you try to run it.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#17067 - Paul Shirley - Sun Feb 29, 2004 5:09 pm</h4>
+    <div class="postbody"><span class="postbody">removed</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

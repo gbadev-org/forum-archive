@@ -1,0 +1,321 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>DMA Noise when return to read sound buffer - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Audio > DMA Noise when return to read sound buffer</h2>
+<div id="posts">
+<div class="post">
+    <h4>#4821 - rome - Thu Apr 10, 2003 8:14 pm</h4>
+    <div class="postbody"><span class="postbody">i?m currently coding a GBA Sound engine and i?m having a problem: i used DMA and a sound buffer to fill with sounds. DMA is always reading data from sound buffer. But when dma must be restarted to read again the sound buffer, a noise garbage is audible.
+<br/>
+there is a problem when restart DMA in timer 1 interrupt?
+<br/>
+<br/>
+when sound is filled into the buffer, the noise is louder
+<br/>
+<br/>
+here is my code:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+///////////////Interrupts/////////////////////////////
+<br/>
+#define INT_TIMER0 0x0008
+<br/>
+#define INT_TIMER1 0x0010
+<br/>
+<br/>
+// Sound Buffer Size
+<br/>
+#define SOUND_BUFFER_SIZE  1024
+<br/>
+<br/>
+// prototype
+<br/>
+void InterruptProcess(void)  __attribute__ ((section (".iwram"), long_call));
+<br/>
+<br/>
+// struct to initialize sound parameters
+<br/>
+typedef struct stSountCntH 
+<br/>
+{ 
+<br/>
+   int Ch1to4OutputRatio          : 2; 
+<br/>
+   int DSndAOutRatio              : 1; 
+<br/>
+   int DSndBOutRatio              : 1; 
+<br/>
+   int unused                     : 4; 
+<br/>
+<br/>
+   int EnableDSndAToRightSpeaker  : 1; 
+<br/>
+   int EnableDSndAToLeftSpeaker   : 1; 
+<br/>
+   int DSndASampleRateTimer       : 1; 
+<br/>
+   int DSndAFIFOReset             : 1; 
+<br/>
+<br/>
+   int EnableDSndBToRightSpeaker  : 1; 
+<br/>
+   int EnableDSndBToLeftSpeaker   : 1; 
+<br/>
+   int DSndBSampleRateTimer       : 1; 
+<br/>
+   int DSndBFIFOReset             : 1; 
+<br/>
+}SountCntH;
+<br/>
+<br/>
+<br/>
+// gbasound device class
+<br/>
+class  WGBASoundDevice
+<br/>
+{
+<br/>
+public:
+<br/>
+  s8 SoundBuffer[SOUND_BUFFER_SIZE];  // Sound Buffer   
+<br/>
+  volatile u32 BufferPos;  // buffer Pos
+<br/>
+<br/>
+  int Initialize();  // init sound device  
+<br/>
+};
+<br/>
+<br/>
+<br/>
+// Sound Device Global variable
+<br/>
+WGBASoundDevice SndDev __attribute__ ((section (".ewram")));
+<br/>
+<br/>
+<br/>
+//---------------------------------------------------------------------------- 
+<br/>
+// Name: Interrupt Handler
+<br/>
+// Desc: 
+<br/>
+// Pams: 
+<br/>
+//---------------------------------------------------------------------------- 
+<br/>
+void InterruptProcess()
+<br/>
+{
+<br/>
+  if(REG_IF &amp; INT_TIMER1) // end of buffer
+<br/>
+  {
+<br/>
+   // disable DMA
+<br/>
+   REG_DM1CNT_H &amp;= 0x7FFF;
+<br/>
+   // reset DMA Source
+<br/>
+   // HERE MUST BE THE PROBLEM!!!
+<br/>
+   REG_DM1SAD   = (unsigned long)SndDev.SoundBuffer;
+<br/>
+      
+<br/>
+   // enable DMA
+<br/>
+   REG_DM1CNT_H |= 0x8000;
+<br/>
+   // reset sound buffer pos
+<br/>
+   SndDev.BufferPos = 0;
+<br/>
+   }
+<br/>
+   else
+<br/>
+    if(REG_IF &amp; INT_TIMER0) // enter here at 16Khz
+<br/>
+    {
+<br/>
+     // inc sound buffer pos
+<br/>
+     SndDev.BufferPos++;
+<br/>
+    }
+<br/>
+<br/>
+ REG_IF |= REG_IF;
+<br/>
+}
+<br/>
+<br/>
+//---------------------------------------------------------------------------- 
+<br/>
+// Name: Initialize()
+<br/>
+// Desc: Initialize GBASound (timers, etc...)
+<br/>
+// Pams: 
+<br/>
+//---------------------------------------------------------------------------- 
+<br/>
+int WGBASoundDevice::Initialize()
+<br/>
+{
+<br/>
+  SountCntH snd_ctrl; 
+<br/>
+<br/>
+   snd_ctrl.Ch1to4OutputRatio          = 0; 
+<br/>
+   snd_ctrl.DSndAOutRatio              = 1;   // 100% 
+<br/>
+   snd_ctrl.DSndBOutRatio              = 0;    
+<br/>
+   snd_ctrl.unused                     = 0; 
+<br/>
+<br/>
+   snd_ctrl.EnableDSndAToRightSpeaker  = 1; 
+<br/>
+   snd_ctrl.EnableDSndAToLeftSpeaker   = 1; 
+<br/>
+   snd_ctrl.DSndASampleRateTimer       = 0;   //Timer 0 
+<br/>
+   snd_ctrl.DSndAFIFOReset             = 1; 
+<br/>
+<br/>
+   snd_ctrl.EnableDSndBToRightSpeaker  = 0; 
+<br/>
+   snd_ctrl.EnableDSndBToLeftSpeaker   = 0; 
+<br/>
+   snd_ctrl.DSndBSampleRateTimer       = 0;   // Timer 0 
+<br/>
+   snd_ctrl.DSndBFIFOReset             = 0; 
+<br/>
+<br/>
+<br/>
+   // reset sound buffer pos
+<br/>
+   BufferPos = 0; 
+<br/>
+   
+<br/>
+   REG_SGCNT0_H = *(u16*) &amp;snd_ctrl;   // init sound parameters
+<br/>
+   REG_SGCNT1   = 0x80;                       //turn sound chip on
+<br/>
+<br/>
+   // Initialize DMA channel
+<br/>
+   REG_DM1CNT_L = 0;
+<br/>
+   REG_DM1SAD = (unsigned long)SoundBuffer;
+<br/>
+   REG_DM1DAD = 0x040000a0;  // set dest in FIFO A
+<br/>
+   REG_DM1CNT_H = 0xB640;    // init DMA: repeat, 32 bit, Enable
+<br/>
+<br/>
+   // will be triggered when buffer reaches the end
+<br/>
+   REG_TM1D   = 0xFFFF - SOUND_BUFFER_SIZE; 
+<br/>
+   // Enable timer 1 + IRQ + cascade from timer 0;
+<br/>
+   REG_TM1CNT = 0xC4;  // Generete IRQ when buffer reaches the end
+<br/>
+    
+<br/>
+    
+<br/>
+   // Enable IRQ for timer 0 and 1
+<br/>
+   REG_IE |= 0x18;   
+<br/>
+   // Enable Master IRQ
+<br/>
+   REG_IME=1;
+<br/>
+<br/>
+    
+<br/>
+   //enable timer at CPU freq/1024 +irq =16384Khz sample rate
+<br/>
+   REG_TM0D   = 0xFFFF; 
+<br/>
+   REG_TM0CNT = 0x00C3;
+<br/>
+  
+<br/>
+ return 1;
+<br/>
+}
+<br/>
+<br/>
+// main routine
+<br/>
+int main(void)
+<br/>
+{  
+<br/>
+  REG_INTERUPT = (u32)InterruptProcess;
+<br/>
+  
+<br/>
+  // fill buffer with any data to increase NOISE 
+<br/>
+  // problem on Return of DMA to Read Buffer (22 is a stupid data)
+<br/>
+  memset(SndDev.SoundBuffer,22,sizeof(char)*SOUND_BUFFER_SIZE);
+<br/>
+<br/>
+  // initialize sound (timers and DMA)
+<br/>
+  SndDev.Initialize();
+<br/>
+   
+<br/>
+   while(1) 
+<br/>
+   {
+<br/>
+   } 
+<br/>
+<br/>
+  return 0;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+this code is very simple, and can be compiled to test.
+<br/>
+the code fill buffer with data 22 and make dma to play it forever.
+<br/>
+when timer 1 is triggered, DMA restart to original source position and begins. then noise can be hearded.
+<br/>
+<br/>
+thanks so much!!!</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

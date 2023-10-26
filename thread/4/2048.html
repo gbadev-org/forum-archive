@@ -1,0 +1,406 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Saving to EEPROM - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > Saving to EEPROM</h2>
+<div id="posts">
+<div class="post">
+    <h4>#10604 - mash - Wed Sep 10, 2003 2:43 pm</h4>
+    <div class="postbody"><span class="postbody">I'm in big trouble. I would like to save my game data on a 4kbit (512 byte) EEPROM. Could you send me source examples how can I do that?
+<br/>
+Thanks!
+<br/>
+<br/>
+Mash</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10611 - niltsair - Wed Sep 10, 2003 3:26 pm</h4>
+    <div class="postbody"><span class="postbody">If you mean the gamepak memory used for save games, then you can take a look at the Faq in the beginner section. It's really easy, but i had a hard time finding doc about it some time ago.<br/>_________________<br/>-Inside every large program is a small program struggling to get out. (Hoare's Law of Large Programs)
+<br/>
+-The man who can smile when things go wrong has thought of someone he can blame it on. (Nixon's Theorem)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10644 - mash - Thu Sep 11, 2003 2:56 pm</h4>
+    <div class="postbody"><span class="postbody">I can't use SRAM. I need to use a 4kbit EEPROM. As I know it uses the DMA to transfer data but I don't know how.
+<br/>
+<br/>
+Bye!
+<br/>
+Mash</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10719 - mash - Sat Sep 13, 2003 10:29 am</h4>
+    <div class="postbody"><span class="postbody">Anybody else? Please! :)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10724 - Burton Radons - Sat Sep 13, 2003 12:58 pm</h4>
+    <div class="postbody"><span class="postbody">EEPROM isn't in the CowBite spec, but it is in the no$gba spec <a class="postlink" href="http://www.work.de/nocash/gbatek.htm#backupeeprom" target="_blank">here</a>.
+<br/>
+<br/>
+I know this isn't helpful as a tutorial - I don't grok how to do it myself.  But it looks like it has the necessary raw information.
+<br/>
+<br/>
+For writing, what it appears you need to do is to generate a packet and then transfer that through DMA to the EEPROM at 0xD000000.  You transfer eight bytes at a time.  The packet starts with 2 bits, valued 2, then 6 or 14 bits (6 for a 512-byte EEPROM, 14 for an 8kb EEPROM) indicating the EEPROM address to write to times eight.  Then it is followed by the eight bytes to store, then stash a 0 byte at the end.  Copy that over.
+<br/>
+<br/>
+Then you need to keep reading from 0xD000000 until the first bit reads 1.  This will not take more than 10 ms, unless if the chip has gone screwy.
+<br/>
+<br/>
+For reading, you send a request packet and then get the response in two DMA transfers.  The request packet is composed of two bits with a value of 3, then 6 or 14 bits with the address times eight, and then a zero byte.  Once you've sent that through DMA, transfer 9 bytes from the EEPROM through DMA; the first four bits are junk, the next 64 bits are the eight bytes of data you requested.
+<br/>
+<br/>
+What a mess!  Here's a blind try at converting that to code (blind as in I'm programming it in this message and haven't done any DMA transfers).  Accept that it might be so far off that it'll decrease your understanding of the issue rather than increase it.  At least it'll be well-documented disinformation.  :-)
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+/** Setup the waitstate for an EEPROM.  This must be done before any transfer operations with the EEPROM. */
+<br/>
+void initializeEEPROM ()
+<br/>
+{
+<br/>
+    REG_WAITCNT &amp;= ~(7 &lt;&lt; 8); /* Clear bits 8, 9, 10. */
+<br/>
+    REG_WAITCNT |= 3 &lt;&lt; 8; /* Set bits 8 and 9. */
+<br/>
+}
+<br/>
+<br/>
+/** Attempt to write an eight-byte packet to EEPROM.
+<br/>
+  * @param size The EEPROM size.  This must be 512 or 8192.
+<br/>
+  * @param offset The EEPROM offset to store into.  These are in pages of eight, so zero and one indicate separate pages.
+<br/>
+  * @param data The data to store.
+<br/>
+  * @return Returns zero on success or negative on failure.  -1 means that the chip was initially not OK.  -2 means that the chip timed out after the write.
+<br/>
+  */
+<br/>
+<br/>
+int writeToEEPROM (int size, int offset, u8 data [8])
+<br/>
+{
+<br/>
+    volatile u8 *eeprom = (u8 *) 0xD000000; /* EEPROM pointer. */
+<br/>
+    u8 packet [12]; /* Packet content to transfer. */
+<br/>
+    int start; /* Starting offset for the data. */
+<br/>
+    int c; /* Loop counter. */
+<br/>
+<br/>
+    assert (size == 512 || size == 8192);
+<br/>
+<br/>
+    /* Initially check that the EEPROM is ready. */
+<br/>
+    if (!(*eeprom &amp; 1))
+<br/>
+        return -1;
+<br/>
+<br/>
+    /* Write the address into the packet. */
+<br/>
+    if (size == 512)
+<br/>
+    {
+<br/>
+        assert (offset &gt;= 0 &amp;&amp; offset &lt; 64);
+<br/>
+        packet [0] = 2 | (offset &lt;&lt; 2);
+<br/>
+        start = 1;
+<br/>
+    }
+<br/>
+    else
+<br/>
+    {
+<br/>
+        assert (offset &gt;= 0 &amp;&amp; offset &lt; 1024);
+<br/>
+        packet [0] = 2 | (offset &lt;&lt; 2);
+<br/>
+        packet [1] = offset &gt;&gt; 6;
+<br/>
+        start = 2;
+<br/>
+    }
+<br/>
+<br/>
+    packet [start + 8] = 0; /* Store the end-of-transfer indicator. */
+<br/>
+<br/>
+    /* Copy the data over. */
+<br/>
+    for (c = 0; c &lt; 8; c ++)
+<br/>
+        packet [start + c] = data [c];
+<br/>
+<br/>
+    /* Make the DMA transfer. */
+<br/>
+    REG_DM3SAD = (u32) &amp;packet [0]; /* Starting address. */
+<br/>
+    REG_DM3DAD = (u32) eeprom; /* Destination address. */
+<br/>
+    REG_DM3CNT_L = (start + 8 + 2) / 2; /* Number of 16-bit words to transfer, either 5 or 6. */
+<br/>
+    REG_DM3CNT_H = 1 &lt;&lt; 15; /* Control bits and fire the DMA. */
+<br/>
+    REG_DISPCNT = REG_DISPCNT; /* Waste some clock cycles. */
+<br/>
+    while (REG_DM3CNT_H &amp; (1 &lt;&lt; 15)); /* Wait out the transfer. */
+<br/>
+<br/>
+    /* Now wait until the EEPROM is back to ready.
+<br/>
+     * Each cycle here must take at least one clock cycle. */
+<br/>
+    for (c = 0; c &lt; 150000; c ++)
+<br/>
+        if (*eeprom &amp; 1)
+<br/>
+            return 1;
+<br/>
+<br/>
+    return -2; /* Ass! */
+<br/>
+}
+<br/>
+<br/>
+/** Read a packet from EEPROM.
+<br/>
+  *
+<br/>
+  * @param size The EEPROM size.  This must be 512 or 8192.
+<br/>
+  * @param offset The EEPROM offset to read from.  These are in pages of eight, so zero and one indicate separate pages.
+<br/>
+  * @param data The data pointer to read into.
+<br/>
+  * @return Returns zero if the operation is successful, or -1 if the EEPROM initially reported that it was not ready.
+<br/>
+  */
+<br/>
+<br/>
+int readFromEEPROM (int size, int offset, u8 *data)
+<br/>
+{
+<br/>
+    volatile u8 *eeprom = (u8 *) 0xD000000; /* EEPROM pointer. */
+<br/>
+    u8 packet [10]; /* Transfer packet to and from. */
+<br/>
+    int packetSize; /* Size of the send packet in 16-bit words. */
+<br/>
+    int c;
+<br/>
+<br/>
+    assert (size == 512 || size == 8192);
+<br/>
+<br/>
+    /* Check that the EEPROM is good to go. */
+<br/>
+    if (!(*eeprom &amp; 1))
+<br/>
+        return -1;
+<br/>
+    
+<br/>
+    /* Write the address into the packet. */
+<br/>
+    if (size == 512)
+<br/>
+    {
+<br/>
+        assert (offset &gt;= 0 &amp;&amp; offset &lt; 64);
+<br/>
+        packet [0] = 3 | (offset &lt;&lt; 2);
+<br/>
+        packet [1] = 0;
+<br/>
+        packetSize = 1;
+<br/>
+    }
+<br/>
+    else
+<br/>
+    {
+<br/>
+        assert (offset &gt;= 0 &amp;&amp; offset &lt; 1024);
+<br/>
+        packet [0] = 3 | (offset &lt;&lt; 2);
+<br/>
+        packet [1] = offset &gt;&gt; 6;
+<br/>
+        packet [2] = 0;
+<br/>
+        packetSize = 2;
+<br/>
+    }
+<br/>
+<br/>
+    /* Send the packet through DMA. */
+<br/>
+    REG_DM3SAD = (u32) &amp;packet [0]; /* Starting address. */
+<br/>
+    REG_DM3DAD = (u32) eeprom; /* Destination address. */
+<br/>
+    REG_DM3CNT_L = packetSize; /* Number of 16-bit words to transfer. */
+<br/>
+    REG_DM3CNT_H = 1 &lt;&lt; 15; /* Control bits and fire the DMA. */
+<br/>
+    REG_DISPCNT = REG_DISPCNT; /* Waste some clock cycles. */
+<br/>
+    while (REG_DM3CNT_H &amp; (1 &lt;&lt; 15)); /* Wait out the transfer. */
+<br/>
+<br/>
+    /* Get the return packet. */
+<br/>
+    REG_DM3SAD = (u32) eeprom; /* Starting address. */
+<br/>
+    REG_DM3DAD = (u32) &amp;packet [0]; /* Destination address. */
+<br/>
+    REG_DM3CNT_L = 5; /* Number of 16-bit words to transfer. */
+<br/>
+    REG_DM3CNT_H = 1 &lt;&lt; 15; /* Control bits and fire the DMA. */
+<br/>
+    REG_DISPCNT = REG_DISPCNT; /* Waste some clock cycles. */
+<br/>
+    while (REG_DM3CNT_H &amp; (1 &lt;&lt; 15)); /* Wait out the transfer. */
+<br/>
+<br/>
+    /* Unpack the return packet. */
+<br/>
+    for (c = 0; c &lt; 8; c ++)
+<br/>
+        data [c] = (packet [c] &gt;&gt; 4) | (packet [c + 1] &lt;&lt; 4);
+<br/>
+<br/>
+    return 0; /* Woot. */
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10761 - mash - Sun Sep 14, 2003 11:23 pm</h4>
+    <div class="postbody"><span class="postbody">Hi Burton,
+<br/>
+<br/>
+You are great!
+<br/>
+Thanks a lot!!!!
+<br/>
+<br/>
+Bye!
+<br/>
+Mash</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#16314 - dagamer34 - Thu Feb 12, 2004 7:09 am</h4>
+    <div class="postbody"><span class="postbody">Just wanted to know, does this code work? I can't seem to get it to work on VBA.<br/>_________________<br/>Little kids and Playstation 2's don't mix. :(</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#16324 - FluBBa - Thu Feb 12, 2004 3:01 pm</h4>
+    <div class="postbody"><span class="postbody">You probably has to set the savetype to EEPROM in VBA and not automatic.<br/>_________________<br/>I probably suck, my not is a programmer.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#16342 - dagamer34 - Fri Feb 13, 2004 12:44 am</h4>
+    <div class="postbody"><span class="postbody">So its supposed to be set to EEPROM? It still doesn't work.
+<br/>
+<br/>
+Here's some that i have:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+EEPROMInit ();
+<br/>
+   
+<br/>
+   u8 data[8];
+<br/>
+   if (EEPROMreadData (EEPROM_SIZE_64KB, 1, (u8*)&amp;data) == -1)
+<br/>
+   {
+<br/>
+       DrawText (0, 0, "ERROR1_");
+<br/>
+   }
+<br/>
+   if (data[0] == 10)
+<br/>
+   {
+<br/>
+       DrawText (0, 0, "Hello!!!_");
+<br/>
+   }
+<br/>
+<br/>
+   data[0] = 10;
+<br/>
+  if (EEPROMwriteData (EEPROM_SIZE_64KB, 1, data) == 1)
+<br/>
+   {
+<br/>
+       DrawText (0, 5, "ERROR2_");
+<br/>
+   }
+<br/>
+   DrawText (0, 1, "GoodBye_");
+<br/>
+   while (1)
+<br/>
+   {
+<br/>
+       
+<br/>
+   }
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+The first time it's run, it should display  "ERROR", since there isn't any save data, but the second time it should display "Hello!!!"
+<br/>
+<br/>
+Any ideas?<br/>_________________<br/>Little kids and Playstation 2's don't mix. :(</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#16394 - dagamer34 - Sat Feb 14, 2004 9:38 pm</h4>
+    <div class="postbody"><span class="postbody">Does this code work? I can't get it to work in VBA. Can somebody make a demo that uses EEPROM for me to look at?<br/>_________________<br/>Little kids and Playstation 2's don't mix. :(</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#16503 - dagamer34 - Wed Feb 18, 2004 2:27 am</h4>
+    <div class="postbody"><span class="postbody">Anyone?<br/>_________________<br/>Little kids and Playstation 2's don't mix. :(</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#16524 - gb_feedback - Wed Feb 18, 2004 7:53 pm</h4>
+    <div class="postbody"><span class="postbody">To be fair I think Burton said that it was untested code. This means making any necessary changes to get it to work. I think it was brave to present the code in the first place. I'm interested to know what cartridge is envisaged for testing this - presumably an official Nintendo one?
+<br/>
+<br/>
+I would be inclined to connect an oscilloscope to the eeprom pins on the cart to see what might be going wrong.<br/>_________________<br/><a class="postlink" href="http://www.bookreader.co.uk/" target="_blank">http://www.bookreader.co.uk/</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#16535 - dagamer34 - Thu Feb 19, 2004 12:52 am</h4>
+    <div class="postbody"><span class="postbody">mash made it seem as if the code worked, he didn't ask any questions.<br/>_________________<br/>Little kids and Playstation 2's don't mix. :(</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

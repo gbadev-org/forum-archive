@@ -1,0 +1,357 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>libpng and Reading PNG8 files (SOLVED) - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > libpng and Reading PNG8 files (SOLVED)</h2>
+<div id="posts">
+<div class="post">
+    <h4>#148011 - rook02 - Mon Dec 31, 2007 6:01 pm</h4>
+    <div class="postbody"><span class="postbody">Hello, and Happy New Year to everyone.
+<br/>
+<br/>
+I'm new to DS programming, and I'm trying to work on a making a png8 file reader using libpng and libfat. I want to be able to read pixel data from the png and load them directly into the OAM.
+<br/>
+<br/>
+I've been using the <a class="postlink" href="http://www.libpng.org/pub/png/libpng-1.2.5-manual.html#section-3" target="_blank">libpng manual</a> and I've managed to get as far as being able to get my DS read the png header and give me the width and height of the image. I'm having problems, however with actually getting the pixel data. I'm getting either invalid window size errors (using png_read_image) or invalid chunks (using png_read_png).
+<br/>
+<br/>
+Can anyone help me figure out what I'm doing wrong?</span><span class="gensmall"><br/><br/>Last edited by rook02 on Fri Jan 25, 2008 8:05 pm; edited 1 time in total</span></div>    
+</div>
+<div class="post">
+    <h4>#148012 - Peter - Mon Dec 31, 2007 6:14 pm</h4>
+    <div class="postbody"><span class="postbody">Hi,
+<br/>
+<br/>
+why would you use png files and not nds raw image data?
+<br/>
+<br/>
+I think decoding of png files can consume quite some time. You probably don't want to decode a png every time you load it to vram, so it must lie decoded in memory all the time anyway.
+<br/>
+<br/>
+Personally I don't see an avantage of png's over raw image data.<br/>_________________<br/>Kind Regards,
+<br/>
+Peter</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#148018 - Quirky - Mon Dec 31, 2007 7:56 pm</h4>
+    <div class="postbody"><span class="postbody">PNG8 are indexed PNGs, right? if so, you need something like this:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+if(info_ptr-&gt;color_type == PNG_COLOR_TYPE_PALETTE)
+<br/>
+{  
+<br/>
+  png_colorp png_palette;
+<br/>
+  int palette_entries;
+<br/>
+  png_get_PLTE(png_ptr,info_ptr, &amp;png_palette, &amp;palette_entries);
+<br/>
+  int paletteSize = palette_entries;
+<br/>
+  unsigned short * palette = (unsigned short*)malloc(sizeof(unsigned short) * palette_entries);
+<br/>
+  for (int i = 0; i &lt; palette_entries; ++i)
+<br/>
+  {
+<br/>
+    palette[i] = RGB8(png_palette[i].red, png_palette[i].green, png_palette[i].blue);
+<br/>
+  }
+<br/>
+}
+<br/>
+<br/>
+int number_passes = png_set_interlace_handling(png_ptr);
+<br/>
+png_bytep rowBuffer = (png_bytep)malloc(sizeof(png_bytep) * info_ptr-&gt;rowbytes);
+<br/>
+for (int pass = 0; pass &lt; number_passes; pass++)
+<br/>
+{  
+<br/>
+  for (unsigned int line = 0; line &lt; height; line++)
+<br/>
+  {
+<br/>
+    png_read_row(png_ptr, rowBuffer, png_bytep_NULL);
+<br/>
+    renderLine((const unsigned char*)rowBuffer, line);
+<br/>
+  }
+<br/>
+}  
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+This is copied from my own code, modified a bit for an example. It uses mostly the same nomenclature as the libpng examples, so should make sense.
+<br/>
+<br/>
+You have to read the palette in then read the data. This uses the read row technique, but changing it to read the whole image shouldn't be tricky. The toughest part now is getting it to the correct format that VRAM expects. Sprite ram is particularly irritating to get right, as you need to load it into the sprite "tiles" taking into account the size of your sprite, rather than just copying each line from the PNG as is.
+<br/>
+<br/>
+I'd recommend using grit to get the data format right first, then once that's working try for reading in PNGs. And I guess the advantage of not using converted data is that it is faster to test new images.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#148041 - rook02 - Tue Jan 01, 2008 7:41 am</h4>
+    <div class="postbody"><span class="postbody">Thanks for the reply.
+<br/>
+<br/>
+I tried the code (I'm getting an undefined reference for renderLine though), but it seems that everytime I call png_read_row() or png_read_png(), I get a "libpng error invalid window size". I'm not sure what's causing it. Did I miss a significant step? I don't recall any of the libpng tutorials saying anything about window sizes.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#148044 - Quirky - Tue Jan 01, 2008 11:51 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>rook02 wrote:</b></span></td> </tr> <tr> <td class="quote">Thanks for the reply.
+<br/>
+<br/>
+I tried the code (I'm getting an undefined reference for renderLine though), but it seems that everytime I call png_read_row() or png_read_png(), I get a "libpng error invalid window size". I'm not sure what's causing it. Did I miss a significant step? I don't recall any of the libpng tutorials saying anything about window sizes.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+renderLine is a function that you should implement to render the line somewhere (or copy it into a big buffer of data). 
+<br/>
+<br/>
+I searched my HD and found an easier example that I was messing with. I've cleaned it up a bit here. It reads a file with palette information and saves it to the global char* data. The original was in C++ with a stack object that handled file IO (<a class="postlink" href="http://en.wikipedia.org/wiki/Resource_Acquisition_Is_Initialization" target="_blank">RAII</a>), so this example doesn't close the FILE correctly on return. Compile it for your PC and if it works with your image, then it should work on the DS too. Or at least help you debug stuff. Note the comment about compiling libpng with NO_STIO defined - this saves space on the DS due to not including the error macros in the png library that use sprintf IIRC, but you have to use your own read function.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#include  &lt;png.h&gt;
+<br/>
+#include &lt;stdio.h&gt;
+<br/>
+#include &lt;malloc.h&gt;
+<br/>
+<br/>
+#define RGB8(r, g, b) 0
+<br/>
+<br/>
+unsigned short * palette = 0;
+<br/>
+unsigned char * data = 0;
+<br/>
+static void user_read_fn(png_structp png_ptr, unsigned char *dest, png_size_t size)
+<br/>
+{
+<br/>
+  FILE * f = (FILE*)png_get_io_ptr(png_ptr);
+<br/>
+  size_t n = fread((char*)dest, size, 1, f);
+<br/>
+  if(size &amp;&amp; (n == 0)) {
+<br/>
+    printf("Read error: invalid or corrupted PNG file\n");
+<br/>
+  }
+<br/>
+}
+<br/>
+<br/>
+void readPng(const char * filename)
+<br/>
+{
+<br/>
+   FILE * f = 0;
+<br/>
+   f = fopen(filename, "rb");
+<br/>
+   if (!f) { return; }
+<br/>
+<br/>
+   png_structp png_ptr= png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+<br/>
+   if (png_ptr == NULL) { return; }
+<br/>
+<br/>
+   /* Allocate/initialize the memory for image information.  REQUIRED. */
+<br/>
+   png_infop info_ptr = png_create_info_struct(png_ptr);
+<br/>
+   if (info_ptr == NULL) { png_destroy_read_struct(&amp;png_ptr, png_infopp_NULL, png_infopp_NULL); return; }
+<br/>
+<br/>
+   /* Set error handling if you are using the setjmp/longjmp method (this is
+<br/>
+    * the normal method of doing things with libpng).  REQUIRED unless you
+<br/>
+    * set up your own error handlers in the png_create_read_struct() earlier.
+<br/>
+    */
+<br/>
+   if (setjmp(png_jmpbuf(png_ptr))) {
+<br/>
+      /* Free all of the memory associated with the png_ptr and info_ptr */
+<br/>
+      png_destroy_read_struct(&amp;png_ptr, &amp;info_ptr, png_infopp_NULL);
+<br/>
+      /* If we get here, we had a problem reading the file */
+<br/>
+      printf("problem reading the file\n");
+<br/>
+      return;
+<br/>
+   }
+<br/>
+<br/>
+   // compiled png with NO_STIO - avoids sprintf madness.
+<br/>
+   png_set_read_fn(png_ptr, (void *)f, user_read_fn);
+<br/>
+   // read the easy way
+<br/>
+   png_read_info(png_ptr, info_ptr);
+<br/>
+   // alpha images require this:
+<br/>
+   png_set_strip_alpha(png_ptr);
+<br/>
+<br/>
+   if(info_ptr-&gt;color_type == PNG_COLOR_TYPE_GRAY &amp;&amp; info_ptr-&gt;bit_depth &lt; 8)
+<br/>
+   {
+<br/>
+     printf("Handle gray 1,2,4\n");
+<br/>
+     //png_set_gray_1_2_4_to_8(png_ptr);
+<br/>
+     png_set_expand(png_ptr);
+<br/>
+   }
+<br/>
+<br/>
+   if (info_ptr-&gt;bit_depth &lt; 8) { printf("Expand\n"); png_set_packing(png_ptr); }
+<br/>
+   // paletted images require this:
+<br/>
+   if(info_ptr-&gt;color_type == PNG_COLOR_TYPE_PALETTE)
+<br/>
+   {
+<br/>
+     printf("Handle palette\n");
+<br/>
+#if 0
+<br/>
+     // remove palette info
+<br/>
+     png_set_palette_to_rgb(png_ptr);
+<br/>
+#else
+<br/>
+     png_colorp png_palette;
+<br/>
+     int palette_entries;
+<br/>
+     png_get_PLTE(png_ptr,info_ptr, &amp;png_palette, &amp;palette_entries);
+<br/>
+     printf(" %d palette entries\n", palette_entries);
+<br/>
+     palette = (unsigned short*)malloc(sizeof(unsigned short) * palette_entries);
+<br/>
+     int i;
+<br/>
+     for (i = 0; i &lt; palette_entries; ++i)
+<br/>
+     {
+<br/>
+       palette[i] = RGB8(png_palette[i].red, png_palette[i].green, png_palette[i].blue);
+<br/>
+     }
+<br/>
+#endif
+<br/>
+   }
+<br/>
+   printf("handle interlace \n");
+<br/>
+   png_set_interlace_handling(png_ptr);
+<br/>
+   printf("update info \n");
+<br/>
+   png_read_update_info(png_ptr, info_ptr);
+<br/>
+   printf("Extract data\n");
+<br/>
+   int height = info_ptr-&gt;height;
+<br/>
+   data = (unsigned char*)malloc( info_ptr-&gt;rowbytes * height);
+<br/>
+   png_bytep * row_pointers = (png_bytep *)malloc(sizeof(png_bytep) * height);
+<br/>
+   if (row_pointers == 0)
+<br/>
+   {
+<br/>
+     printf("OUT OF MEM!\n");
+<br/>
+     return;
+<br/>
+   }
+<br/>
+   int y;
+<br/>
+   for (y = 0; y &lt; height; y++)
+<br/>
+   {
+<br/>
+     row_pointers[y] = (png_bytep)(data + (info_ptr-&gt;rowbytes * y));
+<br/>
+   }
+<br/>
+<br/>
+   printf("read image\n");
+<br/>
+   png_read_image(png_ptr, row_pointers);
+<br/>
+<br/>
+   // clear up row pointers - now everything is in data
+<br/>
+   printf("free pointer\n");
+<br/>
+   free(row_pointers);
+<br/>
+   printf("destroy read struct\n");
+<br/>
+   png_destroy_read_struct(&amp;png_ptr, &amp;info_ptr, png_infopp_NULL);
+<br/>
+}
+<br/>
+<br/>
+int main(int argc, char * argv[])
+<br/>
+{
+<br/>
+  readPng(argv[1]);
+<br/>
+  return 0;
+<br/>
+}                                                           
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#148048 - rook02 - Tue Jan 01, 2008 2:31 pm</h4>
+    <div class="postbody"><span class="postbody">Finally figured it out... there wasn't anything wrong with the code. There were just some things in zlib that weren't configured right. Now everything works. I just need to work on a way to format the data the way the OAM wants it. 
+<br/>
+<br/>
+Thanks for the help. :D</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#151303 - SiW - Fri Feb 22, 2008 11:25 pm</h4>
+    <div class="postbody"><span class="postbody">[ nevermind, unrelated problem ]</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

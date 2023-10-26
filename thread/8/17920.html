@@ -1,0 +1,518 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Problem with GBA CPU modes and interrupts - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>ASM > Problem with GBA CPU modes and interrupts</h2>
+<div id="posts">
+<div class="post">
+    <h4>#177793 - WriteASM - Fri Mar 08, 2013 12:18 am</h4>
+    <div class="postbody"><span class="postbody">First a little background: I have been working on a BASIC and ASM IDE for the GBA for two months now (called bASMic), and have been having good success.  It is coded in 100% ASM, both ARM and THUMB.
+<br/>
+<br/>
+Admittedly, I'm having a hard time describing my problem, but here goes: When "BREAKing" a running program via the Keypad interrupt (a la GBBasic), the CPU can be running either ARM or THUMB, and be in System, Supervisor (=BIOS), or possibly even IRQ mode.  After confirming the "BREAK" with the user, it currently overwrites the return address on the IRQ stack, pointing it to a short routine that ensures ARM mode.  That routine exits out to "Main_FixAll", which basically resets the GBA without clearing EXTRAM.  (Reloads font and palette, also calls "isrInit", among other things.)  However, if the keypad interrupt occurs in a BIOS call (=Supervisor mode), something goes wrong with the IRQ stack, which causes the auto-sleep routine to put the GBA to sleep.  Although I can wake the GBA via joypad interrupt, the BIOS Sleep function never returns, rendering the GBA uselessly locked up in IRQ mode.
+<br/>
+<br/>
+If I write a bASMic program that doesn't use BIOS calls (Div and ArcTan2), it does not lock up when "BREAKing".  
+<br/>
+I also noticed that "gba_crt0.s" in DevKitPRO has the CPU in System mode when jumping to user code; from reading the ARM7TDMI Reference Manual, I'd have expected it to exit in User mode.  Any reasons why, besides more privileges?
+<br/>
+<br/>
+Below is the code in "irq.s"; TABS=4 on my system.  (Source code for the entire project totals about 519KB.)
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+         .arm                     @ the ARM subset is used for interrupts.
+<br/>
+         .text
+<br/>
+         .global isrInit, isrKbdLP, isrKbdBK, isrKbdWK      @ Low-Power, BreaK, WaKe.
+<br/>
+         .include "source/defines.h"
+<br/>
+         
+<br/>
+         .equ BIOS_IF, 0x03007FF8
+<br/>
+         .equ ISR_MAIN, 0x03007FFC
+<br/>
+         @  For ISR mode the stack is by default initialized to 03007FA0h.
+<br/>
+         @NOTE: Only R0-R3, R12 manually PUSHED by the BIOS.  If using others, PUSH them, too.
+<br/>
+         @NOTE: Code break (Start+Select) uses a MANUALLY CALCULATED VALUE for the stack offset.
+<br/>
+         
+<br/>
+         @  Interrupt notes:
+<br/>
+         @      Unfortunately, the SWI 2 (Halt) instruction requires that both enable bits be set for an interrupt.  Otherwise, it will do nothing.
+<br/>
+         @     That means that we cannot exit the "low-power-mode" without the interrupt handler firing.
+<br/>
+         @      The "OR" mask for the keyboard register is for ANY key--it does not "adapt" to the keystate before the SWI call.
+<br/>
+         @      You cannot use the "unused bits in IF" for special messages, unfortunately.
+<br/>
+         @
+<br/>
+         @NOTE: Clearing bits in IE does not prevent IF bits from getting set!  If you would like to disable an interrupt, clear the
+<br/>
+         @bit in the respective control register, NOT IE!  Note that there is no secondary interrupt enable for the cartridge interrupt.
+<br/>
+         
+<br/>
+         @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+<br/>
+         @                                                              @
+<br/>
+         @  isrInit: Interrupt Service Routine Initializer.  Enable interrupts needed for@
+<br/>
+         @bASMic's operation.  This includes TMRs, VBlank, Keys (for Break), Serial, etc.@
+<br/>
+         @                                                            @
+<br/>
+         @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+<br/>
+isrInit:   ldr r0, =ISR_MAIN         @ISR_MAIN &lt; The hardcode address the BIOS looks to for the ISR handler routine
+<br/>
+         ldr r1, =0x03003700         @ Get the address to where our interrupt handler will be.
+<br/>
+         str r1, [r0]            @ Set the IRQ handler address.
+<br/>
+         @  Copy our ARM interrupt handler to IWRAM for maximum speed.  The shorter the ISR takes, the better for all!
+<br/>
+         adr r2, irqHndlr         @ Copy Start Location.  R1 already has the destination
+<br/>
+         mov r3, #((irqH_End - irqHndlr) / 4)   @ copying one long at a time.  No LTORGs required
+<br/>
+         @  Copy loop.
+<br/>
+isrInitLp:   ldr r0, [r2], #4         @ Get a long
+<br/>
+         str r0, [r1], #4         @ Write it back
+<br/>
+         subs r3, r3, #1
+<br/>
+         bne isrInitLp
+<br/>
+         
+<br/>
+         mov r4, #0x03000000         @ Address to IWRAM for setting the ISR handler routines.
+<br/>
+         @================================
+<br/>
+         @  Enable all interrupts we plan to support.
+<br/>
+         ldr r0, =IE
+<br/>
+         ldr r1, =0b0001000011111001   @13:cartridge, 12:keypad, 7:port, 6-3:timers, 0:VBlank
+<br/>
+      @   ldr r1, =0b0001000000000001
+<br/>
+         strh r1, [r0]            @ Set the interrupt enable bits.
+<br/>
+         
+<br/>
+         @  Set the ISR for VBlank interrupts.
+<br/>
+         adr r0, ihVBlank         @ Address to the VBlank handler
+<br/>
+         str r0, [r4, #0xC0]         @ ISR routine offset.
+<br/>
+         @  Set the ISR for keypad interrupts
+<br/>
+         adr r0, ihKeypad
+<br/>
+         str r0, [r4, #0xF0]         @ Keypad handler offset.
+<br/>
+         
+<br/>
+         @  Turn on the master interrupt enable.
+<br/>
+         ldr r0, =IME
+<br/>
+         mov r1, #0x1
+<br/>
+         str r1, [r0]            @ Master Enable bit. ($4000208 = IME)
+<br/>
+         bx lr                  @ Return
+<br/>
+         @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+<br/>
+         
+<br/>
+         
+<br/>
+         @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+<br/>
+         @                                                              @
+<br/>
+         @  isrKbdLP: Set the keyboard interrupt for the lower-power keyboard mode.      @
+<br/>
+         @  isrKbdBK: Set the keyboard interrupt for the "break" AND mask mode, ISR.      @
+<br/>
+         @  isrKbdWK: Set the interrupt for the "wake" mode, ISR disabled.            @
+<br/>
+         @                                                            @
+<br/>
+         @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+<br/>
+         @  Initialize the keyboard interrupt for the BREAK combination of START+SELECT.
+<br/>
+isrKbdLP:   @ldr r1, =0b0100001111111111   @ All keys, OR mask (15)
+<br/>
+         mvn r1, #0b1011110000000000   @ All keys, OR mask (15)--remember than an MVN inverts everything!
+<br/>
+         mov r2, #0               @ No ISR
+<br/>
+         b iK_WR
+<br/>
+         @--------------------------------
+<br/>
+isrKbdBK:   mov r2, #59               @ Keypad ISR "Break" Enabled.  Security code to try to prevent lockups.
+<br/>
+         b iK_AndMsk
+<br/>
+         @--------------------------------
+<br/>
+isrKbdWK:   mov r2, #0               @ No "Break"
+<br/>
+iK_AndMsk:   mov r1, #0xC000            @ Use the Logical AND method (15) and interrupt enable (14) for wakeup.
+<br/>
+         add r1, #0x000C            @ Give the mask as START+SELECT.
+<br/>
+         
+<br/>
+         @--------------------------------
+<br/>
+         @  Write to the actual registers. 
+<br/>
+iK_WR:      mov r0, #0x3000000         @ Hardcode address to IWRAM.  
+<br/>
+         strb r2, [r0, #255]         @ 0x030000FF.  "KeypadISR Flags Register" (our doing, not the GBA's)
+<br/>
+         
+<br/>
+         ldr r0, =0x4000132         @ pointer to KeyControl register
+<br/>
+         strh r1, [r0]            @ Set the keyboard interrupt's flags
+<br/>
+         bx lr
+<br/>
+         @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+<br/>
+         
+<br/>
+         
+<br/>
+         @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+<br/>
+         @                                                              @
+<br/>
+         @  isrHndlr: Interrupt Service Routine Handler.  An interrupt occured; determine@
+<br/>
+         @what it is, and take the appropriate action.                           @
+<br/>
+         @                                                            @
+<br/>
+         @   THE SHORTER THIS ROUTINE, THE BETTER FOR EVERYONE.                     @
+<br/>
+         @  Note: The BIOS interrupt handler PUSHes R0-R3, R12                     @
+<br/>
+         @                                                            @
+<br/>
+         @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+<br/>
+irqHndlr:   @push {lr}
+<br/>
+         @ldr r0, =BIOS_IF         @BIOS_IF &lt; If you would like to use BIOS VBlank wait SWI, this code must be here.
+<br/>
+         @ldr r1, [r0]            @ Otherwise, just comment it out!
+<br/>
+         @orr r1, #0x1
+<br/>
+         @str r1, [r0]
+<br/>
+         
+<br/>
+         @  "Check loop" to see what caused the interrupt
+<br/>
+ihInters:   mov r3, #0x04000000         @ Going for IF, 0x04000202
+<br/>
+         add r3, r3, #0x200         @ MOV/ADD/ADD much faster than an LDR
+<br/>
+         
+<br/>
+         @  No SWPH, unfortunately--and a SWP (32-bit) on $4000202 wouldn't work very well.
+<br/>
+         ldrh r12, [r3, #2]         @ What interrupt flags are set?
+<br/>
+         @  DON'T reset IF here--as easy as that is to do.  That can result in nested interrupts, and those can cause unexplained actions.
+<br/>
+                  
+<br/>
+         mov r2, #0x03000000         @ Root address to IWRAM
+<br/>
+         add r2, r2, #0xC0         @ Refine to interrupt handler address.  This is much faster than an LDR, and also requires no .ltorg 
+<br/>
+         mov r1, #14               @ #of interrupt handlers.
+<br/>
+         @  Loop to find out what caused the interrupt
+<br/>
+ihLoop:      lsrs r12, r12, #1         @ Check the next IE bit.
+<br/>
+         bcs ihJump
+<br/>
+         beq ihClear               @ If no set interrupt bits, reset IF ourselves, and exit.  If no handler for an interrupt, it is skipped.
+<br/>
+         @  Point to the next interrupt handler address with each iteration.
+<br/>
+         add r2, r2, #4
+<br/>
+         b ihLoop
+<br/>
+         
+<br/>
+         @  An interrupt bit was set.
+<br/>
+ihJump:      ldr r0, [r2]
+<br/>
+         movs r0, r0               @ Is a handler specified?
+<br/>
+         beq ihLoop               @ No handler.
+<br/>
+         bx r0                  @ There you go.
+<br/>
+         @----------------------------
+<br/>
+ihClear:   mvn r1, #0
+<br/>
+         strh r1, [r3, #2]         @ Reset all the interrupt flags.
+<br/>
+         bx lr
+<br/>
+irqH_End:   @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+<br/>
+         
+<br/>
+         
+<br/>
+         
+<br/>
+         @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+<br/>
+         @                                                              @
+<br/>
+         @  ihVBlank: Interrupt Service Routine for the VBlank Interrupt.            @
+<br/>
+         @Make Sprite #0 blink on and off at ~2Hz, also handle a 3-minute timeout.      @
+<br/>
+         @                                                            @
+<br/>
+         @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+<br/>
+ihVBlank:   ldr r0, [sp, #-32]         @ Get the "static" value from the IRQ Stack, containing a "VBlank Count"
+<br/>
+         add r0, r0, #1            @ Increment it
+<br/>
+         str r0, [sp, #-32]         @ Save it again.
+<br/>
+         @  Provide a 3-minute timeout.  "Keyboard" will reset this if a key pressed.
+<br/>
+         cmp r0, #10816            @ barely fits in the CMP, but it does fit.
+<br/>
+         @DEBUG: This a weak Band-Aid patch to fix an infinite hang after a BREAK.  (Should be a BGT.)
+<br/>
+         @In other words, a BEQ doesn't solve the problem, but merely reduces the chances you'll hit it.
+<br/>
+         @The problem seems to be when we try to BREAK from a SWI.  Perhaps we need to reset the Supervisor stack?
+<br/>
+         beq ihVB_PSave            @ Power save...DEBUG: Only if an EXACT match.
+<br/>
+         
+<br/>
+         @  Make the cursor sprite blink.  MODding by binary powers is relatively easy.
+<br/>
+         @--------------------------------
+<br/>
+         tst r0, #0x1F            @ 32 counts, toggle on-and-off once per second.
+<br/>
+         bne ihVB_Done            @ Reset the VBlank Interrupt Flag.
+<br/>
+         
+<br/>
+         mov r1, #0x7000000         @ start address for OAM fits nicely in a MOV...!
+<br/>
+         ldrh r2, [r1]            @ INT(0) has the Y position and the "Visible" bit
+<br/>
+         eoreq r2, #0b1000000000      @ 9th bit is "Disable"
+<br/>
+         strh r2, [r1]            @ Write the bit back.
+<br/>
+         @--------------------------------
+<br/>
+ihVB_Done:   mov r1, #1               @ Reset the VBlank interrupt flag 
+<br/>
+         strh r1, [r3, #2]
+<br/>
+         bx lr                  @ Done.
+<br/>
+         @================================
+<br/>
+         @  Timeout!  The keyboard mode should be set to interrupt on any key press, so just sleep.
+<br/>
+ihVB_PSave:   mov r0, #0               @ Reset the timeout
+<br/>
+         str r0, [sp, #-32]
+<br/>
+         @  There are some bugs with BREAKing that cause catastrophic "sleep hangs" here.  You can wake it just fine, but it's locked up.
+<br/>
+         @VisualBoyAdvance points to the SWI below as being the problem.  However, VBA also has some bugs with interrupt emulation...
+<br/>
+         
+<br/>
+         mvn r1, #0               @ We have to reset flags so the SWI can go to sleep!
+<br/>
+         strh r1, [r3, #2]
+<br/>
+         @  Sleeping in IRQ mode /shouldn't/ be a problem.
+<br/>
+         swi #0x30000            @ Full Stop.  Code execution halts here until the interrupt.  As the display is off, there is no VBL interrupt.
+<br/>
+         b ihVB_Done               @ Reset the VBlank interrupt flag, although that won't be what woke it.
+<br/>
+         @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+<br/>
+         
+<br/>
+         
+<br/>
+datKeyBrk:   .ascii "USER BREAK.\x80","Exit Interpreter?\x00"
+<br/>
+         .align
+<br/>
+         @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+<br/>
+         @                                                              @
+<br/>
+         @  ihKeypad: Interrupt Service Routine for the Keypad Interrupt.            @
+<br/>
+         @If the Interpreter is running, we have to BREAK it.  Unfortunately, the CPU can@
+<br/>
+         @be in ARM -or- THUMB mode, as well as in System, IRQ and Supervisor modes!      @
+<br/>
+         @                                                            @
+<br/>
+         @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+<br/>
+ihKeypad:   mov r0, #0x03000000
+<br/>
+         ldrb r0, [r0, #255]         @ 0x030000FF
+<br/>
+         cmp r0, #59               @ Security code
+<br/>
+         bne ihKeyRet            @ If NE, clear the interrupt flag and exit.
+<br/>
+         @--------------------------------
+<br/>
+         @  Keypad Break interrupt enabled.  That means we're in the THUMB Interpreter.  (But could be running ARM routines)
+<br/>
+         push {r3, lr}            @ One more stack level--and save the ~address to the IF register (R3=0x04000200)
+<br/>
+         
+<br/>
+         adr r0, datKeyBrk
+<br/>
+         mov r3, #s_Text            @ on the "run" text screen.
+<br/>
+         bl RMsgBox               @ Red MsgBox...
+<br/>
+         
+<br/>
+         pop {r3, lr}            @ Get the stack back to just what the BIOS did.
+<br/>
+         @- - - - - - - - - - - - - -
+<br/>
+         @  If OK, we have to quit the Interpreter, and set the return address of our own call stack to Main_FixAll.
+<br/>
+         cmp r0, #msgCancel
+<br/>
+         beq ihKeyRet            @ Cancel selected, so continue running the program.
+<br/>
+         
+<br/>
+         @  OK selected.  Disable interrupts, and return to Main_FixAll.  R3 = 0x04000200
+<br/>
+         @NOTE: The BIOS return is by "SUB PC, LR+4": the subset will return to what was last set there by a BX.
+<br/>
+         adr r0, ihThumbRet +4      @ Counteract the BIOS's 4-byte offset.
+<br/>
+         str r0, [sp, #4*5]         @ The BIOS PUSHed R0,R1,R2,R3,R12,--LR--.  R0 is first on the stack, LR is last
+<br/>
+         
+<br/>
+         @  Clear the keypad interrupt flag, return. 
+<br/>
+ihKeyRet:   mov r1, #4096            @ 1&lt;&lt;12 = Keypad flag.
+<br/>
+         strh r1, [r3, #2]         @ Reset the keypad interrupt flag.
+<br/>
+         bx lr                  @ Return...or BREAK, depending on whether we messed with the return address.
+<br/>
+         @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+<br/>
+         .thumb
+<br/>
+         @  The ARM specification indicates that upon the return from IRQ, FIQ, UNDEF, ABORT, SWI modes, 
+<br/>
+         @the destination language will be THUMB if that was what it was before the event.  Consequently, we must have
+<br/>
+         @our own BX mode-changer.  BX is the ONLY instruction that can switch between ARM and THUMB
+<br/>
+         @
+<br/>
+         @  But sometimes, the interrupted routine will have been in ARM mode (MSGBOX, INPUTBOX, PSET).
+<br/>
+         @The next three lines assemble in ARM to "andge r4, r1, r0, ASR #13", "andeq r4, r0, r0, LSL #14"...quite harmless.
+<br/>
+ihThumbRet:   nop                     @ for ARM "runover" upon return.  Without this, it's "STRMI R10, [r0, -r0]"
+<br/>
+         adr r0, ihTR_Ret
+<br/>
+         bx r0                  @ Switch to ARM mode.  Or, if we're already there, do some nonsense ANDs, and fall through to the Branch.
+<br/>
+         @////////////////////////////
+<br/>
+         .arm
+<br/>
+         .align
+<br/>
+         @DEBUG: Make sure we're in System mode.  A hacked return to IRQ or Supervisor mode wouldn't work too well.
+<br/>
+         @Seems this code doesn't exist--it doesn't work /with/ it, and it doesn't work /without/ it!
+<br/>
+ihTR_Ret:   mov   r0, #0x1F            @DEBUG: Switch to System Mode, all flags cleared.
+<br/>
+         msr   cpsr, r0            @ When changing system mode, it technically should be a R-M-W. (ARM Reference Manual.)  
+<br/>
+         b Main_FixAll
+<br/>
+         @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

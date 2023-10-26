@@ -1,0 +1,116 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Timer/Freezing - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Timer/Freezing</h2>
+<div id="posts">
+<div class="post">
+    <h4>#169429 - Synthetic - Fri Jul 10, 2009 9:17 am</h4>
+    <div class="postbody"><span class="postbody">So I've been having problems with timers since the last libnds update, and I'm having a weird problem now that I'm not quite sure what to make of.
+<br/>
+<br/>
+I'm setting up a ~millisecond timer using the following code:
+<br/>
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+volatile long time0=0;//global millisecond timer
+<br/>
+void timer0_function(void){time0++;}
+<br/>
+<br/>
+//blah blah blah, code inbetween
+<br/>
+<br/>
+TIMER0_DATA = TIMER_FREQ_64(1000);
+<br/>
+TIMER0_CR = TIMER_ENABLE | TIMER_IRQ_REQ | TIMER_DIV_64;
+<br/>
+irqSet(IRQ_TIMER0, timer0_function);
+<br/>
+irqEnable(IRQ_TIMER0);
+<br/>
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+The timer is enabled first thing in main, and happily chugs along working until time0 reaches ~65100 and then the program freezes.  I've looked around, and it seems to freeze in a slightly different place in my code every time, which implies its not an overflow in any of my time calculations causing a freeze, and the fact that its freezing so close to 65535 ticks is very suspicious.  I've tried calling the timer init code again after ~65000 ticks but that doesn't do anything.
+<br/>
+<br/>
+Is there a way that the hardware timer could be overflowing into other memory, or maybe I'm overlooking something in the setup?  I'm afraid I don't know very much about the timer internals, so I have no idea what the problem could be.
+<br/>
+<br/>
+Thanks in advance for any help.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#169430 - Echo49 - Fri Jul 10, 2009 12:49 pm</h4>
+    <div class="postbody"><span class="postbody">Is there any reason why you need to call an interrupt nearly 17 times per frame? If you can, you could just set a vblank interrupt that adds (1 / <a class="postlink" href="http://nocash.emubase.de/gbatek.htm#dsvideostuff" target="_blank">59.8261</a>) to a variable.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#169433 - elhobbs - Fri Jul 10, 2009 1:53 pm</h4>
+    <div class="postbody"><span class="postbody">I am not sure that you need an interrupt handler to increment a value. In any case calling one that frequently cannot be good.
+<br/>
+<br/>
+this is the code that I use for keeping track of time.
+<br/>
+<br/>
+setup:</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+TIMER0_CR = TIMER_ENABLE|TIMER_DIV_1024;
+<br/>
+TIMER1_CR = TIMER_ENABLE|TIMER_CASCADE;  </td> </tr></table><span class="postbody">
+<br/>
+<br/>
+read time:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+/*returns the elapsed seconds since the timer started*/
+<br/>
+double Sys_FloatTime (void) {
+<br/>
+    return ((TIMER1_DATA*(1&lt;&lt;16))+TIMER0_DATA)/32728.5;
+<br/>
+} </td> </tr></table><span class="postbody">
+<br/>
+though I doubt you need the value as a double precision floating point value...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#169434 - Miked0801 - Fri Jul 10, 2009 3:50 pm</h4>
+    <div class="postbody"><span class="postbody">Perhaps your interrupts are stacking on top of each other or getting in the way of VBlank or something.  Still, calling an interrupt that often will drag performance way, way down.  You have to trigger the interrupt, push all regs, jump to the interrupt vector, run the interrupt code (crt0), jump to your code and push more registers, run your code, then worm your way back out.  Doing a whole bunch of times per frame will hurt.  We had a similiar issue a long time ago on DMG/GB.  Fired an interrupt every scan-line to copy info to VRAM.  It took nearly the entire frame to copy a 16 bytes of info.   Turned out we were using 90% of our available time just entering and exiting the interrupts.  Spreading the copy across multiple scan lines allowed us to do the same copy in 3 lines.  Moral: Don't interrupt unless you really need to.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#169435 - Synthetic - Fri Jul 10, 2009 5:08 pm</h4>
+    <div class="postbody"><span class="postbody">Thats a good point, I didn't really think about all the overhead behind such frequent interrupts.  I've been using it for profiling a lot, which is why I started calling it so frequently, but I certainly don't need it to be that precise.
+<br/>
+<br/>
+I'll try doing the interrupt less frequently, and see what happens.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#169436 - elhobbs - Fri Jul 10, 2009 6:05 pm</h4>
+    <div class="postbody"><span class="postbody">mike - is there a downside to not setting the timer to interrupt and just reading the value from TIMER0_DATA? particularly if it is only used measuring time?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#169439 - Synthetic - Fri Jul 10, 2009 8:43 pm</h4>
+    <div class="postbody"><span class="postbody">EDIT: Actually,  I was wrong, it does have something to do with the timing.  Very bizzare bug.</span><span class="gensmall"><br/><br/>Last edited by Synthetic on Sat Jul 11, 2009 10:45 pm; edited 1 time in total</span></div>    
+</div>
+<div class="post">
+    <h4>#169442 - Miked0801 - Fri Jul 10, 2009 10:07 pm</h4>
+    <div class="postbody"><span class="postbody">As long as nothing else is playing with the timer (big if), it would probably work.  Still, I'd not go that route.  I'd either count VBlanks for high(er) precision or the RTC for lower value, longer duration stuff.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

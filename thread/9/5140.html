@@ -1,0 +1,705 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>MODE 3 Double Buffer Problem - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Graphics > MODE 3 Double Buffer Problem</h2>
+<div id="posts">
+<div class="post">
+    <h4>#37200 - BlackDragon777 - Tue Mar 08, 2005 9:17 pm</h4>
+    <div class="postbody"><span class="postbody">Hi guys! I am new to GBA programming. I am trying to use mode 3. I want to write a star field scroller. I understand that mode 3 doesn't have support for a hardware double buffer. So you have to write your own. I am not sure that I am going about this 100% correct on the GBA but I attempted to do just that. Here is my code.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+<br/>
+#include &lt;gba2.h&gt;
+<br/>
+#include &lt;stdlib.h&gt;
+<br/>
+//MULTIBOOT
+<br/>
+<br/>
+#define SCREEN_HEIGHT 160
+<br/>
+#define SCREEN_WIDTH 240
+<br/>
+<br/>
+<br/>
+<br/>
+unsigned short* videoBuffer = (unsigned short*)0x6000000;
+<br/>
+<br/>
+void drawPixel(int x, int y, unsigned short color);
+<br/>
+<br/>
+unsigned short buffer[240][160];
+<br/>
+<br/>
+void Buffer2Vram()
+<br/>
+{
+<br/>
+   for(int j=0; j&lt;160; j++)
+<br/>
+   {
+<br/>
+        for(int i=0; i&lt;240; i++)
+<br/>
+        {
+<br/>
+            FrontBuffer[(j*240) + i] = buffer[i][j];
+<br/>
+        }
+<br/>
+    }
+<br/>
+}
+<br/>
+<br/>
+int main(void)
+<br/>
+{
+<br/>
+<br/>
+   for(int j=0; j&lt;160; j++)
+<br/>
+   {
+<br/>
+        for(int i=0; i&lt;240; i++)
+<br/>
+        {
+<br/>
+            buffer[i][j] = 0x000000;
+<br/>
+            FrontBuffer[(j*240) + i] = 0x000000;
+<br/>
+        }
+<br/>
+    }
+<br/>
+<br/>
+<br/>
+u8 x,y;
+<br/>
+u8 x1, y1;
+<br/>
+x1 = 60;
+<br/>
+y1 = 40;
+<br/>
+SetMode(MODE_3 | BG2_ENABLE);
+<br/>
+<br/>
+while(true)
+<br/>
+{
+<br/>
+   for(int j=0; j&lt;160; j++)
+<br/>
+   {
+<br/>
+        for(int i=0; i&lt;240; i++)
+<br/>
+        {
+<br/>
+            buffer[i][j] = 0x000000;
+<br/>
+        }
+<br/>
+    }
+<br/>
+                //buffer[10][y1]=RGB(255, 0, 0);
+<br/>
+                //buffer[10][y1+1]=RGB(255, 0, 0);
+<br/>
+                Buffer2Vram();
+<br/>
+<br/>
+}
+<br/>
+<br/>
+<br/>
+   return 0;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Buffer2Vram() will copy the contents of the buffer to the vram. The problem is that when I am not drawing any pixels other than clearing the screen with 0x000000, I get 2 random white pixels that are diagnol in their position with each other. When I do plot a pixel other than black, I get 3 of those pixels in random locations. Can anyone give me a hint as to what I am doing wrong? Thanks in advance!<br/>_________________<br/>Kindest Regards,
+<br/>
+<br/>
+--Brandon Fogerty
+<br/>
+Lead Programmer
+<br/>
+Game / Software / Web Application Development
+<br/>
+<a href="mailto:brandon@jujikasoft.com">brandon@jujikasoft.com</a>
+<br/>
+<a href="Http://www.Jujikasoft.com" target="_blank">Http://www.Jujikasoft.com</a>
+<br/>
+<br/>
+             GOD Bless you Always my Friend!!!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#37203 - DekuTree64 - Tue Mar 08, 2005 9:32 pm</h4>
+    <div class="postbody"><span class="postbody">Your back buffer is going into IWRAM, which is only 32KB. You'll need to put it in EWRAM instead. You can do it either by using an attribute (check the FAQ, I don't remember the exact syntax off the top of my head), or the easy, way:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">unsigned short *buffer = 0x2000000;   // start of EWRAM</td> </tr></table><span class="postbody">
+<br/>
+You can't make it a 2D array that way though, so you'll have to access pixels like buffer[y*240+x], which which has the nice side effect of being easier to copy to the screen:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">memcpy(0x6000000, buffer, 240*160*sizeof(unsigned short));
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Defining it to be the start of EWRAM like this isn't really a good thing for the long term, but as long as you're not using malloc or putting other variables in EWRAM with attributes, it's fine.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#37233 - BlackDragon777 - Wed Mar 09, 2005 3:50 am</h4>
+    <div class="postbody"><span class="postbody">It is starting to work better now but I have two questions.  Number 1,  is the double buffer suppose to be slow because this is a sort of slow process.  I mean,  it is not REALLY slow,  but it is still kind of slow.  Also,  when I copy 0x000000 into my buffer,  I get a multi color screen.  Is there a problem in how I copy the black color into the EWRAM buffer?  Here is my new code.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+unsigned short* videoBuffer = (unsigned short*)0x6000000;
+<br/>
+<br/>
+void drawPixel(int x, int y, unsigned short color);
+<br/>
+<br/>
+unsigned short *buffer = (unsigned short int *)0x2000000;
+<br/>
+<br/>
+void Buffer2Vram()
+<br/>
+{
+<br/>
+    memcpy((void *)videoBuffer, (void *)buffer, 240*160*sizeof(unsigned short));
+<br/>
+}
+<br/>
+<br/>
+int main(void)
+<br/>
+{
+<br/>
+<br/>
+u8 x,y;
+<br/>
+u8 x1, y1;
+<br/>
+x1 = 60;
+<br/>
+y1 = 40;
+<br/>
+SetMode(MODE_3 | BG2_ENABLE);
+<br/>
+<br/>
+//memcpy(buffer, (void *)0xFFFFFF, sizeof(buffer));
+<br/>
+memcpy((void *)videoBuffer, (void *)buffer, 240 * 160 * sizeof(unsigned short));
+<br/>
+<br/>
+while(true)
+<br/>
+{
+<br/>
+                //memcpy((void *)buffer, (void *)RGB(0, 0, 0), 240 * 160 * sizeof(unsigned short));
+<br/>
+                y1+=1;
+<br/>
+                memcpy((void *)buffer, (void *)RGB(0, 0, 0), 240 * 160 * sizeof(unsigned short));
+<br/>
+                buffer[y1 * 240 + x1] = RGB(255,150,150);
+<br/>
+                Buffer2Vram();
+<br/>
+<br/>
+}
+<br/>
+<br/>
+<br/>
+   return 0;
+<br/>
+}
+<br/>
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Thanks in advance!<br/>_________________<br/>Kindest Regards,
+<br/>
+<br/>
+--Brandon Fogerty
+<br/>
+Lead Programmer
+<br/>
+Game / Software / Web Application Development
+<br/>
+<a href="mailto:brandon@jujikasoft.com">brandon@jujikasoft.com</a>
+<br/>
+<a href="Http://www.Jujikasoft.com" target="_blank">Http://www.Jujikasoft.com</a>
+<br/>
+<br/>
+             GOD Bless you Always my Friend!!!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#37250 - Cearn - Wed Mar 09, 2005 11:10 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>BlackDragon777 wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">memcpy((void *)buffer, (void *)RGB(0, 0, 0), 240 * 160 * sizeof(unsigned short));</td> </tr></table><span class="postbody"></span></td> </tr></table><span class="postbody">
+<br/>
+The second argument of memcpy is supposed to be an address. RGB(0,0,0) is not an address (you can still use it as one of course, but it really isn't). What you want it memset, not memcpy.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">memset(buffer, RGB(0,0,0), 240*160*sizeof(unsigned short));
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+For filling buffers it's better to use DMA or CpuFastSet though. Not only because memset uses bytes, not u16 (i.e., unsigned short, hoozah for typedef :) ) so you couldn't use a full 16bit color anyway, but also because they're probably a good deal faster. Yes I know they can be considered 'advanced' topics, but if speed is required it might be wise to look into them at some point. Look in the tutorials and GBATek for details, and perhaps <a class="postlink" href="http://forum.gbadev.org/viewtopic.php?t=1803" target="_blank">this thread</a> (maybe even <a class="postlink" href="http://forum.gbadev.org/viewtopic.php?t=4985" target="_blank">this one</a>) too.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#37268 - BlackDragon777 - Wed Mar 09, 2005 7:13 pm</h4>
+    <div class="postbody"><span class="postbody">When I use memset, it now DOES work.  Thank you so much for helping me.  However as I said,  it is too slow.  I need to learn how to use the DMA on the GBA.  Well I looked at the posts you asked me to look at.  However When I try to clear the video buffer,  it doesn't erase what was there.  It just causes my video buffer to flicker when I use the dma clear function.  Here is my code.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+void DMAClearScreen(u16 color) {
+<br/>
+   //ham_VBAText("clearing screen");
+<br/>
+   REG_DM3SAD     = (u32) &amp; color;
+<br/>
+   REG_DM3DAD     = 0x6000000;      //Destination Address
+<br/>
+   (REG_DM3CNT_L) = (160 * 240);
+<br/>
+   (REG_DM3CNT_H) = 0x9100;
+<br/>
+}
+<br/>
+<br/>
+void Buffer2Vram()
+<br/>
+{
+<br/>
+    DMAClearScreen(0x000000);
+<br/>
+    memcpy((void *)videoBuffer, (void *)buffer, 240*160*sizeof(unsigned short));
+<br/>
+}
+<br/>
+<br/>
+int main(void)
+<br/>
+{
+<br/>
+    u8 x = 30;
+<br/>
+    u8 y = 30;
+<br/>
+    unsigned short color = 0;
+<br/>
+<br/>
+    SetMode(MODE_3 | BG2_ENABLE);
+<br/>
+<br/>
+   while(true)
+<br/>
+   {
+<br/>
+      //memset((void *)buffer, 0x000000, 240 * 160 * sizeof(unsigned short));
+<br/>
+      buffer[y * 240 + x] = RGB(255, 150, 150);
+<br/>
+      buffer[(y+1) * 240 + x] = RGB(255, 150, 150);
+<br/>
+      buffer[y * 240 + (x+1)] = RGB(255, 150, 150);
+<br/>
+      buffer[(y+1) * 240 + (x+1)] = RGB(255, 150, 150);
+<br/>
+      Buffer2Vram();
+<br/>
+      
+<br/>
+      y++;
+<br/>
+   }
+<br/>
+<br/>
+   return 0;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Any more tips?  Maybe a tutorial on the DMA for GBA? Thanks in advance!!!<br/>_________________<br/>Kindest Regards,
+<br/>
+<br/>
+--Brandon Fogerty
+<br/>
+Lead Programmer
+<br/>
+Game / Software / Web Application Development
+<br/>
+<a href="mailto:brandon@jujikasoft.com">brandon@jujikasoft.com</a>
+<br/>
+<a href="Http://www.Jujikasoft.com" target="_blank">Http://www.Jujikasoft.com</a>
+<br/>
+<br/>
+             GOD Bless you Always my Friend!!!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#37313 - FluBBa - Thu Mar 10, 2005 10:52 am</h4>
+    <div class="postbody"><span class="postbody">you're still sending the color as a value not a pointer to a value, the DMA works by reading a value from a memory address and writing the same value to another address.<br/>_________________<br/>I probably suck, my not is a programmer.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#37316 - Cearn - Thu Mar 10, 2005 12:57 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>FluBBa wrote:</b></span></td> </tr> <tr> <td class="quote">you're still sending the color as a value not a pointer to a value, the DMA works by reading a value from a memory address and writing the same value to another address.</td> </tr></table><span class="postbody">
+<br/>
+True, but it's actually quite subtle. When you pass a value to a function it goes directly into a CPU register (r0 in this case) These don't have a real address. I'm not sure what goes on when you try to take the address of a register, but apparently it's not what you want. Try this:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+void DMAClearScreen(u16 *pclr) {
+<br/>
+   //ham_VBAText("clearing screen");
+<br/>
+   REG_DMA3SAD     = (u32)pclr;
+<br/>
+   REG_DMA3DAD     = 0x6000000;      //Destination Address
+<br/>
+   (REG_DMA3CNT_L) = (160 * 240);
+<br/>
+   (REG_DMA3CNT_H) = 0x8100; // not 0x9100, there's a reason I added the second thread in the other post :p
+<br/>
+}
+<br/>
+<br/>
+void Buffer2Vram()
+<br/>
+{
+<br/>
+    u16 clr= 0xdead; // a nice blue color as a background
+<br/>
+    DMAClearScreen(&amp;clr);
+<br/>
+    memcpy((void *)vid_mem, (void *)buffer, 240*160*sizeof(u16));
+<br/>
+} 
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+You have to define a variable in the calling function and pass its address to DMAClearScreen. This will fill VRAM with a blue color. Kinda. The problem is that right after you've cleared it, you're filling it with the contents of the buffer again, completely negating the clear. 
+<br/>
+<br/>
+As for the flicker, there are two reasons for that. First of all, you don't have any kind of vsync, so the transfers can happen right in the middle of a VDraw. That's not good. But even then, a memcpy uses about 4.75 cycles/byte. For 76800 that's about 365k cycles; a VBlank takes 83776, you do the math. An EWRAM-&gt;VRAM DMA takes 2cycles/byte, so even then it's too long for a full mode3 fill.
+<br/>
+<br/>
+Having said that, mode 3 for animation can be done. DekuTree's using it in his (awesome) eternity demo for example and it seems to work just fine there. Not sure it's something you want to try for a first project, though.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#37330 - tepples - Thu Mar 10, 2005 3:33 pm</h4>
+    <div class="postbody"><span class="postbody">It's time to learn sprites.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#37347 - BlackDragon777 - Thu Mar 10, 2005 7:01 pm</h4>
+    <div class="postbody"><span class="postbody">Hmm,  I have tried what has been suggested.  I also found information about vblank and set it up.  However I am still getting a flickery screen.  Is it just because the speed is too slow or am I not copiing something correctly.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+    #define VCOUNT (*(volatile u16*)0x04000006)
+<br/>
+    #define vsync() while (VCOUNT != 160);
+<br/>
+    
+<br/>
+    unsigned short * videoBuffer = (unsigned short*)0x6000000;
+<br/>
+    unsigned short * buffer = (unsigned short *)0x2000000;  // EWRAM
+<br/>
+<br/>
+void DMAClearScreen(u16 *pclr) {
+<br/>
+   //ham_VBAText("clearing screen");
+<br/>
+    REG_DM3SAD   = (u32)  pclr;
+<br/>
+    REG_DM3DAD     = 0x6000000;      //Destination Address
+<br/>
+   (REG_DMA3CNT_L) = (160 * 240);
+<br/>
+   (REG_DMA3CNT_H) = 0x8100; // not 0x9100, there's a reason I added the second thread in the other post :p
+<br/>
+}
+<br/>
+<br/>
+void Buffer2Vram()
+<br/>
+{
+<br/>
+    u16 color = 0x0000;
+<br/>
+    DMAClearScreen(&amp;color);
+<br/>
+    memcpy((void *)videoBuffer, (void *)buffer, 240*160*sizeof(unsigned short));
+<br/>
+}
+<br/>
+<br/>
+int main(void)
+<br/>
+{
+<br/>
+    u8 x = 30;
+<br/>
+    u8 y = 30;
+<br/>
+    unsigned short color = 0;
+<br/>
+<br/>
+    SetMode(MODE_3 | BG2_ENABLE);
+<br/>
+<br/>
+   while(true)
+<br/>
+   {
+<br/>
+<br/>
+      //memset((void *)buffer, 0x000000, 240 * 160 * sizeof(unsigned short));
+<br/>
+      buffer[y * 240 + x] = RGB(255, 150, 150);
+<br/>
+      buffer[(y+1) * 240 + x] = RGB(255, 150, 150);
+<br/>
+      buffer[y * 240 + (x+1)] = RGB(255, 150, 150);
+<br/>
+      buffer[(y+1) * 240 + (x+1)] = RGB(255, 150, 150);
+<br/>
+<br/>
+      vsync();
+<br/>
+      Buffer2Vram();
+<br/>
+      
+<br/>
+      if(!((*KEYS) &amp; UP))y++;
+<br/>
+   }
+<br/>
+<br/>
+   return 0;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Thanks again for all your help!<br/>_________________<br/>Kindest Regards,
+<br/>
+<br/>
+--Brandon Fogerty
+<br/>
+Lead Programmer
+<br/>
+Game / Software / Web Application Development
+<br/>
+<a href="mailto:brandon@jujikasoft.com">brandon@jujikasoft.com</a>
+<br/>
+<a href="Http://www.Jujikasoft.com" target="_blank">Http://www.Jujikasoft.com</a>
+<br/>
+<br/>
+             GOD Bless you Always my Friend!!!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#37400 - FluBBa - Fri Mar 11, 2005 11:33 am</h4>
+    <div class="postbody"><span class="postbody">Why are you even clearing the screen if you overwrite it directly afterwards?
+<br/>
+I suggest you follow Tepples suggestion, the GBA is not a PC.<br/>_________________<br/>I probably suck, my not is a programmer.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#37425 - BlackDragon777 - Fri Mar 11, 2005 5:01 pm</h4>
+    <div class="postbody"><span class="postbody">I want to clear the screen because I want to see only ONE pixel moving on the screen.  The simple solution to this problem is to just clear the previous pixel and draw the new one.  Yes,  I understand the GBA is not a pc.  However I want to know what I might be doing wrong that causes this flickery screen based off what I have done.  Thanks.<br/>_________________<br/>Kindest Regards,
+<br/>
+<br/>
+--Brandon Fogerty
+<br/>
+Lead Programmer
+<br/>
+Game / Software / Web Application Development
+<br/>
+<a href="mailto:brandon@jujikasoft.com">brandon@jujikasoft.com</a>
+<br/>
+<a href="Http://www.Jujikasoft.com" target="_blank">Http://www.Jujikasoft.com</a>
+<br/>
+<br/>
+             GOD Bless you Always my Friend!!!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#37435 - tepples - Fri Mar 11, 2005 5:50 pm</h4>
+    <div class="postbody"><span class="postbody">You should be clearing the back buffer (in EWRAM), not the screen.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#37439 - Miked0801 - Fri Mar 11, 2005 6:13 pm</h4>
+    <div class="postbody"><span class="postbody">You want what?  Um Ok,
+<br/>
+<br/>
+For moving 1 pixel across the screen, use sprites - it's what the hardware was designed for.
+<br/>
+<br/>
+To others on speed of clearing, a very simple stm loop I've found rivals the speed of DMA for this type of operation.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+clear:
+<br/>
+    orr   r0, r0, r0, shl 16
+<br/>
+    mov  r1, r0
+<br/>
+    mov  r2, r0
+<br/>
+    mov  r3, r0
+<br/>
+    mov  r4, r0
+<br/>
+    mov  r5, r0
+<br/>
+    mov  r6, r0
+<br/>
+    mov  r7, r0
+<br/>
+    mov  r8, #0x06000000
+<br/>
+    mov  r9, #(160*240/2)
+<br/>
+loop:
+<br/>
+    stmia  [r8]!, r0,r1,r2,r3,r4,r5,r6,r7
+<br/>
+    subs  r9, r9, #1
+<br/>
+    jne loop
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Of course clean up and such.  Just wanted to throw this out as well.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#37444 - tepples - Fri Mar 11, 2005 6:52 pm</h4>
+    <div class="postbody"><span class="postbody">Your "very simple stm loop" is exactly what is in <a class="postlink" href="http://pinocchio.jk0.org/gbatek/gbatek20.html#biosmemorycopy" target="_blank">SWI 0x0c, commonly called CpuFastSet</a>.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#37456 - Miked0801 - Fri Mar 11, 2005 7:42 pm</h4>
+    <div class="postbody"><span class="postbody">Lol - true :)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#37461 - BlackDragon777 - Fri Mar 11, 2005 7:59 pm</h4>
+    <div class="postbody"><span class="postbody">Hmmm.... I think you are right.  I never thought about using a sprite.  I will try it!  Thanks!<br/>_________________<br/>Kindest Regards,
+<br/>
+<br/>
+--Brandon Fogerty
+<br/>
+Lead Programmer
+<br/>
+Game / Software / Web Application Development
+<br/>
+<a href="mailto:brandon@jujikasoft.com">brandon@jujikasoft.com</a>
+<br/>
+<a href="Http://www.Jujikasoft.com" target="_blank">Http://www.Jujikasoft.com</a>
+<br/>
+<br/>
+             GOD Bless you Always my Friend!!!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#37622 - Cearn - Mon Mar 14, 2005 10:21 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>BlackDragon777 wrote:</b></span></td> </tr> <tr> <td class="quote">I want to clear the screen because I want to see only ONE pixel moving on the screen. The simple solution to this problem is to just clear the previous pixel and draw the new one. </td> </tr></table><span class="postbody">
+<br/>
+But .... why don't you do exactly what you suggest in the second sentence? Erase the drawn pixel and redraw it somewhere else? There's no need to erase the whole screen (which isn't necessary anyway when you redraw all pixels immediately afterwards).
+<br/>
+<br/>
+Getting back to the DMA subject for just a minute, take a look at this (using dkArm r8, -O2 optimisation).
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void foo()
+<br/>
+{
+<br/>
+   u16 clr= 0x7c00;
+<br/>
+   REG_DMA3SAD= &amp;clr;
+<br/>
+   REG_DMA3DAD= 0x6000000;
+<br/>
+   REG_DMA3CNT= 0x81000000 | (160 * 240);
+<br/>
+   while(1);
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+This will fill the entire screen with a blue color. However, if I <span style="font-weight: bold">remove</span> the while statement the whole thing falls apart. With the while in place, the color is put into the stack (where automatic variables usually go, at least on a PC for example); REG_DMA3SAD loads from the stack and everything's peachy. However, when the while is removed the color won't be put on the stack. In fact, there's no reference of the color <span style="font-style: italic">at all</span> in the generated assembly code. REG_DMA3SAD still reads from the stack, even though the variable it's supposed to read isn't there. This seems to be an optimisation matter, since turning those off gives the right results.
+<br/>
+The same thing happens when you pass the color as a parameter to the function. You may remember there is a simple remedy to gung-ho optimisation: volatile. This should work as desired:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void ClearScreen(volatile u16 clr)
+<br/>
+{
+<br/>
+   REG_DMA3SAD= &amp;clr;
+<br/>
+   REG_DMA3DAD= 0x6000000;
+<br/>
+   REG_DMA3CNT= 0x81000000 | (160 * 240);
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+The actual problem has nothing to do with DMA per s?, so I expect it can turn up in other areas as well. Be careful when taking addresses of automatic variables.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

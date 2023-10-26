@@ -1,0 +1,431 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>audio mixer - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Audio > audio mixer</h2>
+<div id="posts">
+<div class="post">
+    <h4>#19889 - gbawiz - Tue Apr 27, 2004 5:33 pm</h4>
+    <div class="postbody"><span class="postbody">Hello,
+<br/>
+I am still trying to solve the problem of using an audio mixer in my game app.
+<br/>
+the problem seems to be that when I incorporate the mixer routine into my game then the movement of the characters is slowed down as well as being too jerky and not a nice smooth movement.
+<br/>
+<br/>
+I have used a double buffer method whereby one buffer is mixed while the other is played and after one is played then the buffers are swapped.
+<br/>
+The interrupt is triggered when one of the buffers has been played which causes the buffers to swap and the other buffer to be mixed.
+<br/>
+<br/>
+Can anyone suggest a better method which would enable smooth animation and movement?
+<br/>
+<br/>
+Thanks
+<br/>
+GBAWIZ</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#19890 - Miked0801 - Tue Apr 27, 2004 6:58 pm</h4>
+    <div class="postbody"><span class="postbody">Sounds like you just don't have enough CPU to run your game at the speed you want.  Are you running at 60 or 30Hz?  If 60, consider locking to 30 and speeding up your animations to match the new speed.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#19902 - gbawiz - Tue Apr 27, 2004 9:12 pm</h4>
+    <div class="postbody"><span class="postbody">I don't know what speed my game is running at, I assume it is running at processor speed. 16.7MHz
+<br/>
+I have been using a timer to count the number of ticks since the last move of the sprites, frames, and other things such as the clock.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#19910 - Miked0801 - Tue Apr 27, 2004 10:13 pm</h4>
+    <div class="postbody"><span class="postbody">Ok, you need to lock your game loops pretty soon then.  If you have vblanks enabled ands set up right, you can use the SWI call to waitForVBlank to lock your gameloop.  There are other threads explaining how to do that.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#19920 - dagamer34 - Wed Apr 28, 2004 12:38 am</h4>
+    <div class="postbody"><span class="postbody">The way you're doing it, any drastic change in the number of cycles used per frame would throw off your animation timing.<br/>_________________<br/>Little kids and Playstation 2's don't mix. :(</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#19939 - gbawiz - Wed Apr 28, 2004 11:14 am</h4>
+    <div class="postbody"><span class="postbody">Hello,
+<br/>
+Thanks for the response to my message.
+<br/>
+<br/>
+I've been reading the posts and have thought, what about using the VBLANK interrupt?
+<br/>
+I enabled the use of this instead of the timer.
+<br/>
+Within my ISR I have the timings updated for the clock and otherstuff.
+<br/>
+Also I have a counter for each sprite which decreases everytime the VBLANK occurs. Within my program, my move routine checks to see if this is zero, if so then it updates the current position of the sprite. The animation also has a similar counter to count the number of VBLANKS since the last anim-frame update.
+<br/>
+I'm not sure if this is the best way and it seems to work, except there is the limit that the sprite can only move what appears to be 60 pixels per second maximum.
+<br/>
+<br/>
+Also when I integrate the audio mixer into my app then the whole thing goes crazy :(
+<br/>
+The app slows down and the movement of the sprite is jerky as mentioned.
+<br/>
+I believe that perhaps the audio mixer ISR is taking so long to mix the samples that probably several VBLANKS have occured during this time and have been bypassed, and at other times when not mixing, the vblank is being processed ok.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#19943 - tepples - Wed Apr 28, 2004 4:40 pm</h4>
+    <div class="postbody"><span class="postbody">Clocking the audio mixer's buffer switch off the vblank works for me, but it does require your buffer length to be a multiple of 4 (or 16? I haven't tried much) and a factor of 280896 so that you have an integral number of DMA transfers per frame.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#19960 - gbawiz - Wed Apr 28, 2004 11:18 pm</h4>
+    <div class="postbody"><span class="postbody">Hello all,
+<br/>
+<br/>
+My mixer makes use of a double buffer method where each buffer is 2048 bytes each.
+<br/>
+once a buffer is played, an interrupt is triggered which swaps the buffers, sets up one to be played and mixes the other.
+<br/>
+<br/>
+Could it be that perhaps the mixing buffer is to big because I believe that by the time 2048 samples have been mixed then several of the VBLANKS have been missed?
+<br/>
+<br/>
+My sample playback rate is approx 8K per second which would indicate that four mixing interrupts would occur in the same time of 60 VBLANKS, which is one mix interrupt every 15 VBLANK interrupt.
+<br/>
+<br/>
+Are there any examples which would show how to create my own mixer and have it working in my app?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#19979 - tepples - Thu Apr 29, 2004 3:09 am</h4>
+    <div class="postbody"><span class="postbody">My music engine's buffers are 304 bytes in size, each to be played in one frame (280896 cycles), giving a playback rate of 18157 Hz.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#20005 - gbawiz - Thu Apr 29, 2004 8:25 pm</h4>
+    <div class="postbody"><span class="postbody">Could it be that 2048 samples at a time takes too long to mix?
+<br/>
+What is the best method of incorporating a mixer into a game?
+<br/>
+<br/>
+If the interrupts are used to mix the buffer like I have used timer 2, might it be better to use the VBLANK to trigger the mixing as well as the graphics stuff?
+<br/>
+<br/>
+Also I thought that maybe by reducing the size of my mixing buffer would allow the animation side to work better. On the down side, I would have more interrupts triggered per second due to the smaller size of mixing buffer. Would this affect my sound quality?
+<br/>
+<br/>
+Thanks
+<br/>
+GBAWIZ</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#20049 - gbawiz - Fri Apr 30, 2004 6:22 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Miked0801 wrote:</b></span></td> </tr> <tr> <td class="quote">Ok, you need to lock your game loops pretty soon then.  If you have vblanks enabled ands set up right, you can use the SWI call to waitForVBlank to lock your gameloop.  There are other threads explaining how to do that.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+The small games which I have produced in the past all have a similar setup:
+<br/>
+<br/>
+while(not end of game){
+<br/>
+    do game checks and procedures,etc..
+<br/>
+    optional delay to slow game down
+<br/>
+}
+<br/>
+<br/>
+Which basically means that the screen is updated every loop. This caused one game to be so fast that I introduced a delay within the loop. However the other game which I have tried to produce is extremely slow and thats without the delay.
+<br/>
+<br/>
+Is every game produced on the market making use of this wait until vblank?
+<br/>
+If so then are they limited to 60 loops per second?
+<br/>
+<br/>
+Thanks</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#20054 - poslundc - Fri Apr 30, 2004 10:09 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>gbawiz wrote:</b></span></td> </tr> <tr> <td class="quote">Could it be that 2048 samples at a time takes too long to mix?</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I think most mixers tend to be written in the 200-600 range. (Mine is 512, IIRC.)
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">What is the best method of incorporating a mixer into a game?</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Usually it's done with interrupts synced either to a timer or VBlank.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">If the interrupts are used to mix the buffer like I have used timer 2, might it be better to use the VBLANK to trigger the mixing as well as the graphics stuff?</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+This is up to you. I know that Tepples and a few others mix to VBlank; I mix to a timer. I prefer the timer because it results in rounder numbers than trying to sync everything to VBlank. But you need to be a bit more careful in your interrupt coding if you do this in order to prevent interference with VDraw operations (mainly HBlank interrupts, which are very time-sensitive).
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Also I thought that maybe by reducing the size of my mixing buffer would allow the animation side to work better. On the down side, I would have more interrupts triggered per second due to the smaller size of mixing buffer. Would this affect my sound quality?</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+This is why it's a good idea to double-buffer. Even if your interrupt triggers late or something you've still got the length of the other buffer to run through before it becomes a problem.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#20065 - Miked0801 - Sat May 01, 2004 1:12 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+Is every game produced on the market making use of this wait until vblank? 
+<br/>
+If so then are they limited to 60 loops per second? 
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+60 or 30 (or occasionally 20) hz are where games are almost always locked.  It saves on battery life and makes the game run at a constant speed.  All games I've worked on recently have been locked at 30 hz.  You don't notice any slowdown because you have nothing to compare it against :)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#20073 - gbawiz - Sat May 01, 2004 11:20 am</h4>
+    <div class="postbody"><span class="postbody">Hello,
+<br/>
+<br/>
+The technique I currently use is employing a double buffer method. Each buffer is 2048 bytes in size.
+<br/>
+<br/>
+As for the timer, It counts the number of samples being played and after 2048 it generates and interrupt which swaps the buffers and mixes the write buffer.
+<br/>
+<br/>
+Since, during the ISR when mixing the new samples, several VBLANKS may occur and are being ignored or delayed until mixing is finished.
+<br/>
+I need those vblanks to update the sprite positions and animations.
+<br/>
+<br/>
+How is it possible to accomodate both interrupts while processing equaly important code (i.e. the mixing ISR which cannot be interrupted and the VBLANK)?
+<br/>
+<br/>
+Thanks</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#20077 - poslundc - Sat May 01, 2004 1:13 pm</h4>
+    <div class="postbody"><span class="postbody">You answered your own question... use a smaller buffer. Then the two interrupts will no longer be equal priority: your mixer will be higher priority, but it will also clear out of the way faster.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#34458 - gbawiz - Wed Jan 19, 2005 10:22 pm</h4>
+    <div class="postbody"><span class="postbody">Hello,
+<br/>
+I currently find that mixing samples in the following manner works to some extent:
+<br/>
+<br/>
+I have a variable called mix_word which is a 16bit signed variable
+<br/>
+each time I want to mix signed 8bit samples then I shift them left 8 places then add to the mix_word
+<br/>
+Once all the desired samples have been added then I take the mix_word and shift right 8 places to get the final 8bit signed output.
+<br/>
+<br/>
+But the problem is that I have some distortion where there are loud parts of the mixed output. (they are being clipped).
+<br/>
+<br/>
+What is the best way to mix samples?
+<br/>
+<br/>
+Thanks in advance</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#34459 - poslundc - Wed Jan 19, 2005 10:38 pm</h4>
+    <div class="postbody"><span class="postbody">Distortion due to overflow can be handled in two basic ways: 
+<br/>
+<br/>
+1. Checking the values to make sure they haven't exceeded their limits (127 and -128) and assigning those values if they do exceed.
+<br/>
+<br/>
+2. Dividing all of your samples by a large enough common factor before adding them so that it is impossible for them to exceed the limits.
+<br/>
+<br/>
+The first method is called clipping; it is usually slower to do but doesn't affect volume. The second is called scaling; it's very fast when you have an even power of two as your number of channels, but it can result in a loss of volume.
+<br/>
+<br/>
+Why are you shifting your values before and after adding?
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#34461 - gbawiz - Wed Jan 19, 2005 10:50 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>poslundc wrote:</b></span></td> </tr> <tr> <td class="quote">Distortion due to overflow can be handled in two basic ways: 
+<br/>
+<br/>
+1. Checking the values to make sure they haven't exceeded their limits (127 and -128) and assigning those values if they do exceed.
+<br/>
+<br/>
+2. Dividing all of your samples by a large enough common factor before adding them so that it is impossible for them to exceed the limits.
+<br/>
+<br/>
+The first method is called clipping; it is usually slower to do but doesn't affect volume. The second is called scaling; it's very fast when you have an even power of two as your number of channels, but it can result in a loss of volume.
+<br/>
+<br/>
+Why are you shifting your values before and after adding?
+<br/>
+<br/>
+Dan.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I got the advice from this site listed below:
+<br/>
+<br/>
+<a class="postlink" href="http://www.gamasutra.com/features/sound_and_music/19981218/surround_02.htm" target="_blank">http://www.gamasutra.com/features/sound_and_music/19981218/surround_02.htm</a>[/url]</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#34463 - poslundc - Wed Jan 19, 2005 11:04 pm</h4>
+    <div class="postbody"><span class="postbody">The purpose of the shifting there is to convert from unsigned to signed samples and back. Since you (probably) aren't dealing in unsigned samples, this shifting has no effect on your results.
+<br/>
+<br/>
+Assume samples A, B, C, and D.
+<br/>
+<br/>
+((A &lt;&lt; 8) + (B &lt;&lt; 8) + (C &lt;&lt; 8) + (D &lt;&lt; 8)) &gt;&gt; 8 == A + B + C + D
+<br/>
+<br/>
+(This is not <span style="font-style: italic">technically</span> true 100% of the time, but you are performing these shifts for no reason.)
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#34475 - tepples - Thu Jan 20, 2005 2:02 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>poslundc wrote:</b></span></td> </tr> <tr> <td class="quote">this shifting has no effect on your results.
+<br/>
+<br/>
+Assume samples A, B, C, and D.
+<br/>
+<br/>
+((A &lt;&lt; 8) + (B &lt;&lt; 8) + (C &lt;&lt; 8) + (D &lt;&lt; 8)) &gt;&gt; 8 == A + B + C + D
+<br/>
+<br/>
+(This is not <span style="font-style: italic">technically</span> true 100% of the time, but you are performing these shifts for no reason.)</td> </tr></table><span class="postbody">
+<br/>
+In a real mixer, this would break down as ((A * 256) + (B * 256) + (C * 256) + (D * 256)) &gt;&gt; 8. Replace each 256 with a unique value, and you have volume control in your mixer.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#34488 - gbawiz - Thu Jan 20, 2005 10:23 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>poslundc wrote:</b></span></td> </tr> <tr> <td class="quote">this shifting has no effect on your results.
+<br/>
+<br/>
+Assume samples A, B, C, and D.
+<br/>
+<br/>
+((A &lt;&lt; 8) + (B &lt;&lt; 8) + (C &lt;&lt; 8) + (D &lt;&lt; 8)) &gt;&gt; 8 == A + B + C + D
+<br/>
+<br/>
+(This is not <span style="font-style: italic">technically</span> true 100% of the time, but you are performing these shifts for no reason.)</td> </tr></table><span class="postbody">
+<br/>
+In a real mixer, this would break down as ((A * 256) + (B * 256) + (C * 256) + (D * 256)) &gt;&gt; 8. Replace each 256 with a unique value, and you have volume control in your mixer.</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Yeah, I see what you mean about shifting having no results, I tried the following:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+mixing_word=0;
+<br/>
+<br/>
+mixing_word+=a;
+<br/>
+mixing_word+=b;
+<br/>
+mixing_word+=c;
+<br/>
+mixing_word+=d;
+<br/>
+<br/>
+output_byte=(mixing_word&gt;&gt;2);</td> </tr></table><span class="postbody">
+<br/>
+where mixing_word is a 16bit signed variable to allow for 'breathing room' when adding samples to prevent overflow.
+<br/>
+<br/>
+I add all the 8bit signed values to this mixing_word.
+<br/>
+The thing here is that the result is clipped and so I still have to shift right one place (divide by 4) so that the result fits snugly in the 8-bit range. The problem now is that it is only half the amplitude.
+<br/>
+<br/>
+Tepples: how would one incorporate the MOD volume scaling of maximum 64. Perhaps the following?
+<br/>
+<br/>
+((A * 64) + (B * 64) + (C * 64) + (D * 64)) divided by 4 ?
+<br/>
+<br/>
+Thanks again</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#34510 - tepples - Thu Jan 20, 2005 7:25 pm</h4>
+    <div class="postbody"><span class="postbody">If your volumes are maximum 64, then you can just use
+<br/>
+((A * 64) + (B * 64) + (C * 64) + (D * 64)) &gt;&gt; 8
+<br/>
+and you won't get any overflow. However, when you start mixing more than 4 channels you may get problems. In that case, I'd suggest something based on sorting the channels by volume and mixing the quietest channels first.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#34713 - gbawiz - Mon Jan 24, 2005 10:48 pm</h4>
+    <div class="postbody"><span class="postbody">Hello,
+<br/>
+I have been setting up a routine with ISR with refills the audio buffers during the VBLANK.
+<br/>
+<br/>
+I can play one sample but when I attempt more than that, I get lots of clicking.
+<br/>
+I tried reducing the sampling rate and buffersize, this has helped remove the clicking but the sound is poor.
+<br/>
+<br/>
+I have checked the ISR and I believe that my mixing routine cannot process more than 2 channels before the VBLANK ISR runs out.
+<br/>
+<br/>
+I have written the sample mixer in assembly and still it is slow and it doesnt even have a lot of instruction lines.
+<br/>
+<br/>
+Any ideas?
+<br/>
+Thanks</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#36391 - gbawiz - Fri Feb 18, 2005 5:28 pm</h4>
+    <div class="postbody"><span class="postbody">Problem solved:
+<br/>
+create program in C code then compile as object file into IWRAM</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

@@ -1,0 +1,422 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Sorting out polygons - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Sorting out polygons</h2>
+<div id="posts">
+<div class="post">
+    <h4>#170675 - DiscoStew - Sun Oct 11, 2009 9:00 am</h4>
+    <div class="postbody"><span class="postbody">Now that I've got my method for multi-pass layer rendering working, I now have to deal with the next problem. Sorting the polygons, and in a timely fashion. How would I go about doing this?
+<br/>
+<br/>
+<br/>
+What I want to do is insert the polys into a list, and then sort them. I was thinking of taking the average z-value of the vertices, and have the sort work off that, but could that cause some potential problems if a poly were to have a wide z-difference for it's vertices?<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#170676 - elhobbs - Sun Oct 11, 2009 11:36 am</h4>
+    <div class="postbody"><span class="postbody">Sorting the polygons for what purpose? Are you using the 3d hardware? The only reason I can think of to need sorting would be for ordering transparent polygons. glFlush can sort the transparent polygons for you if you call it with the right mode. Though I am just guessing at your intent. Maybe a few more details about what you are ttrying to do would be helpful.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#170678 - DiscoStew - Sun Oct 11, 2009 5:55 pm</h4>
+    <div class="postbody"><span class="postbody">Like I said, I'm working with multi-pass layer rendering, using the display capture unit to retain previously rendered frames to combine them together into one "scene", to overcome the poly limit by reducing the frame rate. There is no z-buffer in between frames, so if there was no sorting of polys, some polys that are meant to be in back might end up not getting rendered in the first layer, making them pop out above others in following layers.
+<br/>
+<br/>
+Hope that explains it.<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#170682 - TwentySeven - Sun Oct 11, 2009 11:40 pm</h4>
+    <div class="postbody"><span class="postbody">Back on the playstation 1 there wasn't any depth buffer so you had to sort your tris manually.   This sounds familar.
+<br/>
+<br/>
+The general (slow) solution is to build a double linked list of polys per frame, and use a "sorted insert" based on poly depth.  I think we used nearest vert as the key, actually.
+<br/>
+<br/>
+A sorted insert just means you search for the insertion point instead of appending-then-sorting.  Simple binary search + tracking the current min/max depth is fantastic for this.
+<br/>
+<br/>
+------
+<br/>
+<br/>
+You can optimize this approach even further by prebuilding your linked lists for chunks of the scene, for each of the primary camera view axises eg:  looking down X+ , X-,  Y+, Y-, Z+, Z-. 
+<br/>
+<br/>
+Slightly non obvious is X+ and X- are not the same-list-just-backwards, because you can backface cull and visibility cull these lists, and just generally spend a bit more effort making sure they're tight and correctly sorted.
+<br/>
+<br/>
+----
+<br/>
+<br/>
+You can mix the two by filling your dynamic buffer from the static world geometry axial-lists first, then adding your dynamic geometry secondly.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#170692 - Miked0801 - Mon Oct 12, 2009 6:00 pm</h4>
+    <div class="postbody"><span class="postbody">Painter's type alogorithm?  Render your back polys in the first pass and capture, render your front polys in the second pass.  Let the 3D system handle everything else.  With some care, I bet you'd be able to segregate your list in 2 roughly equal portions right?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#170693 - elhobbs - Mon Oct 12, 2009 6:49 pm</h4>
+    <div class="postbody"><span class="postbody">just a thought... I wonder if you could do something with the near and far clip planes - so that you do not have to worry about poly that are in both groups. maybe just render all the polys twice - I think the polyies outside of the clip region do not count towards the tri/vertex limits. once for the far group with the near clip plane pushed out far and again with the far clip plane pulled in close. pushing all the polys twice may be faster than sorting them.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#170694 - sajiimori - Mon Oct 12, 2009 7:56 pm</h4>
+    <div class="postbody"><span class="postbody">Running with elhobbs' idea, you could break up the world into medium-sized objects.  For each object, determine whether it's in the near zone, the far zone, or both.  If an object is in both zones, you may have to render it twice.
+<br/>
+<br/>
+There's also BSP a la Quake 1-3.  Small display lists are not ideal for the DS (or any other 3D hardware I know of), but at least it's better than sorting every poly.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#170695 - Miked0801 - Mon Oct 12, 2009 9:26 pm</h4>
+    <div class="postbody"><span class="postbody">Pretty much where I was going as well - though I didn't hink of the double rendering idea :)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#170696 - DiscoStew - Mon Oct 12, 2009 11:13 pm</h4>
+    <div class="postbody"><span class="postbody">As much as I would like to just render each group with changing the far/near plane, the problem that might occur with that would be if one group ends up actually having more than the limit the DS can handle. If the groups were equal all the time and under the limit, it wouldn't be a problem. Even with using BSP, a single "scene" may contain more than the limit, and would require to split it up, which would require knowing what polys are in front and which are in back. Plus, I'm expecting a good number of moving objects and model animations.
+<br/>
+<br/>
+After TwentySeven mentioned the PSX (which required poly sorting because of no z-buffer), I went searching for that, and this is what I found - <a href="http://www.exaflop.org/docs/naifgfx/naifsort.html" target="_blank">http://www.exaflop.org/docs/naifgfx/naifsort.html</a> - an ordering table.
+<br/>
+<br/>
+Is this what is meant by sorted insertion?<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#170697 - TwentySeven - Tue Oct 13, 2009 12:25 am</h4>
+    <div class="postbody"><span class="postbody">Not really.
+<br/>
+<br/>
+A simple implementation of a sorted insert might look something like:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+typedef struct node_s
+<br/>
+{
+<br/>
+    node_s* prev;
+<br/>
+    node_s* next;
+<br/>
+    int          z_depth;
+<br/>
+    poly_t*  polyref;
+<br/>
+} node_t;
+<br/>
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Standard double linked list.  
+<br/>
+<br/>
+Then, when you go to insert a new node, you search for the correct place to put it in the list.  
+<br/>
+<br/>
+<br/>
+if (depth &gt;= current.depth) &amp;&amp; (depth &lt;= current.next.depth)  Insert Here;
+<br/>
+<br/>
+This way the list is sorted as you create it.
+<br/>
+<br/>
+The actual search can be sped up alot of ways, the most obvious one is to check the HeadNode.depth and TailNode.depth first, because appending to the start or end of the list is faster then walking it.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#170699 - elhobbs - Tue Oct 13, 2009 1:53 am</h4>
+    <div class="postbody"><span class="postbody">the naifsort code is really just an implementation of a hash list. hash lists are a simple way to partition a list into a series of smaller lists so that you do not have to traverse the whole list to find something (like a place to add a new element). this hash function partitions the z depth. so adding to the list involves finding the bucket to add the poly to. however this list does not sort the polys that are in the same bucket. it also involves calculating the z depth for each vertex - which would involve transforming all of the vertices. you could try just calculating the distance from the near clip plane for each vertex instead of the z depth.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#170706 - DiscoStew - Tue Oct 13, 2009 6:34 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>elhobbs wrote:</b></span></td> </tr> <tr> <td class="quote">it also involves calculating the z depth for each vertex - which would involve transforming all of the vertices. you could try just calculating the distance from the near clip plane for each vertex instead of the z depth.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+With the distance from the near clip plane, unless I'm mistaken, I would need to compare the scalar of that plane against the dot product of the plane's normal and the vertex position, right? But, because I'd be using things like glTranslate and glRotate, I'd still need to transform all the vertices, right?<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#170707 - TwentySeven - Tue Oct 13, 2009 11:39 pm</h4>
+    <div class="postbody"><span class="postbody">If you know the cameras primary view direction  (X+,X-, Y+,Y- ,Z+ or Z-)
+<br/>
+<br/>
+Then you only need to check that element of the vertex for the sort key.
+<br/>
+<br/>
+eg:  if your camera is looking down X+,  then the worldspace vert.x is going to be the equivilant of your screenspace transformed depth.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#170719 - sajiimori - Wed Oct 14, 2009 6:19 pm</h4>
+    <div class="postbody"><span class="postbody">Ok look people...
+<br/>
+<br/>
+If you're rendering so many polys that you need multiple passes to stay under the vertex limit, then <span style="font-weight: bold">you do not have time to do any per-vertex work.</span>
+<br/>
+<br/>
+Or are you developing a slideshow app?  If so, by all means, disregard this message!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#170720 - DiscoStew - Wed Oct 14, 2009 10:31 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sajiimori wrote:</b></span></td> </tr> <tr> <td class="quote">If you're rendering so many polys that you need multiple passes to stay under the vertex limit, then <span style="font-weight: bold">you do not have time to do any per-vertex work.</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Not sure what you mean by that, but the whole purpose (for me) of doing this is to exceed the limit of the 3D hardware by faking it. Each pass is restricted to the hardware limit, but layering them over one another with the use of the capture unit (and 2 VRAM banks atm) will give the illusion that the hardware can push more at the expense of the frame rate (2 passes = 30FPS, 3 passes = 20FPS, etc). The purpose of the poly sorting is to make sure that polys are organized as best as possible, because the z-buffer is limited to polygons in each individual pass, and would look broken if a poly that was meant to be in the far back in the first pass would showed up in front in the final pass because it was the last to get added.
+<br/>
+<br/>
+If the in-game data of a fixed 30FPS game gets it's job done in one frame-worth of time, the next frame can be used for organizing the polys for the next multi-pass render.<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#170721 - elhobbs - Wed Oct 14, 2009 11:56 pm</h4>
+    <div class="postbody"><span class="postbody">I still think you should try rendering everything twice with modified near clip planes. Going through the lost multiple times is going to be quite slow -never mind sorting everything. Having a sorted lost is only part of the solution in any case. You still need to find a plane that evenly separates the two groups close to the poly limit. I say just pick a distance that works and use the near clip plane.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#170722 - DiscoStew - Thu Oct 15, 2009 12:36 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>elhobbs wrote:</b></span></td> </tr> <tr> <td class="quote">I still think you should try rendering everything twice with modified near clip planes. Going through the lost multiple times is going to be quite slow -never mind sorting everything. Having a sorted lost is only part of the solution in any case. You still need to find a plane that evenly separates the two groups close to the poly limit. I say just pick a distance that works and use the near clip plane.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I just thought up something that could make your method even more beneficial. To start, the clip planes are set at specific points, split evenly prior to a fade in from black, and the level is tested "behind the scenes" with the usual loading of the geometry. For each pass, take note of the internal stats of the 3D hardware, like the poly/vertex count. After the final pass, compare the stat of each pass with the other passes. If one is far lower than the rest, then increase the clipping area for that pass and reduce the others. Vice versa if one is a good deal larger than the others (or even reaches the limit) by reduce the clipping area for that and increasing the others. After the "test" is done, the level executes as normal, but stats are continually monitored, and clipping areas adjusted.
+<br/>
+<br/>
+What do you think?<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#170725 - elhobbs - Thu Oct 15, 2009 1:11 am</h4>
+    <div class="postbody"><span class="postbody">Try it out. Though I think it will change quite a bit based on position and view angle. You may want see if the approach works at all before you try anything fancy.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#170726 - sajiimori - Thu Oct 15, 2009 2:55 am</h4>
+    <div class="postbody"><span class="postbody">DiscoStew, I understand quite well what the purpose is.  But <span style="font-weight: bold">wanting</span> 4000 on-screen polys at 30fps and <span style="font-weight: bold">getting</span> 4000 on-screen polys at 30fps are two very different things.
+<br/>
+<br/>
+Yes, you can do game logic in 17ms, and sort in 17ms.  Now where did I put those spare 20ms for uploading 4000* polys... I'm sure I left them around here somewhere...
+<br/>
+<br/>
+Edit: The point isn't that you can't max out 2 vertex buffers.  It's that maxing out 2 vertex buffers has serious implications for what kind of other work you can expect to do, if you want a reasonable framerate (even 20fps).  In particular, visiting all those vertices on the CPU is framerate suicide.  The only thing that should ever touch them is the DMA controller.
+<br/>
+<br/>
+But don't let me get you down -- by all means, try it.
+<br/>
+<br/>
+<br/>
+<span style="font-style: italic">* And that's if every poly you upload ends up on-screen, so not counting backfaces and anything outside the frustum.  In a typical full-3D game, think more like 10000 polys, if you're aiming to max out 2 vertex buffers.</span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#170727 - TwentySeven - Thu Oct 15, 2009 3:31 am</h4>
+    <div class="postbody"><span class="postbody">Saji, you're making the misinformed assumption that this vertex processing cannot be done offline.
+<br/>
+<br/>
+Presort the world geometry into linked lists on each axis, copy over what you need to render, draw it.
+<br/>
+<br/>
+Its not difficult, and its very very CPU light.  If the #$*#* Playstation 1 can do it, the DS can.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#170741 - sajiimori - Fri Oct 16, 2009 2:22 am</h4>
+    <div class="postbody"><span class="postbody">I'm making the assumption that you'll have to touch the vertices with the CPU, at runtime.  That is, I'm assuming you won't have pre-built display lists that you can DMA to the hardware.
+<br/>
+<br/>
+Yes, you can pre-sort on each axis -- sounds like a good strategy to me, if you need to sort each poly individually.  However, that gets you a fast way to <span style="font-style: italic">build</span> a display list, which means touching every vertex.  If you're going to max out 2 vertex buffers at 30fps (or even 20fps), what you need is to <span style="font-style: italic">have</span> display lists ready to DMA verbatim.
+<br/>
+<br/>
+Yes, the PS1 did it, with half the CPU power.  But are you going to tell me it was sorting ~10000 polys that way, at 30fps?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#170742 - TwentySeven - Fri Oct 16, 2009 3:26 am</h4>
+    <div class="postbody"><span class="postbody">Of course it didn't, but not because of sorting.   The sorting was relatively cheap - most of the cpu went on manually clipping tris to frustum, which the DS doesn't have to do.
+<br/>
+<br/>
+What I don't understand is why people are insisting that the only way to get decent triangle throughput on the DS is via DMA buffered draw commands.    
+<br/>
+<br/>
+The GL styled register commands are plenty fast.
+<br/>
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+<br/>
+   offset = model-&gt;verts-&gt;vertcount * frame;
+<br/>
+   
+<br/>
+<br/>
+   for (j=0;j&lt;model-&gt;stripcount;j++)
+<br/>
+   {
+<br/>
+      glBegin(GL_TRIANGLE_STRIP);
+<br/>
+<br/>
+      glColor3f(1 ,1,1);
+<br/>
+<br/>
+      //First 2 bytes are the point count this strip
+<br/>
+      pointcount= *(strip);         
+<br/>
+      
+<br/>
+      //Index into the first index into this, followed by 2 uv pairs
+<br/>
+      data = (uvpoint_t*)((byte*)strip+2);
+<br/>
+   
+<br/>
+      //Renders a triangle strip one point at a time
+<br/>
+      //point is the "index" of the vert
+<br/>
+      for (r=0;r&lt;pointcount;r++)
+<br/>
+      {
+<br/>
+         point = data-&gt;index;
+<br/>
+         GFX_NORMAL = model-&gt;verts-&gt;verts[offset+point].normal;
+<br/>
+         GFX_TEX_COORD = (TEXTURE_PACK(data-&gt;uvindex0 , data-&gt;uvindex1));
+<br/>
+         
+<br/>
+         glVertex3v16  (model-&gt;verts-&gt;verts[offset+point].vert[0]  , model-&gt;verts-&gt;verts[offset+point].vert[1] , model-&gt;verts-&gt;verts[offset+point].vert[2]   );            
+<br/>
+         data++;
+<br/>
+      }
+<br/>
+      glEnd(); 
+<br/>
+<br/>
+      //Move strip along by 2 bytes + 6 bytes per point entry
+<br/>
+      strip= (int16*) ( (byte*)strip +2 +(6*pointcount) );
+<br/>
+   }
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Now that is fairly mid-range bit of model rendering code.  It not only renders 4000 tris on the DS at 60fps, it does so in about 4-5ms per frame.  Considering with a multipass renderer you only need to process off 4000 tris per 16ms.. I think its well within feasibility.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#170743 - sajiimori - Fri Oct 16, 2009 4:18 am</h4>
+    <div class="postbody"><span class="postbody">Well, I guess I look forward to being proven wrong!  =)
+<br/>
+<br/>
+Edit: I don't know, maybe I'm a terrible programmer; maybe I'm doing something horribly wrong.  But I've never seen a real DS game with a significantly higher poly count than the games I've worked on, and I've always stayed under a single vertex buffer, at 30fps, and I run out of CPU around the same time I run out of vertices.
+<br/>
+<br/>
+Of course, there's a real game going on around all that; rendering (including animation and material setup) only amounts to about half the work.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#170746 - ritz - Fri Oct 16, 2009 5:50 pm</h4>
+    <div class="postbody"><span class="postbody">I use gfx commands direct to port, not DMA call lists or packed commands. I looked for a test case in my rom that just squeaked by at 60fps and I found these particular results:
+<br/>
+<br/>
+Using triangle strips:
+<br/>
+- verts sent to geometry engine: 6776 (4227 reported in vertex ram),
+<br/>
+which translates into triangles: 4096 (2035 reported in polygon ram)
+<br/>
+<br/>
+At least half of the verts being sent to the engine are being quat animated as well, and each vert is eventually passed through a matrix in the end.
+<br/>
+<br/>
+My debugging shows that by the time the CPU is done its work, ~97 entries are still in the gfx pipe.
+<br/>
+<br/>
+~400k in textures are currently active in vram during all this (not the transfer, but there's work to set the params, etc.)
+<br/>
+<br/>
+And there's more going on than just vertex commands in this test too. Normal cmds, tex params/coord cmds, light color cmds, light direction (per vertex) cmds, etc. And still the CPU is done early. However, this is just a 3D tech demo and there's little left for AI, etc. But if a person were to use appropriately lowered content/models for the DS, I think there'd be lots of room for other stuff.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#170751 - Miked0801 - Fri Oct 16, 2009 7:40 pm</h4>
+    <div class="postbody"><span class="postbody">60hz ain't happening for anything beyond a demo and I think you realize this with your hedging :)
+<br/>
+<br/>
+To TwentySeven:
+<br/>
+When we're pusing our render engine to its limit, the push method of rendering into the registers just gets too slow if you aren't packing your commands intelligently.  In my current game, I wish I had built display lists for my mostly static images rather than recreate them every game loop.  That way I could have used packed commands and let the system pull the info async rather than hand feed unpacked.
+<br/>
+<br/>
+One other thing - be very very careful when jamming the 3D FIFO.  If you do pack commands and manually push them in too fast, very random bad things start occuring.  My initial testing showed that I could beat DMA by packing and LDM/STMing the data into the FIFO - and it did quite well.  But on target (not on emulator), the 3D system would randomly freeze once every 0 to 5 hours depending on the individual units as a key u16 was dropped. 
+<br/>
+<br/>
+Some random thoughts from a hazy mind recovering from a cold.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#170755 - sajiimori - Fri Oct 16, 2009 10:58 pm</h4>
+    <div class="postbody"><span class="postbody">That's cool ritz -- I've always wanted to see how much is possible at 60fps, in ideal circumstances, but I never got around to it.
+<br/>
+<br/>
+It sounds like we're not too far off from that ideal, in terms of raw speed, but it would be hard to give up asynchronous display list uploads.  As soon as a DMA starts, I'm already busy setting up for the next chunk.  The gfx hardware can't handle the verts as quickly as the memory bus can upload them, so the CPU can use the bus for other work.
+<br/>
+<br/>
+Our renderer still wastes some CPU, because when the CPU is done setting up for the next DMA, the old DMA is still usually busy, and the CPU spins until it's done so it can start the new one.  Some fancier threading could let us spend that busy-waiting time on game logic, but I don't know how much it would pay off, with all the bus contention.
+<br/>
+<br/>
+Anyway, interesting stuff!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#171260 - TwentySeven - Tue Nov 10, 2009 1:16 am</h4>
+    <div class="postbody"><span class="postbody">Hows this going? any news?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#171265 - DiscoStew - Tue Nov 10, 2009 7:38 pm</h4>
+    <div class="postbody"><span class="postbody">Nothing new to report. Been busy with school and work that I haven't had the time to get back into programming.<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#172172 - Marcel24 - Fri Jan 22, 2010 2:05 pm</h4>
+    <div class="postbody"><span class="postbody">hi,
+<br/>
+is there a way to get multipassrendering just with using one VRAM bank for capturing?
+<br/>
+is there a simple example source code for it?
+<br/>
+<br/>
+tnx.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#172179 - DiscoStew - Fri Jan 22, 2010 8:25 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Marcel24 wrote:</b></span></td> </tr> <tr> <td class="quote">hi,
+<br/>
+is there a way to get multipassrendering just with using one VRAM bank for capturing?
+<br/>
+is there a simple example source code for it?
+<br/>
+<br/>
+tnx.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+After giving it a little thought, you could theoretically do it, but you'll be losing something pretty valuable in the process.
+<br/>
+<br/>
+A complete capture require 96KB of VRAM space. Outside of the main VRAM banks, you have 96KB that can be used for the Main display. This is split up among 3 banks - E (64KB), F &amp; G (16KB each). When set correctly, you could set up the banks to be arranged into a complete 96KB area for use as tile data for a Direct Color BG or collection of OBJs that use 2D mapping. So, after getting it set up, the first of a multi-render capture would be just the 3D render, and all others following would be the 3D+BG+OBJ. After each capture, you'd copy it into banks E-G. After the last render is captured, you'd instead copy it to a designated area in Main Memory, and use the Main Memory Display FIFO to display the image onto the screen.
+<br/>
+<br/>
+So, what do you lose? Well, for any case, you'll be losing banks E-G, which are the only banks that can store Extended Palettes for the BGs, the OBJs, and/or Texture Palettes. The BGs and OBJs used can still use a palette, but they can't be extended. Textures will be forced to be in the 15-bit direct color format. Not only that, but copying the data to either another section of VRAM or Main Memory will take a little time. Also, because you would be using the Main Memory Display FIFO, that might also dig into CPU cycles if it works the same way as regular DMA transfers, which halt the CPU when interacting with Main Memory (I've not tested this aspect).<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#172202 - Marcel24 - Sun Jan 24, 2010 5:37 pm</h4>
+    <div class="postbody"><span class="postbody">Hi tnx for the fast reply.
+<br/>
+i will try the render to texture example for multirendering.
+<br/>
+<br/>
+:=) loosing the vram bank for texture pals is evil for me.
+<br/>
+bye</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

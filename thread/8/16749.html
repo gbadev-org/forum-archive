@@ -1,0 +1,305 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>MULSHIFT32 aka smull error - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>ASM > MULSHIFT32 aka smull error</h2>
+<div id="posts">
+<div class="post">
+    <h4>#169332 - Tommmie - Sat Jul 04, 2009 7:16 pm</h4>
+    <div class="postbody"><span class="postbody">hey everyone,
+<br/>
+<br/>
+i'm very new to assembly, but i have to decode a lib which is optimized for arm. in a header file they declare this function: 
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">static __inline__ int MULSHIFT32(int x, int y)
+<br/>
+{
+<br/>
+    int zlow;
+<br/>
+    __asm__ volatile ("smull %0,%1,%2,%3" : "=&amp;r" (zlow), "=r" (y) : "r" (x), "1" (y) : "cc");
+<br/>
+    return y;
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+but when i try to compile a c file with the function MULSHIFT32(to multiply two 32bit integers) it gives errors like this:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">775: Error: selected processor does not support `smull ip,r7,r6,r7'
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+can someone help me?[/code]</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#169334 - Miked0801 - Sat Jul 04, 2009 7:46 pm</h4>
+    <div class="postbody"><span class="postbody">My guess is it is compiled in Thumb mode and that is an ARM only op.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#169335 - Tommmie - Sun Jul 05, 2009 7:36 am</h4>
+    <div class="postbody"><span class="postbody">thanks, didn't thought about it! will try it
+<br/>
+<br/>
+edit: you're the best man, it works now!!! really thanks</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#169338 - Tommmie - Sun Jul 05, 2009 12:28 pm</h4>
+    <div class="postbody"><span class="postbody">following error is this:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">/home/tom/tmp/ccp00P8r.s:350: rdhi, rdlo and rm must all be different
+<br/>
+/home/tom/tmp/ccp00P8r.s:826: rdhi, rdlo and rm must all be different
+<br/>
+/home/tom/tmp/ccp00P8r.s:836: rdhi, rdlo and rm must all be different
+<br/>
+/home/tom/tmp/ccp00P8r.s:1225: rdhi, rdlo and rm must all be different
+<br/>
+/home/tom/tmp/ccp00P8r.s:1235: rdhi, rdlo and rm must all be different
+<br/>
+/home/tom/tmp/ccp00P8r.s:1251: rdhi, rdlo and rm must all be different
+<br/>
+/home/tom/tmp/ccp00P8r.s:1261: rdhi, rdlo and rm must all be different</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+i don't know where the problem lies. it uses some arm asm functions but not rdhi and so on
+<br/>
+[/code]</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#169340 - Dwedit - Sun Jul 05, 2009 2:23 pm</h4>
+    <div class="postbody"><span class="postbody">It's saying that "rdhi, rdlo and rm must all be different"
+<br/>
+<br/>
+From the ARM reference, the format of the SMULL instruction is:
+<br/>
+SMULL{cond}{S} RdLo,RdHi,Rm,Rs
+<br/>
+<br/>
+So an instruction like "SMULL r0,r2,r0,r1" would cause an error.
+<br/>
+<br/>
+First compile with the -S switch to get the ASM source so you can see what the compiler is doing wrong, and which registers it's duplicating.
+<br/>
+<br/>
+Look at <a class="postlink" href="http://www.ethernut.de/en/documents/arm-inline-asm.html" target="_blank">this nice page about ARM GCC inline assembly</a>
+<br/>
+Find out how to force it not to reuse registers inappropriately.
+<br/>
+<br/>
+edit: I have no idea why the guy who wrote that inline asm claims it clobbers the condition codes, when it clearly doesn't (that's what the "CC" is for, but the instruction is not SMULLS, it's plain SMULL)
+<br/>
+<br/>
+Another edit:
+<br/>
+I just tested how the compiler compiles this C code:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+typedef int s32;
+<br/>
+typedef long long s64;
+<br/>
+<br/>
+s32 test(s32 x, s32 y)
+<br/>
+{
+<br/>
+   return ((s64)x * (s64)y) &gt;&gt; 32;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+It produces an SMULL instruction followed by a MOV instruction.  Maybe that's what the inline ASM was there for, getting rid of the MOV.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#169342 - Tommmie - Sun Jul 05, 2009 2:53 pm</h4>
+    <div class="postbody"><span class="postbody">ok, sorry but i'm not good with makefiles, where to put that switch?
+<br/>
+<br/>
+edit: sorry wasn't clear enough in the second post, the error about mulshift32 is gone. i try to compile another file of the lib. and then i got that error. and the fine is: it say's not in which instruction:(</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#169344 - Ruben - Sun Jul 05, 2009 3:38 pm</h4>
+    <div class="postbody"><span class="postbody">I really don't think it's an error, but rather a warning: In my Midi player, I use UMULL to calculate the final frequency for a note, and get the same error, but it compiles. I suppose it's something like the warning that one shouldn't do "mul r0, r0, r1".</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#169345 - Tommmie - Sun Jul 05, 2009 3:54 pm</h4>
+    <div class="postbody"><span class="postbody">i read something about a warning to, but it should work, or not?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#169346 - Dwedit - Sun Jul 05, 2009 4:38 pm</h4>
+    <div class="postbody"><span class="postbody">If it is duplicating registers that shouldn't be duplicated, it probably won't work on an ARM.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#169347 - Ruben - Sun Jul 05, 2009 5:12 pm</h4>
+    <div class="postbody"><span class="postbody">Dwedit:
+<br/>
+I think the reason for the warnings is for compatibility for pure ARM processors, because in THUMB, MUL must overlap at least one register, so it would make sense that one could do that in ARM, so they allowed it on the ARM7TDMI. So I suppose it would work on an ARM processor that supports THUMB, but won't on a purely ARM processor.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#169348 - Tommmie - Sun Jul 05, 2009 5:21 pm</h4>
+    <div class="postbody"><span class="postbody">it compiled fine, now i have to make a test program with it and see if it works:) just read up some more asm for arm. is it really dofficult or not?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#169349 - Ruben - Sun Jul 05, 2009 6:28 pm</h4>
+    <div class="postbody"><span class="postbody">Well, at first it's like @__@ but once you get the hang of it, it's actually quite easy. You just have to remember the basic arithmetic functions (like add, sub, mul), the memory functions (ldr[b/h], str[b/h], the misc. functions (b, bl, bx) and once you get the hang of it, the conditionals (like -eq, -ne, -vc, -vs, etc). But yeah, it's hard at first, but it pays off nicely and actually turns into fun at times (like when coding tinting routines, or sound mixing routines, in my case).</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#169350 - Tommmie - Sun Jul 05, 2009 7:01 pm</h4>
+    <div class="postbody"><span class="postbody">yes, i'm dutch, so sometimes the document is a bit hard to read. but i already know how to do defines:) and add
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+PI EQU 3.14
+<br/>
+<br/>
+add r0, r1, #PI @ is this one right?
+<br/>
+<br/>
+</td> </tr></table><span class="postbody">or did i misunderstood that?
+<br/>
+<br/>
+how did you learned asm, do you know some good tutorials for beginners?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#169352 - Ruben - Mon Jul 06, 2009 5:12 am</h4>
+    <div class="postbody"><span class="postbody">Err, I'll just have to point something out there: As far as I'm concerned, one can't do floating-point arithmetic (that is, 3.14159 or whatever).
+<br/>
+<br/>
+And about learning it...
+<br/>
+Well, I've got Asperger's syndrome so I tend to pick up things I like a lot faster than "normal" people, but I suppose that if you are serious about learning ARM assembler, then you should check out Tonc's page on assembler. Another nice thing to have is Rejected's ARM/THUMB reference sheet.
+<br/>
+<br/>
+But yeah, it would be better if you start small and then challenge yourself to re-write some small C programs in assembler.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#169354 - Tommmie - Mon Jul 06, 2009 7:10 am</h4>
+    <div class="postbody"><span class="postbody">thanks, i will do that. and because i'm a "nornal" person i will learn something slower but i don't care: i've summer holiday here!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#169373 - Cearn - Mon Jul 06, 2009 8:03 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Ruben wrote:</b></span></td> </tr> <tr> <td class="quote">Well, at first it's like @__@ but once you get the hang of it, it's actually quite easy. You just have to remember the basic arithmetic functions (like add, sub, mul), the memory functions (ldr[b/h], str[b/h], the misc. functions (b, bl, bx) and once you get the hang of it, the conditionals (like -eq, -ne, -vc, -vs, etc). But yeah, it's hard at first, but it pays off nicely and actually turns into fun at times.</td> </tr></table><span class="postbody">Also, ARM asm's purdy ^_^. 
+<br/>
+<br/>
+But yeah, it'll take a while to understand how it works. Reading assembly shouldn't be too hard, even if you're just starting, but writing assembly that works (and plays nice with C code; and is efficient) will require some effort. While you certainly need the reference documents and maybe tutorials, the best start is probably reading the code that the compiler generates. Add <span style="font-style: italic">-save-temps</span> to the CFLAGS in the makefile and you should get a number of .s files with the code of your C functions. Take a look at some of your own C functions and see if you can understand the assembly version of it. You'll probably want to do this in ARM code (use .arm.c files to compile to ARM) since thumb assembly can't be somewhat ugly.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#169384 - Tommmie - Tue Jul 07, 2009 8:39 pm</h4>
+    <div class="postbody"><span class="postbody">thanks, that is indeed a very good way to learn! i will start with some simple functions and look if understand them. thanks everyone, i'm going to learn asm:)
+<br/>
+<br/>
+edit: ok did my first comment on an asm function.
+<br/>
+in c the function was like this:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">int substract(int first, int second){
+<br/>
+return(first-second);
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+and in asm it was this, is the comment right?
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">rsb   r0, r1, r0 @ r0 is the destination for the answor, r1 contains the value of first and r0 contains the value of second</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#169385 - Mighty Max - Tue Jul 07, 2009 11:09 pm</h4>
+    <div class="postbody"><span class="postbody">The parameters: r0 ist the first, r1 the second, r2 the third, r3 the forth, others go on stack on a function call.
+<br/>
+On return r0 is the return value.
+<br/>
+<br/>
+For the instruction here: RSB is a <span style="font-weight: bold">reverse</span> sub
+<br/>
+RSB Rd,Rn,Rm means Rd := Rm - Rn 
+<br/>
+while 
+<br/>
+SUB Rd,Rn,Rm would mean Rd := Rn - Rm<br/>_________________<br/><a class="postlink" href="http://mightymax.org/gbamp_multiboot.html" target="_blank">GBAMP Multiboot</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#169390 - Tommmie - Wed Jul 08, 2009 7:27 am</h4>
+    <div class="postbody"><span class="postbody">but what's the advantage of a rsb?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#169391 - Ruben - Wed Jul 08, 2009 7:40 am</h4>
+    <div class="postbody"><span class="postbody">The advantage of RSB is that you can scale the other register, like this...
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">rsb r0, r0, r1, asr #16 @ r0 = (r1&gt;&gt;16) - r0
+<br/>
+sub r0, r0, r1, asr #16 @ r0 = r0 - (r1&gt;&gt;16)</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I think a SUB would've been better, but then again, compilers tend to do that a lot: muck up -- EDIT: Read as "show off" ;)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#169392 - Tommmie - Wed Jul 08, 2009 7:53 am</h4>
+    <div class="postbody"><span class="postbody">ok, i'm confused now: what do you mean with scale? and with sub you do rn-operand2 and with rsv operand2-rn. but why should you use rsb then? for imitating rsb with sub you could just exhange the values in the register. the value of r0 would go in r1 and the value of r1 in r0 and you could also do a rsb with sub. or am i compeltely wrong?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#169393 - Ruben - Wed Jul 08, 2009 8:26 am</h4>
+    <div class="postbody"><span class="postbody">No, you are correct: By scaling, I meant using the barrel shifter which allows you to shift or rotate a certain register by <span style="font-style: italic">n</span> bits.
+<br/>
+<br/>
+For now, you shouldn't really worry about it, but when you'll need it, you'll know. For example, if I had to do something like this...
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">int foobar = (foo&gt;&gt;16) - bar;</td> </tr></table><span class="postbody">
+<br/>
+The most obvious way would be to do this...
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">@ Assume r0 is foobar, r1 is foo and r2 is bar
+<br/>
+mov r1, r1, asr #16 @ foo&gt;&gt;16
+<br/>
+sub r0, r1, r2      @ (foo&gt;&gt;16) - bar</td> </tr></table><span class="postbody">
+<br/>
+However, with the barrel shifter this turns into 1 instruction...
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">@ Assume the above
+<br/>
+rsb r0, r2, r1, asr #16 @ (foo&gt;&gt;16) - bar</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#169394 - Tommmie - Wed Jul 08, 2009 9:20 am</h4>
+    <div class="postbody"><span class="postbody">thanks got it! is it also more efficient or not?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#169396 - Ruben - Wed Jul 08, 2009 9:56 am</h4>
+    <div class="postbody"><span class="postbody">Well, sub/rsb both have the same execution time (that is, 1 cycle), so they have no advantage over each other, other than the shift position. It really depends on what you're doing, really. Personally, when I encounter something like "sub r0, r1, r0" I tend to make it "rsb r0, r0, r1" to make it cleaner and the opposite for "rsb r0, r1, r0", but that's just me.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#169397 - Tommmie - Wed Jul 08, 2009 11:20 am</h4>
+    <div class="postbody"><span class="postbody">ok, yes that's indeed cleaner. thanks, i've just coded another C function looked into the asm code and i got it!
+<br/>
+<br/>
+btw. the compiler is fan of rsb instead of sub:)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#169398 - Ruben - Wed Jul 08, 2009 11:54 am</h4>
+    <div class="postbody"><span class="postbody">Cool. When you feel confident enough, try compiling some "stronger" functions, and once you get the hang of it, try reading other people's "hand-written" ASM. Cearn's ASM is a bit.. err.. advanced, even for me, to the point where it takes me a bit of time to get what the HELL it's doing, but when you feel confident enough, feel free to scan it. Another thing you may wanna look at it labels (that is, ".Lfoo"), other directives (such as ".section", ".thumb" ".thumb_func" ".align" etc) and eventually, macros of you have functions that repeat segments of code with only slightly different values/registers/whatever.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

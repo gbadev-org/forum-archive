@@ -1,0 +1,240 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Octree splitting polygons theory - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Octree splitting polygons theory</h2>
+<div id="posts">
+<div class="post">
+    <h4>#117121 - Rajveer - Thu Feb 01, 2007 1:40 pm</h4>
+    <div class="postbody"><span class="postbody">Hi guys, I'm implementing an octree to split collision data and it's going fairly well. I'm at the stage where I'm deciding between splitting polygons which span over/through a node into smaller polygons, or just adding these polygons to multiple nodes. Everywhere I look I find people telling me to split polygons but I've been doing some thinking and would like others to read my thoughts and criticise me where needed so I can properly decide. Ok the diagram shows the different cases:
+<br/>
+<br/>
+<a class="postlink" href="http://imageshack.us" target="_blank"></a><a href="http://img166.imageshack.us/img166/9000/verticesnodewy1.jpg">[Images not permitted - Click here to view it]</a>
+<br/>
+<br/>
+Now firstly, there's too many cases to distinguish how many vertices should be created for a polygon, I'm sure I've missed out a few. Secondly, with each polygon split, you'll have to test collision for however many new polygons are formed, and you'll also have to render extra. Now if I were to share one polygon between two nodes, I'd render them multiple times as I render nearby nodes too (unless I use a flag to say already rendered) but I'll still only test collision for this polygon once (whichever node I'm in). So what is the advantage of splitting polygons into smaller polygons which fit a node over sharing polygons between nodes?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#117122 - kusma - Thu Feb 01, 2007 2:19 pm</h4>
+    <div class="postbody"><span class="postbody">First, remember that you don't need to use the same octree for colission-testing and rendering. Or you could store mulitple datasets per node.
+<br/>
+<br/>
+Second, a plain, robust polygon/plane clipping routine should handle all cases more or less automatically. You don't need to check for each case.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#117157 - Balkman - Fri Feb 02, 2007 12:16 am</h4>
+    <div class="postbody"><span class="postbody">The way I implement collision trees is much more simple but it might not work in your case. What I do is find the center of each triangle. Since that is only a point, whereever that point falls in the node tree thats the one it belongs to. To find the center of a triangle you could do something like the following:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+<br/>
+struct Triangle
+<br/>
+{
+<br/>
+   float3 vertices[3];
+<br/>
+   float3 centeroid;
+<br/>
+};
+<br/>
+<br/>
+void CCollisionTree::FindCenteroids(vector&lt;Triangle&gt; tris)
+<br/>
+{
+<br/>
+   // Copy the triangles passed in to the member vector of triangles
+<br/>
+   //m_Triangles.assign(tris.begin(), tris.end());
+<br/>
+   m_root-&gt;m_Triangles = tris;
+<br/>
+<br/>
+   // Calculate the center of the triangle
+<br/>
+   for(unsigned int i = 0; i &lt; m_root-&gt;m_Triangles.size(); i++)
+<br/>
+   {
+<br/>
+      // Set the centeroid components to zero
+<br/>
+      m_root-&gt;m_Triangles[i].centeroid.x = m_root-&gt;m_Triangles[i].centeroid.y = m_root-&gt;m_Triangles[i].centeroid.z = 0.0f;
+<br/>
+<br/>
+      for(unsigned int j = 0; j &lt; 3; j++)
+<br/>
+      {
+<br/>
+         // Get the sum of all three vertex component
+<br/>
+         m_root-&gt;m_Triangles[i].centeroid.x += m_root-&gt;m_Triangles[i].vertices[j].x;
+<br/>
+         m_root-&gt;m_Triangles[i].centeroid.y += m_root-&gt;m_Triangles[i].vertices[j].y;
+<br/>
+         m_root-&gt;m_Triangles[i].centeroid.z += m_root-&gt;m_Triangles[i].vertices[j].z;
+<br/>
+      }
+<br/>
+<br/>
+      // Get the average of the 3 points on triangle
+<br/>
+      m_root-&gt;m_Triangles[i].centeroid.x /= 3;
+<br/>
+      m_root-&gt;m_Triangles[i].centeroid.y /= 3;
+<br/>
+      m_root-&gt;m_Triangles[i].centeroid.z /= 3;
+<br/>
+   }
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Storing the centers for each triangle might seem like a lot, but I'd figure you'd save memory from all the extra triangles you'd get from splitting. Hope this helps.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#117175 - Ant6n - Fri Feb 02, 2007 1:57 am</h4>
+    <div class="postbody"><span class="postbody">Maybe people tell you to split triangles to ensure that one triangle doesnt end up in front of another, i.e. that's why you split when you use bsp's. I guess when using a hardware renderer that can figure out in which order polygons have to be drawn it becomes somewhat of a moot point.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#117176 - sajiimori - Fri Feb 02, 2007 2:06 am</h4>
+    <div class="postbody"><span class="postbody">Balkman, how do you ensure that a collision test will hit polys whose centers are in a neighboring cell?
+<br/>
+<br/>
+Ant6n, you split polys for BSP even when you're only using the tree for collision (which is what I do).  But the resulting tree doesn't even have to contain polys -- just planes.
+<br/>
+<br/>
+BSP collision is great.  It gives you fast swept box collision, faster ray tests versus solid or empty areas, and an even faster function that reports whether a given point is solid or empty... all without testing against a single polygon!
+<br/>
+<br/>
+Poly soup doesn't even make a distinction between "solid" and "empty" areas.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#117191 - Ant6n - Fri Feb 02, 2007 4:21 am</h4>
+    <div class="postbody"><span class="postbody">pretty cool idea, never thought about it. When using convex sectors, one does only need planes, not the polygons - pretty cool. That means the same would also hold for a portal engine (which i believe might be the way to go on gba).
+<br/>
+So for the octree, which doesn't have the nice properties of convexities, in the end it doesnt matter to split up polygons, i.e. one could have only one instance of each worldpolygon, and every sector in which that polygon resides simply has a pointer.
+<br/>
+like that one could reduce polycount (although bsp might reduce it more with a visible set), but one would have to collision check against polygons instead of planes...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#117192 - sajiimori - Fri Feb 02, 2007 5:18 am</h4>
+    <div class="postbody"><span class="postbody">Besides speed, I'd hate to live without the benefits of distinguishing "solid" from "empty".
+<br/>
+<br/>
+It's great for AI navigation.  You can skim a ray under the ground and ask, "When does this ray pass into empty space?"  That information can be used to avoid walking off cliffs.
+<br/>
+<br/>
+For characters that can grab onto ledges, I check two points near their hands, one above the other.  If the bottom point is solid and the top point is empty, there might be a ledge.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#117223 - Rajveer - Fri Feb 02, 2007 2:52 pm</h4>
+    <div class="postbody"><span class="postbody">Cheers for the replies guys. I'd rather not use the centre of polygons, as even though the centre of a polygon may be in one node, it may still occupy some space in another node, and when the player is in the second node it would not test for collision where the polygon occupies it.
+<br/>
+<br/>
+I think I may do both cases, and see which gives more favorable results. Kusma, you said a good polygon clipper would take care of all the cases I drew, could you point me in the direction of a good algorithm to use? Would Sutherland-Hodgman's method using divide and conquer on edges of polygons work well for an octree with 6 planes to test per node?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#117226 - Sunray - Fri Feb 02, 2007 3:27 pm</h4>
+    <div class="postbody"><span class="postbody">BSP trees for collision detection is a good choice. You don't have to split anything unless you need to render the polygons back to front (which you don't in collision detection :).</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#117293 - bsder - Sat Feb 03, 2007 10:58 am</h4>
+    <div class="postbody"><span class="postbody">What you are doing is a subclass of a bunch of algorithms called computational geometry.  I heartily recommend:
+<br/>
+<br/>
+Computational Geometry in C (Second Edition)
+<br/>
+by Joseph O'Rourke 
+<br/>
+<br/>
+Make sure to get the second edition.  It's *much* more complete than the first.
+<br/>
+<br/>
+First, splitting space in 2D--you probably want to look into something called an R-tree.  You don't have to be perfect on your polygons as the space partitioning can overlap (you don't have to split the polygon).  It has good characteristics and doesn't require a lot of special casing.
+<br/>
+<br/>
+<a href="http://en.wikipedia.org/wiki/R-tree" target="_blank">http://en.wikipedia.org/wiki/R-tree</a>
+<br/>
+<br/>
+Be aware that almost all "linear" algorithms I have seen for R-trees are broken.  Use the "quadratic" ones.  If you find that the "quadratic" insert algorithms are taking too long, you probably need to prepack the tree (which can be done in n log n).
+<br/>
+<br/>
+Second, polygon intersection algorithms are ... annoying.  The class of algorithms to to polygon clipping and intersection are called line sweep algorithms.  Here is a page that has a bunch of polygon operation libraries:
+<br/>
+<br/>
+<a href="http://www.complex-a5.ru/polyboolean/comp.html" target="_blank">http://www.complex-a5.ru/polyboolean/comp.html</a>
+<br/>
+<br/>
+Hope this helps.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#117408 - kusma - Sun Feb 04, 2007 6:45 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Rajveer wrote:</b></span></td> </tr> <tr> <td class="quote">Kusma, you said a good polygon clipper would take care of all the cases I drew, could you point me in the direction of a good algorithm to use? Would Sutherland-Hodgman's method using divide and conquer on edges of polygons work well for an octree with 6 planes to test per node?</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Yep</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#117559 - sajiimori - Mon Feb 05, 2007 7:13 pm</h4>
+    <div class="postbody"><span class="postbody">Sunray, you do have to split polys as usual even just for collision -- it's just that for autopartitioning schemes, you don't have to store the resulting polys in the tree.
+<br/>
+<br/>
+But if you want to collide versus anything other than rays and axis-aligned boxes (which I do in my current game), it becomes important to store the vertices in the tree.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#117561 - Sunray - Mon Feb 05, 2007 7:32 pm</h4>
+    <div class="postbody"><span class="postbody">You don't have to split polygons. What difference would it make if you perform collision detection against a clipped and a non-clipped polygon? When you're building the BSP tree and a polygon overlaps the clipping plane, simply put a pointer to that polygon in both the back and front node.
+<br/>
+<br/>
+Try my demo to see it working (press F2 to fly around): <a href="http://sunray.cplusplus.se/?p=proj&amp;pid=11" target="_blank">http://sunray.cplusplus.se/?p=proj&amp;pid=11</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#117562 - sajiimori - Mon Feb 05, 2007 8:00 pm</h4>
+    <div class="postbody"><span class="postbody">Okay, you must be talking about a different kind of BSP tree.  =)
+<br/>
+<br/>
+Am I correct in assuming that you test versus polygons in-game, and the purpose of the BSP tree is to reduce the number of tests, and you don't distinguish between solid and empty areas?
+<br/>
+<br/>
+My data structure does not contain polygons -- only planes (and recently verts to do SATs vs rotated boxes).  The planes that the polygons lie on are used as the splitting planes.  This is called "autopartitioning", and the result is a tree whose leaves are either solid or empty convex volumes.  After you determine that an object is behind all the planes of a solid leaf, it is considered to be colliding with that leaf.
+<br/>
+<br/>
+While building a BSP tree using autopartitioning, you choose a plane and then split all the polys that cross that plane.  If you don't, you get a bad tree.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#117564 - Sunray - Mon Feb 05, 2007 8:12 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Am I correct in assuming that you test versus polygons in-game, and the purpose of the BSP tree is to reduce the number of tests, and you don't distinguish between solid and empty areas? </td> </tr></table><span class="postbody">
+<br/>
+Correct.
+<br/>
+<br/>
+So, you store a convex set in each leaf (like quake). But I don't think thats the most efficient method for only collision detection. Never mind.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#117569 - sajiimori - Mon Feb 05, 2007 8:56 pm</h4>
+    <div class="postbody"><span class="postbody">It may not be the fastest, but it's much faster than testing versus polys.  =)
+<br/>
+<br/>
+The first version of my BSP tree format didn't store anything in solid leaves.  If all you want to do is test for collisions, there is no leaf data.  All the data I store now is for "extra" features: in particular, surface tags (like "wood" or "metal") and support for collision versus rotated boxes.
+<br/>
+<br/>
+Edit: To clarify, for tests against points, rays, and swept or stationary axis-aligned boxes, no additional work is needed upon arriving at a solid leaf.  For rotated boxes, extra SATs are needed along the box axes.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

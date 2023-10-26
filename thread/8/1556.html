@@ -1,0 +1,241 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>fast Abs() in ASM - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>ASM > fast Abs() in ASM</h2>
+<div id="posts">
+<div class="post">
+    <h4>#7928 - Lupin - Sat Jun 28, 2003 7:37 pm</h4>
+    <div class="postbody"><span class="postbody">At the moment I was just using an simple cmp instruction and used rsblt to negate the value, but I figured out that an OR/ADD-Operation would also do what I want, this would get the absolute value of an s32 I think 
+<br/>
+<br/>
+(NUM | 0x80000000) + 0x7FFFFFFF 
+<br/>
+<br/>
+Wich way would you use/would take less cycles?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7935 - DekuTree64 - Sat Jun 28, 2003 10:31 pm</h4>
+    <div class="postbody"><span class="postbody">I'd use the cmp/rsblt. cmp and rsb take one cycle each, so you can't really beat that, and 0x7fffffff can't be created from an 8-bit value+shift, so you'd have to use a mvn r, #0x8000000, which would make it a total of 3 cycles.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7954 - Lupin - Sun Jun 29, 2003 12:45 pm</h4>
+    <div class="postbody"><span class="postbody">thanks! Hm, I figured out that the methode above would still need an cmp instruction though :)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#8027 - beelzebub - Mon Jun 30, 2003 11:39 pm</h4>
+    <div class="postbody"><span class="postbody">another way of doing abs() without an cmp/branch is as follows...
+<br/>
+<br/>
+r1 = r0 &gt;&gt; 31
+<br/>
+r0 ^= r1
+<br/>
+r0 -= r1</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#8071 - Lupin - Tue Jul 01, 2003 4:15 pm</h4>
+    <div class="postbody"><span class="postbody">but this seems to be slow as hell :(</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#8075 - DekuTree64 - Tue Jul 01, 2003 5:31 pm</h4>
+    <div class="postbody"><span class="postbody">Actually it should be the same speed. Just use
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+eor r1, r0, r0, ASR #31
+<br/>
+sub r0, r1, r0, ASR #31
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+I don't think it's possible to do in one instruction, so take your pick^^ Beelzebub's may be faster in THUMB though. 
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+asr r1, r0, #31
+<br/>
+eor r0, r1
+<br/>
+sub r0, r1
+<br/>
+bx lr
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+as opposed to
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+cmp r0, #0
+<br/>
+bgt positive
+<br/>
+neg r0, r0
+<br/>
+positive:
+<br/>
+bx lr
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+which is also 3 instructions, but that branch will take a little extra time if the number was already positive</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#8485 - Archeious - Fri Jul 11, 2003 9:47 pm</h4>
+    <div class="postbody"><span class="postbody">Couldn't you just or off the signed bit.  
+<br/>
+<br/>
+Value = Value and 0x80000000
+<br/>
+<br/>
+or am I missingin something big here.
+<br/>
+<br/>
+Archeious</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#8487 - tepples - Fri Jul 11, 2003 10:44 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Archeious wrote:</b></span></td> </tr> <tr> <td class="quote">Couldn't you just or off the signed bit.  
+<br/>
+<br/>
+Value = Value and 0x80000000</td> </tr></table><span class="postbody">
+<br/>
+No.
+<br/>
+<br/>
+You probably think that the system works like this: 0x00000000 = 0, 0x00000001 = 1, 0x00000040 = 64, 0x80000001 = -1, 0x80000040 = -64, etc. That's the "sign bit" representation, which no modern architecture uses for integers.
+<br/>
+<br/>
+The most common representation of integers is <a class="postlink" href="http://www.duke.edu/~twf/cps104/twoscomp.html" target="_blank">two's complement</a>. A negative number is represented as 0x1 0000 0000 minus the number. Thus, 0xffffffff = -1, and 0xffffffc0 = -64.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#8494 - Archeious - Sat Jul 12, 2003 12:57 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Archeious wrote:</b></span></td> </tr> <tr> <td class="quote">Couldn't you just or off the signed bit.  
+<br/>
+<br/>
+Value = Value and 0x80000000</td> </tr></table><span class="postbody">
+<br/>
+No.
+<br/>
+<br/>
+You probably think that the system works like this: 0x00000000 = 0, 0x00000001 = 1, 0x00000040 = 64, 0x80000001 = -1, 0x80000040 = -64, etc. That's the "sign bit" representation, which no modern architecture uses for integers.
+<br/>
+<br/>
+The most common representation of integers is <a class="postlink" href="http://www.duke.edu/~twf/cps104/twoscomp.html" target="_blank">two's complement</a>. A negative number is represented as 0x1 0000 0000 minus the number. Thus, 0xffffffff = -1, and 0xffffffc0 = -64.</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I guess thats what happens when you never get under the hood.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#8749 - Maddox - Sat Jul 19, 2003 2:15 am</h4>
+    <div class="postbody"><span class="postbody">It is.<br/>_________________<br/>You probably suck.  I hope you're is not a game programmer.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#8752 - sgstair - Sat Jul 19, 2003 3:39 am</h4>
+    <div class="postbody"><span class="postbody">Here's another way to do an abs in ARM, which has the virtue of not using an exta register.  
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+mov   r0,r0
+<br/>
+rsbmi r0,r0,#0
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+for THUMB the code earlier quoted is probably the best way:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+asr r1, r0, #31 
+<br/>
+eor r0, r1 
+<br/>
+sub r0, r1 
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+The ARM implementation will take 2 cycles to execute from iwram regardless of the value of r0, the thumb version will take 3 cycles from iwram.
+<br/>
+<br/>
+Assuming however, that we are running from the cartrige with 3 nonsequential wait states and 1 sequential, it will take 8 cycles for the ARM version, and 6 cycles for the thumb version (if the cart is set to default waitstate of 4-2, it will be 12 for arm and 9 for thumb)
+<br/>
+<br/>
+-Stephen</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#8760 - Dev - Sat Jul 19, 2003 6:03 am</h4>
+    <div class="postbody"><span class="postbody">A few corrections to the ARM side of things:
+<br/>
+<br/>
+You need to use MOVS, not MOV, otherwise the status bits won't be set, and the RSBMI won't execute properly.
+<br/>
+<br/>
+Obviously, if the status bits were set by a previous instruction that operated on R0, you don't even need the MOVS.
+<br/>
+<br/>
+Also, it'll be 10 cycles from ROM at 3/1 (8 cycles for THUMB), but could be lower if prefetched.
+<br/>
+<br/>
+Dev.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#8770 - sgstair - Sat Jul 19, 2003 1:46 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Dev wrote:</b></span></td> </tr> <tr> <td class="quote">A few corrections to the ARM side of things:
+<br/>
+<br/>
+You need to use MOVS, not MOV, otherwise the status bits won't be set, and the RSBMI won't execute properly.
+<br/>
+<br/>
+Obviously, if the status bits were set by a previous instruction that operated on R0, you don't even need the MOVS.
+<br/>
+<br/>
+Also, it'll be 10 cycles from ROM at 3/1 (8 cycles for THUMB), but could be lower if prefetched.
+<br/>
+<br/>
+Dev.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+yeah, sorry :)
+<br/>
+<br/>
+-Stephen</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#8776 - Lupin - Sat Jul 19, 2003 4:09 pm</h4>
+    <div class="postbody"><span class="postbody">wouldn't an cmp or tst 0x8000 be faster then movs r0, r0?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#8780 - sgstair - Sat Jul 19, 2003 6:05 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Lupin wrote:</b></span></td> </tr> <tr> <td class="quote">wouldn't an cmp or tst 0x8000 be faster then movs r0, r0?</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+How so? they both take 1S cycles
+<br/>
+<br/>
+-Stephen</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

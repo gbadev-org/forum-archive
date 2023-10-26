@@ -1,0 +1,242 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Affine transformation paremeters 0-7 valid, but I NEED 0-31 - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Affine transformation paremeters 0-7 valid, but I NEED 0-31</h2>
+<div id="posts">
+<div class="post">
+    <h4>#169500 - LOst? - Sat Jul 18, 2009 11:47 am</h4>
+    <div class="postbody"><span class="postbody">Okay, I have a quick sprite system that allows 32 scaled sprites (0-31). 
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+SpriteEntry            OamEntry [128] VAR_IN_EXRAM;
+<br/>
+SpriteRotation*         pOamRotation   = (SpriteRotation*) OamEntry;
+<br/>
+<br/>
+<br/>
+void ClearOAM ()
+<br/>
+{
+<br/>
+...
+<br/>
+uRotPos = 0;
+<br/>
+}
+<br/>
+<br/>
+void AddOAMScaled (...)
+<br/>
+{
+<br/>
+if (uRotPos &gt;= 32)
+<br/>
+ return;
+<br/>
+<br/>
+...
+<br/>
+         // Set X offset, affine transformation index, sprite size
+<br/>
+         OamEntry [uOamPos].attribute [1] = ((x &amp; 0x1FF) | 
+<br/>
+                                    ((uRotPos &amp; 0x1F) &lt;&lt; 9) | 
+<br/>
+                                    ((size &amp; 0x3) &lt;&lt; 14));
+<br/>
+<br/>
+...
+<br/>
+<br/>
+         // Scale the sprite using one of the 32 affine transformation parameters
+<br/>
+         pOamRotation [uRotPos].hdx      = (signed short) ((signed int) 0x10000 / (signed int) shScaleWidth);
+<br/>
+         pOamRotation [uRotPos].hdy      = 0;
+<br/>
+         pOamRotation [uRotPos].vdx      = 0;
+<br/>
+         pOamRotation [uRotPos].vdy      = (signed short) ((signed int) 0x10000 / (signed int) shScaleHeight);
+<br/>
+<br/>
+uRotPos++;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+So once uRotPos &gt;= 8, the sprite is just one color (all scaled to a wierd value). Because there is no DS emulator with accurate debugging information, I am stuck! Help plz ;) 
+<br/>
+<br/>
+Is there anything I have missed?<br/>_________________<br/><span style="font-style: italic">Exceptions are fun</span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#169505 - eKid - Sun Jul 19, 2009 7:36 am</h4>
+    <div class="postbody"><span class="postbody">Are you copying the entire OamEntry array into the OAM? (and not something like half or just how many you put data into?)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#169511 - LOst? - Sun Jul 19, 2009 9:30 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>eKid wrote:</b></span></td> </tr> <tr> <td class="quote">Are you copying the entire OamEntry array into the OAM? (and not something like half or just how many you put data into?)</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Holy!
+<br/>
+<br/>
+I just fixed a bug earlier today where only 32 sprites made it instead of 128. So I guess this fixed itself!
+<br/>
+<br/>
+Changed:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+      DC_FlushRange (OamEntry, 256);
+<br/>
+      dmaCopyHalfWords (3, OamEntry, OAM, 256);
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Into this:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+      DC_FlushRange (OamEntry, 1024);
+<br/>
+      dmaCopyHalfWords (3, OamEntry, OAM, 1024);
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+<br/>
+<br/>
+Okay, into another problem of mine then:
+<br/>
+Sprite extended palettes are supposed to have 2 slots. I can only write to 1 slot. This code updates slot 0:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+void UploadOBJExtPal0 (const unsigned short* pcwPalette, unsigned int uNumPaletteEntries, 
+<br/>
+                  unsigned short wPalettePage, unsigned short wPaletteIndex)
+<br/>
+{
+<br/>
+   // Prepare VRAM extended palette bank for writing
+<br/>
+   VRAM_G_CR = VRAM_ENABLE | VRAM_G_LCD;
+<br/>
+<br/>
+   // DMA copy prio 3
+<br/>
+   dmaCopyHalfWords (3, pcwPalette, ((VRAM_G + (wPalettePage &lt;&lt; 8)) + wPaletteIndex), uNumPaletteEntries &lt;&lt; 1);
+<br/>
+<br/>
+   // Set to extended palette mode (Bank G holds OBJExtPal 0 and 1)
+<br/>
+   VRAM_G_CR = VRAM_ENABLE | VRAM_G_SPRITE_EXT_PALETTE;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+... and it works. 
+<br/>
+<br/>
+Now, this code should update slot 1 (note the only change is that I add 16 to the 256 palette page since the G bank should be 16 kb (as well as the I bank for use with the sub screen's extended sprite palettes) but it doesn't:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+void UploadOBJExtPal1 (const unsigned short* pcwPalette, unsigned int uNumPaletteEntries, 
+<br/>
+                  unsigned short wPalettePage, unsigned short wPaletteIndex)
+<br/>
+{
+<br/>
+   // Prepare VRAM extended palette bank for writing
+<br/>
+   VRAM_G_CR = VRAM_ENABLE | VRAM_G_LCD;
+<br/>
+<br/>
+   // DMA copy prio 3
+<br/>
+   dmaCopyHalfWords (3, pcwPalette, ((VRAM_G + ((16 + wPalettePage) &lt;&lt; 8)) + wPaletteIndex), uNumPaletteEntries &lt;&lt; 1);
+<br/>
+<br/>
+   // Set to extended palette mode (Bank G holds OBJExtPal 0 and 1)
+<br/>
+   VRAM_G_CR = VRAM_ENABLE | VRAM_G_SPRITE_EXT_PALETTE;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Anything wrong?<br/>_________________<br/><span style="font-style: italic">Exceptions are fun</span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#169512 - eKid - Sun Jul 19, 2009 10:06 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>LOst? wrote:</b></span></td> </tr> <tr> <td class="quote">Sprite extended palettes are supposed to have 2 slots.</td> </tr></table><span class="postbody">
+<br/>
+Are you sure? :/</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#169517 - DiscoStew - Mon Jul 20, 2009 12:36 am</h4>
+    <div class="postbody"><span class="postbody">Taken from GBATEK
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">VRAM   SIZE  MST  OFS   2D Graphics Engine A, OBJ Extended Palette
+<br/>
+F,G     16K   5    -     Slot 0  ;16K each (only lower 8K used)</td> </tr></table><span class="postbody"><br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#169523 - LOst? - Mon Jul 20, 2009 11:31 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>eKid wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>LOst? wrote:</b></span></td> </tr> <tr> <td class="quote">Sprite extended palettes are supposed to have 2 slots.</td> </tr></table><span class="postbody">
+<br/>
+Are you sure? :/</span></td> </tr></table><span class="postbody">
+<br/>
+I am not sure. But the emulator desmume has "Main spr ExtPal 0", "Main spr ExtPal 1", "Sub spr ExtPal 0", and "Sub spr ExtPal 1" available in its Tools-&gt;Wide palettes (PAL VIEW) dialog box. And I can't write to ExtPal 1 for those. 
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>DiscoStew wrote:</b></span></td> </tr> <tr> <td class="quote">Taken from GBATEK
+<br/>
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">VRAM   SIZE  MST  OFS   2D Graphics Engine A, OBJ Extended Palette
+<br/>
+F,G     16K   5    -     Slot 0  ;16K each (only lower 8K used)</td> </tr></table><span class="postbody"></span></td> </tr></table><span class="postbody">
+<br/>
+I have the only working configiration I think when it comes to using 2D BG and OBJ extended palettes on both screens. 
+<br/>
+<br/>
+Also, I know of no way to actually use slot 1 of object extended palettes anyway. So this is only a way for me to be able to write to all palettes that desmume says exist.<br/>_________________<br/><span style="font-style: italic">Exceptions are fun</span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#169796 - sverx - Tue Aug 04, 2009 10:23 am</h4>
+    <div class="postbody"><span class="postbody">I think there's no such Sprite Extended Paletto Slot 1. In fact, how would you tell to the sprite(s) to use Slot 1 palettes instead of Slot 0?
+<br/>
+<br/>
+And </span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>GBATek wrote:</b></span></td> </tr> <tr> <td class="quote">(only lower 8K used)</td> </tr></table><span class="postbody"> means exactly that too, the second half won't be ever used.
+<br/>
+<br/>
+:)</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

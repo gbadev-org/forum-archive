@@ -1,0 +1,338 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Image compression - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > Image compression</h2>
+<div id="posts">
+<div class="post">
+    <h4>#172314 - Kensai - Sat Jan 30, 2010 11:05 am</h4>
+    <div class="postbody"><span class="postbody">I'm using mode 4 and all my images consist of only 16 colors (= 4 bits). In order to save EWRAM, I've written a program which "compresses" the image data: Even pixels are stored in the upper 4 bits and odd pixels are stored in the lower 4 bits of a byte.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+bits 7 6 5 4 3 2 1 0
+<br/>
+     0 1 0 1 0 0 0 1 =&gt; left pixel color palett address = 0x5, 
+<br/>
+     \     / \     /    right pixel color palett address = 0x1
+<br/>
+      left    right
+<br/>
+      pixel   pixel
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+But there is a tradeoff: If I want to copy the pixels from EWRAM to VRAM, the image has to be "decompressed" using bit swifting operations. Another option would be to store all my images in ROM but without the compression. Which variant is the faster one?
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+void drawImage (u8 x, u8 y, const u8* image, u16 width, u16 height, Bool hFlip, u8 transparentColor)
+<br/>
+{
+<br/>
+   width /= 2;
+<br/>
+   x     /= 2;
+<br/>
+   
+<br/>
+   u8 w, h;
+<br/>
+   u8 leftColor, rightColor;
+<br/>
+   if (hFlip == FALSE)
+<br/>
+      {
+<br/>
+      if (transparentColor == NO_TRANSPARENCY)
+<br/>
+      {
+<br/>
+         for (h=0; h&lt;height; h++)
+<br/>
+            for (w=0; w&lt;width; w++)
+<br/>
+            {
+<br/>
+               leftColor  = image[w+h*width] &amp; 0x0F;
+<br/>
+               rightColor = image[w+h*width] / 0x10;
+<br/>
+               videoBuffer[(x+w)+120*(y+h)] = rightColor | 0x100*leftColor;
+<br/>
+            }
+<br/>
+      }
+<br/>
+      else
+<br/>
+      {
+<br/>
+         for (h=0; h&lt;height; h++)
+<br/>
+            for (w=0; w&lt;width; w++)
+<br/>
+            {
+<br/>
+               leftColor = image[w+h*width] &amp; 0x0F;
+<br/>
+               if (leftColor == transparentColor)
+<br/>
+                  leftColor  = (0xF00 &amp; videoBuffer[(x+w)+120*(y+h)]) &gt;&gt; 8;
+<br/>
+<br/>
+               rightColor = image[w+h*width] / 0x10;
+<br/>
+               if (rightColor == transparentColor)
+<br/>
+                  rightColor = videoBuffer[(x+w)+120*(y+h)] &amp; 0x000F;
+<br/>
+                  
+<br/>
+               videoBuffer[(x+w)+120*(y+h)] = rightColor | 0x100*leftColor;
+<br/>
+            }
+<br/>
+      }
+<br/>
+   }
+<br/>
+   else
+<br/>
+   {
+<br/>
+      if (transparentColor == NO_TRANSPARENCY)
+<br/>
+      {
+<br/>
+         for (h=0; h&lt;height; h++)
+<br/>
+            for (w=0; w&lt;width; w++)
+<br/>
+            {
+<br/>
+               leftColor  = image[w+h*width] / 0x10;
+<br/>
+               rightColor = image[w+h*width] &amp; 0x0F;
+<br/>
+               videoBuffer[(x+(width-1-w))+120*(y+h)] = rightColor | 0x100*leftColor;
+<br/>
+            }
+<br/>
+      } 
+<br/>
+      else
+<br/>
+      {
+<br/>
+         for (h=0; h&lt;height; h++)
+<br/>
+            for (w=0; w&lt;width; w++)
+<br/>
+            {
+<br/>
+               leftColor = image[w+h*width] / 0x10;
+<br/>
+               if (leftColor == transparentColor)
+<br/>
+                  leftColor  = (0xF00 &amp; videoBuffer[(x+(width-1-w))+120*(y+h)]) &gt;&gt; 8;
+<br/>
+<br/>
+               rightColor = image[w+h*width] &amp; 0x0F;
+<br/>
+               if (rightColor == transparentColor)
+<br/>
+                  rightColor = videoBuffer[(x+(width-1-w))+120*(y+h)] &amp; 0x000F;
+<br/>
+                  
+<br/>
+               videoBuffer[(x+(width-1-w))+120*(y+h)] = rightColor | 0x100*leftColor;
+<br/>
+            }
+<br/>
+      }
+<br/>
+   }
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#172316 - FluBBa - Sat Jan 30, 2010 12:16 pm</h4>
+    <div class="postbody"><span class="postbody">I would suggest 16 color using sprites/tiles if it's not really necessary to use a bitmap mode...
+<br/>
+Other than that, use ints for variables where you don't absolutely need char or short.<br/>_________________<br/>I probably suck, my not is a programmer.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#172317 - Kensai - Sat Jan 30, 2010 1:45 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">I would suggest 16 color using sprites/tiles if it's not really necessary to use a bitmap mode...</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I would use one of the tile modes if I could, but the concept of my game doesn't allow me to do so.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Other than that, use ints for variables where you don't absolutely need char or short.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Well... maybe I should really store all my images in ROM and use one int per pixel. :|</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#172323 - Cearn - Sat Jan 30, 2010 8:57 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Kensai wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Flubba wrote:</b></span></td> </tr> <tr> <td class="quote">Other than that, use ints for variables where you don't absolutely need char or short.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+... use one int per pixel. :|</span></td> </tr></table><span class="postbody">
+<br/>
+What Flubba was referring to here is to use ints for local variables and function parameters, not for the images themselves. 
+<br/>
+<br/>
+Simply put, there are two kinds of variables: <span style="font-weight: bold">storage</span> variables and <span style="font-weight: bold">worker</span> variables. Storage variables are the things that take up space: globals, arrays, code, structs and such. These take up memory, and smaller will usually be faster. Workers are the things that the CPU actually does its operations on: local variables, including function parameters and temporaries. These do <span style="font-style: italic">not</span> take up memory, but are kept in the CPU's registers. The CPU tends to work faster when the worker vars are the same size as the registers, and this usually correlates to the 'int' datatype. In this case, smaller is usually slightly slower.
+<br/>
+<br/>
+For example, pretty much all local variables and parameters are non-int-sized in your code. In extreme cases, I have seen this half the speed of an algorithm. That's probably not the case here, but it'd still be better to use 'int' or 'u32' for the locals. 
+<br/>
+<br/>
+Another thing that can help is to use local pointers that point as directly as possible to the memory you're working on. For example, instead of `videoBuffer[(x+w)+120*(y+h)]', create a local pointer to videoBuffer[x+120*y] outside the loop and index through memory using that pointer instead. This cuts down on the size of the statements inside the loop and can, on occasion, speed up the code by quite a bit.
+<br/>
+<br/>
+The fastest method would be the one where you can copy the whole thing without any pixel manipulation at all (i.e., non-compressed). But since transparency requires you to consider pixels individually anyway, the extra compression won't make that big of a difference. It may even be faster because you only need to retrieve half the memory.
+<br/>
+<br/>
+Oh, also: the <span style="font-style: italic">left</span> pixel in a VRAM halfword is actually the lower byte, not the upper.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#172339 - Miked0801 - Mon Feb 01, 2010 7:31 pm</h4>
+    <div class="postbody"><span class="postbody">Perhaps consider a different compression scheme?  If your data is only at most 4 bits, a huffman compressor will get you better compression and decompression speed than what you have now.  Or even RLE or LZ.  I'm hesitant to optimize your decompressor when I'm pretty sure your choice of algorithm is a much bigger bottleneck than the code itself.
+<br/>
+<br/>
+Aye!  You are doing manual transparent color merging?  That will be so slow!  Sprites do this kind of thing for you in hardware.  Failing that, using Mode 0 and doing the conversion math from pixel to 4-bit char space will be much better than this.  You are not effectively using the GBA (DS?) hardware given to you.  With any of the char modes, you'd be in much better shape.
+<br/>
+<br/>
+But, if forced to use Mode 4, think large Look Up Table for speed.  Perhaps reading the data 16-bits at a time if alignment allows:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+u8 LUT[256][256];
+<br/>
+<br/>
+for (h=0; h&lt;height; h++) 
+<br/>
+    for (w=0; w&lt;width/2; w++) 
+<br/>
+    {
+<br/>
+        int pixleColor = image[w+h*width];
+<br/>
+        *videoPtr = LUT[pixleColor];
+<br/>
+    }
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+The reading of tranparent data is still your bane though.
+<br/>
+<br/>
+This will roughly triple the speed of writes without tranparency and the same idea could be applied to tranparency as well with work.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#172347 - kusma - Tue Feb 02, 2010 11:29 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Kensai wrote:</b></span></td> </tr> <tr> <td class="quote">I'm using mode 4 and all my images consist of only 16 colors (= 4 bits). In order to save EWRAM, I've written a program which "compresses" the image data: Even pixels are stored in the upper 4 bits and odd pixels are stored in the lower 4 bits of a byte.
+<br/>
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+bits 7 6 5 4 3 2 1 0
+<br/>
+     0 1 0 1 0 0 0 1 =&gt; left pixel color palett address = 0x5, 
+<br/>
+     \     / \     /    right pixel color palett address = 0x1
+<br/>
+      left    right
+<br/>
+      pixel   pixel
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+But there is a tradeoff: If I want to copy the pixels from EWRAM to VRAM, the image has to be "decompressed" using bit swifting operations. Another option would be to store all my images in ROM but without the compression. Which variant is the faster one?
+<br/>
+</span></td> </tr></table><span class="postbody">
+<br/>
+It might be even faster (or perhaps "fast enough") and smaller just to use the BIOS' LZW routines on the native data.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+for (h=0; h&lt;height; h++)
+<br/>
+   for (w=0; w&lt;width; w++)
+<br/>
+   {
+<br/>
+      leftColor  = image[w+h*width] &amp; 0x0F;
+<br/>
+      rightColor = image[w+h*width] / 0x10;
+<br/>
+      videoBuffer[(x+w)+120*(y+h)] = rightColor | 0x100*leftColor;
+<br/>
+   }
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody"></span></td> </tr></table><span class="postbody">
+<br/>
+This here can be done quite a bit faster. First, since all pixels in an x-span is stored linearly both in the source and destination, you can move all multiplies out of the inner loop. Something like this:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+for (h=0; h&lt;height; h++)
+<br/>
+   u8 *dst = videoBuffer + x + 120 * (y + h);
+<br/>
+   for (w=0; w&lt;width; w++)
+<br/>
+   {
+<br/>
+      int tmp = *image++;
+<br/>
+      *dst++ = (tmp &amp; 0x0F) | ((tmp &amp; 0xF0) &lt;&lt; 4);
+<br/>
+   }
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I swapped the high and low nibble here, because it became slightly faster (the low nibble stays in the same place). You can do further such optimizations if you unroll the inner loop one time, and think about the problem a bit. Unrolling should gain you a lot here as well anyway.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#172353 - Kensai - Tue Feb 02, 2010 4:03 pm</h4>
+    <div class="postbody"><span class="postbody">Thank you so much for your advice! I will use a 16x16 color LUT for images without transparency and an optimized version of my algorithm for images with transparency. Additionally I will minimize the usage of the last-mentioned algorithm by splitting up all images that contain transparency into smaller images with and without transparency.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

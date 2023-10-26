@@ -1,0 +1,613 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Read-modify-write: who can do better? - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Read-modify-write: who can do better?</h2>
+<div id="posts">
+<div class="post">
+    <h4>#134125 - simonjhall - Tue Jul 10, 2007 8:04 pm</h4>
+    <div class="postbody"><span class="postbody">I have a dumb function which allows 8-bit writes to the gba slot by reading in a short, masking out the bits I don't want, then orring in the new bits of the value, like so:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">//write byte 'value' to address 'ptr'
+<br/>
+void byte_write(void *ptr, unsigned char value)
+<br/>
+{
+<br/>
+   unsigned int aligned_addr = ((unsigned int)ptr) &amp; 0xfffffffe;
+<br/>
+   unsigned short existing = *(unsigned short *)aligned_addr;
+<br/>
+   
+<br/>
+   unsigned short result;
+<br/>
+   
+<br/>
+   unsigned short is_lower = (unsigned int)ptr &amp; 0x1;
+<br/>
+   unsigned short value_shift = is_lower &lt;&lt; 3;
+<br/>
+   
+<br/>
+   unsigned short shifted_value = value &lt;&lt; value_shift;
+<br/>
+   unsigned short existing_masked = existing &amp; (0xff00 &gt;&gt; value_shift);
+<br/>
+   
+<br/>
+   result = shifted_value | existing_masked;
+<br/>
+   
+<br/>
+   *(unsigned short *)aligned_addr = result;
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+The compiler does a good job of this, and assembles this:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">02043ad8 &lt;_Z10byte_writePvh&gt;:
+<br/>
+ 2043ad8:       e2002001        and     r2, r0, #1      ; 0x1
+<br/>
+ 2043adc:       e3c00001        bic     r0, r0, #1      ; 0x1
+<br/>
+ 2043ae0:       e1d030b0        ldrh    r3, [r0]
+<br/>
+ 2043ae4:       e1a02982        mov     r2, r2, lsl #19
+<br/>
+ 2043ae8:       e1a02822        mov     r2, r2, lsr #16
+<br/>
+ 2043aec:       e3a0ccff        mov     ip, #65280      ; 0xff00
+<br/>
+ 2043af0:       e003325c        and     r3, r3, ip, asr r2
+<br/>
+ 2043af4:       e1833211        orr     r3, r3, r1, lsl r2
+<br/>
+ 2043af8:       e1c030b0        strh    r3, [r0]
+<br/>
+ 2043afc:       e12fff1e        bx      lr</td> </tr></table><span class="postbody">
+<br/>
+However I reckon this can be done better. For instance, my C code makes sure that the load (and store) is aligned by taking the destination address and chopping off the bottom bit. But (I'm sure) ldrh won't care about that bottom bit anyway, so I may as well leave it in (and hence remove the and and bic).
+<br/>
+What else can I drop to make this as short as pos?
+<br/>
+<br/>
+Oh and I preferably want to use as few possible registers as possible.
+<br/>
+<br/>
+And finally, there are several names for strb - there are the conditional versions, are there any more?
+<br/>
+<br/>
+Ta :-D<br/>_________________<br/><span style="font-weight: bold"><a class="postlink" href="https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&amp;business=simonjhall%40gmail%2ecom&amp;no_shipping=2&amp;no_note=1&amp;tax=0&amp;currency_code=GBP&amp;lc=GB&amp;bn=PP%2dDonationsBF&amp;charset=UTF%2d8" target="_blank">Big thanks to everyone who donated for Quake2</a></span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#134127 - Dwedit - Tue Jul 10, 2007 8:48 pm</h4>
+    <div class="postbody"><span class="postbody">I made a couple of these (8 instructions)
+<br/>
+This one assumes you don't care about writing or reading from an unaligned address, and want to preserve r0 and r1:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+   @r0 = address
+<br/>
+   @r1 = value
+<br/>
+   tst r0,#1
+<br/>
+   ldrh r2,[r0]
+<br/>
+   biceq r2,r2,#0x00FF
+<br/>
+   bicne r2,r2,#0xFF00
+<br/>
+   orreq r2,r2,r1
+<br/>
+   orrne r2,r2,r1,lsl#8
+<br/>
+   strh r2,[r0]
+<br/>
+   bx lr
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Then another one if you don't care about destroying the address, and want to avoid unaligned memory access:  (still 8 instructions)  You can easily sacrifice an additional register if you want to preserve r0.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+   @r0 = address
+<br/>
+   @r1 = value
+<br/>
+   ands r2,r0,#1
+<br/>
+   ldrh r2,[r0,-r2]!
+<br/>
+   biceq r2,r2,#0x00FF
+<br/>
+   bicne r2,r2,#0xFF00
+<br/>
+   orreq r2,r2,r1
+<br/>
+   orrne r2,r2,r1,lsl#8
+<br/>
+   strh r2,[r0]
+<br/>
+   bx lr
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Edit:
+<br/>
+This C code produced results somewhat similar to the first example at the top:
+<br/>
+C code:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+void byte_write(u8* mem, u8 value)
+<br/>
+{
+<br/>
+   u32 address=(u32)mem;
+<br/>
+   int condition = (address&amp;1);
+<br/>
+   u16 readvalue = *(u16*)mem;
+<br/>
+   if (condition) readvalue&amp;=0xFF00;
+<br/>
+   else readvalue &amp;=0x00FF;
+<br/>
+   if (condition) readvalue|=(value&lt;&lt;8);
+<br/>
+   else readvalue|=value;
+<br/>
+   *(u16*)mem=readvalue;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Produced this:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+byte_write:
+<br/>
+   ldrh   r2, [r0, #0]
+<br/>
+   tst   r0, #1
+<br/>
+   and   r3, r2, #65280
+<br/>
+   and   r2, r2, #255
+<br/>
+   orr   r3, r3, r1, asl #8
+<br/>
+   orreq   r3, r2, r1
+<br/>
+   strh   r3, [r0, #0]
+<br/>
+   bx   lr
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I couldn't get the compiler to produce anything resembling the second code though.  It must not like to subtract 1 with a LDRH []! instruction<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#134130 - masscat - Tue Jul 10, 2007 9:03 pm</h4>
+    <div class="postbody"><span class="postbody">LDRH may or may not care about the least significant bit.
+<br/>
+Quoting the ARM Architecture Reference Manual:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">If the address is not halfword-aligned, the result is UNPREDICTABLE.</td> </tr></table><span class="postbody">
+<br/>
+Same for STRH.
+<br/>
+The behaviour maybe consistent for the DS ARMs though.
+<br/>
+<br/>
+You can get the ARM Arichitecture Reference Manual by googling for "arm ddi 0100e".</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#134136 - simonjhall - Tue Jul 10, 2007 10:42 pm</h4>
+    <div class="postbody"><span class="postbody">Kewl, ta dwedit. I reckon I'll be taking the second bit of code from you (the one using the conditional execution). Btw, have you tested these code fragments, so can I be sure that they work? ;-)
+<br/>
+<br/>
+And thanks masscat - I think I'll make sure the bottom bit is cleared, just in case it happens to run on a DS which cares about that bit!
+<br/>
+<br/>
+Watch this space...<br/>_________________<br/><span style="font-weight: bold"><a class="postlink" href="https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&amp;business=simonjhall%40gmail%2ecom&amp;no_shipping=2&amp;no_note=1&amp;tax=0&amp;currency_code=GBP&amp;lc=GB&amp;bn=PP%2dDonationsBF&amp;charset=UTF%2d8" target="_blank">Big thanks to everyone who donated for Quake2</a></span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#134149 - Cearn - Wed Jul 11, 2007 1:01 am</h4>
+    <div class="postbody"><span class="postbody">Here's one for 7 instructions, without masking. 
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">@ void byte_write(void *ptr, u8 value)
+<br/>
+byte_write:
+<br/>
+    eor     r2, r0, #1
+<br/>
+    ldrb    r3, [r2]            @ Read the *other* byte
+<br/>
+    ands    r2, r0, #1          @ Test and prep for alignment
+<br/>
+    orreq   r3, r1, r3, lsl #8  @ Even: src-byte needs shift
+<br/>
+    orrne   r3, r3, r1, lsl #8  @ Odd: value needs shift
+<br/>
+    strh    r3, [r0,-r2]        @ Align and write
+<br/>
+    bx      lr
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<span style="font-weight: bold">NOTE: UNTESTED</span>. But something like this should be possible. I'll test tomorrow when it's not 2am.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#134156 - Dwedit - Wed Jul 11, 2007 2:03 am</h4>
+    <div class="postbody"><span class="postbody">Wow, that's even awesomer.
+<br/>
+I think the best method is probably still the swpb with cache method, which is NDS9 only.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#134166 - simonjhall - Wed Jul 11, 2007 7:44 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Dwedit wrote:</b></span></td> </tr> <tr> <td class="quote">I think the best method is probably still the swpb with cache method, which is NDS9 only.</td> </tr></table><span class="postbody">What does that do? (sorry but I've forgotten most of my ARM!)<br/>_________________<br/><span style="font-weight: bold"><a class="postlink" href="https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&amp;business=simonjhall%40gmail%2ecom&amp;no_shipping=2&amp;no_note=1&amp;tax=0&amp;currency_code=GBP&amp;lc=GB&amp;bn=PP%2dDonationsBF&amp;charset=UTF%2d8" target="_blank">Big thanks to everyone who donated for Quake2</a></span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#134169 - Ant6n - Wed Jul 11, 2007 8:11 am</h4>
+    <div class="postbody"><span class="postbody">How about enable caching with WB on gba slot, and use
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+pld [r0]
+<br/>
+strb r1,[r0]
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+can't really test it, don't have access to a DS right now. Since there is not much information on pld, i'd guess that if a line fill is required, it'll stall the bus for the load of 32 bytes. If executing from itcm, one could probably have some instructions inbetween there, because they dont need the external bus. This thing could give varying performance based on how scattered the access is. Maybe using unified cache, which I believe would give 12Kb instead of 4Kb would increase the change of cahce hit when running code from itcm. Again, I can only make assumptions, as the documentation is sparse, and I can't test.
+<br/>
+Also, things might go wrong if an interrupt occurs inbetween these instructions and the cacheline of [r0] is flushed by the isr.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#134171 - kusma - Wed Jul 11, 2007 8:37 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Ant6n wrote:</b></span></td> </tr> <tr> <td class="quote">Since there is not much information on pld, i'd guess that if a line fill is required, it'll stall the bus for the load of 32 bytes.</td> </tr></table><span class="postbody">
+<br/>
+Most ARM9-implementations I've seen has actually treated PLD as a NOP. Not too sure about what the NDS9 does though.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#134173 - simonjhall - Wed Jul 11, 2007 9:22 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Ant6n wrote:</b></span></td> </tr> <tr> <td class="quote">Also, things might go wrong if an interrupt occurs inbetween these instructions and the cacheline of [r0] is flushed by the isr.</td> </tr></table><span class="postbody">Yeah that's what I was worried about.
+<br/>
+Tbh after writing the debugger I'd like to run something which works *exactly* the way I expect it to! No fancy stuff, so hopefully the debugging will be easier!
+<br/>
+<br/>
+Anyway, why use a pld? What about a ldrb followed by a strb? I'm pretty sure ldrb works :-)<br/>_________________<br/><span style="font-weight: bold"><a class="postlink" href="https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&amp;business=simonjhall%40gmail%2ecom&amp;no_shipping=2&amp;no_note=1&amp;tax=0&amp;currency_code=GBP&amp;lc=GB&amp;bn=PP%2dDonationsBF&amp;charset=UTF%2d8" target="_blank">Big thanks to everyone who donated for Quake2</a></span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#134174 - Ant6n - Wed Jul 11, 2007 9:24 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>kusma wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Ant6n wrote:</b></span></td> </tr> <tr> <td class="quote">Since there is not much information on pld, i'd guess that if a line fill is required, it'll stall the bus for the load of 32 bytes.</td> </tr></table><span class="postbody">
+<br/>
+Most ARM9-implementations I've seen has actually treated PLD as a NOP. Not too sure about what the NDS9 does though.</span></td> </tr></table><span class="postbody">
+<br/>
+well, even if pld doesnt do anything, one could still just read the byte/corresponding word - and force the linefetch that way. Considering that caching should speed up ram in general, and that a read has to be performed to write 8bit anyway, the cache trick might come pretty much for free.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#134184 - nutki - Wed Jul 11, 2007 11:48 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Cearn wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">@ void byte_write(void *ptr, u8 value)
+<br/>
+byte_write:
+<br/>
+    ...
+<br/>
+    ldrb    r3, [r2]            @ Read the *other* byte
+<br/>
+    ...
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+</span></td> </tr></table><span class="postbody">
+<br/>
+Wasn't the whole thing that you cannot 8-bit access the *ptr?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#134186 - simonjhall - Wed Jul 11, 2007 12:02 pm</h4>
+    <div class="postbody"><span class="postbody">ldrb should work fine, it's strb that doesn't work correctly when used on the (uncached?) gba slot memory space.<br/>_________________<br/><span style="font-weight: bold"><a class="postlink" href="https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&amp;business=simonjhall%40gmail%2ecom&amp;no_shipping=2&amp;no_note=1&amp;tax=0&amp;currency_code=GBP&amp;lc=GB&amp;bn=PP%2dDonationsBF&amp;charset=UTF%2d8" target="_blank">Big thanks to everyone who donated for Quake2</a></span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#134196 - kusma - Wed Jul 11, 2007 2:34 pm</h4>
+    <div class="postbody"><span class="postbody">I think Cearn's technique here is close to optimal, but you might end up wasting a bit of performance as function call overhead. If you move the register-allocation over to gcc, you can write a nice inline-routine that can be used. If you don't just end up trashing the instruction-cache, that is.
+<br/>
+<br/>
+edit: For your convenience, I've rewritten Cearn's code to inline asm. When compiled with optimizations on, it outputs exactly the same as the non-inline-asm version. Here you go:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void byte_write(void *ptr, u8 value)
+<br/>
+{
+<br/>
+   int tmp1, tmp2;
+<br/>
+   asm volatile (
+<br/>
+"\n\
+<br/>
+   eor     %0, %[ptr], #1                                        \n\
+<br/>
+   ldrb    %1, [%0]                @ Read the *other* byte       \n\
+<br/>
+   ands    %0, %[ptr], #1          @ Test and prep for alignment \n\
+<br/>
+   orreq   %1, %[val], %1, lsl #8  @ Even: src-byte needs shift  \n\
+<br/>
+   orrne   %1, %1, %[val], lsl #8  @ Odd: value needs shift      \n\
+<br/>
+   strh    %1, [%[ptr],-%0]        @ Align and write             \n\
+<br/>
+"
+<br/>
+   : /* output */
+<br/>
+      "=&amp;r"(tmp1), "=&amp;r"(tmp2)
+<br/>
+   : /* input */
+<br/>
+       [ptr] "r"(ptr),
+<br/>
+       [val] "r"(value)
+<br/>
+    );
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+edit2: warning: phpbb has added some spaces between the slashes and line-ends. remove them to get the code to compile ;)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#134214 - Ant6n - Wed Jul 11, 2007 5:38 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>simonjhall wrote:</b></span></td> </tr> <tr> <td class="quote">...
+<br/>
+Anyway, why use a pld? What about a ldrb followed by a strb? I'm pretty sure ldrb works :-)</td> </tr></table><span class="postbody">
+<br/>
+When I first looked into it it seemed like a pretty smart idea because PLD only takes one cycle. In my project design I was going to execute asm from itcm, and since pld does not need the return value it'd most likely be possible to have a bunch of instructions between the pld and strb. In that way the line fill and those instructions could execute simulatenously - although I haven't tested whether line fill and on-die execution can happen simulatenously. Of course this doesnt apply here.
+<br/>
+<br/>
+About the interrupt cases I think one could get deterministic behaviour, if one considers this:
+<br/>
+- if the irs doesn't used cached memory, then everything should be fine (the cache survives across calls)
+<br/>
+- if the irs does use cached memory, then check whether the instruction before the interrupt was a load, and simply return to that same instruction.    One could add some exra checks (i.e. whether the instruction afterwards is ldrb), or possibly use pld to identify the cache prepare. 
+<br/>
+Whether this works sort of depends on the project</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#134216 - DekuTree64 - Wed Jul 11, 2007 5:52 pm</h4>
+    <div class="postbody"><span class="postbody">Can't you just use swpb alone, like dwedit mentioned a few posts ago? It should load the cache line and do the write without the possibility of interrupts inbetween.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#134257 - Ant6n - Thu Jul 12, 2007 2:29 am</h4>
+    <div class="postbody"><span class="postbody">oh right! ('doh)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#134293 - simonjhall - Thu Jul 12, 2007 9:33 am</h4>
+    <div class="postbody"><span class="postbody">So again, what does swpb do?<br/>_________________<br/><span style="font-weight: bold"><a class="postlink" href="https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&amp;business=simonjhall%40gmail%2ecom&amp;no_shipping=2&amp;no_note=1&amp;tax=0&amp;currency_code=GBP&amp;lc=GB&amp;bn=PP%2dDonationsBF&amp;charset=UTF%2d8" target="_blank">Big thanks to everyone who donated for Quake2</a></span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#134296 - chishm - Thu Jul 12, 2007 9:59 am</h4>
+    <div class="postbody"><span class="postbody">It's an atomic byte load then store. It locks the bus while the instruction executes, and can be used to implement semaphores.<br/>_________________<br/><a class="postlink" href="http://chishm.drunkencoders.com" target="_blank">http://chishm.drunkencoders.com</a>
+<br/>
+<a class="postlink" href="http://dldi.drunkencoders.com" target="_blank">http://dldi.drunkencoders.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#134449 - Ant6n - Fri Jul 13, 2007 7:28 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Cearn wrote:</b></span></td> </tr> <tr> <td class="quote">Here's one for 7 instructions, without masking. 
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">@ void byte_write(void *ptr, u8 value)
+<br/>
+byte_write:
+<br/>
+    eor     r2, r0, #1
+<br/>
+    ldrb    r3, [r2]            @ Read the *other* byte
+<br/>
+    ands    r2, r0, #1          @ Test and prep for alignment
+<br/>
+    orreq   r3, r1, r3, lsl #8  @ Even: src-byte needs shift
+<br/>
+    orrne   r3, r3, r1, lsl #8  @ Odd: value needs shift
+<br/>
+    strh    r3, [r0,-r2]        @ Align and write
+<br/>
+    bx      lr
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+...</span></td> </tr></table><span class="postbody">
+<br/>
+If I remember correctly, a ldrb causes a two cycle interlock.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#134680 - simonjhall - Sun Jul 15, 2007 6:55 pm</h4>
+    <div class="postbody"><span class="postbody">I forgot to follow this one up - basically I was writing a tool to automatically patch up strbs with a dash of code to emulate the instruction. However it didn't work out as well as I had hoped as other stuff broke it!
+<br/>
+<br/>
+It works like this:
+<br/>
+- compile the code not to an object file, but to assembly output (-S, not -c)
+<br/>
+- find all instances of strb
+<br/>
+- figure out what that instruction was going to do
+<br/>
+- insert a replacement
+<br/>
+- assemble the files
+<br/>
+- ship it
+<br/>
+<br/>
+I know this works, as I've done it before on another platform (I replaced all load/store instructions with blocking DMA reads and writes), however the ARM ISA is a little more complicated so it means that there's more chance of getting it wrong. However I do have something which I think is working ok, but interrupt handlers are breaking it ;-)
+<br/>
+<br/>
+The biggest problem is on entry to the replaced block, I need a couple of spare registers (eg computing the EA) and need to save/restore the flag bits. However there doesn't seem to be a 'store absolute' instruction, so all load/stores need to be with reference to a register...but I can't set an address in a register without trashing its contents! So that leaves $sp and $pc...
+<br/>
+<br/>
+Using the stack pointer is a bit risky (as you can't be sure if it actually points to the stack), but also (what clobbered me) is the fact that interrupts which use a lot of stack may occur and wipe out the stored state.
+<br/>
+<br/>
+So that leaves the program counter. I could have gotten away with doing something like this:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">str r0, [pc + 20]
+<br/>
+str r1, [pc + 20]
+<br/>
+mrs r1, cpsr
+<br/>
+str r1, [pc + 16]
+<br/>
+b rest_of_code
+<br/>
+.word 0x0
+<br/>
+.word 0x0
+<br/>
+.word 0x0
+<br/>
+rest_of_code:
+<br/>
+&lt;etc&gt;
+<br/>
+</td> </tr></table><span class="postbody">...but I couldn't be arsed, plus didn't like the wasted time due to branching. So before I waste yet more time working on this thing, I'm gonna do it by manually going through gallons of code, manually replacing strbs :-(
+<br/>
+<br/>
+If anyone wants to pick up my code, just shout. If it works, it'll quite easily allow you to run any program from slot-2 RAM without modifying the compiler.<br/>_________________<br/><span style="font-weight: bold"><a class="postlink" href="https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&amp;business=simonjhall%40gmail%2ecom&amp;no_shipping=2&amp;no_note=1&amp;tax=0&amp;currency_code=GBP&amp;lc=GB&amp;bn=PP%2dDonationsBF&amp;charset=UTF%2d8" target="_blank">Big thanks to everyone who donated for Quake2</a></span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#134706 - Ant6n - Mon Jul 16, 2007 1:06 am</h4>
+    <div class="postbody"><span class="postbody">the swap byte trick didn't work?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#134713 - Dwedit - Mon Jul 16, 2007 3:12 am</h4>
+    <div class="postbody"><span class="postbody">I believe you need to enable caching for that memory range before the swap byte trick will work.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#134715 - Dwedit - Mon Jul 16, 2007 3:17 am</h4>
+    <div class="postbody"><span class="postbody">Have the changes made to DSLinux's GCC toolchain (to support 8-bit writes to any memory area) been merged into Devkitarm yet?<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#134718 - wintermute - Mon Jul 16, 2007 4:40 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Dwedit wrote:</b></span></td> </tr> <tr> <td class="quote">Have the changes made to DSLinux's GCC toolchain (to support 8-bit writes to any memory area) been merged into Devkitarm yet?</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+No, and given that it would then require another 4 sets of libraries I'm really not that keen on doing it.<br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#134737 - simonjhall - Mon Jul 16, 2007 8:05 am</h4>
+    <div class="postbody"><span class="postbody">Yeah I thought about swpb, but I don't think you can use the same addressing modes as strb, which means the ea might have to be computed in code. If so, you'd still need a spare register to do that with...<br/>_________________<br/><span style="font-weight: bold"><a class="postlink" href="https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&amp;business=simonjhall%40gmail%2ecom&amp;no_shipping=2&amp;no_note=1&amp;tax=0&amp;currency_code=GBP&amp;lc=GB&amp;bn=PP%2dDonationsBF&amp;charset=UTF%2d8" target="_blank">Big thanks to everyone who donated for Quake2</a></span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#134744 - DekuTree64 - Mon Jul 16, 2007 9:13 am</h4>
+    <div class="postbody"><span class="postbody">I think it's pretty safe to assume that the stack will always be the stack. So then all you need to do is find a fast byte write that doesn't involve conditional instructions. Here's a pretty crappy one. 11 instructions, 2 temp registers, and "undefined" behavior.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">r0 is dest pointer
+<br/>
+r1 is data byte
+<br/>
+<br/>
+stmfd sp!, {r2, r3}
+<br/>
+ldr   r2, [r0]         @ Read 32 bits, rotated so our target is in the low bits
+<br/>
+bic   r2, r2, #0xff    @ Clear space for target
+<br/>
+and   r3, r1, #0xff    @ Upper bits may not be 0...
+<br/>
+orr   r2, r2, r3       @ Insert the byte
+<br/>
+and   r3, r0, #3       @ \
+<br/>
+mov   r3, r3, lsl #3   @  } 32 - (dest &amp; 3) * 8
+<br/>
+rsb   r3, r3, #32      @ /
+<br/>
+mov   r2, r2, ror r3   @ Rotate target byte back in place
+<br/>
+str   r2, [r0]         @ Store (unaligned, but should force)
+<br/>
+ldmfd sp!, {r2, r3}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Although I guess using swpb with manually computed addresses for the unsupported modes would be faster.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#134746 - simonjhall - Mon Jul 16, 2007 9:24 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>DekuTree64 wrote:</b></span></td> </tr> <tr> <td class="quote">I think it's pretty safe to assume that the stack will always be the stack.</td> </tr></table><span class="postbody">But what about (optimised) leaf functions which don't actually make stack frames, and don't move the stack pointer? You've got to store your data a certain amount below the stack pointer just in case...
+<br/>
+<br/>
+Time to move to the PSP I think, where they don't have this stupid problem ;-)<br/>_________________<br/><span style="font-weight: bold"><a class="postlink" href="https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&amp;business=simonjhall%40gmail%2ecom&amp;no_shipping=2&amp;no_note=1&amp;tax=0&amp;currency_code=GBP&amp;lc=GB&amp;bn=PP%2dDonationsBF&amp;charset=UTF%2d8" target="_blank">Big thanks to everyone who donated for Quake2</a></span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#134750 - DekuTree64 - Mon Jul 16, 2007 10:27 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>simonjhall wrote:</b></span></td> </tr> <tr> <td class="quote">But what about (optimised) leaf functions which don't actually make stack frames, and don't move the stack pointer?</td> </tr></table><span class="postbody">
+<br/>
+But if anything was ever depending on the survival of data below sp, then you wouldn't be able to switch to the main stack during an interrupt handler. Or are you talking about hand-written functions?<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#134774 - Ant6n - Mon Jul 16, 2007 5:17 pm</h4>
+    <div class="postbody"><span class="postbody">switch to main stack?? why'd you do that? and also, why would you have ain interrupt stack to begin with?
+<br/>
+That's dangerous talking there</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#134807 - Ant6n - Tue Jul 17, 2007 2:32 am</h4>
+    <div class="postbody"><span class="postbody">One way to store a value temporarily without using the stack is using some specific memory location. To make sure that interrupts etc don't interfere with each other,  one could have one of these for every couple of functions - assuming that these functions are not used by both isr and normal code, there should be no error conditions.
+<br/>
+Regarding not cahnging condition flags, do lsl,asr,lsr,ror change the carry flag? My arm asm programming manual seems to suggest so, but gbatek seems to suggest that only when an instruction uses '-S' that any flags are set.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

@@ -1,0 +1,159 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Is it possible to expand memory?! - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > Is it possible to expand memory?!</h2>
+<div id="posts">
+<div class="post">
+    <h4>#7083 - Lupin - Sun Jun 08, 2003 8:38 pm</h4>
+    <div class="postbody"><span class="postbody">I saved an 512(64)x512(64) map at screen base block 31 and it still gets correctly displayed in VBA, I thought this would be out of memory bounds, could someone tell me why it's not?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7084 - Jason Wilkins - Sun Jun 08, 2003 8:56 pm</h4>
+    <div class="postbody"><span class="postbody">There are 96 kilobytes of video memory.<br/>_________________<br/><a href="http://devkitadv.sourceforge.net" target="_blank">http://devkitadv.sourceforge.net</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7086 - Lupin - Mon Jun 09, 2003 8:29 am</h4>
+    <div class="postbody"><span class="postbody">aha, but I wonder why screen base block 31 could hold an whole 512x512 map, I thought it just fits in 4 screen base blocks</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7095 - Jason Wilkins - Mon Jun 09, 2003 2:19 pm</h4>
+    <div class="postbody"><span class="postbody">What is there to wonder?  Screen base block 31 is at offset 0x0F800, but the end of video memory is at offset 0x18000.  There is 34 kilobytes of memory left at offset 31.<br/>_________________<br/><a href="http://devkitadv.sourceforge.net" target="_blank">http://devkitadv.sourceforge.net</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7096 - Lupin - Mon Jun 09, 2003 3:07 pm</h4>
+    <div class="postbody"><span class="postbody">well, but why is screen base block 31 larger then the other ones?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7100 - niltsair - Mon Jun 09, 2003 3:26 pm</h4>
+    <div class="postbody"><span class="postbody">It's not that it's larger, it's only that there's a lot of memory left after the block 31, enough to fit 4 maps(and more). Don't think of it as if they assigned a certain amount of memory for each block, but as if they assigned a start address to each map, in video memory. 
+<br/>
+<br/>
+Since they wanted to only use 5bits to address the maps, we can only specify a map number between 0-31, but once this address is reached, it then use the memory necessary to build 4maps. If you pick say address 28, then 28-29-30-31 will be use. If you pick 31, then 31-32-33-34. The only reason you can't access 32-33-34 yourself is because there's not enough bits used to address it in the background map entry (which is weird, since there's 2 unused bit in REG_BGxCNT).
+<br/>
+<br/>
+That's good you mentioned it though, i never realized there was free remaining video memory space after map 31 untill Jason mentioned it. Which mean alway store your big map there to free more tiles space, if this work on HD.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7103 - tepples - Mon Jun 09, 2003 5:50 pm</h4>
+    <div class="postbody"><span class="postbody">Video memory beyond map 31 overlaps the part of video memory that contains sprite cel data.  I'm curious if accessing video memory beyond nametable 31 would even work on hardware.  Possible results:
+<br/>
+<ul><li>it'd actually work as expected, reading map data from sprite VRAM</li><li>repeating map 31</li><li>wrap around (map 32 == map 0)</li><li>repeating tile 0 in maps beyond 31</li><li>blankness in maps beyond 31</li><li>garbage</li></ul>
+<br/>
+<br/>
+And what happens when one tries to use tiles 512-1023 in 16-color tiles with charbaseblock=3?
+<br/>
+<br/>
+Perhaps when I get time, I'll investigate what happens on hardware when a background is told to use a tile or map in memory that overlaps sprite cels.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7104 - niltsair - Mon Jun 09, 2003 6:03 pm</h4>
+    <div class="postbody"><span class="postbody">Ah ok so it is not free, it's used for sprites. Then make sure your map doesn't overflow.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7107 - Lupin - Mon Jun 09, 2003 7:54 pm</h4>
+    <div class="postbody"><span class="postbody">I noticed that many games aren't using 512x512 maps, they just use an 256x256 map and copy the content of the 512x512 map into the 256x256map on run time, is that an good way to save memory or would that slow down everything because the GBA would have to transfer all the data from ROM (or are these arrays in header files stored in RAM when loaded up?!) to VRAM</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7109 - niltsair - Mon Jun 09, 2003 8:10 pm</h4>
+    <div class="postbody"><span class="postbody">To do intricates maps, you don't have a choice. 4 layers of 248x168pixels takes 651*4 Tiles (2604). This is the minimum size a map can be when scrolling occurs, and yet it takes more tiles that you can store in video memory in 16colors. 
+<br/>
+<br/>
+If you have a basic set of tiles that keep getting re-used thoughout your maps, then 512x512 isn't a problem, else you need to create a dynamic tile loader that takes care to only load the tiles you're currently displaying.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7111 - DekuTree64 - Mon Jun 09, 2003 8:39 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote">Video memory beyond map 31 overlaps the part of video memory that contains sprite cel data.  I'm curious if accessing video memory beyond nametable 31 would even work on hardware.  </td> </tr></table><span class="postbody">
+<br/>
+<br/>
+If I remember right, there was a post on this board from a guy having map problems, and it turned out to be trying to access data past block 31, so I don't think it works. Still worth testing though. Using the tiles past char block 3 is what interests me most. That could mean 2 complete screens worth of tiles at the same time, with some clever trickery to use the end of block 2, all of 3, and some of '4' for the second screen.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7123 - Jason Wilkins - Mon Jun 09, 2003 11:58 pm</h4>
+    <div class="postbody"><span class="postbody">tepples,
+<br/>
+<br/>
+Very good point, I was wondering if the tile hardware could actually access the memory above the 64k mark.
+<br/>
+<br/>
+Has anyone ever talked about using video memory for general purpose type storage?  I was thinking of using it as the text history buffer for the next version of the TTY, and I realized that this would not use video memory as video memory because I never intend to display this memory, just copy it into the active tile map, but it saves a great deal of ewram used as a history.
+<br/>
+<br/>
+This made me think that I may want to create a .vram overlay as a section type recognized by the link script so that people could use any dead spaces in vram to store variables.  They could also map vram to a big, packed, struct.  There are other ways to do this, so I wasn't sure it warranted a new section.<br/>_________________<br/><a href="http://devkitadv.sourceforge.net" target="_blank">http://devkitadv.sourceforge.net</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7124 - DekuTree64 - Tue Jun 10, 2003 12:50 am</h4>
+    <div class="postbody"><span class="postbody">Yeah, I was going over some ideas for a demo for the upcoming compo, and was thinking about doing it in 256K (for multiboot, just to be cool^_^), and was thinking about using VRAM and already-run pieces of demo and stuff for decompressed graphics and dynamically calculated stuff like trig/reciprocal tables and such. I don't think it really needs a section though. At least for me, I like to have full control over where things go, and especially with VRAM, you need to know exactly what's used and what isn't.
+<br/>
+I think I'll do some tests on putting tiles past 64K tonight, so I'll probably post the results tomorrow morning.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7146 - DekuTree64 - Tue Jun 10, 2003 4:46 pm</h4>
+    <div class="postbody"><span class="postbody">Ok, they both work in VBA, but neither works on HW. Using a large map past block 31 just gets blackness, and using tiles past 64K gets garbage. Kind of 4 pixel (using 16-color tiles) wide vertical bars, generally starting at low colors and going to higher colors (using a black-to-white gradient, just like black, dark gray, light gray, white, repeat). Different tiles get different colors sometimes, but they still seem to follow a similar pattern of dark-to-light.
+<br/>
+<br/>
+I haven't tried using spare VRAM for data yet, but I don't see any reason there would be any problems with it. And VRAM is actually a little faster than EWRAM, which makes it even better for trig tables and the like.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7149 - tepples - Tue Jun 10, 2003 5:45 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Jason Wilkins wrote:</b></span></td> </tr> <tr> <td class="quote">Has anyone ever talked about using video memory for general purpose type storage?</td> </tr></table><span class="postbody">
+<br/>
+I've been thinking about using it for *code* storage. VRAM is a region of 16-bit memory that appears to have less than half a cycle of wait state on average, faster than EWRAM's 2 cycle wait state or ROM's 3n/1s wait state, good for Thumb code.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">I was thinking of using it as the text history buffer for the next version of the TTY</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+What? You mean 44 lines of history (as in my AGBTTY) isn't enough? I grew up on the Apple II with 0 lines of history.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">This made me think that I may want to create a .vram overlay [...] There are other ways to do this, so I wasn't sure it warranted a new section.</td> </tr></table><span class="postbody">
+<br/>
+In order for the linker to be able to relocate code somewhere, it needs a section, right?<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7176 - Jason Wilkins - Wed Jun 11, 2003 3:09 pm</h4>
+    <div class="postbody"><span class="postbody">tepples,
+<br/>
+<br/>
+44 lines is definitely not enough for what I have been using my TTY for.  I was thinking I could write a TTY that has more than 500 lines of backbuffer, with color and multiple fonts.  And, all without using any general purpose RAM.
+<br/>
+<br/>
+I was going to do this when I got around to completely rewriting it all based on your interface and code.
+<br/>
+<br/>
+About code in vram, I had not really thought about that, and I think it would require a different approach than what I was originally thinking.  Putting data in vram, even imposing a structure on it (to avoid a lot of casting), would be easy to do without linkscript support, but relocating code to vram would be difficult without linkscript support.  I am pretty sure that is true.
+<br/>
+<br/>
+But, I do not think it would be very useful to just have a .vram.text section for code.  I am just throwing this out there as an idea, but, perhaps a .vram.text.0 - .vram.text.31 to allow you to put code at 2k boundaries.
+<br/>
+<br/>
+I'll have to think about it, and experiment a lot.<br/>_________________<br/><a href="http://devkitadv.sourceforge.net" target="_blank">http://devkitadv.sourceforge.net</a></span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

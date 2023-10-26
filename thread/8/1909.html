@@ -1,0 +1,173 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>ASM programming in GAS - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>ASM > ASM programming in GAS</h2>
+<div id="posts">
+<div class="post">
+    <h4>#9767 - Omega81 - Sun Aug 17, 2003 1:55 am</h4>
+    <div class="postbody"><span class="postbody">I would like to know were I get a good tutorial on programming ASM for ARM with GAS, I want to know what the basic setup construct is (do I just define a .text and start programming or what?) . The man problem is that I have a piece of code I wrote in GAS to change the screen mode but it only works for one pixel plot. basically, I want it to plot a lot of pixel on the sreen one pixel position after another. but I have noticed (due to the debug mode in VisualGameBoyAdvance :)) that GAS is calculating the branch vectors incorrectly. Here is the code:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">   .text
+<br/>
+.start:
+<br/>
+   ldr r1, =(0x0400|0x03)    @ load mode settings into register r1
+<br/>
+   ldr r2, =0x4000000      @ load the mode select register address in r2
+<br/>
+   str r1, [r2]               @ enable the video mode
+<br/>
+   ldr r1, =0xff00            @ load  the color into r1
+<br/>
+   ldr r2, =0x6000000         @ Load the Vram address in to r2
+<br/>
+   ldr r3, =38400                  @ number times we will loop throug
+<br/>
+<br/>
+.label1:
+<br/>
+   str r1, [r2],#10              @ blast it at the screen
+<br/>
+   add r1,r1,#5                    @ changed color
+<br/>
+   sub r3,r3,#1                    @ decrement the loop counter
+<br/>
+   cmp r3,#0
+<br/>
+   bne .label1
+<br/>
+   add r2,r2,#200
+<br/>
+   ldr r1, =0xffff            @ load  the color into r1
+<br/>
+   str r1, [r2],#4              @ blast it at the screen
+<br/>
+<br/>
+.end:
+<br/>
+   b .label1                 @ infinity loop
+<br/>
+   .pool
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+GAS keeps jumping too far in memory, I thing it is a configuration thing but can be too sure so wanted so input. if you have any input or a solution I would be grateful.  OOO yeah I am using DevKitAdvance bilt from GCC 3.1
+<br/>
+<br/>
+thanks
+<br/>
+<br/>
+Charlie</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#9772 - DekuTree64 - Sun Aug 17, 2003 6:14 pm</h4>
+    <div class="postbody"><span class="postbody">Here's how I write functions in ASM
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+.global FuncName
+<br/>
+.arm
+<br/>
+.align 4
+<br/>
+FuncName:
+<br/>
+@do your stuff
+<br/>
+bx lr
+<br/>
+<br/>
+.global FuncName2
+<br/>
+.thumb
+<br/>
+.align 2
+<br/>
+.thumb_func
+<br/>
+FuncName2:
+<br/>
+@do stuff in THUMB
+<br/>
+bx lr
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+GCC puts a .type FuncName,function in there too if you use the -S flag to see the ASM a C file compiles to, but it doesn't seem to be required.
+<br/>
+But as for why your code won't work, it might be those dots before your label naems, I don't know if that's allowed or not. It might get confused and think those are directives.
+<br/>
+And I'm kind of confused by that str r1, [r2], #10... Looping 38400 times I assume you're filling the screen with a color, but then you should be incrementing by 2 bytes, not 10, and using strh cause storing 4 bytes at a time, and incrementing by a number that's not a multiple of 4 means you'll have some unaligned writes. 
+<br/>
+And lastly, just so you can see some of what makes the ARM so much fun to write ASM for, instead of writing
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+sub r3,r3,#1                    @ decrement the loop counter 
+<br/>
+cmp r3,#0 
+<br/>
+bne label1 
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+you can use
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+subs r3,r3,#1                    @ decrement the loop counter 
+<br/>
+bne label1 
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+The cmp instruction actually uses the same circuitry as sub, it just doesn't write the result to anywhere. And subs sets the processor flags the same as cmp would (since you're comparing with 0, if you need to subtract one number and then compare with a different number, you'll need a specific cmp).
+<br/>
+ARM ASM is way more fun than x86 ASM, so I'd encourage writing as much as you have the time for.
+<br/>
+Happy coding^^<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#9774 - Omega81 - Sun Aug 17, 2003 9:29 pm</h4>
+    <div class="postbody"><span class="postbody">Thanks a lot DekuTree64 but I was wondering, you have given me a good layout for writing seperate function in GAS asm but I want to write whole programs (including the main function) will I have to struct it the same way and just call it "main" or is there more to know. looking at the GAS manual, there isn't much in the ARM section to go on (bless there little hearts). So any ideas on this little issuse would be nice. Also
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">But as for why your code won't work, it might be those dots before your label naems, I don't know if that's allowed or not. It might get confused and think those are directives. </td> </tr></table><span class="postbody">
+<br/>
+<br/>
+The labels are actually fine funny enough, as I have seen them in the -S output (this confused me too so I added it to see if it would solve my dilema)
+<br/>
+<br/>
+one more thing. About the instruction </span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">  r1, [r2], #10</td> </tr></table><span class="postbody"> on the next pass of a loop, will the address in r2 be r2+10? I ask this because I have not issued a writeback request. or are writebacks only need for pre-increment Data transferrer memory address modes.
+<br/>
+<br/>
+I know this sound like a lot to ask but I can't help it, I am a hopeless newbie and hopefully you guys/gals can give me a clue.
+<br/>
+<br/>
+thanks.<br/>_________________<br/>Keep it real, keep it Free, Keep it GNU</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

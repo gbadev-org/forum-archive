@@ -1,0 +1,122 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Hardware: Vertex * Matrix. - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Hardware: Vertex * Matrix.</h2>
+<div id="posts">
+<div class="post">
+    <h4>#157496 - DensitY - Mon May 26, 2008 12:58 am</h4>
+    <div class="postbody"><span class="postbody">Greetings all :)
+<br/>
+<br/>
+I've been doing some playing around on the DS, specifically software 3d rendering, and I'm currently looking at ways to improve a rather expensive routine.
+<br/>
+<br/>
+now I know its possible to-do matrix * matrix using the DS's geometry hardware, and I'm wondering if there is a proper way of performing a vertex * matrix operation using the hardware since my C code is a tad too slow for my liking. I've <a class="postlink" href="http://nocash.emubase.de/gbatek.htm#ds3dmatrixloadmultiply" target="_blank">had a look here</a> and I've found nothing that fits that natively at least. I figure atm I could just fill my vertex into a dummy matrix (filling the rest with zeros) and do a matrix*matrix hardware multiply but I am seeking for a less annoying fix up.
+<br/>
+<br/>
+Thoughts :)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#157498 - DiscoStew - Mon May 26, 2008 1:14 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote"><span style="font-weight: bold">40005C4h - Cmd 71h - POS_TEST - Set Position Coordinates for Test (W)</span>
+<br/>
+<br/>
+  Parameter 1, Bit 0-15   X-Coordinate
+<br/>
+  Parameter 1, Bit 16-31  Y-Coordinate
+<br/>
+  Parameter 2, Bit 0-15   Z-Coordinate
+<br/>
+  Parameter 2, Bit 16-31  Not used
+<br/>
+  All values are 1bit sign, 3bit integer, 12bit fractional part.
+<br/>
+<br/>
+Multiplies the specified line-vector (x,y,z,1) by the clip coordinate matrix.
+<br/>
+After sending the command, wait until GXSTAT.Bit0 indicates Ready, then read the result from POS_RESULT registers. POS_TEST can be issued anywhere, except within polygon strips.
+<br/>
+<br/>
+<span style="font-weight: bold">000620h..62Fh - POS_RESULT - Position Test Results (R)</span>
+<br/>
+This 16-byte region (4 words) contains the resulting clip coordinates (x,y,z,w) from the POS_TEST command. Each value is 1bit sign, 19bit integer, 12bit fractional part.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+That should help ya. I's what I currently use for my vertex manipulations. Just plug in your matrix, then plug in the vertex vector into POS_TEST, and retrieve the result from POS_RESULT. One cool thing about this is that it doesn't affect the matrix, so you can ignore that while plugging in and retrieving values.<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#157499 - DensitY - Mon May 26, 2008 1:23 am</h4>
+    <div class="postbody"><span class="postbody">Thats pretty darn clever , thank you DiscoStew. I'll surely give it a try, I'm rather embarrassed I didn't deduce that ;)
+<br/>
+<br/>
+Cheers,</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#157502 - TwentySeven - Mon May 26, 2008 1:45 am</h4>
+    <div class="postbody"><span class="postbody">Oooh! Yum.  Any benchmarks on that stu?  Vector transforms per second? :D</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#157517 - DensitY - Mon May 26, 2008 7:54 am</h4>
+    <div class="postbody"><span class="postbody">right all working, for those that are interested
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+// 1. there is actually no need to specify the matrix, as the DS will automatically
+<br/>
+//    multiply against position*projection matrix it is feed. not doing this will return
+<br/>
+//    odd results
+<br/>
+// 2. an identity matrix must be set before using this function else we get odd results.
+<br/>
+// 3. our vertex is in 20.12 format, however we can only feed on 1.3.12 formated vertices
+<br/>
+//    so masking down to a 16bit variable (FFFF) is required unless shifting up.
+<br/>
+// 4. you have to wait for both Geometry engine and Pos Test values to be set free. (bit 27
+<br/>
+//    and bit 0 in GFX_STATUS.
+<br/>
+void MultiplyVertexByMatrixHard(vec3_t &amp;result, vec3_t const &amp;vector)
+<br/>
+{   
+<br/>
+   // configure test position
+<br/>
+   GFX_POS_TEST = ((vector[0] &amp; 0xFFFF)) | ((vector[1]) &lt;&lt; 16);
+<br/>
+   GFX_POS_TEST = ((vector[2] &amp; 0xFFFF));   
+<br/>
+<br/>
+   while((GFX_STATUS &amp; ((1&lt;&lt;27) &amp; 0))); // wait for result
+<br/>
+<br/>
+   // read back results
+<br/>
+   result[0] = GFX_POS_RESULT[0];
+<br/>
+   result[1] = GFX_POS_RESULT[1];
+<br/>
+   result[2] = GFX_POS_RESULT[2];
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

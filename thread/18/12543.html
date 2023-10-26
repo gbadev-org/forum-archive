@@ -1,0 +1,308 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Bitpacked unions - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Bitpacked unions</h2>
+<div id="posts">
+<div class="post">
+    <h4>#119583 - LiraNuna - Sat Feb 24, 2007 2:03 pm</h4>
+    <div class="postbody"><span class="postbody">I usually never get anwers for my questions, but I'll give it a try anyway.
+<br/>
+<br/>
+I'm writing an engine that heavily relays on bitbacked unions such as:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">struct {
+<br/>
+   u16 v1            :9;
+<br/>
+   union {
+<br/>
+      struct {
+<br/>
+         u8 v2      :3;
+<br/>
+         bool v3      :1;
+<br/>
+         bool v4      :1;
+<br/>
+      }; // 5bit
+<br/>
+      u8 v5         :5;
+<br/>
+   }; // 5bit union
+<br/>
+   u8 v6            :2;
+<br/>
+} name; // 16bit</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+However, when accessing variables inside the union, aren't "merging", and the size of the struct is 4, and not 2 as it should be.
+<br/>
+<br/>
+Ofcourse, I tried this: 
+<br/>
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">struct {
+<br/>
+   u16 v1            :9;
+<br/>
+   union {
+<br/>
+      struct {
+<br/>
+         u8 v2      :3;
+<br/>
+         bool v3      :1;
+<br/>
+         bool v4      :1;
+<br/>
+      } PACKED; // 5bit
+<br/>
+      u8 v5         :5;
+<br/>
+   } PACKED; // 5bit union
+<br/>
+   u8 v6            :2;
+<br/>
+} PACKED name; // 16bit</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+But it didn't work too.
+<br/>
+<br/>
+The only way I can get the struct to be sized '2' is to comment out the union:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">struct {
+<br/>
+   u16 v1            :9;
+<br/>
+//   union {
+<br/>
+//      struct {
+<br/>
+         u8 v2      :3;
+<br/>
+         bool v3      :1;
+<br/>
+         bool v4      :1;
+<br/>
+//      }; // 5bit
+<br/>
+//      u8 v5         :5;
+<br/>
+//   }; // 5bit union
+<br/>
+   u8 v6            :2;
+<br/>
+}; // 16bit</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I don't want to use ugly tricks as "#define v5 v2" or similar. And I'm sure I'm misusing the union. 
+<br/>
+Any Ideas?<br/>_________________<br/>Private property.
+<br/>
+Violators will be shot, survivors will be shot again.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#119584 - tepples - Sat Feb 24, 2007 2:12 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>LiraNuna wrote:</b></span></td> </tr> <tr> <td class="quote">I'm writing an engine that heavily relays on bitbacked unions</td> </tr></table><span class="postbody">
+<br/>
+The order of objects within the integer represented by a bitfield is implementation defined. Therefore the behavior of a that contains such a bitfield is also implementation defined. Using explicit read-modify-write instructions is more likely to be portable should you ever want to port the engine to something other than a little-endian ARM CPU or a compiler other than GCC. In addition, a lot of compilers generate decidedly suboptimal code for bitfield manipulation.
+<br/>
+<br/>
+Is there a specific reason that you're using bitfields instead of explicit RMW? I couldn't take a guess because you hid the variable names.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#119585 - LiraNuna - Sat Feb 24, 2007 2:15 pm</h4>
+    <div class="postbody"><span class="postbody">Yes there is a reason. And I know it's slower then normal |= and &amp;= ~, but it should be bitpack.
+<br/>
+<br/>
+I could tell you why, but that would just ruin the surprise :)
+<br/>
+EDIT: The engine could not be portable.<br/>_________________<br/>Private property.
+<br/>
+Violators will be shot, survivors will be shot again.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#119602 - DekuTree64 - Sat Feb 24, 2007 5:23 pm</h4>
+    <div class="postbody"><span class="postbody">I'm not positive, but I don't think bitfields work properly when you mix variable types like that. Try this:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">struct {
+<br/>
+   union {
+<br/>
+      struct {
+<br/>
+         u16 v1 : 9;
+<br/>
+         u16 dummy : 7;
+<br/>
+      };
+<br/>
+      struct {
+<br/>
+         u8 dummy2;  // Fill part of v1, since nothing overlaps it
+<br/>
+         union {
+<br/>
+            // Each of these overlap the upper 8 bits
+<br/>
+            struct {
+<br/>
+               u8 dummy3 : 1;
+<br/>
+               u8 v2 : 3;
+<br/>
+               u8 dummy4 : 4;
+<br/>
+            };
+<br/>
+            struct {
+<br/>
+               bool dummy5 : 4;
+<br/>
+               bool v3 : 1;
+<br/>
+               bool v4 : 1;
+<br/>
+               bool dummy6 : 2;
+<br/>
+            };
+<br/>
+            struct {
+<br/>
+               u8 dummy7 : 1;
+<br/>
+               u8 v5 : 5;
+<br/>
+               u8 v6 : 2;
+<br/>
+            };
+<br/>
+         };
+<br/>
+      };
+<br/>
+   };
+<br/>
+};</td> </tr></table><span class="postbody"><br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#119619 - LiraNuna - Sat Feb 24, 2007 8:41 pm</h4>
+    <div class="postbody"><span class="postbody">"Oh, I see what you did there..."
+<br/>
+    -- Kitten
+<br/>
+<br/>
+I'll try it as soon as posible. But first, I'd like to post a 'refined' edition of yours, after understading the concept of your system:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">typedef union {
+<br/>
+   struct {
+<br/>
+      u16 v1         :9;
+<br/>
+      u8             :7;
+<br/>
+   };
+<br/>
+   struct {
+<br/>
+      u8            :8;
+<br/>
+      union {
+<br/>
+         struct {
+<br/>
+            u8      :1;
+<br/>
+            u8 v2   :3;
+<br/>
+            u8 v3   :1;
+<br/>
+            u8 v4   :1;
+<br/>
+            u8      :2;
+<br/>
+         };
+<br/>
+         struct {
+<br/>
+            u8      :1;
+<br/>
+            u8 v5   :5;
+<br/>
+            u8 v6   :2;
+<br/>
+         };
+<br/>
+      };
+<br/>
+   };
+<br/>
+} name;</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+The idea of the 'unnamed' vars are standard C (99?) and fully legal.
+<br/>
+<br/>
+Thanks a lot deku, I'll see if it works.
+<br/>
+<br/>
+EDIT: works like a charm! Did I say thanks?<br/>_________________<br/>Private property.
+<br/>
+Violators will be shot, survivors will be shot again.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#119770 - Lick - Mon Feb 26, 2007 12:55 am</h4>
+    <div class="postbody"><span class="postbody">I'm not really sure this is relevant or not, but I'll mention it anyway. Most of the time when I'm having problems with structs and the sizes of them, the following line before the struct declaration helps me get rid of them:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#pragma pack(1)
+<br/>
+struct {...};
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+And AFAIK, it is only needed once, unless you change the value multiple times.<br/>_________________<br/><a class="postlink" href="http://licklick.wordpress.com" target="_blank">http://licklick.wordpress.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#120320 - LiraNuna - Fri Mar 02, 2007 9:23 pm</h4>
+    <div class="postbody"><span class="postbody">If you'll read the post again, you'll see that PACKED (predefined) was my first attempt to solve the problem. of course it didn't change anything<br/>_________________<br/>Private property.
+<br/>
+Violators will be shot, survivors will be shot again.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

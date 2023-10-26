@@ -1,0 +1,584 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Another Division Question - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>C/C++ > Another Division Question</h2>
+<div id="posts">
+<div class="post">
+    <h4>#110532 - Joe_Sextus - Wed Nov 29, 2006 1:10 am</h4>
+    <div class="postbody"><span class="postbody">I have a set of functions that need to be optimized for speed and platform independence.
+<br/>
+<br/>
+For Multiplication (by 10) I use
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">  x = (y &lt;&lt; 3) + (y &lt;&lt; 1)</td> </tr></table><span class="postbody">is there a similar way to do this for division (by10)?</span><span class="gensmall"><br/><br/>Last edited by Joe_Sextus on Wed Nov 29, 2006 2:44 am; edited 1 time in total</span></div>    
+</div>
+<div class="post">
+    <h4>#110541 - Dwedit - Wed Nov 29, 2006 2:28 am</h4>
+    <div class="postbody"><span class="postbody">short post:
+<br/>
+Multiplying by ten is faster, don't bother with shifting and adding.
+<br/>
+<br/>
+long post:
+<br/>
+So we're trying to compare these two operations:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+   add r0,r1,r1
+<br/>
+   add r0,r0,r1,lsl#3
+<br/>
+   
+<br/>
+   mov r0,#10
+<br/>
+   mul r0,r1,r0
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Both of these take 2S+1I cycles to complete.
+<br/>
+In THUMB mode, the mov and multiply wins, since the shifting and adding version would need more instructions.
+<br/>
+<br/>
+The ARM7 already has a multiply instruction, so you don't need to replace it with shifting and adding.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#110543 - Joe_Sextus - Wed Nov 29, 2006 2:54 am</h4>
+    <div class="postbody"><span class="postbody">I'm not as concerned about the multiplication, as I am with division.
+<br/>
+<br/>
+What is the fastest way to do division and keep the platform independence? Is this the best way with gcc?</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">y = x / 10</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#110547 - DekuTree64 - Wed Nov 29, 2006 3:25 am</h4>
+    <div class="postbody"><span class="postbody">You can do reciprocal multiplication, like x*6554&gt;&gt;16. The 6554 there is (1&lt;&lt;16)/10 (which is 6553.6), rounded up. Be careful of overflowing 32 bits with the intermediate value though. Also, you'll start getting accuracy problems if x is too large. You could do a 64-bit multiply with (1&lt;&lt;32)/10 if necessary to deal with either of those.
+<br/>
+I've heard before that GCC will automatically do reciprocal multiplies instead of real division when you divide by a constant, but I've never verified it personally.
+<br/>
+<br/>
+And for the record, shift-add multiplies do have their place. For one thing, you can often squeeze in a free add with a non-shifted value, while mla takes an extra cycle to do it. More importantly though, you don't need a temporary register to store the value you're multiplying by. This can be a life saver in a tight inner loop if you'd have to swap things around on the stack otherwise.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#110581 - kusma - Wed Nov 29, 2006 3:36 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Joe_Sextus wrote:</b></span></td> </tr> <tr> <td class="quote">I'm not as concerned about the multiplication, as I am with division.
+<br/>
+<br/>
+What is the fastest way to do division and keep the platform independence? Is this the best way with gcc?<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">y = x / 10</td> </tr></table><span class="postbody"></span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+gcc with optimizations turned on implement divisions by constants as long multiplies, so there's no real point in worrying about this.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#110591 - poslundc - Wed Nov 29, 2006 5:42 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>kusma wrote:</b></span></td> </tr> <tr> <td class="quote">gcc with optimizations turned on implement divisions by constants as long multiplies, so there's no real point in worrying about this.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+In ARM mode it does the optimization... in Thumb mode, it does manual division :(
+<br/>
+<br/>
+If you want to know how to combine shifts cumulatively to divide, <a class="postlink" href="http://www.cs.uiowa.edu/~jones/bcd/decimal.html" target="_blank">this page</a> goes into some detail (it's what I based my <a class="postlink" href="http://danposluns.com/gbadev/posprintf/" target="_blank">posprintf</a> on). Suffice to say that it's far more mathematically complicated than multiplication, and you are usually far better off multiplying by a constant reciprocal when possible.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#110658 - Joe_Sextus - Thu Nov 30, 2006 4:14 am</h4>
+    <div class="postbody"><span class="postbody">Thanks for the replies I think in this case the reciprocal approach may be best. But I discovered two case that I am not sure of how to handle.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">a = b / c
+<br/>
+d = b % c</td> </tr></table><span class="postbody">Is this actually the best way to do this for platform independence and speed or is there a better way?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#110659 - Ant6n - Thu Nov 30, 2006 4:23 am</h4>
+    <div class="postbody"><span class="postbody">if you wanna know it in arm try
+<br/>
+<a href="http://www.ee.ic.ac.uk/pcheung/teaching/ee2_computing/arm/Progtech.pdf" target="_blank">http://www.ee.ic.ac.uk/pcheung/teaching/ee2_computing/arm/Progtech.pdf</a>
+<br/>
+page 70</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#110673 - gladius - Thu Nov 30, 2006 9:35 am</h4>
+    <div class="postbody"><span class="postbody">Modulus (the % operator) can be implemented as a multiply and divide as so:
+<br/>
+<br/>
+d = b % c
+<br/>
+<br/>
+d = b - (b / c) * c
+<br/>
+<br/>
+So once you have your result a = b / c, you can easily compute modulus with an additional multiply and subtraction.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#110686 - Joe_Sextus - Thu Nov 30, 2006 2:07 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>gladius wrote:</b></span></td> </tr> <tr> <td class="quote">Modulus (the % operator) can be implemented as a multiply and divide as so:
+<br/>
+<br/>
+d = b % c
+<br/>
+<br/>
+d = b - (b / c) * c
+<br/>
+<br/>
+So once you have your result a = b / c, you can easily compute modulus with an additional multiply and subtraction.</td> </tr></table><span class="postbody">
+<br/>
+I feel dumb for not thinking of that.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#110739 - Miked0801 - Fri Dec 01, 2006 2:40 am</h4>
+    <div class="postbody"><span class="postbody">Many division routines actually have the modulus available to them upon termination - but for want of a place to return the value.  Nothing like getting a divide and having the mod for free.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#110742 - Joe_Sextus - Fri Dec 01, 2006 2:51 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Miked0801 wrote:</b></span></td> </tr> <tr> <td class="quote">Many division routines actually have the modulus available to them upon termination...</td> </tr></table><span class="postbody">
+<br/>
+I would have used the swi because of this, but I need the code to be independent of the GBA / DS.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#110743 - sgeos - Fri Dec 01, 2006 3:54 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Joe_Sextus wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Miked0801 wrote:</b></span></td> </tr> <tr> <td class="quote">Many division routines actually have the modulus available to them upon termination...</td> </tr></table><span class="postbody">
+<br/>
+I would have used the swi because of this, but I need the code to be independent of the GBA / DS.</span></td> </tr></table><span class="postbody">
+<br/>
+Use a wrapper function?
+<br/>
+<br/>
+-Brendan</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#110839 - Miked0801 - Sat Dec 02, 2006 2:58 am</h4>
+    <div class="postbody"><span class="postbody">The version of the divide I'm thinking of is a stand alone, ARM asm version.  Basically, repeat 3 instructions per bit of the divide.  When done you have the quotient and remainder both available for return.  Jeff Frohein&lt;sp&gt; has a version of this divide on his site somewhere.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#110855 - Ant6n - Sat Dec 02, 2006 7:01 am</h4>
+    <div class="postbody"><span class="postbody">div10
+<br/>
+; takes argument in a1
+<br/>
+; returns quotient in a1, remainder in a2
+<br/>
+; cycles could be saved if only divide or remainder is required
+<br/>
+SUB a2, a1, #10 ; keep (x-10) for later
+<br/>
+SUB a1, a1, a1, lsr #2
+<br/>
+ADD a1, a1, a1, lsr #4
+<br/>
+ADD a1, a1, a1, lsr #8
+<br/>
+ADD a1, a1, a1, lsr #16
+<br/>
+MOV a1, a1, lsr #3
+<br/>
+ADD a3, a1, a1, asl #2
+<br/>
+SUBS a2, a2, a3, asl #1 ; calc (x-10) - (x/10)*10
+<br/>
+ADDPL a1, a1, #1 ; fix-up quotient
+<br/>
+ADDMI a2, a2, #10 ; fix-up remainder
+<br/>
+MOV pc, lr</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#110871 - Cearn - Sat Dec 02, 2006 1:30 pm</h4>
+    <div class="postbody"><span class="postbody">Alternatively, compile the following as ARM code:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#include &lt;stdlib.h&gt;
+<br/>
+<br/>
+div_t div10(int x)
+<br/>
+{
+<br/>
+    div_t y;
+<br/>
+    y.quot= x/10;
+<br/>
+    y.rem= x%10;
+<br/>
+<br/>
+    return y;
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+In ARM the division and modulo will be turned into multiplications and subtractions, but it has the benefit of being portable and working for both positive and negative <span style="font-style: italic">x</span>). It does take a little longer than Ant6n's version because there's some stack-work involved.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#110881 - Joe_Sextus - Sat Dec 02, 2006 4:18 pm</h4>
+    <div class="postbody"><span class="postbody">I realized since my last post that both of my targets use versions of the ARM instruction set and that I will need division by a variable as well. So I googled for a division routine and found <a class="postlink" href="http://www.tofla.iconbar.com/tofla/arm/arm02/index.htm" target="_blank">http://www.tofla.iconbar.com/tofla/arm/arm02/index.htm</a>
+<br/>
+My complete function (doesn't do signed division).
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">  .align
+<br/>
+  .arm
+<br/>
+  .global div
+<br/>
+<br/>
+<br/>
+@void div(unsigned int retvalue, unsigned int dividend, unsigned int divisor, unsigned int modulus)
+<br/>
+<br/>
+div:
+<br/>
+  cmp r2, #0                  @if(divisor == 0)
+<br/>
+  beq .div_end                @   return;
+<br/>
+<br/>
+  mov r0, #0                  @retvalue     = 0;
+<br/>
+  mov r3, #1                  @placeholder  = 1;
+<br/>
+<br/>
+  .start:                     @while(divisor &lt; dividend)
+<br/>
+    cmp r2, r1                @{
+<br/>
+    movls r2, r2, lsl#1       @   divisor &lt;&lt;= 1;
+<br/>
+    movls r3, r3, lsl#1       @   placeholder &lt;&lt;= 1;
+<br/>
+    bls .start                @}
+<br/>
+<br/>
+  .subtract                   @while(r1 - r2 &gt; 0)
+<br/>
+    cmp r1, r2                @{
+<br/>
+    subcs r1, r1, r2          @   dividend -= divisor;
+<br/>
+    addcs r0, r0, r3          @   retvalue += placeholder;
+<br/>
+    movs r3, r3, lsr#1        @   placeholder &gt;&gt;= 1;
+<br/>
+    movs r2, r2, lsr#1        @   divisor &gt;&gt;= 1;
+<br/>
+    bcc .subtract             @}
+<br/>
+<br/>
+  .div_end:
+<br/>
+    bx lr                     @return;</td> </tr></table><span class="postbody">
+<br/>
+Currently this code doesn't return the modulus, but it will when I finish it. (That's a simple mov r3, r1).
+<br/>
+[EDIT]
+<br/>
+Fixed typo.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#111084 - Miked0801 - Mon Dec 04, 2006 1:04 am</h4>
+    <div class="postbody"><span class="postbody">To add signed, just xor the starting 2 numbers and look at bit 31.  If set, the result is negative, else is positive.  Then ABS and go.
+<br/>
+<br/>
+Another speed trick is to completely unroll the divide loop and jump into the code based on the number of signifigant bits.  Man I wish I had the routine handy - I'd post it.  ARM also has a routine they publish with their stuff that has a nice divider.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#111092 - keldon - Mon Dec 04, 2006 1:41 am</h4>
+    <div class="postbody"><span class="postbody">CLZ in about 10 cycles - <a href="http://forum.gbadev.org/viewtopic.php?t=4359" target="_blank">http://forum.gbadev.org/viewtopic.php?t=4359</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#111093 - Joe_Sextus - Mon Dec 04, 2006 1:45 am</h4>
+    <div class="postbody"><span class="postbody">I was thinking something similar to this for signed division
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void sdiv(signed int retvalue, signed int dividend, signed int divisor, signed int modulus)
+<br/>
+{
+<br/>
+  bool negative = false;
+<br/>
+  if(dividend &amp; 0x80000000)
+<br/>
+  {
+<br/>
+    negative = 1;
+<br/>
+    dividend *= -1;
+<br/>
+  }
+<br/>
+  
+<br/>
+  if(divisor &amp; 0x80000000)
+<br/>
+  {
+<br/>
+    negative = !negative;
+<br/>
+    divisor *= -1;
+<br/>
+  }
+<br/>
+  
+<br/>
+  div(retvalue, dividend, divisor, modulus);
+<br/>
+  
+<br/>
+  if(negative)
+<br/>
+    retvalue *= -1;
+<br/>
+}</td> </tr></table><span class="postbody">Is there an easy way to change sign in ASM?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#111096 - keldon - Mon Dec 04, 2006 2:40 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Joe_Sextus wrote:</b></span></td> </tr> <tr> <td class="quote">Is there an easy way to change sign in ASM?</td> </tr></table><span class="postbody">
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">int changesign(int a) {
+<br/>
+   return 0-a;
+<br/>
+}
+<br/>
+<br/>
+int changesign(int a){
+<br/>
+   return (~a)+1;
+<br/>
+}</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#111101 - Joe_Sextus - Mon Dec 04, 2006 2:56 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>keldon wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Joe_Sextus wrote:</b></span></td> </tr> <tr> <td class="quote">Is there an easy way to change sign in ASM?</td> </tr></table><span class="postbody">
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">int changesign(int a) {
+<br/>
+   return 0-a;
+<br/>
+}
+<br/>
+<br/>
+int changesign(int a){
+<br/>
+   return (~a)+1;
+<br/>
+}</td> </tr></table><span class="postbody"></span></td> </tr></table><span class="postbody">
+<br/>
+Are either of those more efficient than 
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">int changesign(int a)
+<br/>
+{
+<br/>
+  return a * -1;
+<br/>
+}</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#111103 - DekuTree64 - Mon Dec 04, 2006 3:12 am</h4>
+    <div class="postbody"><span class="postbody">Quickest in ARM:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">rsb r0, r0, #0</td> </tr></table><span class="postbody">
+<br/>
+Quickest in THUMB:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">neg r0, r0</td> </tr></table><span class="postbody">
+<br/>
+Multiplying is much slower and needs a temporary register:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">mov r1, #-1
+<br/>
+mul r0, r1, r0</td> </tr></table><span class="postbody"><br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#111195 - Miked0801 - Mon Dec 04, 2006 8:12 pm</h4>
+    <div class="postbody"><span class="postbody">The compiler is smart enough in every case I've come across to change:
+<br/>
+<br/>
+x = x * -1
+<br/>
+<br/>
+to
+<br/>
+<br/>
+x = -x;
+<br/>
+<br/>
+Which involves only 1 instruction.
+<br/>
+<br/>
+And change sign even simpler is
+<br/>
+<br/>
+int changeSign(int x)
+<br/>
+{
+<br/>
+    return -x;
+<br/>
+}
+<br/>
+<br/>
+This does the 2s compliment for you.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#111201 - Joe_Sextus - Mon Dec 04, 2006 8:51 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Miked0801 wrote:</b></span></td> </tr> <tr> <td class="quote">The compiler is smart enough in every case I've come across to change:
+<br/>
+<br/>
+x = x * -1
+<br/>
+<br/>
+to
+<br/>
+<br/>
+x = -x;
+<br/>
+<br/>
+Which involves only 1 instruction.
+<br/>
+<br/>
+And change sign even simpler is
+<br/>
+<br/>
+int changeSign(int x)
+<br/>
+{
+<br/>
+    return -x;
+<br/>
+}
+<br/>
+<br/>
+This does the 2s compliment for you.</td> </tr></table><span class="postbody">
+<br/>
+That will probably be the way I will do it.
+<br/>
+<br/>
+If I want to passed return values into the function arguments, do I have to handle pointers in ASM, or does the C register keyword allow me to do that?
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void div(register unsigned int retvalue, register unsigned int dividend, register unsigned int divisor, register unsigned int modulus)</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#111210 - gladius - Mon Dec 04, 2006 10:14 pm</h4>
+    <div class="postbody"><span class="postbody">The arm calling convention by default puts the first 4 arguments that are 32 bits or less into r0-r3, so that scenario will "just work".
+<br/>
+<br/>
+Also, in newer compilers the register keyword is completely ignored.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#111238 - Miked0801 - Tue Dec 05, 2006 3:43 am</h4>
+    <div class="postbody"><span class="postbody">BTW, here:
+<br/>
+<a href="http://www.peter-teichmann.de/adiv1e.html" target="_blank">http://www.peter-teichmann.de/adiv1e.html</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#111241 - Ant6n - Tue Dec 05, 2006 4:17 am</h4>
+    <div class="postbody"><span class="postbody">in this regard it probably would be good if somebody mentions static inline functions, i dont remember how they work for sure though. I think its possible to just define a function like that in a header file
+<br/>
+static inline int changeSign(int x)
+<br/>
+{
+<br/>
+return -x;
+<br/>
+} 
+<br/>
+are there any compiler flags needed now??</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#111248 - Joe_Sextus - Tue Dec 05, 2006 5:29 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Miked0801 wrote:</b></span></td> </tr> <tr> <td class="quote">BTW, here:
+<br/>
+<a href="http://www.peter-teichmann.de/adiv1e.html" target="_blank">http://www.peter-teichmann.de/adiv1e.html</a></td> </tr></table><span class="postbody">
+<br/>
+I have already looked at that. When I first looked at it I didn't understand it, until I realized that it is the same basic thing as mine only with unrolled loops.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Ant6n wrote:</b></span></td> </tr> <tr> <td class="quote">in this regard it probably would be good if somebody mentions static inline functions, i dont remember how they work for sure though. I think its possible to just define a function like that in a header file
+<br/>
+static inline int changeSign(int x)
+<br/>
+{
+<br/>
+return -x;
+<br/>
+} 
+<br/>
+are there any compiler flags needed now??</td> </tr></table><span class="postbody">
+<br/>
+Why not just do this then
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#define changeSign(x) (-x)</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#111252 - poslundc - Tue Dec 05, 2006 8:12 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Joe_Sextus wrote:</b></span></td> </tr> <tr> <td class="quote">Why not just do this then
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#define changeSign(x) (-x)</td> </tr></table><span class="postbody"></span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I could riff on the advantages of type-checking and debugging and whatnot, but instead I'll just pounce on the example you gave to illustrate the dangers of reckless macro use.
+<br/>
+<br/>
+What do you think will be the result if you use your changeSign macro with the following?
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">int     a = 4;
+<br/>
+int     b = 5;
+<br/>
+int     c = changeSign(a + b);</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#111293 - gmiller - Tue Dec 05, 2006 3:01 pm</h4>
+    <div class="postbody"><span class="postbody">Change your macro to:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#define changeSign(x) (-(x))
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+To keep from messing up like poslundc is pointing out.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#111352 - Miked0801 - Tue Dec 05, 2006 7:47 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+I have already looked at that. When I first looked at it I didn't understand it, until I realized that it is the same basic thing as mine only with unrolled loops.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+It takes it a step beyond actually - it does a binary search based on the MSB to prevent a whole bunch of wasted time.  It's faster on smaller divides, but a touch slower on larger number divides.  I found it to be very clever.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

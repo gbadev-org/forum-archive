@@ -1,0 +1,327 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>SIO Normal Mode - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Beginners > SIO Normal Mode</h2>
+<div id="posts">
+<div class="post">
+    <h4>#66060 - Ultima2876 - Sat Jan 07, 2006 11:37 pm</h4>
+    <div class="postbody"><span class="postbody">I've got some normal mode multiplayer code, for sending game assets from the master to the slave (just one way communications):
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void transfer_data(u8 master, u32 *data, u32 size)      //master - 1 for master, 0 for slave, *data - pointer to data to send, size - size of data in bytes
+<br/>
+   {
+<br/>
+      u32 location = 0;
+<br/>
+<br/>
+      REG_RCNT = 0;         //init RCNT
+<br/>
+      if(master)
+<br/>
+         {
+<br/>
+            //make sure size is correct
+<br/>
+            if(size == 0) { return; }
+<br/>
+            if(size &amp; 3 != 0) { size += 4; }
+<br/>
+            size = (size - (size &amp; 3)) &gt;&gt; 2;
+<br/>
+            REG_SIOCNT = 0x1001;            //init SIOCNT for master
+<br/>
+            while(location &lt; size)            //start sending
+<br/>
+               {
+<br/>
+                  REG_SIODATA32 = ((u32*)data)[location];      //set the data to send
+<br/>
+                  while(REG_SIOCNT &amp; 4) { }                  //while the SI is HIGH (slave NOT READY), wait
+<br/>
+                  REG_SIOCNT |= 0x80;                        //set the start bit to start the transfer
+<br/>
+                  while((REG_SIOCNT &amp; 0x80) == 1) { }            //wait for the start bit to clear (transfer done)
+<br/>
+                  errorcount += 1;
+<br/>
+                  location += 1;
+<br/>
+                  //WaitForVsync();
+<br/>
+               }
+<br/>
+         }
+<br/>
+      else
+<br/>
+         {
+<br/>
+            //make sure size is correct
+<br/>
+            if(size == 0) { return; }
+<br/>
+            if(size &amp; 3 != 0) { size += 4; }
+<br/>
+            size = (size - (size &amp; 3)) &gt;&gt; 2;
+<br/>
+            REG_SIOCNT = 0x1008;            //init for slave (with SO HIGH, to indicate NOT READY)
+<br/>
+            while(location &lt; size)
+<br/>
+               {
+<br/>
+                  REG_SIODATA32 = 0;               //clear the data
+<br/>
+                  REG_SIOCNT |= 0x80;               //set the start bit so that you can wait for the transfer to complete
+<br/>
+                  REG_SIOCNT &amp;= 0xFFF7;            //Set SO LOW - READY
+<br/>
+                  while(REG_SIOCNT &amp; 0x80) { }      //wait for the start bit to clear (transfer done)
+<br/>
+                  REG_SIOCNT |= 8;               //Set SO HIGH - NOT READY
+<br/>
+                  ((u32*)data)[location] = REG_SIODATA32;      //write the received data
+<br/>
+                  errorcount += 1;
+<br/>
+                  location += 1;
+<br/>
+                  //WaitForVsync();
+<br/>
+               }
+<br/>
+         }
+<br/>
+   }</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+There are two WaitForVsync calls in there - if they're commented, as they are above, the game crashes after sending 4 bytes (1 transfer). It only works if it waits for Vsync every frame -- <span style="font-style: italic">surely</span> this can't be due to speed limits? 4 bytes/frame? that's disgustingly slow o_O
+<br/>
+<br/>
+The SI/SO bits should be taking care of sync here, shouldn't they? Or is there something I'm missing? I saw another topic with a very similar problem, but when the guy fixed the problem he didn't actually say what the solution was...
+<br/>
+<br/>
+Are there any working examples of one-way normal mode transfers around?
+<br/>
+<br/>
+Thanks for any help.</span><span class="gensmall"><br/><br/>Last edited by Ultima2876 on Sun Jan 08, 2006 3:06 pm; edited 1 time in total</span></div>    
+</div>
+<div class="post">
+    <h4>#66117 - Ultima2876 - Sun Jan 08, 2006 10:20 am</h4>
+    <div class="postbody"><span class="postbody">EDIT: I've got it almost working (it works in no$) but I have a problem on hardware... If the SLAVE sets its SO LOW on an AGB-005 link cable, will the master 's SI change to LOW? I suspect that my problem is something to do with this - and am wondering if by "one way" communications you mean even this doesn't work.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#66203 - ScottLininger - Mon Jan 09, 2006 12:30 am</h4>
+    <div class="postbody"><span class="postbody">Can you post the your DEFINEs so I can see what all you're doing? The defines I have in my code have different names, so I'm having trouble comparing.
+<br/>
+<br/>
+Then I might be able to shed some light. :)
+<br/>
+<br/>
+-Scott</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#66222 - wintermute - Mon Jan 09, 2006 3:16 am</h4>
+    <div class="postbody"><span class="postbody">A lot of GBA link cables I've seen are set up as a master/slave cable, i.e. SI on the master side is grounded - this is one of the reasons GBA cables aren't always suitable for making xboo cables with :/
+<br/>
+<br/>
+The SI line floats high so you can test this by writing an app which monitors the SI state - it should be high with no cable attached, with the cable plugged in ( and no gba on the other end) it will go low. Check both cable ends.
+<br/>
+<br/>
+I *think* a gbc cable can be used for 32bit mode comms but I've never actually got round to confirming this.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#66266 - Ultima2876 - Mon Jan 09, 2006 11:02 am</h4>
+    <div class="postbody"><span class="postbody">I've updated my code a bit - this one displays a purple screen on the slave GBA, and on the master there's nothing (indicating that it's waiting for the SI to go LOW from the slave).
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void transfer_data(u8 master, u32 *data, u32 size)      //master - 1 for master, 0 for slave, *data - pointer to data to send, size - size of data in bytes
+<br/>
+   {
+<br/>
+      u32 location = 0;
+<br/>
+      u32 temp = 0;
+<br/>
+      u32 sync = 0;
+<br/>
+      u8 flip = 0;
+<br/>
+      
+<br/>
+      temp = IntrTable[7];
+<br/>
+<br/>
+      REG_RCNT = 0;         //init RCNT
+<br/>
+      if(master)
+<br/>
+         {
+<br/>
+            //make sure size is correct
+<br/>
+            if(size == 0) { return; }
+<br/>
+            if(size &amp; 3 != 0) { size += 4; }
+<br/>
+            size = (size - (size &amp; 3)) &gt;&gt; 2;
+<br/>
+            REG_IE |= 0x80;      //enable serial interrupt
+<br/>
+            IntrTable[7] = transferint_master;
+<br/>
+            REG_SIOCNT = 0x5001;            //init SIOCNT for master
+<br/>
+            while(location &lt; size)            //start sending
+<br/>
+               {
+<br/>
+                  REG_SIODATA32 = ((u32*)data)[location];      //set the data to send
+<br/>
+                  REG_SIOCNT |= 8;                      //set SO HIGH
+<br/>
+                  while((REG_SIOCNT &amp; 4) == 0) { }         //while the SI is LOW (slave NOT READY), wait
+<br/>
+                  BG_PaletteMem[0] = 0x7FFF;
+<br/>
+                  REG_SIOCNT &amp;= 0xFFF7;                  //set SO LOW
+<br/>
+                  REG_SIOCNT |= 0x80;                     //set the start bit to start the transfer
+<br/>
+                  IntrWait(1, 0x80);                     //wait for the interrupt to trigger
+<br/>
+                  errorcount += 1;
+<br/>
+                  location += 1;
+<br/>
+               }
+<br/>
+         }
+<br/>
+      else
+<br/>
+         {
+<br/>
+            //make sure size is correct
+<br/>
+            if(size == 0) { return; }
+<br/>
+            if(size &amp; 3 != 0) { size += 4; }
+<br/>
+            size = (size - (size &amp; 3)) &gt;&gt; 2;
+<br/>
+            REG_SIOCNT = 0x5000;                        //init for slave
+<br/>
+            REG_IE |= 0x80;                              //enable serial interrupt
+<br/>
+            IntrTable[7] = transferint_slave;
+<br/>
+            BG_PaletteMem[0] = RGB(31, 31, 31);
+<br/>
+            while(location &lt; size)
+<br/>
+               {
+<br/>
+                  REG_SIODATA32 = 0;                     //clear the data
+<br/>
+                  BG_PaletteMem[0] = RGB(0, 31, 0);
+<br/>
+                  while((REG_SIOCNT &amp; 4) == 0) { }         //wait until SI HIGH
+<br/>
+                  REG_SIOCNT |= 0x80;                     //set the start bit so that you can wait for the transfer to complete
+<br/>
+                  REG_SIOCNT |= 8;                     //Set SO HIGH - READY
+<br/>
+                  BG_PaletteMem[0] = RGB(31, 0, 31);
+<br/>
+                  IntrWait(1, 0x80);                     //wait for the interrupt to trigger
+<br/>
+                  BG_PaletteMem[0] = RGB(31, 31, 0);
+<br/>
+                  ((u32*)data)[location] = REG_SIODATA32;      //write the received data
+<br/>
+                  errorcount += 1;
+<br/>
+                  location += 1;
+<br/>
+               }
+<br/>
+         }
+<br/>
+      IntrTable[7] = temp;
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+These are the interrupt functions:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void transferint_slave(void)
+<br/>
+   {
+<br/>
+      ((vu16*)0x03007FF8)[0] |= 0x0080;
+<br/>
+      BG_PaletteMem[0] = RGB(0, 0, 0);
+<br/>
+   }
+<br/>
+   
+<br/>
+void transferint_master(void)
+<br/>
+   {
+<br/>
+      ((vu16*)0x03007FF8)[0] |= 0x0080;
+<br/>
+   }</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+And the defines:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#define REG_SIOCNT          (*(volatile u16 *)0x04000128)
+<br/>
+#define REG_RCNT     (*(volatile u16 *)0x04000134)
+<br/>
+#define REG_SIOMPRECV ((volatile u16 *)0x04000120)
+<br/>
+#define REG_SIODATA8   (*(volatile u16 *)0x0400012A)
+<br/>
+#define REG_SIODATA32 (*(volatile u32 *)0x04000120)</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+On hardware, the master's SI never goes LOW - the slave definitely sets its SO LOW because it gets to the purple screen - which indicates that it's waiting for the transfer-done interrupt to occur.
+<br/>
+<br/>
+This code fails on no$ - no$ treats the SI as always LOW, so the master doesn't wait for the slave (it waits for LOW, sees that it's already LOW) and carries on sending to nothing - the slave crashes with a green screen (waiting for SI HIGH). The same happens on hardware if I change it to work on no$ by switching the HIGHs and LOWs that are sent - the code then works perfectly in no$.
+<br/>
+<br/>
+This is what lead me to believe that the slave's SO is completely ignored with the normal link cable... is this the case, or am I still doing something wrong?
+<br/>
+<br/>
+Thanks again =P
+<br/>
+<br/>
+EDIT: If it's the case that on the official cable the master's SI is grounded, is there any way I can do this? maybe by using general purpose mode, then switching to normal mode and doing the one way transfer, then back to general purpose to send the sync bit back to the master - rinse and repeat until the transfer is finished?
+<br/>
+<br/>
+There must be some way to sync them, otherwise how/why would anyone ever want to use normal mode?</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

@@ -1,0 +1,91 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Reading VRAM in Mode 3 - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Beginners > Reading VRAM in Mode 3</h2>
+<div id="posts">
+<div class="post">
+    <h4>#145960 - biolizard89 - Mon Nov 26, 2007 3:26 pm</h4>
+    <div class="postbody"><span class="postbody">I'm working on a project which needs to read a bitmap image from the VRAM while the GBA is in Mode 3 (240*160*16bit bitmap).  This is because some libraries with which I was provided store an image from a camera in VRAM, and I don't want to mess with the libraries, but I need access to the image.  Problem is, the image seems corrupted when I process it (but the image on the GBA screen still looks fine).  Is there anything special I have to do when reading images from VRAM in Mode 3?  VBlank or something like that, maybe?  Some of my code is known to have had other problems with data corruption, but I *think* all of those issues are fixed, so I'm unsure of what the problem is exactly.
+<br/>
+<br/>
+Thanks in advance.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#145963 - gmiller - Mon Nov 26, 2007 4:00 pm</h4>
+    <div class="postbody"><span class="postbody">Not sure how you define corrupt, but the image to display correctly needs to be stored in VRAM starting at 0x6000000 with each pixel in two bytes with a 15 bit color in that two bytes (high order bit does not matter).  The data needs to accessed in multiples of 2 bytes (16 bits) because of the data bus.  if the display is OK then the data is in that format.  
+<br/>
+<br/>
+What are you trying to do that does not work?  If you are trying to change bytes then you will need to figure out what 16 bit data element that byte is in and then read that 16 bit data element change the byte and then re-write the 16 bit data.
+<br/>
+<br/>
+Of course if there is something else you are trying to do then my response is of little use to you.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#145964 - biolizard89 - Mon Nov 26, 2007 4:35 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>gmiller wrote:</b></span></td> </tr> <tr> <td class="quote">Not sure how you define corrupt, but the image to display correctly needs to be stored in VRAM starting at 0x6000000 with each pixel in two bytes with a 15 bit color in that two bytes (high order bit does not matter).  The data needs to accessed in multiples of 2 bytes (16 bits) because of the data bus.  if the display is OK then the data is in that format.  
+<br/>
+<br/>
+What are you trying to do that does not work?  If you are trying to change bytes then you will need to figure out what 16 bit data element that byte is in and then read that 16 bit data element change the byte and then re-write the 16 bit data.
+<br/>
+<br/>
+Of course if there is something else you are trying to do then my response is of little use to you.</td> </tr></table><span class="postbody">
+<br/>
+Sorry, I wasn't totally clear.  The display is perfectly fine; I am trying to read the data out of VRAM for processing by the GBA.  I am doing this with a Charmed Labs XBC (robotics controller which plugs into the GBA game slot), and I am trying to send the VRAM data over the XBC USB port one byte at a time.  My code for sending data over the XBC USB port seems to work, as none of my non-video data is being corrupted, but the data from VRAM that I'm sending over the USB port seems to be getting corrupted somewhere along the way (not sure where), as when I try to view the bitmap on my PC, which received it over USB, the image resembles the original image (or at least seems to be somewhat ordered; it's not just static), but parts are corrupted (some areas <span style="font-style: italic">are</span> just static) and all the colors are screwed up.  I suspect that the reading from VRAM is somewhat screwy, hence my question.  Is there anything that I need to do to read from VRAM?
+<br/>
+<br/>
+A snippet of code is below:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">m_commDevice-&gt;Write((char *)0x06000000,1920); // This is supposed to write the first 1920 bytes of VRAM to the USB port
+<br/>
+// The m_commDevice-&gt;Write function does seem to work for other purposes, e.g. sending variables from my program
+<br/>
+<br/>
+// This is what m_commDevice-&gt;Write maps to
+<br/>
+unsigned int CUartComm::WriteData(const char *data, unsigned int len)
+<br/>
+   {
+<br/>
+   unsigned int i = 0;
+<br/>
+<br/>
+   while(i&lt;len)
+<br/>
+      {
+<br/>
+      while(WriteBusy());
+<br/>
+      WriteByte(data[i++]);
+<br/>
+      }
+<br/>
+   return i;
+<br/>
+   }</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Thanks.
+<br/>
+<br/>
+EDIT: Forgot to mention, I'm using an old version of DevKitAdvance, not DevKitARM.  It's the version from the Charmed Labs Xport devkit, I can look up the version if you think it's relevant.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#145967 - gmiller - Mon Nov 26, 2007 6:28 pm</h4>
+    <div class="postbody"><span class="postbody">I am not sure where you have issues here ... it could be serial over USB data loss or some issue on how you read the data or a display issue on the PC.  Your code is reading VRAM as bytes (which I have read works but I aways do it in shorts, the write is supposed to be the restriction not the read).  The data size should be (240x160x2) sized correctly but the color layout is not one that is native to the PC so you would need something to convert the colors (BGR - 5 bits each) to something the PC can display.  I assume you have check the data size and the looked at the data inside a GBA emulator to make sure that it is correct coming across the USB connection.  If all that is OK then I would guess that you display program is incorrect.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

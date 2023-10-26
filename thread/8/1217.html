@@ -1,0 +1,334 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>General advices on code organisation - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>ASM > General advices on code organisation</h2>
+<div id="posts">
+<div class="post">
+    <h4>#6018 - funkeejeffou - Thu May 15, 2003 9:54 am</h4>
+    <div class="postbody"><span class="postbody">I've been coding for a week now on asm and i can get some graphics routines running fine now, but independantly(a routine for bresenham, another to draw an image...).
+<br/>
+Since I'm new to asm and that I've been mostly coding in C, some questions went to me :
+<br/>
+- how do we represent negative numbers?
+<br/>
+- how do we create variables?
+<br/>
+- how do we switch the proc to thumb or arm mode?
+<br/>
+- how do we place our variables in iwram, ewram(ie is there an equivalent to malloc)?
+<br/>
+- how do we place code in iwram, ewram?
+<br/>
+- how can you represent the equivalent of a C structure in asm?
+<br/>
+- what are pools?
+<br/>
+- do you use an asm editor(wich one?)
+<br/>
+- what is the general structure and organisation of a large program?
+<br/>
+I know it is a lot to answer, but I've been browsing the asm tutorials as well as the arm docs, and I still can't answer precisely those.
+<br/>
+If someone could please just guide me, I'm actually passing a 3D engine from c to asm and it is not so simple :)
+<br/>
+<br/>
+Thanks to anyone who will answer me.
+<br/>
+<br/>
+PS : I'm using goldroad 1.7</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#6025 - DekuTree64 - Thu May 15, 2003 4:57 pm</h4>
+    <div class="postbody"><span class="postbody">- how do we represent negative numbers?
+<br/>
+It's called two's compliment. It means the number looks the same as positive, except the bits are opposites, except you have ato add one to the bitwise-opposite to get the negative. -1 (in 8-bit binary) would be 11111111, because if you add 1 to that, it overflows and becomes 0. Likewise, -5 would be 11111011, because +5 is 101, so invert that and you get 11111010, but if you add 101 to that, you get 11111111, which is-1, not 0. 
+<br/>
+I hope that made some sort of sense^^;
+<br/>
+- how do we create variables?
+<br/>
+Use the stack pointer. It's called sp, or r13. Just different names for the same register. It's full-descending, so the word it currently points to is considered used, so don't overwrite it. And decending means it tharts at the top and grows down, so like to declare 2 4-byte of variables, you'd use sub r13, r13, #8, and then use str/ldr rWhatever, [r13], and str/ldr rWhatever, [r13, #4] to access them. You have to keep track of how many things you've pushed onto the stack at the current point in your code.
+<br/>
+Global vars are accessed by labels though, so use like 
+<br/>
+ldr rWhatever, =gVar   //the address of the variable
+<br/>
+and then 
+<br/>
+ldr rWhatever. [rWhatever]
+<br/>
+to get the value in it. I've never actually created a global var in ASM though, but I think it would be done like 
+<br/>
+.section .iwram (or ewram)
+<br/>
+.global v1
+<br/>
+v1:
+<br/>
+.word 0 (the initial value)
+<br/>
+.global v2
+<br/>
+v2:
+<br/>
+.word 1 (initialize to 1)
+<br/>
+But keep in mind that's ust guessing, so don't blame me if it doesn't work^^
+<br/>
+- how do we switch the proc to thumb or arm mode?
+<br/>
+At the start of the functin, use .ARM or .THUMB to tell it which instruction set the following code uses. When calling thumb functions, use ldr rWhatever, =address
+<br/>
+orr rWhatever, rWhatever, #1
+<br/>
+bx rWhatever
+<br/>
+The lower bit of the address you bx to tells it which instruction set to use.
+<br/>
+- how do we place our variables in iwram, ewram(ie is there an equivalent to malloc)?
+<br/>
+The stack is in IWRAM, and EWRAM is free to do whatever you want with, though I'm pretty sure you can use .section .ewram to put global vars there the same as IWRAM. I treat is like a giant 256K stack, and I have a memory manager to claim a little of it for allocating little bits at a time when needed.
+<br/>
+- how do we place code in iwram, ewram?
+<br/>
+.section .iwram (or .ewram) at the start of the function
+<br/>
+- how can you represent the equivalent of a C structure in asm?
+<br/>
+As far as I know, you just use an array-type thing and keep track of the member offsets yourself
+<br/>
+- what are pools?
+<br/>
+That's where literals are stored, like for accessing global vars. At the end of your function, put 
+<br/>
+.pool
+<br/>
+gVar1:
+<br/>
+.word gVar1
+<br/>
+gVar2:
+<br/>
+.word gVar2
+<br/>
+then ldr rWhatever, =gVar1 loads the word at that label there. The linker replaces the names with the actual addresses of the variables.
+<br/>
+Actually you don't need to do that explicitly, the assembler does it for you. You would need to do it yourself though if you have a long function so the pool at the end is out of range of ldr's immediate value range at the start of the function. Then you could put the pool right in the middle, and just branch over it when your code gets there.
+<br/>
+I wouldn't swear to anything I just said though, anybody want to verify it?
+<br/>
+- do you use an asm editor(wich one?)
+<br/>
+I use MSVC++, cause it has automatic indenting, but you could use notepad or anything else.
+<br/>
+- what is the general structure and organisation of a large program?
+<br/>
+Never written a whole program in ASM.
+<br/>
+<br/>
+Hope hat helps, I was half guessing some of the time, but I'm pretty familiar with the ways of ARM ASM though, so it's probably all at least close to right^^</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#6036 - torne - Thu May 15, 2003 6:49 pm</h4>
+    <div class="postbody"><span class="postbody">Mostly right. Both I and the previous poster assume GNU as, rather than GoldRoad.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">- how do we represent negative numbers?</td> </tr></table><span class="postbody">
+<br/>
+In the assembler, just write negative numbers. The assembler will generate the complements for you, and/or use the MVN instruction (move not) to invert numbers. But they are stored as two's complement, exactly the same as in C =)
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">- how do we create variables?</td> </tr></table><span class="postbody">
+<br/>
+Local variables do indeed work the way DekuTree explains. To make a global variable that's initialised to a value, do it the way DekuTree says; to make one that's initialised to zero and doesn't occupy any space in your ROM, use:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">.bss
+<br/>
+.global var1
+<br/>
+var1:
+<br/>
+.skip &lt;number of bytes you want&gt;</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I recommend not using labels like v1, btw, as they conflict with the ATPCS register naming conventions (a1-a4,v1-v8,fp,sp,ip,lr,pc and probably one or two more I missed)
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">- how do we switch the proc to thumb or arm mode?</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+You never need to explicitly switch the processor. Use .ARM and .THUMB to mark sections of code as being in one or the other. Do not do what DekuTree suggests to call functions, I'm afraid. To call functions by label, just call them normally:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">.arm
+<br/>
+.b thumbfunction</td> </tr></table><span class="postbody">
+<br/>
+and the assembler will automatically patch the call site to make the switch between CPU modes if neccecary (a dummy 6 byte shim function will be inserted elsewhere in the code to transition between cpu states).
+<br/>
+<br/>
+To call functions through a function pointer, use bx, but rather than setting the bottom bit to one yourself, declare the pointer as being a thumb function:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">.thumb_func
+<br/>
+AFunctionWrittenInThumb:
+<br/>
+... instructions</td> </tr></table><span class="postbody">
+<br/>
+as the assembler will then automatically add the 1 to the value of the symbol AFunctionWrittenInThumb (the .thumb_func directive also automatically switches you to Thumb asm mode).
+<br/>
+<br/>
+When you return from a function in a program using both ARM and Thumb instructions (this is called interworking), use bx lr, not mov pc, lr. If you use ldmfd or pop to return from functions by popping the saved LR value directly into the PC, this is also OK as setting the PC via a load is also guarenteed to restore the processor state.
+<br/>
+<br/>
+For more information on interworking, read the ATPCS, the ARM/Thumb Procedure Call Standard, available from ARM's site.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">- how can you represent the equivalent of a C structure in asm?
+<br/>
+As far as I know, you just use an array-type thing and keep track of the member offsets yourself</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+There is a section reserved for making structures:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">.struct 0
+<br/>
+Field1:
+<br/>
+.struct Field1 + 4
+<br/>
+Field2:
+<br/>
+.struct Field2 + 2
+<br/>
+Field3:
+<br/>
+.struct Field3 + 2
+<br/>
+StructEnd:</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+This creates a structure template 8 bytes long, containing a four-byte field and two two-byte fields. You access the members like this:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">ldr r1, [r2, #Field1]   @ Loads Field 1 from the structure pointed to by r2</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">- what are pools?</td> </tr></table><span class="postbody">
+<br/>
+Never explicitly put anything into a pool. The .pool directive is not for designating the start of a pool, it is to cause the assembler to dump its pending pool constants at the current location. You should not normally need to put in any pool directives as the pool is automatically dumped at the end of each file; if the assembler complains that pool offsets are too large, you may need to designate a pool near to the middle of your file, usually between functions such that there is no need to branch over it. If you have a truly titanic function which is bigger than the offsets supported by the ARM instruction set, then your function probably needs to be split up anyway. =)
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">- do you use an asm editor(wich one?)</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I use gVim, its syntax highlighting supports GNU as quite happily.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">- what is the general structure and organisation of a large program?</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+The same as in C, usually. Place related functions in the same source file, along with their global variable definitions. You don't need any header files in asm except for the preprocessor, if you use it. You will need headers with extern declarations for your asm functions if you intend to call them from C, however.
+<br/>
+<br/>
+I'm writing a complete operating system for the GBA entirely in assembler, mostly in Thumb for fast execution directly from the cart. I have studied all the ARM reference manuals, including the ones you don't get from their site (google for the ARM ARM, Architectural Reference Manual, for canonical info on the ARM/Thumb instruction sets, as the info in no$gba and friends' documentation is not perfect and is rather brief), and made up a lot of nice tricks. ASM is fun, especially on RISC.
+<br/>
+<br/>
+Hope this helps,
+<br/>
+Torne</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#6119 - funkeejeffou - Sat May 17, 2003 2:31 pm</h4>
+    <div class="postbody"><span class="postbody">Thanks a lot you too for your replies, i can now visualise a little bit more how am i gonna code the engine.
+<br/>
+Just some other questions and i'll stop bother you :
+<br/>
+<br/>
+When i want to test if a 32bits variable is negative, should i check if it is more than 0x80000000 (ie 2power31), or can the assembler figure it out itself if i write 
+<br/>
+"cmp r0, #0"
+<br/>
+"ble loop"
+<br/>
+<br/>
+Also, if i want to use local variables, i've seen that i must declare them within a "textarea":
+<br/>
+@textarea 0x300000(Ram adress)
+<br/>
+var1 ....
+<br/>
+var2 ....
+<br/>
+@endarea
+<br/>
+the problem is that if in another functiun i have new local variables, defining this :
+<br/>
+@textarea 0x300000(Ram adress)
+<br/>
+var3 ....
+<br/>
+var4 ....
+<br/>
+@endarea
+<br/>
+would make var3 equivalent to var1 as well as vr4 equivalent to var2
+<br/>
+Should I code a functiun equivalent to malloc so that i keep trace of how much memory i have still left in each type of ram?
+<br/>
+<br/>
+What does bx exactly do? Does it make the jump to the label and set the end bit to its inverse value(set to 1 if 0, set to 0 if 1), so that the proc is switched to thumb or arm?
+<br/>
+Still can't figure out how to switch the CPU mode, putting 
+<br/>
+"@arm" or "@thumb", doesn't seem to be enough, and "@thumb" generates compilation errors(don't know why as the code compiles in arm mode...)
+<br/>
+<br/>
+Thanks again Torne and Dekuthree64 for your attention, hope you'll help me again.
+<br/>
+PS : Are you too coding in GNU ASM, your not using the goldroad syntax (Goldroad doesn't have ".section" stuff, right?)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#6134 - torne - Sat May 17, 2003 11:23 pm</h4>
+    <div class="postbody"><span class="postbody">To test if a value is negative, you can either compare it to zero and use the 'le' condition, as you said, or, since testing for zero is a 'special case', you can do something like the following:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">subs r1,r1,#1    @ subtract 1 from r1 and also set flags
+<br/>
+ble loop</td> </tr></table><span class="postbody">
+<br/>
+If you append 's' to almost any ARM arithmetic instruction (doesn't work in thumb), it will set the CPU flags in the same way as if you compared the result to zero, thus saving you using a cmp instruction at all.
+<br/>
+the 'le' test is signed, meaning that 0x90000000 is less than zero. If you want unsigned comparisons (which you don't here, but might elsewhere) then use 'mi' (minus) and 'pl' (plus or equal): under 'pl, 0x90000000 is greater than zero.
+<br/>
+<br/>
+Declaring variables like that is declaring a *global* variable, not local. Local variables live on the stack, and are not at any defined address, only an address relative to the stack pointer. I suggest you consult the web and find some references to stack organisation and C local variable implementation; as it's a lil complex to explain here if you don't know about that.
+<br/>
+<br/>
+You can use malloc in dka, don't know about goldroad; dka's c library contains a malloc implementation. But you shouldn't malloc to store local variables, usually.
+<br/>
+<br/>
+bx does not jump to a label; bx jumps to the value of a register. bx uses the low bit of that register to determine whether it should be switching mode or not; if the low bit is 1, it switches to (if it's not already in) Thumb mode, andd if it's 0, to ARM mode. Any symbol that you intend to use as a Thumb function pointer must be declared with GoldRoad's equivalent of .thumb_func as I said in my previous post, else its low bit won't get set for you.
+<br/>
+<br/>
+You can't just declare a section of code as being in Thumb; Thumb instructions have a different format. Arithmetic instructions take only two arguments on the whole (the destination is implicitly the first argument), only branches can be conditional, and a whole swathe of other restrictions. Thumb is a subset of ARM and you need to learn what you can and can't do in it.
+<br/>
+<br/>
+I used goldroad briefly and don't like it personally; I develop for other platforms using GNU binutils, so am used to its more 'standard' syntax; plus Goldroad seems to take a little too much into its own hands for my liking; I like to know where every byte of my ELF binaries came from. =)
+<br/>
+<br/>
+Torne</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

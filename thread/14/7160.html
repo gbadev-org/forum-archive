@@ -1,0 +1,187 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Writing a pixel to a screen in Mode 0 - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Beginners > Writing a pixel to a screen in Mode 0</h2>
+<div id="posts">
+<div class="post">
+    <h4>#57271 - blacksun - Fri Oct 14, 2005 6:36 pm</h4>
+    <div class="postbody"><span class="postbody">I would like to set pixels on a text background layer.  I have been doing this in Mode 3 to write text onto the screen without using sprites.  The reason I can't use sprites is because I will exceed my sprite limit.  I can't make the numbers tiles because they aren't 8x8 and the spacing needs to be 1 pixel.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#57279 - poslundc - Fri Oct 14, 2005 7:29 pm</h4>
+    <div class="postbody"><span class="postbody">Not sure what your question is, but <a class="postlink" href="http://forum.gbadev.org/viewtopic.php?t=1764" target="_blank">this thread</a> talks about some different strategies for displaying variable-width text on the GBA.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#57304 - blacksun - Fri Oct 14, 2005 9:31 pm</h4>
+    <div class="postbody"><span class="postbody">Well, in Mode 3 I write text by just plotting pixels in the Video Buffer.  Easy enough.  On a text background i know you use tiles and maps to draw the background.  Is there a way to just plot pixels on a text background instead of manipulating the tiles?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#57314 - poslundc - Fri Oct 14, 2005 10:06 pm</h4>
+    <div class="postbody"><span class="postbody">You can plot pixels, but you need to plot them into a tile which is displayed on the screen. This is inconvenient, but not hard to wrap your head around if you give it some thought.
+<br/>
+<br/>
+Just assign a unique tile to each "slot" displayable in your BG map - 30 across by 20 down = 600 tiles. Then when you want to plot your pixel, first determine which tile you have to write to, then determine where on that tile you have to write.
+<br/>
+<br/>
+The hardest part is that (in 16-colour mode) you need to write four pixels at a time, because VRAM only allows 16-bit writes and your pixels are 4-bits each. This makes plotting an individual pixel some work, because you need to load in the correct u16 from VRAM, bitwise-AND out the four bits in question and bitwise-OR in the new bits. This is no different from having to address two pixels at a time in Mode 4, though. Because of this behaviour, it's generally adviseable to try to design your system so that you paint an entire tile at a time with your output contents, rather than trying to plot individual pixels all over the place.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#57327 - ScottLininger - Fri Oct 14, 2005 11:08 pm</h4>
+    <div class="postbody"><span class="postbody">Here's some (incomplete and somewhat retarded) code to do like dan is saying... But maybe it will make it more concrete. :)
+<br/>
+<br/>
+-Scott
+<br/>
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">// set up mode 0 and point a background (3 in this case)
+<br/>
+// to a memory location (block 31 in this case)
+<br/>
+SetMode(MODE_0 | BG3_ENABLE ); 
+<br/>
+u16* bg3map =(u16*)ScreenBaseBlock(31);
+<br/>
+<br/>
+// set up a u16 that will contain our actual pixel data
+<br/>
+// note that each u16 contains the data for 4 pixels
+<br/>
+u16* tileData =(u16*)CharBaseBlock(0);
+<br/>
+<br/>
+// set up our Registers to use the above memory locations
+<br/>
+REG_BG3CNT = BG_COLOR16 | TEXTBG_SIZE_256x256 | (31 &lt;&lt; SCREEN_SHIFT) | (0 &lt;&lt; CHAR_SHIFT) | BIT1;
+<br/>
+<br/>
+// loop across a 30 columns and 20 rows, and set
+<br/>
+// a unique tile into each of your 8x8 cells 
+<br/>
+int row,col;
+<br/>
+int tileIndex = 0;
+<br/>
+for (row=0;row&lt;20;row++) {
+<br/>
+    for (col=0;col&lt;30;col++) {
+<br/>
+        bg3map[row*30 + col] = tileIndex + (DESIREDPALETTEINDEX&lt;&lt;12);
+<br/>
+        tileIndex++;
+<br/>
+    }
+<br/>
+} 
+<br/>
+<br/>
+// a couple defines to avoid "magic numbers"
+<br/>
+#define PIXELSPERTILE 64
+<br/>
+#define TOTALCOLS 30
+<br/>
+<br/>
+void PlotPixel(int screenX, int screenY, unsigned short int c) {
+<br/>
+   
+<br/>
+    int tileX,tileY,interiorX,interiorY,pixelNumber,myIndex,myPixel;
+<br/>
+<br/>
+    tileX = screenX/8; // figure out the "column" we're writing to
+<br/>
+    tileY = screenY/8; // figure out the "row"
+<br/>
+    interiorX = screenX - tileX*8; // figure our X offset within the tile
+<br/>
+    interiorY = screenY - tileY*8; // figure our Y offset withing the tile
+<br/>
+<br/>
+    // this next bit calculates the pixel "index" as if the tileData 
+<br/>
+    // were a u4 array
+<br/>
+    pixelNumber = tileY*(TOTALCOLS*PIXELSPERTILE) + 
+<br/>
+        tileX*PIXELSPERTILE + interiorY*8 + interiorX; 
+<br/>
+    
+<br/>
+    // divide by 4 to get the u16 index
+<br/>
+    // (remember that this u16 contains 4 pixels worth of data)
+<br/>
+    myIndex = pixelNumber&gt;&gt;2; 
+<br/>
+<br/>
+    // remember which of the 4 pixels we're trying to write to
+<br/>
+    myPixel = pixelNumber - myIndex*4; 
+<br/>
+<br/>
+    // pull a copy of the "original" color, since we need to change
+<br/>
+    // only one 4-bit section of the thing
+<br/>
+    u16 originalColor = tileData[myIndex];
+<br/>
+<br/>
+    // do some bit math to mask out our pixel and then add it to
+<br/>
+    // our new color to set just that one pixel
+<br/>
+    if (myPixel==0) {
+<br/>
+        tileData[myIndex] = (originalColor &amp; 0xFFF0) + c;
+<br/>
+    } else if (myPixel==1) {
+<br/>
+        tileData[myIndex] = (originalColor &amp; 0xFF0F) + (c&lt;&lt;4);
+<br/>
+    } else if (myPixel==2) {
+<br/>
+        tileData[myIndex] = (originalColor &amp; 0xF0FF) + (c&lt;&lt;8);
+<br/>
+    } else if (myPixel==3) {
+<br/>
+        tileData[myIndex] = (originalColor &amp; 0x0FFF) + (c&lt;&lt;12);
+<br/>
+    }
+<br/>
+<br/>
+}
+<br/>
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#58850 - thegamefreak0134 - Wed Oct 26, 2005 7:51 pm</h4>
+    <div class="postbody"><span class="postbody">Just what spacing are the numbers tiles? If they are multiples of 8, you can still use tiles. Just use more than one tile per number.<br/>_________________<br/>What if the hokey-pokey really is what it's all about?
+<br/>
+<br/>
+[url=http:/www.darknovagames.com/index.php?action=recruit&amp;clanid=1]Support Zeta on DarkNova![/url]</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

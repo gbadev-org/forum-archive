@@ -1,0 +1,576 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Benchmarking - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > Benchmarking</h2>
+<div id="posts">
+<div class="post">
+    <h4>#2191 - animension - Fri Jan 31, 2003 12:22 am</h4>
+    <div class="postbody"><span class="postbody">Hey all,
+<br/>
+<br/>
+I'm trying to benchmark some C code VS some ASM code of the same task, and I'm wondering how would be a good, accurate method to do so. Specifically, I'd like to bench the BIOS DIV util vs the "/" operator in integer divide operations. I have written a crude benchmarking test program and I think there's something inaccurate with it but I can't see anything out of the ordinary. 
+<br/>
+<br/>
+As I understand it, the BIOS util is supposed to be far superior to using the "/" operator. The code I have that uses the util is as follows:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+.code 32
+<br/>
+.section .iwram
+<br/>
+.align
+<br/>
+.global  biosdiv 
+<br/>
+<br/>
+biosdiv:  
+<br/>
+  swi   0x60000 
+<br/>
+  bx   lr 
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+As you can see, it's very simple, is for ARM and is placed in IWRAM for speedy ARM execution.
+<br/>
+<br/>
+The code that benches the util against compiled "/" operations is as follows:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#include "mygba.h"
+<br/>
+<br/>
+extern "C" signed long biosdiv(
+<br/>
+   signed long dividend, 
+<br/>
+   signed long divisor
+<br/>
+);
+<br/>
+<br/>
+unsigned int aframes, bframes = 0;
+<br/>
+bool adone, bdone = false;
+<br/>
+const unsigned long MAXCOUNT = 1000000;
+<br/>
+const unsigned long PLACEBO = 7;
+<br/>
+<br/>
+<br/>
+void vbl(void){
+<br/>
+   if(!adone){
+<br/>
+      aframes++;
+<br/>
+   } else if (!bdone){
+<br/>
+      bframes++;
+<br/>
+   }
+<br/>
+   ham_DrawText(0,0,"A: %d",aframes);
+<br/>
+   ham_DrawText(0,1,"B: %d",bframes);
+<br/>
+}
+<br/>
+<br/>
+int doatask(int input){
+<br/>
+   return (input / PLACEBO);
+<br/>
+}
+<br/>
+<br/>
+int dobtask(int input){
+<br/>
+   return biosdiv(input,PLACEBO);
+<br/>
+}
+<br/>
+<br/>
+int main(void){
+<br/>
+   ham_Init();
+<br/>
+   ham_SetBgMode(0);
+<br/>
+   ham_InitText(0);
+<br/>
+   
+<br/>
+   ham_StartIntHandler(INT_TYPE_VBL,(void*)&amp;vbl);
+<br/>
+   
+<br/>
+   int dummy = 0;
+<br/>
+   unsigned long i;
+<br/>
+<br/>
+   for (i = 0; i &lt; MAXCOUNT; i++){
+<br/>
+      doatask(i);
+<br/>
+   }
+<br/>
+   adone = true;
+<br/>
+<br/>
+   dummy = 0;
+<br/>
+   for (i = 0; i &lt; MAXCOUNT; i++){
+<br/>
+      dobtask(i);
+<br/>
+   }
+<br/>
+   bdone = true;
+<br/>
+<br/>
+   while(1);
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+In a nutshell, this code first counts how many frames it takes to do MAXCOUNT (one million) aritmatic calculations with each iteration calculating "i" (iterator of the loop) divided by PLACEBO (in this case 7) using the C "/" operator. With each frame it updates the count of the frame and when the task is finished it proceeds to the second task, doing the exact same thing but calling the function made via ASM. 
+<br/>
+<br/>
+The results were disappointing. I got 542 frames for the "/" operator versus 1826 frames for the ASM function. This test was done on hardware. Could there be anything that needs to be checked for inaccuracies? As far as I know, I'm subjecting both functions to the same tests with the same amount of overhead needed to conduct the tests themselves... I find it strange that everyone raves about the BIOS util when the bench shows it being 4 times as slow... something is not right with my code.<br/>_________________<br/>"Beer is proof that God loves us and wants us to be happy."
+<br/>
+-- Benjamin Franklin</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#2193 - dragor - Fri Jan 31, 2003 12:45 am</h4>
+    <div class="postbody"><span class="postbody">Here's one idea.  With the / test, the test is done immediately, whereas the bios test uses an extra function call before it starts executing.  The extra time for the bios might be because of this.  Try putting your asm inline.<br/>_________________<br/>Sum Ergo Cogito</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#2195 - animension - Fri Jan 31, 2003 1:06 am</h4>
+    <div class="postbody"><span class="postbody">Ah, I see.  However, I ran into another problem. I changed "dobtask" to contain:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+int dobtask(int input){
+<br/>
+   int retval = 0;
+<br/>
+   asm volatile(
+<br/>
+      "add      r0,%1,#0\n" // put value of input into r0
+<br/>
+      "add      r1,%2,#0\n" // put value of PLACEBO into r1
+<br/>
+      "swi      6\n" // BIOS DIV util SWI
+<br/>
+      "ldr      r2,%0" // put address of retval into r2
+<br/>
+      "str      r0,[r2]" // store result of SWI 6 into memory address in r2
+<br/>
+      : "=m" (&amp;retval) // address of retval is %0
+<br/>
+      : "r" (input), "r" (PLACEBO) // input is %1, PLACEBO is %2
+<br/>
+      : "r0","r1","r2" // we smash and crush r0,r1, and r2 registers
+<br/>
+   );
+<br/>
+   return retval;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+and what I get when I compile it is:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+D:/ham/gcc-arm/bin/arm-thumb-elf-gcc.exe    -I D:/ham/gcc-arm/include -I D:/ham/gcc-arm/arm-thumb-elf/include -I D:/ham/include -I D:/ham/system  -c -DHAM_HAM  -DHAM_MULTIBOOT  -DHAM_ENABLE_MBV2LIB  -O2  -DHAM_WITH_LIBHAM  -mthumb-interwork -mlong-calls -Wall -save-temps -fverbose-asm  test.cpp 
+<br/>
+test.cpp: In function `int dobtask(int)':
+<br/>
+test.cpp:26: output number 0 not directly addressable
+<br/>
+test.cpp:37: confused by earlier errors, bailing out
+<br/>
+make: *** [test.o] Error 1
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+the same bleeding problem I had last time I tried to inline ASM anything. The code looks correct and I just cannot figure out why the compiler is whining.<br/>_________________<br/>"Beer is proof that God loves us and wants us to be happy."
+<br/>
+-- Benjamin Franklin</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#2197 - Rich - Fri Jan 31, 2003 1:23 am</h4>
+    <div class="postbody"><span class="postbody">Try changing your code to...
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+int dobtask(int input)
+<br/>
+{ 
+<br/>
+   int retval = 0; 
+<br/>
+   asm volatile
+<br/>
+   ( 
+<br/>
+      "mov      r0,%1\n"
+<br/>
+      "mov      r1,%2\n"
+<br/>
+      "swi      6\n"
+<br/>
+      "mov      %0,r0"
+<br/>
+      : "=r" (retval)
+<br/>
+      : "r" (input), "r" (PLACEBO)
+<br/>
+      : "r0", "r1", "r2"
+<br/>
+   ); 
+<br/>
+   return retval; 
+<br/>
+} 
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#2201 - animension - Fri Jan 31, 2003 2:56 am</h4>
+    <div class="postbody"><span class="postbody">Wow that worked. What made the difference? using "=r" instead of "=m"? How does it make a difference? Also isn't the mov function limited to only 8bit numbers that are/can be shifted?
+<br/>
+<br/>
+I also added code that would spit out the value of the dummy variable and print it to see accuracy for the two tests. For the "/" test I got a value of -1586372603 and for the SWI 6 test I got 1783293664.
+<br/>
+<br/>
+Huh?<br/>_________________<br/>"Beer is proof that God loves us and wants us to be happy."
+<br/>
+-- Benjamin Franklin</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#2203 - Rich - Fri Jan 31, 2003 3:27 am</h4>
+    <div class="postbody"><span class="postbody">Check out <a href="http://www.devrs.com/gba/files/asmrules.html" target="_blank">http://www.devrs.com/gba/files/asmrules.html</a> for more info about inline asm, it explains things better than I can :)
+<br/>
+<br/>
+Mov can move registers, which can contain any 32bit value, or immediate values which are limited to certain values.
+<br/>
+<br/>
+As for the discrepancies in your accuaracy tests it looks like a problem with overflow in signed / unsigned numbers.  Can you post the values you were testing with and maybe the code you used to print the results?
+<br/>
+<br/>
+Rich.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#2204 - animension - Fri Jan 31, 2003 3:38 am</h4>
+    <div class="postbody"><span class="postbody">I tried running this on hardware and it crashed when it reached the start of the ASM benchmark. No idea why. Worked perfectly in VBA.
+<br/>
+<br/>
+When I do run it in VBA I get different results for both tests. The "A" task test gets a value of -1586372603 and the "B" test gest a value of 1783293664.
+<br/>
+<br/>
+Here is the code in full:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#include "mygba.h"
+<br/>
+<br/>
+<br/>
+unsigned int aframes, bframes = 0;
+<br/>
+bool adone, bdone = false;
+<br/>
+const unsigned long MAXCOUNT = 1000000;
+<br/>
+const unsigned long PLACEBO = 7;
+<br/>
+<br/>
+<br/>
+void vbl(void){
+<br/>
+   if(!adone){
+<br/>
+      aframes++;
+<br/>
+   } else if (!bdone){
+<br/>
+      bframes++;
+<br/>
+   }
+<br/>
+   ham_DrawText(0,0,"A: %d",aframes);
+<br/>
+   ham_DrawText(0,1,"B: %d",bframes);
+<br/>
+}
+<br/>
+<br/>
+int doatask(signed long input){
+<br/>
+   return int(input / PLACEBO);
+<br/>
+}
+<br/>
+<br/>
+int dobtask(signed long input) 
+<br/>
+{ 
+<br/>
+   int retval = 0; 
+<br/>
+   asm volatile 
+<br/>
+   ( 
+<br/>
+      "mov      r0,%1\n" 
+<br/>
+      "mov      r1,%2\n" 
+<br/>
+      "swi      6\n" 
+<br/>
+      "mov      %0,r0" 
+<br/>
+      : "=r" (retval) 
+<br/>
+      : "r" (input), "r" (PLACEBO) 
+<br/>
+      : "r0", "r1", "r2" 
+<br/>
+   ); 
+<br/>
+   return retval; 
+<br/>
+} 
+<br/>
+<br/>
+int main(void){
+<br/>
+   ham_Init();
+<br/>
+   ham_SetBgMode(0);
+<br/>
+   ham_InitText(0);
+<br/>
+   
+<br/>
+   ham_StartIntHandler(INT_TYPE_VBL,(void*)&amp;vbl);
+<br/>
+   
+<br/>
+   signed long adummy = 0;
+<br/>
+   signed long bdummy = 0;
+<br/>
+   unsigned long i;
+<br/>
+<br/>
+   for (i = 0; i &lt; MAXCOUNT; i++){
+<br/>
+      adummy += doatask(i);
+<br/>
+   }
+<br/>
+   adone = true;
+<br/>
+   ham_DrawText(0,4,"AV: %10d",adummy);
+<br/>
+<br/>
+   for (i = 0; i &lt; MAXCOUNT; i++){
+<br/>
+      bdummy += dobtask(i);
+<br/>
+   }
+<br/>
+   bdone = true;
+<br/>
+<br/>
+   ham_DrawText(0,5,"BV: %10d",bdummy);
+<br/>
+<br/>
+<br/>
+   while(1);
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody"><br/>_________________<br/>"Beer is proof that God loves us and wants us to be happy."
+<br/>
+-- Benjamin Franklin</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#2205 - Rich - Fri Jan 31, 2003 3:49 am</h4>
+    <div class="postbody"><span class="postbody">Okay firstly try changing the swi 6 to swi 0x60000
+<br/>
+<br/>
+And secondly, try decreasing MAXCOUNT to something like 1000 to make sure that adummy and bdummy aren't overflowing.  You can always increase MAXCOUNT bit by bit later.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#2206 - animension - Fri Jan 31, 2003 4:00 am</h4>
+    <div class="postbody"><span class="postbody">Ok that seemed to fix the problems. I do get both values being equal even with MAXCOUNT at one million. At one hundred thousand, it takes the hardware 55 frames to run test "A" and 151 frames to run test "B", which makes the BIOS util still slower... is there a way I can guarantee the function runs in IWRAM and is compiled for ARM using GCC?<br/>_________________<br/>"Beer is proof that God loves us and wants us to be happy."
+<br/>
+-- Benjamin Franklin</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#2207 - Rich - Fri Jan 31, 2003 4:07 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#define IWRAM_CODE __attribute__ ((section (".iwram"), long_call))
+<br/>
+<br/>
+IWRAM_CODE int dobtask(signed long input) 
+<br/>
+{ 
+<br/>
+   int retval = 0; 
+<br/>
+   asm volatile 
+<br/>
+   ( 
+<br/>
+      "mov      r0,%1\n" 
+<br/>
+      "mov      r1,%2\n" 
+<br/>
+      "swi      0x60000\n" 
+<br/>
+      "mov      %0,r0" 
+<br/>
+      : "=r" (retval) 
+<br/>
+      : "r" (input), "r" (PLACEBO) 
+<br/>
+      : "r0", "r1", "r2" 
+<br/>
+   ); 
+<br/>
+   return retval; 
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+You might need to put the dobtask function in a separate .c file</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#2209 - animension - Fri Jan 31, 2003 4:17 am</h4>
+    <div class="postbody"><span class="postbody">I relocated the function to a different file and had it designated to IWRAM. Running it on hardware with MAXCOUNT at one hundred thousand, the "A" test takes 55 frames (as it did before) and the "B" test dropped to 125 frames, still over 2x slower.
+<br/>
+<br/>
+Is there anything else that can be done? I'd like to discover the joy of a fast divide, but so far it's way slower than compiled C.<br/>_________________<br/>"Beer is proof that God loves us and wants us to be happy."
+<br/>
+-- Benjamin Franklin</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#2211 - Rich - Fri Jan 31, 2003 4:24 am</h4>
+    <div class="postbody"><span class="postbody">You might want to take a look at <a href="http://www.peter-teichmann.de/ahinte.html" target="_blank">http://www.peter-teichmann.de/ahinte.html</a>
+<br/>
+<br/>
+Try putting that routine into iwram and seeing how that compares.
+<br/>
+<br/>
+Just out of interest, what results do you get if you run the test on an emulator?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#2213 - animension - Fri Jan 31, 2003 4:47 am</h4>
+    <div class="postbody"><span class="postbody">I'll try running that routine later this evening as I have to run out for a bit. To answer your question about how the bench runs in an emu, test "A" gets 18 frames and test "B" gets 96. There's a much bigger gap in the emu probably because the PC is able to divide faster than the GBA, but when running BIOS it has to emulate the BIOS ROM algorithms I imagine.<br/>_________________<br/>"Beer is proof that God loves us and wants us to be happy."
+<br/>
+-- Benjamin Franklin</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#2214 - Rich - Fri Jan 31, 2003 5:01 am</h4>
+    <div class="postbody"><span class="postbody">From the quick test that I've just done using a slightly modified version of that routine running in IWRAM, I'd say it's about twice as fast as the standard '/' routines when running on the VBA emulator.
+<br/>
+<br/>
+Haven't got time tonight to dig out my GBA and do a hardware test, so I'd be interested to hear what you find out later.
+<br/>
+<br/>
+Good luck :)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#2238 - col - Fri Jan 31, 2003 3:01 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>animension wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+...
+<br/>
+const unsigned long PLACEBO = 7;
+<br/>
+...
+<br/>
+int doatask(int input){
+<br/>
+   return (input / PLACEBO);
+<br/>
+}
+<br/>
+...
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+...The results were disappointing. I got 542 frames for the "/" operator versus 1826 frames for the ASM function. </span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+you are dividing by a const.  gcc should optimise this to use a few shifts and adds!! check the asm output.
+<br/>
+Change your code to use a 'volatile unsigned long' instead of a const...
+<br/>
+<br/>
+(There is a section in this document about how to optimise divide by a const
+<br/>
+<a href="http://infoeng.ee.ic.ac.uk/~gac1/Architecture/Progtech.pdf" target="_blank">http://infoeng.ee.ic.ac.uk/~gac1/Architecture/Progtech.pdf</a> )
+<br/>
+<br/>
+I suggest you use a broad range of divisors and dividends for a more accurate test - a divide that is fast dividing by 7 might be VERY slow dividing by 65534.
+<br/>
+Whereas another algorithm that looks worse using 7, might be better over a large range...
+<br/>
+<br/>
+<br/>
+cheers
+<br/>
+<br/>
+col</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#2281 - animension - Sat Feb 01, 2003 2:43 am</h4>
+    <div class="postbody"><span class="postbody">Wow that made a huge difference. The BIOS divide util was way ahead of the divide opration when the values were designated as volatile and unoptimized. Thanks a bunch!<br/>_________________<br/>"Beer is proof that God loves us and wants us to be happy."
+<br/>
+-- Benjamin Franklin</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

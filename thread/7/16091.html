@@ -1,0 +1,522 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Can you explain this warning? - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>C/C++ > Can you explain this warning?</h2>
+<div id="posts">
+<div class="post">
+    <h4>#163306 - mml - Mon Sep 29, 2008 11:00 am</h4>
+    <div class="postbody"><span class="postbody">This one's got me a bit puzzled.
+<br/>
+<br/>
+I've got a source file in my project which I'm changing from C++ to C, since it requires no C++ features and for my purposes C is most likely to be more reusable later on.
+<br/>
+<br/>
+When compiling as C, I'm getting this warning:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">source/debug.c: In function 'hexdump':
+<br/>
+source/debug.c:105: warning: passing argument 1 of 'pager' from incompatible pointer type</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+pager's signature is:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void pager(const char (*)[32], const size_t , const char *, const char *);</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+(ie, argument 1 is a pointer to (an array of) char[32])
+<br/>
+<br/>
+and it's being called from:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">    char (*buffer)[32];
+<br/>
+    ...
+<br/>
+    pager(buffer, line_count, title, lenstr);</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+This was all perfectly happy when compiled as C++; and it seems to be working fine when compiled as C, but the warning is annoying me.
+<br/>
+<br/>
+Before I change those functions to use an ordinary char** malloc loop rather than a 2d array/single large malloc, can anyone explain why it's warning me about this?
+<br/>
+<br/>
+Cheers</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#163376 - sajiimori - Wed Oct 01, 2008 12:26 am</h4>
+    <div class="postbody"><span class="postbody">I recommend avoiding the "pointer to array" concept entirely, and passing a plain pointer to the first element of the array instead.  It results in exactly the same generated opcodes, and the [32] doesn't actually guarantee that the array is 32 elements long -- it just says "I <span style="font-style: italic">hope</span> this is 32 elements long".
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void pager(const char *, const size_t , const char *, const char *);
+<br/>
+char *buffer;  // will point to the first element of an array.
+<br/>
+...
+<br/>
+pager(buffer, line_count, title, lenstr);
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+As you've discovered, the semantics of pointers to arrays is slightly different between C and C++.  Frankly, I don't understand the difference, and I don't care to because I consider them an obfuscation anyway.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#163386 - mml - Wed Oct 01, 2008 9:05 am</h4>
+    <div class="postbody"><span class="postbody">It is already a plain pointer to the first element of the array.  The first argument to pager is not a char array; it's a (pointer to an) array of char arrays (each 32 chars long).  So I can't just change the function to take a char* -- that's a completely different data type.
+<br/>
+<br/>
+The alternate, non-pointer syntax of what I'm doing here would be:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void pager(const char[][32], const size_t , const char *, const char *); </td> </tr></table><span class="postbody">
+<br/>
+<br/>
+<br/>
+As it turns out, the warning I'm getting is due arg1 of pager being declared const, while buffer is not, and seems closely related to this: <a href="http://c-faq.com/ansi/constmismatch.html" target="_blank">http://c-faq.com/ansi/constmismatch.html</a>
+<br/>
+<br/>
+Though I'm not sure why it deems that worthy of a warning, when the troublesome middle-step is explicitly an array (with all the limitations thereof) and not a troublesome pointer.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#163388 - kusma - Wed Oct 01, 2008 9:36 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>mml wrote:</b></span></td> </tr> <tr> <td class="quote">It is already a plain pointer to the first element of the array.  The first argument to pager is not a char array; it's a (pointer to an) array of char arrays (each 32 chars long).  So I can't just change the function to take a char* -- that's a completely different data type.</td> </tr></table><span class="postbody">
+<br/>
+Actually, it's not entirely. A pointer to an array and an array is pretty much the same thing in C/C++. There's no point in passing a pointer to an array of 32 elements, as just passing an array of 32 elements (or a pointer to the first element in the array) does the same thing, only without stepping into some C/C++ pitfalls.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#include &lt;stdio.h&gt;
+<br/>
+int main()
+<br/>
+{
+<br/>
+   int test[3] = {0,1,2};
+<br/>
+   printf("%p\n", test);
+<br/>
+   printf("%p\n", &amp;test);
+<br/>
+   return 0;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+These two print-statements print the same address. Similarly, the following code also prints the same address twice:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#include &lt;stdio.h&gt;
+<br/>
+void something(int test[3])
+<br/>
+{
+<br/>
+   printf("%p\n", test);
+<br/>
+}
+<br/>
+void something2(int test[][3])
+<br/>
+{
+<br/>
+   printf("%p\n", test);
+<br/>
+}
+<br/>
+int main()
+<br/>
+{
+<br/>
+   int test[3] = {0,1,2};
+<br/>
+   something(test);
+<br/>
+   something2(&amp;test);
+<br/>
+   return 0;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#163400 - sajiimori - Wed Oct 01, 2008 6:42 pm</h4>
+    <div class="postbody"><span class="postbody">mml, what I'm suggesting is avoiding the "pointer to array" concept entirely, and using pointers to scalars instead, because I find array semantics endlessly confusing in C and C++, and arrays degenerate to pointers at the drop of a hat anyway.
+<br/>
+<br/>
+But that's just me -- I never saw the benefit of trying to prevent arrays from degenerating to pointers.  Pointers are plain, first-class values; it's arrays that are weird.
+<br/>
+<br/>
+Here's another alternative that avoids pointer-to-array ugliness:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+struct S
+<br/>
+{
+<br/>
+  char a[32];
+<br/>
+};
+<br/>
+<br/>
+void pager(const S*, ...);
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+I like that approach because it turns a second-class array into a first-class value that can be treated the same as other values: you can pass and return it by value, it won't degenerate to some other type, you can take its address in a meaningful way, etc.
+<br/>
+<br/>
+kusma, I disagree that pointers and arrays are "pretty much the same thing" in C and C++.  Again, pointers are plain first-class values, whereas arrays have special-case semantics.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#163411 - tepples - Wed Oct 01, 2008 9:34 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sajiimori wrote:</b></span></td> </tr> <tr> <td class="quote">I never saw the benefit of trying to prevent arrays from degenerating to pointers.  Pointers are plain, first-class values; it's arrays that are weird.</td> </tr></table><span class="postbody">
+<br/>
+Perhaps preserving arrays as arrays was intended for static bounds checking or debug-mode run-time bounds checking.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#163416 - mml - Wed Oct 01, 2008 10:58 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>kusma wrote:</b></span></td> </tr> <tr> <td class="quote">These two print-statements print the same address.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Of course they do.  Two pointers to the same memory address will always have the same value, regardless of their type.  Would you then say these two are the same thing?:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">float f=123.45;
+<br/>
+float *fp =&amp;f;
+<br/>
+char *s = (char*)&amp;f;</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+The reason for specifying what sort of data is behind the pointer is so that a) the compiler knows how to treat it when you dereference it later, and b) so that the person reading/writing the code knows what kind of data is supposed to be there.
+<br/>
+<br/>
+If I'm gonna start treating a 2d array as a 1d array and handling all the calculations to access it myself I might as well just use void*'s and casts, and make it explicit that I'm doing something tricky.  But then every time I want to use that pager function down the track I'm gonna have to go and read through a lot of arcane wizardry every time to remember what it does and what it assumes about the data, instead of just reading the function signature in the header file and knowing everything I need to know.
+<br/>
+<br/>
+... or I could use explicit types and let the compiler do all that for me like it's supposed to, right?
+<br/>
+<br/>
+Anyway, this is already solved, as mentioned above; the problem was promoting a foo** (or foo[][n]) to const foo** (or const foo[][n]).
+<br/>
+<br/>
+The only thing I'm still vaguely wondering about here is why gcc gives the same warning in this case for an explicit 2d array (which is limited in how it can be messed with by virtue of being a "weird" array) as it does for a double-pointer; but this is something that requires intimate knowledge of gcc itself to answer.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#163420 - sajiimori - Thu Oct 02, 2008 1:32 am</h4>
+    <div class="postbody"><span class="postbody">I've never used a compiler that actually provided any safety benefits when declaring function arguments and return values as array types instead of pointers.
+<br/>
+<br/>
+For instance, gcc -Wall has no problem with this:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void f(char[32]);
+<br/>
+<br/>
+void test()
+<br/>
+{
+<br/>
+   char a[16];
+<br/>
+   f(a);
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+If you want safety, wrap your arrays in structs.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#163421 - kusma - Thu Oct 02, 2008 1:57 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>mml wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>kusma wrote:</b></span></td> </tr> <tr> <td class="quote">These two print-statements print the same address.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Of course they do.  Two pointers to the same memory address will always have the same value, regardless of their type.  Would you then say these two are the same thing?:
+<br/>
+</span></td> </tr></table><span class="postbody">
+<br/>
+You seem to somehow misunderstand my (IMO pretty simple) message: Don't pass a pointer to an array around, it's a pointless construct in C/C++. A pointer to an array does not make any sense.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#163422 - kusma - Thu Oct 02, 2008 2:04 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>mml wrote:</b></span></td> </tr> <tr> <td class="quote">The reason for specifying what sort of data is behind the pointer is so that a) the compiler knows how to treat it when you dereference it later, and b) so that the person reading/writing the code knows what kind of data is supposed to be there.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+While the first point would have made perfectly sense unless C/C++ was actually defined the way it is (the pointer to an array being the array itself, thus making the dereferencing redundant in the first place), your second does not at all. The person reading the code would be much better suited knowing that an array was passed. The pointer to an array is simply just confusing (and a defunct construct in the first place). There's no actual dereferencing, so it looks like something it is not.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#163431 - mml - Thu Oct 02, 2008 10:01 am</h4>
+    <div class="postbody"><span class="postbody">I can't figure out if I'm missing your point, or if you're missing mine.
+<br/>
+<br/>
+We are talking about a 2-dimensional array here.
+<br/>
+<br/>
+In the same way as you would conventionally pass a 1-dimensional array of arbitrary length to a function by passing a pointer to its first element and its length, I am here talking about passing an array (of arrays) to a function by passing a pointer to its first element, and the length of the outer array.  
+<br/>
+<br/>
+Consider the code below (which is simplified down to a single element in the outer array).  Note that to access subsequent elements in the outer array you need to know how large the inner array is...
+<br/>
+<br/>
+I'm not understanding why you're all yelling at me for using a pointer to an array.
+<br/>
+<br/>
+(Also, keep in mind the warnings from the code below are <span style="font-style: italic">not</span> what I was originally asking about.  That's solved!  The only reason this thread is still going on is because I don't understand what you're trying to tell me about pointers-to-arrays-being-meaningless and can't help but wonder if you're misunderstanding what's going on here.)
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#include &lt;stdio.h&gt;
+<br/>
+#include &lt;stdlib.h&gt;
+<br/>
+#include &lt;string.h&gt;
+<br/>
+<br/>
+void foo1(char (*p)[32]) {
+<br/>
+    printf ("%s: sizeof dereferenced char(*)[32]: %lu\n", *p, sizeof(*p));
+<br/>
+}
+<br/>
+<br/>
+void foo2(char *p) {
+<br/>
+    printf ("%s: sizeof dereferenced char*: %lu -- can't tell how big inner array is\n", p, sizeof(*p));
+<br/>
+}
+<br/>
+<br/>
+void foo3(char p[][32]) {
+<br/>
+    printf ("%s: sizeof first element of 2d array: %lu\n", p[0], sizeof(p[0]));
+<br/>
+}
+<br/>
+<br/>
+int main(int argc, char** argv) {
+<br/>
+    
+<br/>
+    char junk[32] = { "test 1" };
+<br/>
+    char (*test1)[32] = &amp;junk;
+<br/>
+    char *test2 = "test 2";
+<br/>
+    char test3[1][32] = { "test 3" };
+<br/>
+<br/>
+    printf ("testing functions with matching arguments...\n");
+<br/>
+    foo1(test1);
+<br/>
+    foo2(test2);
+<br/>
+    foo3(test3);
+<br/>
+<br/>
+    printf ("testing 2d functions with foo[][] / foo(*)[] semantics reversed...\n");
+<br/>
+    foo3(test1);    
+<br/>
+    foo1(test3);
+<br/>
+<br/>
+    printf ("passing 2d data to 1d pointer -- quite rightly, this warns at compilation...\n");
+<br/>
+    foo2(test1);
+<br/>
+    foo2(test3);
+<br/>
+<br/>
+    char (*test4)[32] = malloc(1 * sizeof(test4[0]));
+<br/>
+    strcpy(test4[0], "test 4");
+<br/>
+<br/>
+    char *test5 = strdup ("test 5");
+<br/>
+<br/>
+    char test6[1][32] = { "test 6" };
+<br/>
+//  ^^  explicit 2d array can't be allocated dynamically, you must use a pointer like test4
+<br/>
+<br/>
+    printf ("tests 1, 2 and 3 repeated with dynamic allocation...\n");
+<br/>
+    foo1(test4);
+<br/>
+    foo2(test5);
+<br/>
+    foo3(test6);
+<br/>
+<br/>
+    printf ("reversed foo[][] / foo(*)[] semantics with dynamic allocation...\n");
+<br/>
+    foo3(test4);    // with foo[][] / foo(*)[] semantics reversed
+<br/>
+    foo1(test6);
+<br/>
+<br/>
+    printf ("passing 2d data to 2d pointer using dynamic allocation, also warns...\n");
+<br/>
+    foo2(test4);
+<br/>
+    foo2(test6);
+<br/>
+<br/>
+    free(test5);
+<br/>
+    free(test4);
+<br/>
+<br/>
+    return 0;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#163432 - mml - Thu Oct 02, 2008 10:11 am</h4>
+    <div class="postbody"><span class="postbody">... though tbh, I was expecting foo3(char p[][32]) to cause problems when passed dynamically allocated memory.  
+<br/>
+<br/>
+Since it works correctly I might change pager's signature to use that, so the fact its 2-dimensional is more clear to the reader (though for what it does, it should be reasonably obvious).</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#163435 - Maxxie - Thu Oct 02, 2008 11:46 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>kusma wrote:</b></span></td> </tr> <tr> <td class="quote"> Don't pass a pointer to an array around, it's a pointless construct in C/C++. A pointer to an array does not make any sense.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Oh it does make perfect sense in C.
+<br/>
+In the development with MPI on a high performance computing project (pressure and heat distribution simulation), calculation matrices were all defined that way:
+<br/>
+<br/>
+Manage and share one pointer to the actual matrix data buffer
+<br/>
+Manage a pointer to the local array of row beginnings for each subset of that matrix.
+<br/>
+<br/>
+It is fast to share (at whole matrix and row level), nicely supports divide &amp; conquer strategies and can easily be extended to support more dimensions.<br/>_________________<br/><a class="postlink" href="http://nintendods.desperate-programmers.com/doku.php?id=wireless_io_map" target="_blank">Trying  to bring more detail into understanding the wireless hardware</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#163516 - sajiimori - Sat Oct 04, 2008 1:19 am</h4>
+    <div class="postbody"><span class="postbody">Maxxie, the implementation behind-the-scenes is exactly the same.  It's a matter of preference only, and it's unrelated to efficiency.
+<br/>
+<br/>
+mml, I'm not gonna say you're wrong in any way, but I'll clarify that I wasn't suggesting that you flatten all your arrays to 1D.  I just thought, at first, that your array was 1D.  In your situation, I'd actually wrap the inner array in a struct, which costs nothing and gains typesafety and first-class semantics.
+<br/>
+<br/>
+Anyway, glad your problem is solved -- happy coding.  ^_^</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#163524 - mml - Sat Oct 04, 2008 4:57 am</h4>
+    <div class="postbody"><span class="postbody">Ah, all becomes clear. :)
+<br/>
+<br/>
+FYI, I just added a couple more tests to try out what happens when you pass in a 2d array where the inner dimension is too small:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">    char test7[1][16] = { "test 7" };
+<br/>
+    char junk2[16] =  "test 8";
+<br/>
+    char (*test8)[16] = &amp;junk2;
+<br/>
+<br/>
+    printf ("2d array with wrong size inner dimension... also warns!\n");
+<br/>
+    foo1(test7);
+<br/>
+    foo3(test7);
+<br/>
+<br/>
+    printf ("2d pointer with wrong size inner dimension... also warns!\n");
+<br/>
+    foo1(test8);
+<br/>
+    foo3(test8);</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+gcc warns for all four tests here too, even without -Wall.  So I do get the type safety I was hoping for without contorting things to use structs. :)   (At least, as much type safety as I was ever going to get in C, anyway.)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#163532 - Maxxie - Sat Oct 04, 2008 8:33 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sajiimori wrote:</b></span></td> </tr> <tr> <td class="quote">Maxxie, the implementation behind-the-scenes is exactly the same.  It's a matter of preference only, and it's unrelated to efficiency.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Let me be clear: i did not say that the calls themself are faster (actually these matrices were allways passed as struct references containing more then those two pointers)
+<br/>
+But the thing Kusma said and i replied too contained: 
+<br/>
+"A pointer to an array does not make any sense."
+<br/>
+Which is - hopefully as shown - wrong.
+<br/>
+<br/>
+If you have a different stance to this, then i'd be interested in your solution to a standard problem: Gaussian algorithm with pivots.
+<br/>
+The row swapping: Beside the row-lookup as described above, the permutation matrix controlled access as well as the native row swapping have their impact on speed. What would your same-or-greater-speed then row-lookup approach look like?<br/>_________________<br/><a class="postlink" href="http://nintendods.desperate-programmers.com/doku.php?id=wireless_io_map" target="_blank">Trying  to bring more detail into understanding the wireless hardware</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#163537 - kusma - Sat Oct 04, 2008 11:07 am</h4>
+    <div class="postbody"><span class="postbody">As long as the same address is passed in both cases (as my previously posted code shows), I'd be VERY interested in hearing how you believe anything can be <span style="font-weight: bold">faster</span> by passing a pointer to an array rather than the array. So far you've just said "I've seen it - it's true", but let us see it as well. Post some code.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#163538 - Maxxie - Sat Oct 04, 2008 12:29 pm</h4>
+    <div class="postbody"><span class="postbody">Kusma, what the heck are you talking about?
+<br/>
+<br/>
+I have some points you should think again about (and probably answer me):
+<br/>
+a) Where did i say that the argument passing / calling is faster? Please read the first(!) words of my last post.
+<br/>
+b) Why would an example as detailed as needed to reproduce the results be not good enough for you? Can't you understand it? Then ask, that's more of your problem then the problem of the example. And by far its not a "I've seen it - it's true" statement.
+<br/>
+c) You did just claim that an pointer to an array does not make sense and not give information why. How does that match your demand of detailed prove? Thats more like a "I've dreamed it - it's true" statement to keep in your way to say it. 
+<br/>
+That leads to:
+<br/>
+d) Did you try to stay in a wording that might sound calm?
+<br/>
+e) Are you defending a statement you are wrong about and probably just did not mean it like you have initial written it?<br/>_________________<br/><a class="postlink" href="http://nintendods.desperate-programmers.com/doku.php?id=wireless_io_map" target="_blank">Trying  to bring more detail into understanding the wireless hardware</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#163539 - kusma - Sat Oct 04, 2008 2:41 pm</h4>
+    <div class="postbody"><span class="postbody">Wow, you seem to take this really personal, which I find a bit strange since I never addressed you directly apart from my last post. I see now that in my last post I might have misunderstood what you meant. I thought you said that passing a pointer to an array as a parameter to a function could speed up some algorithms, and I fail to see how that is the case (as compared to simply passing the array - which is by the C/C++ array/pointer semantics the same thing). If this was not what you were saying, then please excuse me.
+<br/>
+<br/>
+My point was made purely about the case in question, where a const-pointer to an array was passed as a parameter to a function. That is what I'm saying does not make any sense. (And hopefully you know that statements about code paradigms should always be taken with a pinch of salt - there's always special cases where paradigms don't hold true)
+<br/>
+<br/>
+Why you seem to be so angry about all of this is beyond me. If I'm misunderstanding you, I'm sorry.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

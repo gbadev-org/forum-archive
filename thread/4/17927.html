@@ -1,0 +1,117 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>GBA sound mixing based on timer (NOT VBlank !) - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > GBA sound mixing based on timer (NOT VBlank !)</h2>
+<div id="posts">
+<div class="post">
+    <h4>#177817 - Bregalad - Wed Mar 20, 2013 3:06 pm</h4>
+    <div class="postbody"><span class="postbody">I want to create my own sound engine, and I want it to get updated way faster than 60Hz (I plan to do it at aprox. 200Hz).
+<br/>
+<br/>
+I found <a class="postlink" href="http://deku.rydia.net/program/sound1.html" target="_blank">this</a> excellent tutorial, so I'll not be asking how to write a sound engine. However, I'm afraid of something :
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">The easiest kind of buffering for use on GBA is double buffering. With it, you have 2 distinct buffers, each the same size, and use an interrupt to decide when to swap them out. For now, we'll do it with a VBlank interrupt, because it's the safest. Doing it on a timer means opening up possibilities of another interrupt happening first and delaying the swap, causing a click.</td> </tr></table><span class="postbody">
+<br/>
+The problem is that I really want to do it based on a timer, because VBlank is too slow (and this gives impresision for rapid pitch and voluem changes).
+<br/>
+If I update the sound engine at 200Hz, but the sound mixing at 60Hz it will be weird, because all the updates that would be done by the sound engine will not be applied to the mixer until the next VBlank, so only PSG sound channels will be able to benefix from the increased refresh frequency. I want to avoid that if possible.
+<br/>
+<br/>
+Is there a way (even if it is a bit tricky or hacky) to make a timer interrupt higher priority than VBlank (i.e. when the timer overflows, it calls the sound engine even if this is during a VBlank interrupt) ?
+<br/>
+<br/>
+If no, I still think there is a work arround. I can do a dummy copy of the fist part of the first sound buffer at the end of the second buffer, so that even if the timer interrupt is asserved late, the sound will still continue correctly.
+<br/>
+Now the problem is asserting the new address to the sound buffer, since there is jiterring in the interrupt, it should be done by subtracting a constant to the adress, instead simply forcing the start of the first buffer.
+<br/>
+Is there a way to do this RMW operation of the sound DMA pointers ?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177818 - Dwedit - Wed Mar 20, 2013 4:39 pm</h4>
+    <div class="postbody"><span class="postbody">When you're synthesizing the sound in software, you have no restrictions on what goes into generating the sound.  You are just generating samples for the hardware to play back later.  So you can design your mixer to generate sound at any rate your want to, you have no need for aligning things to any particular timing, like 60Hz or 200Hz.  As long as you generate enough samples to keep the audio buffer full at the right time, you're good.
+<br/>
+The only things that would need precise timing would be PSG sound, since they update immediately unlike samples in a buffer.  And if you have a dire need to drive PSG sound at a faster rate, you can also use scanline counting interrupts.
+<br/>
+<br/>
+The 60Hz vblank stuff mainly applies to playing back what you have generated, because that provides a decent way to play back sound without using additional timers.
+<br/>
+You also need a timer that operates at the sampling rate of the sound, and you need a count-up timer after that to count how many samples have been consumed.
+<br/>
+60Hz Vblank stuff is used here so you can regularly count the samples that have been consumed, and trigger more samples to be produced.
+<br/>
+<br/>
+If you plan on using the PSG channels, you need to use special trickery to update the volume of the square channels without popping.  Use a GBA timer, set the period to match the square channel.  When you want to change the volume or pitch of the channel, store the intended new value (and new timer value) somewhere, then enable interrupts for that timer.  Have the interrupt handler write the new values to the sound channel and timer.  This eats up two timers for the two square channels.  I did this in PocketNES.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177819 - Bregalad - Wed Mar 20, 2013 6:10 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">If you plan on using the PSG channels, you need to use special trickery to update the volume of the square channels without popping. Use a GBA timer, set the period to match the square channel. When you want to change the volume or pitch of the channel, store the intended new value (and new timer value) somewhere, then enable interrupts for that timer. Have the interrupt handler write the new values to the sound channel and timer. This eats up two timers for the two square channels.</td> </tr></table><span class="postbody">
+<br/>
+This is very clever !
+<br/>
+I already knew that "trickery" thing - the sappy engine that 95% of GBA games uses simply updates a new volume at change, and this sounds very ugly if you try to do fades in/outs with MIDI controllers 7. However, most games handled this with ADSR envelopes which are translated to hardware increase/decrease modes.
+<br/>
+<br/>
+I was planning to simply use the increase/decrease mode cleverly to handle the volume (apparently this can be done without clicking) but anyways that isn't (yet) my problem.
+<br/>
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">The 60Hz vblank stuff mainly applies to playing back what you have generated, because that provides a decent way to play back sound without using additional timers.</td> </tr></table><span class="postbody">
+<br/>
+In fact this is exacly the problem. It would be way simpler if I could have the following setup :
+<br/>
+<br/>
+* Any timer enabled at ~200Hz, when it overflows it crates an interrupt
+<br/>
+* Normal VBlank interrupt only deals with graphics / DMA (does not deal with sound AT ALL)
+<br/>
+* The sound engine is run on the timer interrupt, and then the samples for the next tick are mixed to the buffer, then only the interrupt returns.
+<br/>
+<br/>
+The problem is that apparently the VBlank has a higher priority which is NOT what I want - I'd like the sound to have a higher priority so I can swap buffers exactly when the timer overflows.
+<br/>
+<br/>
+If this is really impossible to get clean sound this way I'll find an alternative but I'd really like to do it this way (and keep graphics and sound separate).
+<br/>
+I don't care about timer usage, they probably are not useful to anything other than sound, so all 4 can be used if this is necessary. Using VBlank or HBlank interrupts for sound is really "hacky" IMO (even if the sappy engine typically runs on VBlank).
+<br/>
+<br/>
+EDIT :
+<br/>
+According to no$ :
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote"> - User program may freely assign priority to each reason by own logic</td> </tr></table><span class="postbody">
+<br/>
+Whew ! I'm relived. Now it's all a matter to know how to tell GCC that timer interrupt is more important than VBlank.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177820 - sverx - Thu Mar 21, 2013 10:34 am</h4>
+    <div class="postbody"><span class="postbody">I think GBATek is saying that in your handler you can service the IRQs the order you prefer, not that there's a precedence.
+<br/>
+Anyway it also say </span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">If user wants to allow nested interrupts, save SPSR_irq, then enable IRQs.</td> </tr></table><span class="postbody"> so you might want to allow nested interrupts in your VBlank handler so that your timer interrupts will be serviced immediately.<br/>_________________<br/><a class="postlink" href="http://bit.ly/yiQrz9" target="_blank">libXM7</a>|<a class="postlink" href="http://bit.ly/yJwcOo" target="_blank">NDS programming tutorial (Italiano)</a>|<a class="postlink" href="http://disjointedstudio.blogspot.com/" target="_blank">Waimanu DS / GBA</a>|<a class="postlink" href="http://adshomebrewersdiary.blogspot.com" target="_blank">A DS Homebrewer's Diary</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177821 - Bregalad - Thu Mar 21, 2013 12:18 pm</h4>
+    <div class="postbody"><span class="postbody">So all I'll have to do is enable timer interrupts from within the VBlank interrupt ?
+<br/>
+But then, what happens if a timer interrupts occurs during a DMA transfer ? I suppose it will only be asserted at the end of the DMA transfer, and this delay in the assertion of the interrupt can be problematic to swap the buffers at the right time.
+<br/>
+<br/>
+This can be solved by splitting large DMA transfers into multiple smaller DMA transfers, or do all the transfers by soft.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

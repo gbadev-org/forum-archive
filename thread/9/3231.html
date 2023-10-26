@@ -1,0 +1,543 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Brightness/Gamma on Hardware - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Graphics > Brightness/Gamma on Hardware</h2>
+<div id="posts">
+<div class="post">
+    <h4>#19248 - josath - Thu Apr 15, 2004 8:01 am</h4>
+    <div class="postbody"><span class="postbody">Hello,
+<br/>
+I wrote a GBA game without actually having a gba or flash cart (<a class="postlink" href="http://rorex.isa-geek.net/wizards" target="_blank">wizards</a>), and when i finally got a chance to play it on the hardware, i noticed the colors were much darker. Is there a way (i'm sure there is, i just can't think of how) to lighten the colors, not within my graphics programs (gimp, psp etc), but within the code it self, like increase the brightness of all the colors in the palette. 
+<br/>
+<br/>
+I tried a couple different algorithms, but I couldn't come up with any that worked (I tried adding to the color, no good, then I split it into R,G,B components, and added to each of them, but that still washed all the color out, i also tried multiplying). 
+<br/>
+<br/>
+Maybe i had some errors in my code, not sure, but basically i would just loop over the palette and perform some operation on each color. What I am looking for, i guess, is an operation/formula I can apply to a color (RGB555) that will brighten it (and not make it too large, if you do that it loops back into dark colors)
+<br/>
+<br/>
+I can show some of my test code if you want, but it doesn't really work right.
+<br/>
+<br/>
+Thanks for the help.
+<br/>
+-David</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#19254 - bomberman - Thu Apr 15, 2004 12:04 pm</h4>
+    <div class="postbody"><span class="postbody">I had the same problem...
+<br/>
+<br/>
+Basically you need to implement gamma correction. I did this in Atomix (see <a href="http://rmstudiogames.free.fr" target="_blank">http://rmstudiogames.free.fr</a>) and you can select the level at run time. The algorithm is not about adding or applying linear ratio. The gamma correction is a "square algorithm". To sum up you choose a ratio and you apply ratio*ratio.
+<br/>
+<br/>
+I googled for "gamma correction", found pages which explained how gamma correction works and it was very easy to code it for the GBA format.
+<br/>
+<br/>
+Good luck !</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#19265 - Lord Graga - Thu Apr 15, 2004 5:01 pm</h4>
+    <div class="postbody"><span class="postbody">you *could* be lazy and just use the blending registers :)
+<br/>
+<br/>
+Else, when you load the palette, add 10% to the color it loads, and check for any errors that should occur.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#19268 - josath - Thu Apr 15, 2004 6:15 pm</h4>
+    <div class="postbody"><span class="postbody">ok, figured it out, i originally had some bugs in my code.
+<br/>
+this seems to work pretty well. call brigten with an amount, and it calls bright for each in dividual color. master_palette and map1_cmap are my palettes stored in rom for obj and bg respectivly.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+u16 bright(u16 col, s8 amount)
+<br/>
+{
+<br/>
+    s16 r, g, b;
+<br/>
+<br/>
+   //get individual colors out
+<br/>
+   r = col &amp; 31;
+<br/>
+   g = (col &gt;&gt; 5) &amp; 31;
+<br/>
+   b = (col &gt;&gt; 10) &amp; 31;
+<br/>
+<br/>
+   //add to each color component
+<br/>
+        r+=amount;
+<br/>
+        g+=amount;
+<br/>
+        b+=amount;
+<br/>
+<br/>
+   //make sure none of the color components are out of range
+<br/>
+   if(r &gt; 31)
+<br/>
+       r = 31;
+<br/>
+   if(g &gt; 31)
+<br/>
+       g = 31;
+<br/>
+   if(b &gt; 31)
+<br/>
+       b = 31;
+<br/>
+        if(r &lt; 0)
+<br/>
+            r=0;
+<br/>
+        if(g &lt; 0)
+<br/>
+            g=0;
+<br/>
+        if(b &lt; 0)
+<br/>
+            b=0;
+<br/>
+<br/>
+   //return the color combined back together
+<br/>
+   return (r) + (g&lt;&lt;5) + (b&lt;&lt;10);
+<br/>
+<br/>
+}
+<br/>
+<br/>
+void brighten(s8 amount)
+<br/>
+{
+<br/>
+    int i;
+<br/>
+    WaitForVsync();
+<br/>
+<br/>
+    //call bright for each color in both obj and bg palettes
+<br/>
+    for(i = 0; i&lt;256; i++)
+<br/>
+    {
+<br/>
+   OBJPaletteMem[i] = bright(master_Palette[i], amount);
+<br/>
+   BGPaletteMem[i] = bright(map1_cmap[i], amount);
+<br/>
+    }
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">[/code]</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#19522 - FluBBa - Wed Apr 21, 2004 10:13 am</h4>
+    <div class="postbody"><span class="postbody">Use a gamma style algorithm instead.
+<br/>
+One channel:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+r1=col &amp; 0x1F
+<br/>
+r2=0x1F - r1
+<br/>
+r2=r2*r2
+<br/>
+r2=r2/0x1F
+<br/>
+r2=0x1F-r2
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+You will probably want to do some linear scaling between the 2 values to set the gamma level also.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+ratio1=2, ratio2=3
+<br/>
+r2=(r2*ratio2 + r1*ratio1) / 5
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+<br/>
+You can also check the source (assembler) to PCEAdvance on my hp, but it uses RGB333 to gamma corrected BGR555.<br/>_________________<br/>I probably suck, my not is a programmer.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#19543 - Miked0801 - Wed Apr 21, 2004 6:00 pm</h4>
+    <div class="postbody"><span class="postbody">Do yourself a favor and turn this into a lookup table.  Same results but much faster to access.  :)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#19547 - josath - Wed Apr 21, 2004 7:18 pm</h4>
+    <div class="postbody"><span class="postbody">wow, thanks flubba, this works much better than my algorithm, my brightness(gamma) adjustments look a lot better now.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#19584 - FluBBa - Thu Apr 22, 2004 12:03 pm</h4>
+    <div class="postbody"><span class="postbody">Maybe an entry for the FAQ?
+<br/>
+A more correct one can probably be made so that you don't lose bit's and pieces.<br/>_________________<br/>I probably suck, my not is a programmer.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#32171 - Issac - Sat Dec 18, 2004 11:48 pm</h4>
+    <div class="postbody"><span class="postbody">umm.... All this looks goood.... but i dont understand anything... should I put that in a header or something??
+<br/>
+Im not that good with this yet..... 
+<br/>
+someone please explain this a little more.. and how to actually use it (or is it used by itself?)
+<br/>
+<br/>
+im a noob... accept it ;)<br/>_________________<br/>yeah, well, maybe... or? anyways.... eh...  what was i talking about??</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#32172 - DekuTree64 - Sun Dec 19, 2004 12:00 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Issac wrote:</b></span></td> </tr> <tr> <td class="quote">umm.... All this looks goood.... but i dont understand anything... should I put that in a header or something??
+<br/>
+Im not that good with this yet..... 
+<br/>
+someone please explain this a little more.. and how to actually use it (or is it used by itself?)
+<br/>
+<br/>
+im a noob... accept it ;)</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I wouldn't worry about such little things as gamma correction at first. Just tune your palettes to the screen you like (GBA, SP, DS, TV) and add in the gamma correction later on if you really want it.
+<br/>
+<br/>
+Normally you don't want to put code in headers, just the function prototypes to call things. Then put the function itself in a .c file somewhere. Doesn't matter too much where it is as long as it gets linked in, just depends on how you want to keep things organized.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#32176 - Issac - Sun Dec 19, 2004 12:46 am</h4>
+    <div class="postbody"><span class="postbody">well, I'd just want to have a bit of code to make it all brighter...
+<br/>
+its a pain in the @$$ to test my games on hardware (except ngc-gba player) since All i have is the old gba and the gbaplayer...
+<br/>
+<br/>
+but it would be better to fix everything so it becomes brighter...<br/>_________________<br/>yeah, well, maybe... or? anyways.... eh...  what was i talking about??</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#32181 - tepples - Sun Dec 19, 2004 2:48 am</h4>
+    <div class="postbody"><span class="postbody">If you're not using the blending register, try fading partway to white.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#32215 - Issac - Sun Dec 19, 2004 1:56 pm</h4>
+    <div class="postbody"><span class="postbody">you mean... makeing all the sprites n backgrounds brighter in eg. photoshop?<br/>_________________<br/>yeah, well, maybe... or? anyways.... eh...  what was i talking about??</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#32229 - tepples - Sun Dec 19, 2004 6:58 pm</h4>
+    <div class="postbody"><span class="postbody"><a class="postlink" href="http://www.cs.rit.edu/~tjh8300/CowBite/CowBiteSpec.htm#Effects%20Registers" target="_blank">CowBite Spec</a> and <a class="postlink" href="http://nocash.emubase.de/gbatek.htm#lcdiocolorspecialeffects" target="_blank">GBATEK</a> say you can do it in hardware. Try this:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">  REG_BLDMOD = 0x00BF;  /* turn on fade to white for all layers */
+<br/>
+  REG_COLEY = 4;        /* 0 = no fade; 16 = full whiteout */
+<br/>
+</td> </tr></table><span class="postbody"><br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#32275 - Issac - Mon Dec 20, 2004 11:45 am</h4>
+    <div class="postbody"><span class="postbody">been reading this a little.. and I dont really know how to use it...
+<br/>
+I need to define it.. but i dont know how and such....
+<br/>
+could you please explain?
+<br/>
+<br/>
+or...
+<br/>
+<br/>
+should i just use like 
+<br/>
+u16 REG_BLDMOD;
+<br/>
+u16 REG_COLEY;
+<br/>
+<br/>
+or am i stupid? (ok dont answear to that ;))<br/>_________________<br/>yeah, well, maybe... or? anyways.... eh...  what was i talking about??</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#32283 - Cearn - Mon Dec 20, 2004 5:28 pm</h4>
+    <div class="postbody"><span class="postbody">REG_BLDMOD and REG_COLEY are IO registers, just like REG_DISPCNT and REG_BGxCNT. Most tutorials and demos come with a file gba.h or regs.h that contain all these definitions, so you probably have them already. If not, try
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#define REG_BLDMOD  *(volatile u16*)(0x06000050)
+<br/>
+#define REG_COLEY  *(volatile u16*)(0x06000054)  // Might be named REG_COLY
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+What these registers actually do is explained in the links that tepples gave. (In CowBite, you might have to go to the "Effects Registers" manually, the direct link doesn't work for me for some reason. Silly IE)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#32288 - Fatnickc - Mon Dec 20, 2004 6:41 pm</h4>
+    <div class="postbody"><span class="postbody">And how would one make it work in mode 4?
+<br/>
+Or wouldn't you?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#32293 - Issac - Mon Dec 20, 2004 7:58 pm</h4>
+    <div class="postbody"><span class="postbody">ooh ok :) now i dont get any errors.... i havnt noticed any difference yet... gonna play around a bit with it though...
+<br/>
+<br/>
+my gba_regs.h didnt have those two... thats why it didnt work at first.. thank you!<br/>_________________<br/>yeah, well, maybe... or? anyways.... eh...  what was i talking about??</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#32303 - tepples - Mon Dec 20, 2004 11:44 pm</h4>
+    <div class="postbody"><span class="postbody">Try setting COLEY to 0, waiting a few frames, setting it to 8, waiting a few frames, and repeating the process. You should be able to see a difference then.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#32490 - Fatnickc - Thu Dec 23, 2004 9:19 am</h4>
+    <div class="postbody"><span class="postbody">And, Mode 4?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#32525 - tepples - Thu Dec 23, 2004 5:04 pm</h4>
+    <div class="postbody"><span class="postbody">Mode 4 uses the backdrop, the sprites, and background 2. How, specifically, did fading using the technique I mentioned not work in Mode 4?<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#32747 - Issac - Sat Dec 25, 2004 7:37 pm</h4>
+    <div class="postbody"><span class="postbody">well... as I said before.. I didn't notice any diference...
+<br/>
+and i dont know how to wait a few frames.. but that has nothing to do with it...
+<br/>
+and I saw now that I used mode 4...
+<br/>
+<br/>
+and.. i changed the coley to 16 and to 0 and tried everything...
+<br/>
+<br/>
+but it seems that it wont work in mode 4..
+<br/>
+<br/>
+nothing happens... and.. it is kinda.... distrubing :(<br/>_________________<br/>yeah, well, maybe... or? anyways.... eh...  what was i talking about??</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#32772 - Cearn - Mon Dec 27, 2004 5:57 pm</h4>
+    <div class="postbody"><span class="postbody">Here's a minimal demo for blending in mode 4. Just add copying your picture and palette and you should be all set. It should display your picture as oscillating between normal and fully white, if it doesn't, there's something wrong with your emulator.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+// some defines for REG_BLDMOD
+<br/>
+#define BLD_BG0   0x0001
+<br/>
+#define BLD_BG1   0x0002
+<br/>
+#define BLD_BG2   0x0004
+<br/>
+#define BLD_BG3   0x0008
+<br/>
+#define BLD_OBJ   0x0010
+<br/>
+#define BLD_BD    0x0020
+<br/>
+<br/>
+#define BLD_NULL    0x0000
+<br/>
+#define BLD_STD     0x0040
+<br/>
+#define BLD_WHITE   0x0080
+<br/>
+#define BLD_BLACK   0x00c0
+<br/>
+<br/>
+void vid_vsync()
+<br/>
+{
+<br/>
+   while(REG_VCOUNT &gt;= 160);   // wait till VBlank is over
+<br/>
+   while(REG_VCOUNT &lt; 160);   // wait till VBlank
+<br/>
+}
+<br/>
+<br/>
+int main()
+<br/>
+{
+<br/>
+   // copy your bitmap and palette
+<br/>
+<br/>
+   // dma_memcpy(vid_page, gba_picData, gba_picSize);
+<br/>
+   // dma_memcpy(pal_bg_mem, gba_picPal, 8);
+<br/>
+<br/>
+   REG_DISPCNT= VID_MODE4 | VID_BG2;
+<br/>
+   REG_BLDMOD = BLD_WHITE | BLD_BG2;
+<br/>
+<br/>
+   u32 frame=0, white;
+<br/>
+<br/>
+   while(1)
+<br/>
+   {
+<br/>
+      vid_vsync();
+<br/>
+      frame++;
+<br/>
+      
+<br/>
+      white= frame&gt;&gt;2;   // change after 4 frames (fixed point, hoozah!)
+<br/>
+      if(white &amp; 0x10)
+<br/>
+         white ^= 0x1f;   // for reversal at 16
+<br/>
+<br/>
+      REG_COLY= white &amp; 0x1f;
+<br/>
+   }
+<br/>
+   return 0;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#32788 - tepples - Mon Dec 27, 2004 10:45 pm</h4>
+    <div class="postbody"><span class="postbody">You may have special effects (blend, mosaic, etc) turned off in your emulator to increase frame rate. You need to turn those back on in order to see fades. For example, in VisualBoyAdvance for Windows, make sure Options &gt; Video &gt; Disable SFX is unchecked.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#32815 - Fatnickc - Tue Dec 28, 2004 9:50 am</h4>
+    <div class="postbody"><span class="postbody">Sorry I haven't been able to get back to anyone on this, but my grandmother is in the room with the computer I do GBA stuff on (because it has Photoshop, I don't). She's leaving today in about 3 hours-ish so I will be able to see about the Mode 4 stuff.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#32842 - tepples - Tue Dec 28, 2004 4:36 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Fatnickc wrote:</b></span></td> </tr> <tr> <td class="quote">the computer I do GBA stuff on (because it has Photoshop, I don't)</td> </tr></table><span class="postbody">
+<br/>
+Have you tried GIMP?<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#32843 - dagamer34 - Tue Dec 28, 2004 4:46 pm</h4>
+    <div class="postbody"><span class="postbody">I think Photoshop is overkill for pixel work. Paint Shop Pro is suited much better and only $99 for the latest version. You can probably find a previous version for much cheaper.<br/>_________________<br/>Little kids and Playstation 2's don't mix. :(</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#32844 - tepples - Tue Dec 28, 2004 4:54 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>dagamer34 wrote:</b></span></td> </tr> <tr> <td class="quote">Paint Shop Pro is suited much better and only $99 for the latest version.</td> </tr></table><span class="postbody">
+<br/>
+It would appear that JASC and Adobe are either in a price war or trying to chase GIMP users, as I found <a class="postlink" href="http://www.softwareoutlet.com/static/item0325.html" target="_blank">Photoshop Elements for $30</a>.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#32845 - Fatnickc - Tue Dec 28, 2004 4:56 pm</h4>
+    <div class="postbody"><span class="postbody">I meant elements 2.0. I know that Paint Shop Pro works, and I have it on this computer, but Photoshop Elements works more easily. Plus, this computer is really S..L..O..W, and it likes to crash alot.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#32846 - tepples - Tue Dec 28, 2004 5:08 pm</h4>
+    <div class="postbody"><span class="postbody">Slow as in slower than mine (PIII 866 MHz), which is just barely fast enough to run VBA at full speed?<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#32849 - Fatnickc - Tue Dec 28, 2004 5:42 pm</h4>
+    <div class="postbody"><span class="postbody">Slow as in Pentium II 333MHz, 640k system memory with 63Mb of added memory. A 4Gig hard drive, wich has been madly partitioned before the computer was mine, so the C drive is full up and the rest.. aren't. A monitor from 1992 (seriously) which I got free this year from a weird man. The only nice bit is the wireless card which I bought. I asked for some computer-bits for Christmas but didn't get any, and my birthday is the 16th so, maybe.. -_-</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#32859 - tepples - Tue Dec 28, 2004 8:35 pm</h4>
+    <div class="postbody"><span class="postbody">OK, so you mean slow as in my 1999 laptop (PII 333 MHz, 64 MB RAM, 6 GB HD). On a machine like that, you might want to stick to NES or GBC development.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#32941 - Fatnickc - Wed Dec 29, 2004 1:30 pm</h4>
+    <div class="postbody"><span class="postbody">Exactimo. But I like GBA dev. That's why I can't dev on this computer, so I use the newer one, which my dad enjoys modding (once I overclocked it a bit over the top, but didn't fry it). Talking of which, I have made a very basic, not very nice game called 'Acorn Collector' for a squirrel-mad friend. I might give you a look at it when I get onto the computer (my two-years older brother ALWAYS plays championship manager and other long games just when I want to go on the computer..).
+<br/>
+Thanks, 
+<br/>
+           Nick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#33088 - sgeos - Thu Dec 30, 2004 6:27 pm</h4>
+    <div class="postbody"><span class="postbody">Deal with a slow emulator and get an MBV2 cable for testing?  (Or a flash cart if you can afford it. =)
+<br/>
+<br/>
+-Brendan</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#33089 - Fatnickc - Thu Dec 30, 2004 6:33 pm</h4>
+    <div class="postbody"><span class="postbody">I'm fine not doing dev on my computer. I'll probably update it sometime, when I have the cash ;).</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

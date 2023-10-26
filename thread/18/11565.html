@@ -1,0 +1,317 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Adding a file system? (newlib devoptab) - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Adding a file system? (newlib devoptab)</h2>
+<div id="posts">
+<div class="post">
+    <h4>#107430 - tepples - Sun Oct 29, 2006 4:51 pm</h4>
+    <div class="postbody"><span class="postbody">I would like to add GBFS support to devkitARM's implementation of stdio in the same way that Chishm added libfat, in order to provide another way to make no-FAT builds of homebrew apps such as beup without having to change the app's code. What does it take to add a new file system? One would need to implement open(), read(), write() and close(), and somehow register it with newlib. What else? Where should I look for details?<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"><br/><br/>Last edited by tepples on Mon Mar 19, 2007 11:36 pm; edited 1 time in total</span></div>    
+</div>
+<div class="post">
+    <h4>#107451 - Payk - Sun Oct 29, 2006 7:41 pm</h4>
+    <div class="postbody"><span class="postbody">Well there is a simpleway which gpf showed me...
+<br/>
+you can first include stdio.h
+<br/>
+then undef each stdio command...
+<br/>
+and define new ones...
+<br/>
+<br/>
+Little example:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#include &lt;stdio.h&gt;
+<br/>
+<br/>
+#undef FILE
+<br/>
+#define FILE FAT_FILE
+<br/>
+<br/>
+#undef fopen
+<br/>
+#define fopen FAT_fopen
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Be sure to make that with all fileacces-commands and take care wintermute doesnt see that...
+<br/>
+<br/>
+Anotherhing....if u want to use gba-romspace with stido functions:
+<br/>
+Try RomdiskFS (by GPF)
+<br/>
+<br/>
+if u need a clever method to simply use that system on codes which already exist:
+<br/>
+write a file and call it sdt.h
+<br/>
+<br/>
+add following code to be able to switch between fat and romdsikfs(kosfs):
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+//#define FAT
+<br/>
+<br/>
+#include &lt;stdio.h&gt;
+<br/>
+#include &lt;nds.h&gt;
+<br/>
+<br/>
+//KOS Filesystem
+<br/>
+#ifndef FAT
+<br/>
+   #include &lt;stdlib.h&gt;
+<br/>
+   #include "kos/kos/kosstdio.h"
+<br/>
+   #include "kos/kos/fs_romdisk.h"
+<br/>
+#endif
+<br/>
+<br/>
+#ifdef FAT
+<br/>
+   #include &lt;stdlib.h&gt;
+<br/>
+   #include "FAT/gba_nds_fat.h"
+<br/>
+   
+<br/>
+   #define FAT_FILE KOS_FILE
+<br/>
+   #define FAT_fopen KOS_fopen
+<br/>
+   #define FAT_fwrite KOS_fwrite
+<br/>
+   #define FAT_fread KOS_fread
+<br/>
+   #define FAT_fclose KOS_fclose
+<br/>
+   #define FAT_fseek KOS_fseek
+<br/>
+   #define FAT_fputs KOS_fputs
+<br/>
+   #define FAT_fgets KOS_fgets
+<br/>
+   #define FAT_fputc KOS_fputc
+<br/>
+   #define FAT_getc KOS_getc
+<br/>
+   #define FAT_putc KOS_putc
+<br/>
+   #define FAT_fgetc KOS_fgetc
+<br/>
+   #define FAT_fprintf KOS_fprintf
+<br/>
+   #define FAT_vfprintf KOS_fprintf 
+<br/>
+   #define FAT_ftell KOS_ftell
+<br/>
+   #define FAT_tmpfile KOS_tmpfile
+<br/>
+   //#define FAT_rewind KOS_rewind
+<br/>
+   #define FAT_feof KOS_feof
+<br/>
+   #define FAT_stdin KOS_stdin
+<br/>
+   #define FAT_stdout KOS_stdout
+<br/>
+   #define FAT_fscanf KOS_fscanf
+<br/>
+   #define FAT_fflush KOS_fflush
+<br/>
+#endif
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+But both systems need to be initialzied one a different way....
+<br/>
+i recommand to write a stdio.c!
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#include "sdt.h"
+<br/>
+<br/>
+void InitFS(void){
+<br/>
+#ifndef FAT
+<br/>
+      REG_IME=0;   
+<br/>
+      sysSetCartOwner( BUS_OWNER_ARM9 );
+<br/>
+      fs_init(); 
+<br/>
+      fs_romdisk_mount("/rd", (uint8*)find_first_romfs_file((uint8*)0x08000000), 0); 
+<br/>
+#endif
+<br/>
+#ifdef FAT
+<br/>
+      swiWaitForVBlank();
+<br/>
+      swiWaitForVBlank();
+<br/>
+      FAT_InitFiles();
+<br/>
+      swiWaitForVBlank();
+<br/>
+      swiWaitForVBlank();
+<br/>
+#endif
+<br/>
+}
+<br/>
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+So if all that was done correctly u call InitFS(void) and u can use the right filesystem...if you are realy lazzy u can #undef FAT_InitFiles and #define InitFS(void) FAT_InitFiles...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#107477 - chishm - Mon Oct 30, 2006 12:16 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Payk wrote:</b></span></td> </tr> <tr> <td class="quote">Well there is a simpleway which gpf showed me...
+<br/>
+you can first include stdio.h
+<br/>
+then undef each stdio command...
+<br/>
+and define new ones...</td> </tr></table><span class="postbody">
+<br/>
+Eww, I feel dirty.
+<br/>
+<br/>
+The proper way is to create all the required functions, then place pointers to them in a struct, then register this with the underlying calling stubs. Look in &lt;sys/iosupport.h&gt; for the required struct and functions.<br/>_________________<br/><a class="postlink" href="http://chishm.drunkencoders.com" target="_blank">http://chishm.drunkencoders.com</a>
+<br/>
+<a class="postlink" href="http://dldi.drunkencoders.com" target="_blank">http://dldi.drunkencoders.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#107486 - tepples - Mon Oct 30, 2006 2:33 am</h4>
+    <div class="postbody"><span class="postbody">Chishm's answer is what I was looking for so far. But what is each function specified to do, and what does each argument mean? Specifically:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">   int (*open_r)(struct _reent *r, void *fileStruct, const char *path,int flags,int mode);
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+What is struct _reent *r, and what is void *fileStruct?
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">   int (*link_r)(struct _reent *r,const char *existing, const char  *new);
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Isn't 'new' an operator in C++? Or must all file system drivers be written in the C language?
+<br/>
+<br/>
+And what are the semantics of each errno value under newlib; specifically, how do they differ from common implementations of POSIX file I/O? For instance, <a class="postlink" href="http://www.die.net/doc/linux/man/man2/open.2.html" target="_blank">Linux's open()</a> distinguishes EMFILE (this process has opened the maximum number of files for one process) from ENFILE (all processes put together have opened the maximum number of files for one computer).<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#107496 - chishm - Mon Oct 30, 2006 7:16 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">   int (*open_r)(struct _reent *r, void *fileStruct, const char *path,int flags,int mode);
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+What is struct _reent *r, and what is void *fileStruct?</span></td> </tr></table><span class="postbody">
+<br/>
+struct _reent *r is used for re-entrancy. It is defined in &lt;sys/reent.h&gt;. It is used in place of normally global variables, like errno. In fact, you'll really only need it for errno, which is accessed as r-&gt;_errno. To user code, these variables are still globals (unless re-entrancy is defined when compiling the tool chain).
+<br/>
+<br/>
+void *fileStruct is memory allocated by the calling stub to be used by your filesystem I/O driver for storing the state of the openned file. This is so you don't need to use malloc. The size of the memory allocated is defined by int structSize; in the devoptab struct passed to AddDevice. A pointer to the memory allocated is passed to the other file functions (read, write, close) but cast to an integer (int fd). Cast fd to a pointer to your file struct to access it normally.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">   int (*link_r)(struct _reent *r,const char *existing, const char  *new);
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Isn't 'new' an operator in C++? Or must all file system drivers be written in the C language?</span></td> </tr></table><span class="postbody">
+<br/>
+Yes it is. This is a problem with libc and needs to be fixed in DevkitPro. That being said, all these are function pointers and you'll need to make sure the functions are compiled with the correct number of arguments (eg, no this pointer as the first argument).
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">And what are the semantics of each errno value under newlib; specifically, how do they differ from common implementations of POSIX file I/O? For instance, <a class="postlink" href="http://www.die.net/doc/linux/man/man2/open.2.html" target="_blank">Linux's open()</a> distinguishes EMFILE (this process has opened the maximum number of files for one process) from ENFILE (all processes put together have opened the maximum number of files for one computer).</td> </tr></table><span class="postbody">
+<br/>
+All errno values are defined in &lt;sys/errno.h&gt; There are still separate ENFILE and EMFILE values, but use your judgement in choosing the correct one.<br/>_________________<br/><a class="postlink" href="http://chishm.drunkencoders.com" target="_blank">http://chishm.drunkencoders.com</a>
+<br/>
+<a class="postlink" href="http://dldi.drunkencoders.com" target="_blank">http://dldi.drunkencoders.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#122518 - Puyo - Mon Mar 19, 2007 10:57 pm</h4>
+    <div class="postbody"><span class="postbody">Sorry to bump old topic, but i thought it`s kind of related. It`s about devoptab.
+<br/>
+I`m adding functions to it as i create them. Now i`m adding ftell and I couldn`t find this function in devoptab. I was sure that fstat_r is called to fill stat structure (st-&gt;st_size?) at that moment, but it`s not. The same with stat_r. So what actually happens? And where should i add this thing?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#122547 - wintermute - Tue Mar 20, 2007 4:40 am</h4>
+    <div class="postbody"><span class="postbody">ftell is implemented using seek<br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#122590 - sirpoonga - Tue Mar 20, 2007 4:01 pm</h4>
+    <div class="postbody"><span class="postbody">tepples, that's a neat idea.  However, you can do that with fcsr and dldi if you want too.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#122598 - tepples - Tue Mar 20, 2007 5:12 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sirpoonga wrote:</b></span></td> </tr> <tr> <td class="quote">tepples, that's a neat idea.  However, you can do that with fcsr and dldi if you want too.</td> </tr></table><span class="postbody">
+<br/>
+How easy are the FCSR tools to use on the Microsoft Windows operating system?<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#122607 - sirpoonga - Tue Mar 20, 2007 5:32 pm</h4>
+    <div class="postbody"><span class="postbody">Check out this thread
+<br/>
+<a href="http://forum.gbadev.org/viewtopic.php?t=12654%3C/blockquote%3E%3C/div%3E" target="_blank">http://forum.gbadev.org/viewtopic.php?t=12654%3C/blockquote%3E%3C/div%3E</a>
+<br/>
+<br/>
+As for using it, it's pretty simple.  Put your files in a folder.  Use the the fcsr tool to make the .img file.  pad and cat the nds program with the img file.  Apply dldi.
+<br/>
+<br/>
+I have been using this to test my ds motion maze game.  The maze is a text file.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

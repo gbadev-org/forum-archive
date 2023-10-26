@@ -1,0 +1,208 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Keypad interupt not responding - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Beginners > Keypad interupt not responding</h2>
+<div id="posts">
+<div class="post">
+    <h4>#23202 - simc - Wed Jul 07, 2004 10:50 am</h4>
+    <div class="postbody"><span class="postbody">Hi everyone,
+<br/>
+<br/>
+I have run into a snag while trying to use key interupts. I am trying to set a global variable when the interupt is triggered. As you can see, my code is very textbook and I don't really have any idea what is causing the keyInterupt to not run. The Vblank interupt works perfectly. I am using Jeff's crt0.S and I have modifed it to enable interupts and I am using multiple interupts.  From my testing using Insight I know my enable function is run.  I am also pretty sure that the key interupt function never runs as the global variable is never changed and breakpoints inside the function are never reached.
+<br/>
+<br/>
+Basically, i'm hoping someone will notice some tiny error that I couldn't find ;-).
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#include "gba.h"
+<br/>
+#include "interupts.h"
+<br/>
+<br/>
+// External Variables
+<br/>
+// Used in BLANK interut handler to know if it is supposed to flip the buffers
+<br/>
+u16 ReadyToFlipBuffers=0;
+<br/>
+u16 InputFromKeyInterrupt=0;
+<br/>
+<br/>
+<br/>
+void (*IntrTable[])() = {
+<br/>
+vBlankInterrupt, // v-blank
+<br/>
+0, // h-blank
+<br/>
+0, // vcount
+<br/>
+0, // timer0
+<br/>
+0, // timer1
+<br/>
+0, // timer2
+<br/>
+0, // timer3
+<br/>
+0, // serial
+<br/>
+0, // dma0
+<br/>
+0,// dma1
+<br/>
+0, // dma2
+<br/>
+0, // dma3
+<br/>
+keyInterrupt, // key
+<br/>
+0 // cart
+<br/>
+};
+<br/>
+<br/>
+void enableVblankInterrupt()
+<br/>
+{
+<br/>
+     REG_IME = 0x00; // Disable interrupts
+<br/>
+     REG_IE |= BIT0; // Enable V-Blank IRQ.
+<br/>
+     REG_DISPSTAT |= BIT3; // Enable Display V-Blank IRQ also.
+<br/>
+     REG_IME = BIT0; // Enable interrupts
+<br/>
+}
+<br/>
+<br/>
+void disableInterrupts()
+<br/>
+{
+<br/>
+    REG_IME = 0x00;// Disable interrupts
+<br/>
+}
+<br/>
+<br/>
+void keyInterrupt()
+<br/>
+{
+<br/>
+    //InputFromKeyInterrupt = 0;
+<br/>
+    // if (keyDown(KEY_B)) InputFromKeyInterrupt = InputFromKeyInterrupt |  KEY_B;
+<br/>
+    InputFromKeyInterrupt = 1;
+<br/>
+<br/>
+    REG_IF |= INT_KEYBOARD;
+<br/>
+}
+<br/>
+<br/>
+void vBlankInterrupt()
+<br/>
+{
+<br/>
+    if (ReadyToFlipBuffers == 1)
+<br/>
+    {
+<br/>
+        // Change buffers
+<br/>
+        // See Pern Project tutorials day2
+<br/>
+<br/>
+    
+<br/>
+        if (REG_DISPCNT &amp; BACKBUFFER) // Back buffer is current buffer
+<br/>
+        {
+<br/>
+            //Switch to front buffer
+<br/>
+            REG_DISPCNT = REG_DISPCNT &amp; ~BACKBUFFER;
+<br/>
+            currentVideoBuffer = BackBuffer;  // Back buffer is the one we draw to, Front buffer is the one on screen
+<br/>
+        }
+<br/>
+        else
+<br/>
+        {
+<br/>
+            // Switch to front buffer
+<br/>
+            REG_DISPCNT = REG_DISPCNT | BACKBUFFER;
+<br/>
+            currentVideoBuffer = FrontBuffer; // Drawing on frontbuffer, displaying backbuffer
+<br/>
+        }
+<br/>
+        ReadyToFlipBuffers = 2; // signifies we don't need to do it again next vblank
+<br/>
+    }
+<br/>
+    REG_IF |= INT_VBLANK;
+<br/>
+} 
+<br/>
+<br/>
+void enableKeyInterrupt()
+<br/>
+{
+<br/>
+    REG_IME = 0;  //probably not necessary but not a good idea to change interrupt registers when an interrupt is occuring
+<br/>
+<br/>
+    REG_IE |= INT_KEYBOARD;
+<br/>
+    
+<br/>
+    REG_IME = 1;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#23205 - poslundc - Wed Jul 07, 2004 1:43 pm</h4>
+    <div class="postbody"><span class="postbody">You have to set REG_KEYCNT to configure the interrupt.
+<br/>
+<br/>
+<a href="http://www.cs.rit.edu/~tjh8300/CowBite/CowBiteSpec.htm#REG_KEYCNT" target="_blank">http://www.cs.rit.edu/~tjh8300/CowBite/CowBiteSpec.htm#REG_KEYCNT</a>
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#23238 - simc - Thu Jul 08, 2004 8:29 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>poslundc wrote:</b></span></td> </tr> <tr> <td class="quote">You have to set REG_KEYCNT to configure the interrupt.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Thanks for pointing that out - I didn't know that register existed.  The key interrupt works fine now.
+<br/>
+<br/>
+Simon</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

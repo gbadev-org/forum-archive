@@ -1,0 +1,146 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>devkitARM r22 and above, IWRAM issue - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > devkitARM r22 and above, IWRAM issue</h2>
+<div id="posts">
+<div class="post">
+    <h4>#168319 - kusma - Tue Apr 21, 2009 2:13 pm</h4>
+    <div class="postbody"><span class="postbody">I've noticed a significant slow-down in a lot of my code in recent releases of devkitARM. After some simple checking, it turns out some of my code isn't put in IWRAM anymore (as it used to be).
+<br/>
+<br/>
+I usually compile the code I want in IWRAM from file.c to file.iwram.o, and have the link-script handle stuffing it into IWRAM. Well, on more recent releases, this doesn't seem to be the case.
+<br/>
+<br/>
+Adding "__attribute__((section (".iwram"), long_call))" doesn't help me much either, I keep getting the error "error: some_array causes a section type conflict". "some_array" is an array that is supposed to be in IWRAM as well, and is decleared with "__attribute__((section (".iwram")))". These attributes correspond to the IWRAM_CODE and IWRAM_DATA macros in libgba.
+<br/>
+<br/>
+Does anyone know why? The code in the linkscript (in this case $(DEVKITPRO)/devkitARM/arm-eabi/lib/gba_cart.ld) seems like it still tries to do so; "*(EXCLUDE_FILE (*.iwram*) .text)" is located in the .text-section, and "*iwram.*(.text)" is located in the .iwram-section.
+<br/>
+<br/>
+edit: changed the topic subject to better match the findings.</span><span class="gensmall"><br/><br/>Last edited by kusma on Thu Apr 23, 2009 9:10 am; edited 1 time in total</span></div>    
+</div>
+<div class="post">
+    <h4>#168320 - Cearn - Tue Apr 21, 2009 3:16 pm</h4>
+    <div class="postbody"><span class="postbody">I just checked over here with DKA r25 and everything seems to work fine. Do you have a small sample project to test with?
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>kusma wrote:</b></span></td> </tr> <tr> <td class="quote">I usually compile the code I want in IWRAM from file.c to file.iwram.o</td> </tr></table><span class="postbody">
+<br/>
+Just to be sure, are you calling the files file.<span style="font-weight: bold">c</span>, or file.<span style="font-weight: bold">iwram.c</span>? If that's not just a typo, this may be the issue.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#168321 - kusma - Tue Apr 21, 2009 3:51 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Cearn wrote:</b></span></td> </tr> <tr> <td class="quote">I just checked over here with DKA r25 and everything seems to work fine. Do you have a small sample project to test with?
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>kusma wrote:</b></span></td> </tr> <tr> <td class="quote">I usually compile the code I want in IWRAM from file.c to file.iwram.o</td> </tr></table><span class="postbody">
+<br/>
+Just to be sure, are you calling the files file.<span style="font-weight: bold">c</span>, or file.<span style="font-weight: bold">iwram.c</span>? If that's not just a typo, this may be the issue.</span></td> </tr></table><span class="postbody">
+<br/>
+I'm calling the c source "file.c". My make-system has an implicit rule to build %.iwram.o from %.c with the correct flags to creage ARM-code (as opposed to THUMB). Since it's the linker that dictates what's in IWRAM and what is not, I don't believe the compiler should care what the file was called though.
+<br/>
+<br/>
+You can find a small project that has the issue <a class="postlink" href="http://github.com/kusma/sector_engine/tree/master" target="_blank">here</a>. The framerate is about half in r25 than what it is in r21. I did narrow down what version of devkitARM did cause the issue, and I verified that it was indeed devkitARM and not libgba etc. Unfortunately, that information is at home, and I'm not going home for a while.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#168322 - Cearn - Tue Apr 21, 2009 5:45 pm</h4>
+    <div class="postbody"><span class="postbody">Well, I got the draw functions to go into IWRAM, but I'm not sure what I did can be said to be the 'correct' solution. Just remove the IWRAM_DATA from texture_cache and it works. Without a specific section, globals go into IWRAM anyway.
+<br/>
+<br/>
+Initially, the .iwram rules were added to the linkscript so that every function in an .iwram file are put in IWRAM without requiring any sort of __attributes__. This seems to have stopped working at some point. With r19, things still go into IWRAM, but with r22 (I don't have the versions in between anymore so I can't check those) it doesn't anymore. Nowadays, what seems to matter is the attributes. I never noticed the switch before because I still had the attributes anyway -- they're still necessary for the declaration, that that seems to be enough to put them in the proper section (see the generated assembly, for example).
+<br/>
+<br/>
+So yeah, I agree there's something odd going on here. Now IWRAM_CODE is required at some point of the code, either declaration or definition. Just remove the IWRAM_DATA, as that seems to be causing the issue and isn't necessary anyway.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#168324 - kusma - Tue Apr 21, 2009 10:26 pm</h4>
+    <div class="postbody"><span class="postbody">I've checked with R21 already, so it was R22 that introduced the issue. I can't say I see any relevant changes in the linkscript. Here's the full diff of gba_cart.ld:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">85,86c85,86
+<br/>
+&lt;               *(.text.*)
+<br/>
+&lt;               *(.stub)
+<br/>
+---
+<br/>
+&gt;               *(.text .stub .text.* .gnu.linkonce.t.*)
+<br/>
+&gt;               KEEP (*(.text.*personality*))
+<br/>
+89,91c89
+<br/>
+&lt;               *(.gnu.linkonce.t*)
+<br/>
+&lt;               *(.glue_7)
+<br/>
+&lt;               *(.glue_7t)
+<br/>
+---
+<br/>
+&gt;               *(.glue_7t) *(.glue_7) *(.vfp11_veneer)
+<br/>
+178c176
+<br/>
+&lt;       } &gt;iwram
+<br/>
+---
+<br/>
+&gt;       } AT&gt;iwram
+<br/>
+232,233d229
+<br/>
+&lt;       __ewram_lma = __load_stop_iwram9;
+<br/>
+&lt;
+<br/>
+234a231,232
+<br/>
+&gt;   __ewram_lma = __iwram_overlay_lma + (__iwram_overlay_end - __iwram_overlay_s
+<br/>
+tart) ;
+<br/>
+&gt;
+<br/>
+252c250
+<br/>
+&lt;       } &gt;ewram
+<br/>
+---
+<br/>
+&gt;       } AT&gt;ewram</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+One possibly relevant change, though: R22 updated binutils from 2.17 to 2.18.50.20080413. R24 again updated to 2.19, and it still doesn't work. It COULD be that binutils 2.17 allows things that 2.18.50.20080413 and above doesn't. Unfortunately, I haven't been able to find anything in the changelog for binutils that indicates such a change.
+<br/>
+<br/>
+So, I've tried compiling with the compiler in R22, and linking with the one in R21, and bam! works! So, it seems like the update of binutils might be the cause.
+<br/>
+<br/>
+If I try using the R21 linkscript in R22, I get the following error:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">c:/gba/devkitpro/devkitarm_r22hack/bin/../lib/gcc/arm-eabi/4.3.0/../../../../arm
+<br/>
+-eabi/bin/ld.exe: section .data [08012d7c -&gt; 08013627] overlaps section .bss [08
+<br/>
+012d7c -&gt; 08012e6f]
+<br/>
+collect2: ld returned 1 exit status</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I'd love to find out what the issue really is - I hate changing my code because "it works" :)</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

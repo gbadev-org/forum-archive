@@ -1,0 +1,584 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>OAM is screwing me. - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > OAM is screwing me.</h2>
+<div id="posts">
+<div class="post">
+    <h4>#174835 - relminator - Fri Jul 23, 2010 7:52 am</h4>
+    <div class="postbody"><span class="postbody">Oam gets flipped?
+<br/>
+<br/>
+I've just implemented my oamfont(font are rendered via oam) since my sub screen font needs are not that much and I needed the speed.
+<br/>
+<br/>
+However an artifact shows on one of the text printed on the sub screen and the weird thing is that it only shows on start up. I'm pretty sure it's the oam trying to screw me because I've implemented the same font system using the gl interface and it worked like a charm.  I've been trying to find out the bug to no avail for hours now.
+<br/>
+<br/>
+My eyes are not that fast to discern but I think the oam gets flipped.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+/******************************************************************************
+<br/>
+*******************************************************************************
+<br/>
+<br/>
+   Space Impakto DS
+<br/>
+   relminator
+<br/>
+   http://rel.betterwebber.com
+<br/>
+<br/>
+<br/>
+   Coamfont class
+<br/>
+<br/>
+<br/>
+*******************************************************************************
+<br/>
+******************************************************************************/
+<br/>
+<br/>
+#include &lt;nds.h&gt;
+<br/>
+#include "Coamfont.h"
+<br/>
+<br/>
+<br/>
+<br/>
+/******************************************************************************
+<br/>
+<br/>
+<br/>
+<br/>
+******************************************************************************/
+<br/>
+void Coamfont::init(OamState *_oam,u8 *_gfx, int _width, int _height, SpriteSize _size, int _max_chars)
+<br/>
+{
+<br/>
+   active_chars = 0;
+<br/>
+   oam = _oam;
+<br/>
+   
+<br/>
+   if (_max_chars &gt; MAX_FONT_SPRITES)
+<br/>
+      _max_chars = MAX_FONT_SPRITES;
+<br/>
+   
+<br/>
+   gfx = _gfx;
+<br/>
+   max_chars = _max_chars;
+<br/>
+   width = _width;
+<br/>
+   height = _height;
+<br/>
+   tile_mem_size = width * height;
+<br/>
+   
+<br/>
+   fonts[0].create (oam, width, height, _size, SpriteColorFormat_256Color, true, true);
+<br/>
+   fonts[0].active = false;
+<br/>
+   
+<br/>
+   for (int i = 1; i &lt; max_chars; i++)
+<br/>
+   {
+<br/>
+      fonts[i].create (oam, width, height, _size, SpriteColorFormat_256Color, true);
+<br/>
+      fonts[i].active = false;
+<br/>
+   }
+<br/>
+<br/>
+}
+<br/>
+<br/>
+/******************************************************************************
+<br/>
+<br/>
+<br/>
+<br/>
+******************************************************************************/
+<br/>
+void Coamfont::clear()
+<br/>
+{
+<br/>
+   active_chars = 0;
+<br/>
+   for (int i = 0; i &lt; max_chars; i++)
+<br/>
+   {
+<br/>
+      fonts[i].active = false;
+<br/>
+   }
+<br/>
+<br/>
+}
+<br/>
+<br/>
+/******************************************************************************
+<br/>
+<br/>
+<br/>
+<br/>
+******************************************************************************/
+<br/>
+void Coamfont::print(int x, int y, const char *text)
+<br/>
+{
+<br/>
+<br/>
+   unsigned char font_char;
+<br/>
+   
+<br/>
+   while(*text)
+<br/>
+   {
+<br/>
+      font_char = (*(unsigned char*)text++) - 32;
+<br/>
+      if (font_char)   // don't print space
+<br/>
+      {
+<br/>
+         for (int i = 0; i &lt; max_chars; i++)
+<br/>
+         {
+<br/>
+            if (!fonts[i].active)
+<br/>
+            {
+<br/>
+               dmaCopy(gfx + (tile_mem_size*font_char) , fonts[i].gfx, tile_mem_size);
+<br/>
+               fonts[i].active = true;
+<br/>
+               fonts[i].x = x;
+<br/>
+               fonts[i].y = y;
+<br/>
+               fonts[i].update_oam();
+<br/>
+               active_chars++;
+<br/>
+               break;
+<br/>
+            }
+<br/>
+         }
+<br/>
+      }
+<br/>
+      x += width; 
+<br/>
+   }
+<br/>
+   
+<br/>
+}
+<br/>
+<br/>
+/******************************************************************************
+<br/>
+<br/>
+<br/>
+<br/>
+******************************************************************************/
+<br/>
+void Coamfont::print(int x, int y, int value)
+<br/>
+{
+<br/>
+<br/>
+   
+<br/>
+   sprintf(str,"%i",value);
+<br/>
+   
+<br/>
+   print(x, y, str);
+<br/>
+   
+<br/>
+}
+<br/>
+<br/>
+/******************************************************************************
+<br/>
+<br/>
+<br/>
+<br/>
+******************************************************************************/
+<br/>
+void Coamfont::print(int x, int y, const char *text, int value)
+<br/>
+{
+<br/>
+<br/>
+   strcpy(str, text);
+<br/>
+   sprintf(str2,"%i",value);
+<br/>
+   strcat(str, str2);
+<br/>
+   
+<br/>
+   print(x, y, str);
+<br/>
+   
+<br/>
+}
+<br/>
+<br/>
+/******************************************************************************
+<br/>
+<br/>
+<br/>
+<br/>
+******************************************************************************/
+<br/>
+void Coamfont::print_centered(int x, int y, const char *text)
+<br/>
+{
+<br/>
+<br/>
+   unsigned char font_char;
+<br/>
+   int total_width = 0;
+<br/>
+   
+<br/>
+   total_width = width * strlen(text);
+<br/>
+   
+<br/>
+   x = (SCREEN_WIDTH - total_width) / 2; 
+<br/>
+   
+<br/>
+   
+<br/>
+   while(*text)
+<br/>
+   {
+<br/>
+      font_char = (*(unsigned char*)text++) - 32;
+<br/>
+      if (font_char)   // don't print space
+<br/>
+      {
+<br/>
+         for (int i = 0; i &lt; max_chars; i++)
+<br/>
+         {
+<br/>
+            if (!fonts[i].active)
+<br/>
+            {
+<br/>
+               dmaCopy(gfx + (tile_mem_size*font_char) , fonts[i].gfx, tile_mem_size);
+<br/>
+               fonts[i].active = true;
+<br/>
+               fonts[i].x = x;
+<br/>
+               fonts[i].y = y;
+<br/>
+               fonts[i].update_oam();
+<br/>
+               active_chars++;
+<br/>
+               break;
+<br/>
+            }
+<br/>
+         }
+<br/>
+      }
+<br/>
+      x += width; 
+<br/>
+   }
+<br/>
+   
+<br/>
+}
+<br/>
+<br/>
+/******************************************************************************
+<br/>
+<br/>
+<br/>
+<br/>
+******************************************************************************/
+<br/>
+void Coamfont::print_score(int x, int y, int value, const char *filler, int length)
+<br/>
+{
+<br/>
+<br/>
+   sprintf(str2,"%i",value);
+<br/>
+   int value_len = strlen(str2);
+<br/>
+   
+<br/>
+   if (length &lt; value_len)
+<br/>
+      length = value_len;
+<br/>
+      
+<br/>
+   int new_length = length - value_len;
+<br/>
+   
+<br/>
+   for (int i=0; i &lt; new_length; i++)
+<br/>
+   {
+<br/>
+      str[i]=*filler;
+<br/>
+   }
+<br/>
+   
+<br/>
+   //str[new_length]='\0';         // not needed
+<br/>
+   
+<br/>
+   char *p_str = &amp;str[new_length];
+<br/>
+ 
+<br/>
+   strcpy(p_str, str2);
+<br/>
+   
+<br/>
+   print(x, y, str);
+<br/>
+   
+<br/>
+}
+<br/>
+<br/>
+/******************************************************************************
+<br/>
+<br/>
+<br/>
+<br/>
+******************************************************************************/
+<br/>
+void Coamfont::print_spaced(int x, int y, const char *text, int x_space, s32 x_offset, s32 y_offset)
+<br/>
+{
+<br/>
+<br/>
+   unsigned char font_char;
+<br/>
+   s32 spacing = x_space &lt;&lt; 12;
+<br/>
+   s32 y_spacing = 0;
+<br/>
+   s32 _x = x &lt;&lt; 12;
+<br/>
+   s32 _y = y &lt;&lt; 12;
+<br/>
+   s32 _x_space = x_space &lt;&lt; 12;
+<br/>
+   
+<br/>
+   while(*text)
+<br/>
+   {
+<br/>
+      font_char = (*(unsigned char*)text++) - 32;
+<br/>
+      if (font_char)   // don't print space
+<br/>
+      {
+<br/>
+         for (int i = 0; i &lt; max_chars; i++)
+<br/>
+         {
+<br/>
+            if (!fonts[i].active)
+<br/>
+            {
+<br/>
+               dmaCopy(gfx + (tile_mem_size*font_char) , fonts[i].gfx, tile_mem_size);
+<br/>
+               fonts[i].active = true;
+<br/>
+               fonts[i].x = _x &gt;&gt; 12;
+<br/>
+               fonts[i].y = _y &gt;&gt; 12;
+<br/>
+               fonts[i].update_oam();
+<br/>
+               active_chars++;
+<br/>
+               break;
+<br/>
+            }
+<br/>
+         }
+<br/>
+      }
+<br/>
+      
+<br/>
+      y_spacing += y_offset;
+<br/>
+      
+<br/>
+      spacing += x_offset;
+<br/>
+      _x_space = spacing;
+<br/>
+      
+<br/>
+      _x += ((width&lt;&lt;12) + _x_space); 
+<br/>
+      _y += (y_spacing);
+<br/>
+   }
+<br/>
+   
+<br/>
+}
+<br/>
+<br/>
+/******************************************************************************
+<br/>
+<br/>
+<br/>
+<br/>
+******************************************************************************/
+<br/>
+void Coamfont::print_vertical(int x, int y, const char *text)
+<br/>
+{
+<br/>
+<br/>
+   unsigned char font_char;
+<br/>
+   
+<br/>
+   while(*text)
+<br/>
+   {
+<br/>
+      font_char = (*(unsigned char*)text++) - 32;
+<br/>
+      if (font_char)   // don't print space
+<br/>
+      {
+<br/>
+         for (int i = 0; i &lt; max_chars; i++)
+<br/>
+         {
+<br/>
+            if (!fonts[i].active)
+<br/>
+            {
+<br/>
+               dmaCopy(gfx + (tile_mem_size*font_char) , fonts[i].gfx, tile_mem_size);
+<br/>
+               fonts[i].active = true;
+<br/>
+               fonts[i].x = x;
+<br/>
+               fonts[i].y = y;
+<br/>
+               fonts[i].update_oam();
+<br/>
+               active_chars++;
+<br/>
+               break;
+<br/>
+            }
+<br/>
+         }
+<br/>
+      }
+<br/>
+      y += height; 
+<br/>
+   }
+<br/>
+   
+<br/>
+}
+<br/>
+<br/>
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+<br/>
+Anyways here's the full source and binary:
+<br/>
+(Look at the moving "ANYATECH" text at the bottom.)
+<br/>
+<br/>
+<a href="http://rel.betterwebber.com/junk.php?id=111" target="_blank">http://rel.betterwebber.com/junk.php?id=111</a>
+<br/>
+<br/>
+<br/>
+And for the glfont routine that works perfectly:
+<br/>
+<br/>
+<a href="http://rel.betterwebber.com/junk.php?id=110" target="_blank">http://rel.betterwebber.com/junk.php?id=110</a>
+<br/>
+<br/>
+<br/>
+Thanks in advance!<br/>_________________<br/><a href="http://rel.betterwebber.com" target="_blank">http://rel.betterwebber.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#174837 - Dwedit - Fri Jul 23, 2010 10:11 am</h4>
+    <div class="postbody"><span class="postbody">Are you writing to OAM outside of vblank time?<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#174838 - relminator - Fri Jul 23, 2010 10:14 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Dwedit wrote:</b></span></td> </tr> <tr> <td class="quote">Are you writing to OAM outside of vblank time?</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Before.
+<br/>
+<br/>
+1. Print via oam (write to oam)
+<br/>
+2. vblank
+<br/>
+3. oamUpdate()<br/>_________________<br/><a href="http://rel.betterwebber.com" target="_blank">http://rel.betterwebber.com</a></span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

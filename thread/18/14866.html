@@ -1,0 +1,346 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Garbled Wav Sound Playing from Memcard(FAT) - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Garbled Wav Sound Playing from Memcard(FAT)</h2>
+<div id="posts">
+<div class="post">
+    <h4>#149311 - sowee - Fri Jan 18, 2008 7:10 am</h4>
+    <div class="postbody"><span class="postbody">I'm loading a small wav file from fat, mono, 11025 and 8bits, and the code for playing the sound through the IPC from arm9 to arm7 is structured similar to the command ipc structure discussed in the double.co.nz ds dev't tutorial part 6.
+<br/>
+<br/>
+My problem is that when the data i got from the wav file is played, it comes out garbled, either that or theres just a huge amount of noise.
+<br/>
+<br/>
+This is my method for loading wav files from the memory card and storing the data in a SoundData structure:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">SoundData Content_LoadWav(char *fname)
+<br/>
+{
+<br/>
+   FILE *fp;
+<br/>
+   fp = fopen(fname, "rb");
+<br/>
+   if (fp)
+<br/>
+   {
+<br/>
+      WAV_HDR *wav;
+<br/>
+      CHK_HDR *chk;
+<br/>
+      char buffer[80];
+<br/>
+      int i;
+<br/>
+      int chkCounter;
+<br/>
+      int dataLengthBuffer;
+<br/>
+      short int channels;
+<br/>
+      long int sample_rate;
+<br/>
+      long int seekOffset;
+<br/>
+      unsigned int fSuccess;
+<br/>
+<br/>
+      wav = (WAV_HDR *) malloc (sizeof(WAV_HDR));      //allocate memory for wav header
+<br/>
+      chk = (CHK_HDR *) malloc (sizeof(CHK_HDR));
+<br/>
+      fSuccess = fread((void *)wav,sizeof(WAV_HDR),(size_t)1,fp);//get wav headers
+<br/>
+      if (fSuccess != 1) { printf("\n\tcan't read wav header\n");}
+<br/>
+      for(i=0;i&lt;4;i++)buffer[i] = wav-&gt;riffID[i];      //check for RIFF
+<br/>
+      buffer[4] = 0;
+<br/>
+      if(strcmp(buffer,"RIFF")!=0){ printf("\n\tbad RIFF format\n");}
+<br/>
+      printf("\n\tShouldBeRiff:%s\n", buffer);
+<br/>
+      for(i=0;i&lt;4;i++)buffer[i] = wav-&gt;waveID[i];      //check for WAVE
+<br/>
+      buffer[4] = 0;
+<br/>
+      if(strcmp(buffer,"WAVE")!=0){ printf("\n\tbad WAVE format\n");}
+<br/>
+      printf("\n\tShouldBeWAVE:%s\n", buffer);
+<br/>
+      for(i=0;i&lt;3;i++)buffer[i] = wav-&gt;fmtID[i];      //check for fmt
+<br/>
+      buffer[3]=0;
+<br/>
+      if(strcmp(buffer,"fmt")!=0){ printf("\n\tbad fmt format\n");}
+<br/>
+      printf("\n\tShouldBefmt:%s\n", buffer);
+<br/>
+      if(wav-&gt;format_tag!=1){printf("\n\tbad wav format_tag\n");}
+<br/>
+<br/>
+      sample_rate = wav-&gt;sample_rate;
+<br/>
+      printf("\n\tsample_rate:%d\n", sample_rate);
+<br/>
+      if( (wav-&gt;bits_per_sample != 16) &amp;&amp; (wav-&gt;bits_per_sample != 8) ){ //check if bit rate is valid
+<br/>
+         printf("\n\t%d is a bad wav bits_per_sample\n", wav-&gt;bits_per_sample);}else {
+<br/>
+            printf("\n\tbits_per_sample:%d\n",wav-&gt;bits_per_sample);}
+<br/>
+      
+<br/>
+      //skip over remaining portion of wav header
+<br/>
+      channels = wav-&gt;channels;
+<br/>
+      printf("\n\tchannels:%d\n", channels);
+<br/>
+      seekOffset = wav-&gt;format_len - (sizeof(WAV_HDR) - 20);
+<br/>
+      fSuccess = fseek(fp, seekOffset, SEEK_CUR);
+<br/>
+      if (fSuccess!=0){printf("\n\tcan't seek\n");}
+<br/>
+<br/>
+      chkCounter = 1;
+<br/>
+      
+<br/>
+      while(1)
+<br/>
+      {
+<br/>
+         if (chkCounter &gt; 10) {printf("\n\ttoo many chunks\n"); break;}   //check attempt counter
+<br/>
+         fSuccess = fread( (void*)chk, sizeof(CHK_HDR), (size_t)1, fp);
+<br/>
+         if (fSuccess != 1){ printf("\n\tcan't read chunk\n"); break;} //get chunk header
+<br/>
+         for (i=0;i&lt;4;i++)buffer[i] = chk-&gt;dataID[i];
+<br/>
+         buffer[4] = 0;
+<br/>
+         if (strcmp(buffer, "data") == 0){break;}
+<br/>
+         
+<br/>
+         //skip over chunk
+<br/>
+         chkCounter++;
+<br/>
+         fSuccess = fseek(fp, chk-&gt;dLen, SEEK_CUR);
+<br/>
+         if (fSuccess!=0){printf("\n\tcan't seek\n"); break;}
+<br/>
+      }
+<br/>
+      for(i=0;i&lt;4;i++)buffer[i] = chk-&gt;dataID[i];      //check for fmt
+<br/>
+      buffer[4]=0;
+<br/>
+      printf("\n\tShouldBedata:%s\n", buffer);
+<br/>
+      dataLengthBuffer = chk-&gt;dLen;
+<br/>
+      //char wbuff[dataLengthBuffer];
+<br/>
+      //char *wbuff;
+<br/>
+      wbuff = (char *) malloc (sizeof(char)*dataLengthBuffer);
+<br/>
+      fSuccess = fread((void *)wbuff, dataLengthBuffer, (size_t)1, fp);
+<br/>
+      if (fSuccess!=1){printf("\n\tcan't read data\n");}
+<br/>
+      
+<br/>
+      
+<br/>
+      universalSoundData.frequency = sample_rate;
+<br/>
+      universalSoundData.length = dataLengthBuffer;
+<br/>
+      printf("\n\tfrequency:%d\n", universalSoundData.frequency);
+<br/>
+      printf("\n\tlength:%d\n", universalSoundData.length);
+<br/>
+      
+<br/>
+      free(universalSoundData.data);
+<br/>
+      universalSoundData.data = (char *) malloc (sizeof(char)*dataLengthBuffer);
+<br/>
+      memcpy(universalSoundData.data, wbuff, (sizeof(char)*dataLengthBuffer));
+<br/>
+      //universalSoundData.data = &amp;wbuff;
+<br/>
+      
+<br/>
+      free(wbuff);
+<br/>
+      free(wav);
+<br/>
+      free(chk);
+<br/>
+      fclose(fp);
+<br/>
+      return universalSoundData;
+<br/>
+   }
+<br/>
+   return;
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+As you can see, my concern here is with the universalSoundData.data, which supposedly holds the actual data of the wave file (headers excluded). Now i don't know why the sound comes out the way it does, do i need to do something to the data before i pass it to the arm7 to be played? or is it that theres just a problem with how i store the data?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#149313 - eKid - Fri Jan 18, 2008 7:34 am</h4>
+    <div class="postbody"><span class="postbody">Does the sound output resemble the correct sound slightly or is it just bad data? Why not just store the wave data as RAW? And how are you setting the sound registers? Oh, and what does WAVE_HDR look like? :)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#149319 - sowee - Fri Jan 18, 2008 10:11 am</h4>
+    <div class="postbody"><span class="postbody">The sound output resembles the actual, at least I think it does because I can somewhat hear the words being spoken in the wav file if I concentrate...either that or I'm just imagining it hehe :P
+<br/>
+<br/>
+WAV_HDR looks like this:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">typedef struct{
+<br/>
+   char riffID[4];
+<br/>
+   long int rLen;
+<br/>
+   char waveID[4];
+<br/>
+   char fmtID[4];
+<br/>
+   long int format_len;
+<br/>
+   short int format_tag;
+<br/>
+   short int channels;
+<br/>
+   long int sample_rate;
+<br/>
+   long int avg_bytes_sec;
+<br/>
+   short int block_align;
+<br/>
+   short int bits_per_sample;
+<br/>
+}WAV_HDR;</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+It doesn't really contain the actual sound data, just to get the header information out of the way and as a means for me to check the wav info.
+<br/>
+<br/>
+I play the sound using this arm7 method through the ipc
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">static void PlaySoundOnce(SoundData* sd) {
+<br/>
+   int channel = sd-&gt;channel;
+<br/>
+   SCHANNEL_CR(channel) = 0;
+<br/>
+   SCHANNEL_TIMER(channel) = SOUND_FREQ(sd-&gt;frequency);
+<br/>
+   SCHANNEL_SOURCE(channel) = (uint32)sd-&gt;data;
+<br/>
+   SCHANNEL_LENGTH(channel) = sd-&gt;length &gt;&gt; 2;  
+<br/>
+   SCHANNEL_CR(channel) = 
+<br/>
+      SCHANNEL_ENABLE | 
+<br/>
+      SOUND_ONE_SHOT | 
+<br/>
+      SOUND_8BIT | 
+<br/>
+      SOUND_VOL(sd-&gt;volume);
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I basically left the template main method of arm7 alone, and just added a ProcessAllSound() method at the end of the VBlankHandler method of the template which looks like this:
+<br/>
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void ProcessAllSound() {
+<br/>
+  static int currentSoundCommand = -1;
+<br/>
+  while(currentSoundCommand != sharedSoundControl-&gt;currentSoundCommand) {
+<br/>
+    SoundCommand* soundCommand = &amp;sharedSoundControl-&gt;sound[currentSoundCommand];
+<br/>
+    switch(soundCommand-&gt;playType) {
+<br/>
+    case PLAY_ONE_SHOT_SAMPLE:
+<br/>
+      PlaySoundOnce(&amp;soundCommand-&gt;soundData);
+<br/>
+      break;      
+<br/>
+    }
+<br/>
+    currentSoundCommand++;
+<br/>
+    currentSoundCommand &amp;= MAX_SOUNDS-1;
+<br/>
+  }
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+it's basically just the same as the tutorial at double.co.nz, with the sharedSoundControl as a define for the ipc shared area
+<br/>
+<br/>
+By "store the wave data as RAW" do you mean that I should convert the wave file first using a program, like sox?, or is there a way to convert the data after I fread it from the wave file and before I place it in the struct?
+<br/>
+I want to be able to play wave files stored on the memory card so the former really isn't an option for me hehe. Thanks for looking into it :D much appreciated</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#149320 - Dark Knight ez - Fri Jan 18, 2008 10:31 am</h4>
+    <div class="postbody"><span class="postbody">You do realise that 8bit wavs are unsigned, right? And that the DS requires RAW samples to be signed?
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void toggleSignBit(unsigned char *sample, unsigned int len) {
+<br/>
+    for(; len &gt; 0; --len, ++sample) {
+<br/>
+        *sample ^= 0x80;
+<br/>
+    }
+<br/>
+}</td> </tr></table><span class="postbody"><br/>_________________<br/><span style="font-size: 9px; line-height: normal"><a class="postlink" href="http://amplituds.drunkencoders.com" target="_blank">AmplituDS website</a></span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#149321 - sowee - Fri Jan 18, 2008 12:01 pm</h4>
+    <div class="postbody"><span class="postbody">wow..i didn't notice that, sorry hehe, goes to show how much experience I have with this stuff hehe :P i tried it out and it works fine now :) thanks a million for the quick solution!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#149322 - eKid - Fri Jan 18, 2008 12:24 pm</h4>
+    <div class="postbody"><span class="postbody">Ah.. yeah, treating unsigned as signed data can result in some pretty hard distortion :P</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

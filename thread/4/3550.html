@@ -1,0 +1,688 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>UART under interruption, and flow control - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > UART under interruption, and flow control</h2>
+<div id="posts">
+<div class="post">
+    <h4>#22029 - Gnurou - Fri Jun 11, 2004 4:49 pm</h4>
+    <div class="postbody"><span class="postbody">Hello everyone,
+<br/>
+<br/>
+I've been browsing many sources (including this forum), but unfortunately I can't get it to work the way it should. Any advice would be greatly appreciated here. Some words about the context first:
+<br/>
+<br/>
+I'm working on a Java-OS that supports the GBA. We implemented a TCP/IP stack in Java that allows nice things, like hosting a real HTTP server on the GBA that gets its internet connection from the serial line via a PC. Unfortunately, I'm losing too many bytes on the physical layer, because I don't manage to get the flow control to work the way I want.
+<br/>
+<br/>
+The VM can run multiple threads, and threads waiting for serial data should be put into an idle list and awakened when the data actually arrived. So I'm naturally using an interrupt-based approach for handling data arrival. Once the interrupt is triggered, the byte is put into a buffer (that is large enough to contain all the bytes I send during a session for my tests). Here is the serial initialization code:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+   REG_SIODATA8 = 'A';
+<br/>
+   
+<br/>
+   REG_SIOCNT = 0;
+<br/>
+   REG_RCNT = RCNT_MODE_UART;
+<br/>
+  
+<br/>
+<br/>
+   REG_SIOCNT |= SIO_BAUD_9600 | SIO_CTS | SIO_LENGTH_8 | SIO_USE_UART;
+<br/>
+   REG_SIOCNT |= SIO_SEND_ENABLE | SIO_RECV_ENABLE;
+<br/>
+   REG_SIOCNT |= SIO_SEND_DATA | SIO_RECV_DATA;
+<br/>
+   REG_SIOCNT |= SIO_REQUEST_IRQ;
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+And here is the interrupt code:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+    u32 Int_Flag;
+<br/>
+    /* Disable interrupts */
+<br/>
+    Int_Flag = REG_IF;
+<br/>
+    REG_IME = 0x00;
+<br/>
+    
+<br/>
+    /* Only act when we receive a character */
+<br/>
+    if (!(REG_SIOCNT &amp; SIO_RECV_DATA))
+<br/>
+    {
+<br/>
+         /* Code to store the character (slightly longer in real) */
+<br/>
+         buffer[cpt++] = (char)REG_SIODATA8;
+<br/>
+<br/>
+        REG_SIOCNT |= SIO_SEND_DATA | SIO_RECV_DATA;
+<br/>
+    }
+<br/>
+    REG_IF = Int_Flag;      /*Write back the interrupt flags */
+<br/>
+    BIOS_IF |= Int_Flag;
+<br/>
+    REG_IME = 0x1;              /* Re-Enable interrups */
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Using this code I'm losing something like 5% of the transmitted characters. I'm kinda desesperate since 1) the desired interrupt code would be quite long in some cases (in case you need to reschedule the thread receiving the byte) and 2) I don't manage to get CTS/RTS flow control to work, despite of a good hundred tests. The idea is to tell the sender to stop sending bytes at the beginning of the interrupt code, than re-enable sending at the end.
+<br/>
+<br/>
+Has anyone managed to get something like this to work? Can you see something wrong in my code that would explain why I'm losing characters? My test protocol is a simple "cat file.txt &gt; /dev/ttyS0" under Linux, with the serial line well configure. The Java program on the GBA reads the bytes as they arrive and display them on the screen. This process should not interfere with characters receiving since latter is under interruption and only place them into a buffer.
+<br/>
+<br/>
+Thanks in advance for your help,
+<br/>
+Alex.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#22030 - poslundc - Fri Jun 11, 2004 4:59 pm</h4>
+    <div class="postbody"><span class="postbody">I'd be lying if I said this was much more than a shot in the dark here, but there is a chance that you may be missing some interrupts if they are hitting while your ISR is processing.
+<br/>
+<br/>
+Instead of turning off REG_IME, try disabling the specific interrupts in REG_IE instead, which will hopefully allow interrupts to still queue up.
+<br/>
+<br/>
+Again, it's a bit of a blind shot, but it may help.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#22037 - torne - Fri Jun 11, 2004 7:34 pm</h4>
+    <div class="postbody"><span class="postbody">Interrupts should still be queued even with REG_IME disabled; only disabling the appropriate bits in the serial registers should actually disable queueing.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#22038 - poslundc - Fri Jun 11, 2004 7:48 pm</h4>
+    <div class="postbody"><span class="postbody">Yeah, that's what I figured... :P
+<br/>
+<br/>
+Sorry, no help then...
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#22048 - JasperW - Sat Jun 12, 2004 9:48 am</h4>
+    <div class="postbody"><span class="postbody">I've done some serial programming. A couple of points that might be of interest to you:
+<br/>
+<br/>
+1) What kind of serial cable are you using? Jeff's MBV2 doesn't support CTS/RTS in hardware so you need some sort of software flow control. Darthfader's serial UART cable does but the cable I built didn't work reliably above 9600 baud. Though this might be due to not hacking up an official Nintendo cable.
+<br/>
+<br/>
+2) You could turn on the FIFO buffer so your interrupt handler gets called less giving you more time to handle the interrupt. Beware though that it then only triggers after four bytes so if your data isn't dword aligned you'll have to check periodically for extra data.
+<br/>
+<br/>
+Hope this helps. Good luck.
+<br/>
+<br/>
+Jasper</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#22049 - Gnurou - Sat Jun 12, 2004 10:08 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>JasperW wrote:</b></span></td> </tr> <tr> <td class="quote">I've done some serial programming. A couple of points that might be of interest to you:
+<br/>
+<br/>
+1) What kind of serial cable are you using? Jeff's MBV2 doesn't support CTS/RTS in hardware so you need some sort of software flow control. Darthfader's serial UART cable does but the cable I built didn't work reliably above 9600 baud. Though this might be due to not hacking up an official Nintendo cable.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+The cable has all the wires connected (i.e. including the CTS and RTS ones) and has been tested without interrupts at 115000 bauds. So I suppose it works.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+2) You could turn on the FIFO buffer so your interrupt handler gets called less giving you more time to handle the interrupt. Beware though that it then only triggers after four bytes so if your data isn't dword aligned you'll have to check periodically for extra data.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I'm trying to avoid the hassle of the FIFO by using flow control, but maybe I just did it wrong. Some sources claim that the GBA UART doesn't support CTS/RTS at all. Others give informations about it, but I don't know the exact way to set/reset the CTS and RTS lines. Any information on this would help.
+<br/>
+<br/>
+I'm trying to do the same using the smallest possible C program (i.e. without my VM). It will be easier to debug and I should be able to provide more informations.
+<br/>
+<br/>
+Anyway, thanks already for all your answers! :)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#22050 - JasperW - Sat Jun 12, 2004 10:36 am</h4>
+    <div class="postbody"><span class="postbody">From my experience CTS/RTS works just fine on the GBA and you don't need to do anything other than setting it when initializing the UART. When you then set the SIO_RECV_ENABLE flag the GBA will output lo when the buffer is empty (just been read) and hi when the buffer is full (needs to be read) on the CTS line. Do you have hardware flow control enabled on the PC side? I'd suggest sending 20 bytes on the PC, reading 10 on the GBA, stop a while and read the next 10 and see if they all get through. They should if everything properly configured because the PC will halt it's transfer.
+<br/>
+In your code you set the SIO_SEND_DATA and SIO_RECV_DATA flags everytime you read a byte but this isn't necessary. They might be writeable but you should only read them to check if the GBA is done with receiving / sending. 
+<br/>
+If SIO_RECV_DATA is lo (0) there's data, if it's hi (1) there's no data in the buffer. 
+<br/>
+Similar with SIO_SEND_DATA: if it's lo (0) you can put a character in the send buffer, if it's hi (1) it's busy sending.
+<br/>
+<br/>
+Jasper</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#22059 - Gnurou - Sat Jun 12, 2004 7:20 pm</h4>
+    <div class="postbody"><span class="postbody">Thanks for the informations Jasper. Unfortunately I'm still losing chars. I have tried the simplest possible example, a raw sending of characters without using interrupts.
+<br/>
+<br/>
+Initialization:
+<br/>
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+   REG_SIODATA8 = 'A';
+<br/>
+   
+<br/>
+   REG_SIOCNT = 0;
+<br/>
+   REG_RCNT = RCNT_MODE_UART;
+<br/>
+  
+<br/>
+<br/>
+   REG_SIOCNT |= SIO_BAUD_9600 | SIO_CTS | SIO_LENGTH_8 | SIO_USE_UART;
+<br/>
+   REG_SIOCNT |= SIO_SEND_ENABLE | SIO_RECV_ENABLE;
+<br/>
+   REG_SIOCNT |= SIO_RECV_DATA | SIO_SEND_DATA;
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Code:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+  char buf[2048];
+<br/>
+  char c;
+<br/>
+  int cpt = 0;
+<br/>
+  while(1)
+<br/>
+    {
+<br/>
+      /* Wait for a char to be available on the line */
+<br/>
+      while (REG_SIOCNT &amp; SIO_RECV_DATA);
+<br/>
+      /* Store it into the buffer */
+<br/>
+      buf[cpt++] = (char)REG_SIODATA8;
+<br/>
+    }
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Doing this simple stuff, I'm not losing a single character. That's a relief!
+<br/>
+<br/>
+However, if I add some delay after the 10th character as you suggested:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+  while(1)
+<br/>
+    {
+<br/>
+      /* Wait for a char to be available on the line */
+<br/>
+      while (REG_SIOCNT &amp; SIO_RECV_DATA);
+<br/>
+      /* Store it into the buffer */
+<br/>
+      buf[cpt++] = (char)REG_SIODATA8;
+<br/>
+      /* Delay after 10 characters */
+<br/>
+      if (cpt == 10) for (i = 0; i &lt; 100000; i++);
+<br/>
+    }
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Then I'm losing 5 chars after the 11th. It looks like character 11 remains in SIODATA8 until read but that the other characters are just sent blindly by the PC.
+<br/>
+<br/>
+I've double-checked my cable and settings - my cable has been built using Darthfader's plans. The serial port on the PC is configured at 9600 bauds, 8 data bits, no parity, and RTS/CTS enabled. I send the 20 characters using a dumb 'echo':
+<br/>
+<br/>
+$ echo -n -e "AZERTYUIOPQSDFGHJKLM" &gt; /dev/ttyS0
+<br/>
+<br/>
+And here is what I get on the GBA when I print my buffer:
+<br/>
+<br/>
+AZERTYUIOPQJKLM
+<br/>
+<br/>
+The delay introduced by the empty loop seems to be something like 200 ms. I thought it could be a bit much, but even if I lower the value a lot, I lose characters.
+<br/>
+<br/>
+In the code above, I simply *never* control the RTS/CTS lines. I assumed this is done automatically by some action, maybe reading SIODATA_8, but even if I move the loop before reading the register, the result is the same. The PC constantly sends data to the GBA. The ideal way to code this to me would be something like:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+      while (REG_SIOCNT &amp; SIO_RECV_DATA);
+<br/>
+      /* Set CTS to lo - PC stop sending bytes */
+<br/>
+      REG_SOMETHING ^= CTS;
+<br/>
+      buf[cpt++] = (char)REG_SIODATA8;
+<br/>
+      if (cpt == 10) for (i = 0; i &lt; 100000; i++);
+<br/>
+      /* Set CTS to hi - PC can send again */
+<br/>
+      REG_SOMETHING |= CTS;
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I'm quite clueless as to how to achieve this. I would just be *very* nice if someone else could run the same test on his hardware to check. The reason why I was losing characters while using interruptions seems to be bad flow control. Any more infos, hints, ideas, advices, tests to run?
+<br/>
+<br/>
+Thanks,
+<br/>
+Alex.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#22060 - Gnurou - Sat Jun 12, 2004 8:19 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Gnurou wrote:</b></span></td> </tr> <tr> <td class="quote">The ideal way to code this to me would be something like:
+<br/>
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+      while (REG_SIOCNT &amp; SIO_RECV_DATA);
+<br/>
+      /* Set CTS to lo - PC stop sending bytes */
+<br/>
+      REG_SOMETHING ^= CTS;
+<br/>
+      buf[cpt++] = (char)REG_SIODATA8;
+<br/>
+      if (cpt == 10) for (i = 0; i &lt; 100000; i++);
+<br/>
+      /* Set CTS to hi - PC can send again */
+<br/>
+      REG_SOMETHING |= CTS;
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Actually I've already tried something like that by disabling the RECV_ENABLE flag of REG_SIOCNT once a character arrives and re-enabling it once processing is over - but if I do so, then I only get garbage and lose even more chars. Sad, it would have been the right trick for me.
+<br/>
+<br/>
+On some documentation I read:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+The error flag is set when a bad stop bit has been received (stop bit must be 0), when a parity error has occured (if enabled), or <span style="font-weight: bold">when new data has been completely received while the receive data register (or receive FIFO) is already full</span>.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+But how can the GBA know that the receive data register is full, since we never acknowledge when we read it?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#22062 - JasperW - Sat Jun 12, 2004 8:54 pm</h4>
+    <div class="postbody"><span class="postbody">I'm almost sure the GBA handles the CTS/RTS itself and you don't need to do anything. I can't test it right now because I don't have my serial cable here but I will try it after the weekend if you're still having problems.
+<br/>
+The only thing I can think of is a faulty cable but since you're using Darthfader's cable it should work. To test the cable write one GBA program that keeps reading data and use a volt meter to check if the line is indeed low. Then write a program that only receives one char, send a bunch from the PC and check if the line remains high.
+<br/>
+Lastly I'm stating the obvious but you never know :) Did you declare all the SIO registers as volatile? Not doing so can give weird results but you probably already knew that.
+<br/>
+As to how the GBA know you're reading and writing: I think the UART hardware is memory mapped to the GBA's memory and this hardware checks if data is requested and adjusts the register. But this is just a shot in the dark, I'm no hardware guru. I'm sure however it detects when you read or write REG_SIO_DATA8 because the flags SIO_RECV_DATA &amp; SIO_SEND_DATA change (you can test this yourself).
+<br/>
+Anyway I'm sorry I can't exactly pinpoint the problem because I don't have my cable with me at the moment but I still hope this helps. Good luck!
+<br/>
+<br/>
+Jasper</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#22064 - Gnurou - Sat Jun 12, 2004 10:09 pm</h4>
+    <div class="postbody"><span class="postbody">Hi again Jasper,
+<br/>
+<br/>
+First, thanks a lot for all your involvment to this problem. I really appreciate it.
+<br/>
+<br/>
+About the obvious: yes, all SIO variables are declared as volatile. :) At this stage, it's not silly to check it anyway.
+<br/>
+<br/>
+About the cable, I have another one built on the same scheme at the lab, I could test with it Monday. I'm like a chicken who found a knife with a volt meter, but I can try that too. :)
+<br/>
+<br/>
+Some good news now: I've found an explanation to my randomly-lost characters. The timer0 interrupt was set, and for some reason I don't know it was responsible for some chars not arriving when receiving them with the serial interrupt handler. I'll investigate what's wrong with it (aren't interrupts supposed to be queued anyway?), but I temporarily disabled it and now I can receive a full text file using interrupts.
+<br/>
+<br/>
+One problem remains still, and this is where control-flow is welcome. I had success because my interrupt only put the received character into a (large) buffer. But if it takes more time (like printing on the screen for instance), then I'm losing them again. I added support for the ERROR flag of SIOCNT in my interrupt handler and it effectively signals me when I'm losing characters. On a receive-and-print test, I lose 3 characters every time the terminal scrolls (since it involves some longer process). This is constant - no more, no less, and not elsewhere. Something weird: if I disable flow control on the PC, then I'm losing more - 9 to be exact. So maybe it's working normally at all and the GBA sets CTS to 1 after a (very short!) timeout. It's better than nothing, but still worrying since once my input buffer is full, I must wait for a thread to read bytes before accepting new ones. So I'd like the possibility to make the sender wait as long as necessary.
+<br/>
+<br/>
+It might be interesting to know that during some wrongly run tests during which the GBA completely screwed up, I got the 'cat' command on the PC blocked, as if it was waiting for a signal from the GBA to continue sending. So I deduct that the PC can stop sending if requested to - all the problem lies in how to make the GBA ask the sender to shut up.
+<br/>
+<br/>
+I'll continue investigating this tomorrow, it's probably on the good way.
+<br/>
+<br/>
+Alex.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#22104 - Gnurou - Sun Jun 13, 2004 2:33 pm</h4>
+    <div class="postbody"><span class="postbody">Some more informations. It's both encouraging and weird.
+<br/>
+<br/>
+I've solved the problem with the timer0 interrupt interfering by changing the entry/exit of interrupt code so just masking off/on REG_IE with the current interrupt. It seems to work fine.
+<br/>
+<br/>
+Here is the test I ran, with only the serial interrupt enabled:
+<br/>
+<br/>
+Every received character is directly printed on the screen. The operation is fast enough so no characters are lost as long as the screen doesn't scroll. Every 10 characters, a wait period is introduced. I've tried with 3 different wait periods: empty loop of 100000 iterations (about 0.5 sec), 1000000 iterations (about 5 seconds) and 5000000 iterations (about 25 (!) seconds). The interrupt code is below:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+    u16 Siocnt;
+<br/>
+    u8 Data8;
+<br/>
+<br/>
+    /* Disable this interrupt */
+<br/>
+    REG_IE ^= IT_SERIAL;
+<br/>
+<br/>
+    /* The error flag of REG_SIOCNT is reset every time it is read,
+<br/>
+       so we must keep it into a variable to read it only once */
+<br/>
+    Siocnt = REG_SIOCNT;
+<br/>
+<br/>
+    /* Character received */
+<br/>
+    if (!(Siocnt &amp; SIO_RECV_DATA))
+<br/>
+    {
+<br/>
+      /* Reading SIODATA8 might have some side effect - so we
+<br/>
+         read it carefully, only once */
+<br/>
+      Data8 = (char)REG_SIODATA8;
+<br/>
+<br/>
+      agb_writechar(Data8);
+<br/>
+<br/>
+      /* Every 10 characters, introduce a delay */
+<br/>
+      if (++lcpt == 10)
+<br/>
+   {
+<br/>
+     int i;
+<br/>
+     for (i = 0; i &lt; 100000; i++);
+<br/>
+     lcpt = 0;
+<br/>
+   }
+<br/>
+    }
+<br/>
+<br/>
+    /* An error occured? */
+<br/>
+    if (Siocnt &amp; SIO_ERROR)
+<br/>
+    {
+<br/>
+      /* Just display a '?' to inform us */
+<br/>
+      agb_writechar('?');
+<br/>
+    }
+<br/>
+<br/>
+    /* Reenable this interrupt */
+<br/>
+    REG_IE |= IT_SERIAL;
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Here is the string I send to the serial port, the beginning of my last post:
+<br/>
+<br/>
+<span style="font-style: italic">Thanks for the informations Jasper. Unfortunately I'm still losing chars. I have tried the simplest possible example, a raw sending of characters without using interrupts.</span>
+<br/>
+<br/>
+Here is what I see on the GBA screen when the 0.5 seconds delay is introduced every 10 chars (characters in <span style="color: red">red</span> indicate the idle time occured right after them):
+<br/>
+<br/>
+<span style="font-style: italic">Thanks fo<span style="color: red">r</span> ?nformati<span style="color: red">o</span>n?er. Unfo<span style="color: red">r</span>t?y I'm st<span style="color: red">i</span>l?ng chars<span style="color: red">.</span> ? tried t<span style="color: red">h</span>e?est poss<span style="color: red">i</span>b?mple, a <span style="color: red">r</span>a?ing of c<span style="color: red">h</span>a?s withou<span style="color: red">t</span> interrup<span style="color: red">t</span>s?</span>
+<br/>
+<br/>
+Every 11 characters, I lose the 6 next, excepted the first time where I only lose 5.
+<br/>
+<br/>
+Now you wanna know the fun part? With the two other tests (5 and 25 seconds of delay) I receive exactly <span style="font-weight: bold">the same things</span>. Of course it takes much longer, but I'm not losing more characters, and the PC actually waits with the GBA.
+<br/>
+<br/>
+From all this I deduct that:
+<br/>
+1) The GBA and PC are well using hardware flow control (If I disable it on the PC I only get the first 11 characters and the others are lost forever) since the GBA is able to order the PC to stop sending stuff.
+<br/>
+2) I'm making a misuse somewhere, for sure. How come the amount of lost characters is constant while the delays vary? Why 6 characters constantly?
+<br/>
+<br/>
+Finding an answer to these questions would probably mean solving the entire problem. Thoughts, pointers from GBA gurus are more welcome than ever. :)
+<br/>
+<br/>
+Alex.
+<br/>
+<br/>
+PS: Actually, this might be enough to sort things out. If I don't disable the serial interrupt at the beginning of its interrupt handler, I should catch all the characters. Putting them in a small buffer (10 elements would be large enough) prior to doing any other processing would probably do the trick, as I know the flood would stop after a few ones.
+<br/>
+<br/>
+Will give it a try ASAP.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#22110 - Miked0801 - Sun Jun 13, 2004 3:42 pm</h4>
+    <div class="postbody"><span class="postbody">Just making sure you aren't doing any DMAs anywhere and that in your Crt0.s has your SIO interrupt at the most important level.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#22117 - JasperW - Sun Jun 13, 2004 4:56 pm</h4>
+    <div class="postbody"><span class="postbody">Well I'm pretty much stumped why you are still losing characters even though there is some kind of CTS signal. From my experience it should work as you'd expect it to, but it's been a while...
+<br/>
+Tomorrow I'll be reunited with my UART cable and I will run some tests with hardware flow control and see what I can come up with as I'm very curious what is causing this.
+<br/>
+<br/>
+Jasper</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#22123 - Gnurou - Sun Jun 13, 2004 6:12 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Miked0801 wrote:</b></span></td> </tr> <tr> <td class="quote">Just making sure you aren't doing any DMAs anywhere</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I'm using DMA at init time - but not a single while receiving the characters. Can you tell me why they would cause problems?
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">and that in your Crt0.s has your SIO interrupt at the most important level.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Sorry, I don't get what you mean here. I'm using Jeff's crt0.S 1.28 with MultipleInterrupts enabled. Since I'm only using the SIO interrupt for my test, I've tried with SingleInterrupt and it does exactly the same.
+<br/>
+<br/>
+Are you referring to some kind of IRQ priorities? Could you elaborate on this please?
+<br/>
+<br/>
+Thanks,
+<br/>
+Alex.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#22126 - Gnurou - Sun Jun 13, 2004 6:34 pm</h4>
+    <div class="postbody"><span class="postbody">Some more information, maybe useful.
+<br/>
+<br/>
+With the same program on the GBA, I've tried sending multiple single characters to the serial line using echo:
+<br/>
+<br/>
+<span style="font-style: italic">$ echo -n -e "A" &gt; /dev/ttyS0</span>
+<br/>
+<br/>
+I've noticed that if I send some during the delay introduced every time 10 characters are received, these ones arrive safely. So the flow control works fine in case there is a slight delay between characters.
+<br/>
+<br/>
+Also, I've tried with ports configured at 115200 bauds at both ends, it performs identically.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#22140 - Miked0801 - Sun Jun 13, 2004 9:03 pm</h4>
+    <div class="postbody"><span class="postbody">Add some error correction.  All multiplayer code I've written for GBA has needed heavy error correction so this could be the case as well.  Add a CRC cehck to each packet and go - of course since your errors are regular it more than likely is a bug with your system.  Don't know what to tell you though!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#22180 - JasperW - Mon Jun 14, 2004 10:27 am</h4>
+    <div class="postbody"><span class="postbody">Alright I did some tests today and came up with something. You can find the source I used <a class="postlink" href="http://funkybob.ocp-s.tudelft.nl/~jasper/gbatest.zip" target="_blank">here</a>.
+<br/>
+When I first ran it on my Win2000 machine using Tera Term Pro I got the exact same results as you. I was losing 6 characters after the pause. That surprised me a little as I thought CTS/RTS was done correctly by the GBA.
+<br/>
+Then I remember that when I first started experimenting with serial communications I started out as simple as possible (9600 baud, no FIFO). So what I did was turn off FIFO on the PC side (in the windoze device manager) and it worked! Now all the character come through even after the pause and even if I increase the wait. 
+<br/>
+So it's the PC that's not doing it's job properly and still sends out buffered characters even though the GBA signals not to send. My experience with Linux is pretty limited so I don't know how to disable FIFO on the COM port but it should be possible given that it's Linux :)
+<br/>
+<br/>
+Jasper</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#22184 - JasperW - Mon Jun 14, 2004 11:49 am</h4>
+    <div class="postbody"><span class="postbody">Found <a class="postlink" href="http://groups.google.nl/groups?q=stty+disable+fifo&amp;hl=nl&amp;lr=&amp;ie=UTF-8&amp;selm=Printing-HOWTO.1-24498.841892935%40cc.gatech.edu&amp;rnum=8" target="_blank">this</a> on Google:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+  7.2.  Older serial printers that drop characters
+<br/>
+<br/>
+  Jon Luckey points out that some older serial printers with ten-cent
+<br/>
+  serial interfaces and small buffers really mean stop when they say so
+<br/>
+  with flow control.  He found that disabling the FIFO in his Linux
+<br/>
+  box's 16550 serial port with setserial corrected the problem of
+<br/>
+  dropped characters (you apparently just specify the uart type as an
+<br/>
+  8250 to do this).
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+So apparantly stop doesn't really mean stop in modern flow control. This probably the same what's happening to the GBA as there is only a one byte buffer.
+<br/>
+<br/>
+Jasper</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#22189 - Gnurou - Mon Jun 14, 2004 1:46 pm</h4>
+    <div class="postbody"><span class="postbody">Jasper,
+<br/>
+<br/>
+Thanks a million. Now I have a precise idea of what's going on. I've just tested your program on a Windows machine with the port properly configured and it works fine. With my interrupt test I've been still losing one character - but it's probably bad code on my side. I'll run more tests once I get the port well configured on Linux, which doesn't seem as easy as you suggested, as says <a href="http://www.tldp.org/HOWTO/Serial-HOWTO-18.html" target="_blank">http://www.tldp.org/HOWTO/Serial-HOWTO-18.html</a>
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+Note that the interrupt threshold of FIFO buffers (trigger level) may be set at less than 14. 1, 4 and 8 are other possible choices. <span style="font-weight: bold">As of late 2000 there was no way the Linux user could set these directly (setserial can't do it).</span> While many PC's only have a 16550 with 16-byte buffers, better UARTS have even larger buffers.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+As of today neither, it seems. :(
+<br/>
+<br/>
+The trick you posted, suggesting to set the port to a 8250 UART (which doesn't have a FIFO), works poorly for me unfortunately. Guess what - I'm only receiving one character on 16! The FIFO doesn't seems to be deactivated, but this looks more like a kernel driver bug. I'll ask the linux serial driver guys about this.
+<br/>
+<br/>
+So it was that. The FIFO buffer of the UART 16550A is 16 bytes by default. RTS/CTS flow control requires a software part that stops sending bytes as soon as RTS goes low. But all the bytes that are put in the FIFO are sent anyway by the UART. This is a normal behavior, as the device on the other end is supposed to have a 16 bits FIFO as well, which is not the case for the GBA. Disabling the FIFO is the solution, or you could activate the GBA FIFO and set the PC's FIFO size to 4.
+<br/>
+<br/>
+I'll be away for the rest of the week, so I doubt I can look at this closely. But I'll come back once I have everything properly working on both sides. I think I'll also write a comprehensive documentation about all this, since to my knowledge this has never been explained so deeply in any documentation.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#22195 - JasperW - Mon Jun 14, 2004 3:10 pm</h4>
+    <div class="postbody"><span class="postbody">Glad we finally found what was the problem. Looks like you're going to be doing some kernel hacking over the weekend :-)
+<br/>
+Your Java OS for the GBA has sparked my interest by the way. Does it have a homepage? I've tried implementing PPP/IP/TCP for the GBA but when I got to TCP my code became very complicated. I lost interest because of a bug that caused everything to crash if the system was under heavy load for a while. But when I think about it now it might be related to this.
+<br/>
+When my exams are finished I might have another look at it because the PPP driver was functioning pretty well. Good luck with your project.
+<br/>
+<br/>
+Jasper</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#22198 - Gnurou - Mon Jun 14, 2004 3:49 pm</h4>
+    <div class="postbody"><span class="postbody">It really seems to be a bug in the 2.6 series of the serial driver. I've tried on a 2.4 kernel and, guess what, it works <span style="font-weight: bold">perfectly</span>! Just sent a mail to report this to the serial driver guys.
+<br/>
+<br/>
+I'm sending entire text files right now to my GBA and it is receiving everything perfectly, without a single character drop, and using interrupts. Jasper, I don't know how much I could thank you. I'd never have managed to sort this out without your help.
+<br/>
+<br/>
+Cool thing is that, of course, it also works at 115200 bauds. 
+<br/>
+<br/>
+Some infos about our OS and TCP/IP stack: you can find its homepage (unfinished, unupdated and not so useful yet) at <a href="http://www.lifl.fr/RD2P/JITS" target="_blank">http://www.lifl.fr/RD2P/JITS</a> . It's named Java In The Small and is a research project, but it performs quite well already. The idea is to start from a complete JRE that would be degraded according to the applications you want to use on your final OS (OS customization). Doing so, you can get very small footprints for very dedicated, hence very performant, OSes. Our real targets are devices like smartcards, but we are prototyping on the GBA because it has the same features (ARM processor, RAM/EWRAM/ROM, serial line), has good development environments and it's so damn cool to see the face the furnitures guys do when you order 10 GBAs with flash2advance kits to "do research work". :)
+<br/>
+<br/>
+About the TCP/IP stack, it works over SLIP for the moment. PPP is on the way. We already have it performing (working would be a big word, for some things are missing) on the PC target, over the serial port. WIth the low-level stuff working on the GBA, it should work soon there as well. It's entirely written in Java, excepted for "getByte" and "sendByte" of course, and is designed with embedded devices in mind. Maybe you could get some ideas from it for your own design.
+<br/>
+<br/>
+No release of JITS has been made yet, but we'll probably make the source available under an open-source licence soon. If you want me to tell you when it happens, or if you want to discuss more about this, I suggest you contact me by mail (see my profile here) - but I probably won't be able to reply before Sunday since I'm off to a conference.
+<br/>
+<br/>
+By the way, we also plan to put a GBA online with an HTTP server, just for the fun. Watch out our page! ;)</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

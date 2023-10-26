@@ -1,0 +1,242 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>call a C function from asm - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>ASM > call a C function from asm</h2>
+<div id="posts">
+<div class="post">
+    <h4>#68720 - ProblemBaby - Thu Jan 26, 2006 3:06 pm</h4>
+    <div class="postbody"><span class="postbody">Hi
+<br/>
+<br/>
+Just a small question I want to call a c-function from my asm routine. Since ive to push some regs to the stack i get problems.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+.thumb_func
+<br/>
+.global myFunc
+<br/>
+myFunc:
+<br/>
+PUSH { r4 }
+<br/>
+LDR r4, [r0, #0]
+<br/>
+<br/>
+MOV r0, #1
+<br/>
+MOV r1, #2
+<br/>
+MOV r2, #3
+<br/>
+MOV r3, #4
+<br/>
+BX r4
+<br/>
+   
+<br/>
+      
+<br/>
+POP { r4 }
+<br/>
+BX lr
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+r4 is correct, the problem is that it doesnt get to the code after BX r4 and I dont know how to solve this in thumb.
+<br/>
+<br/>
+thanks</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#68727 - FluBBa - Thu Jan 26, 2006 3:48 pm</h4>
+    <div class="postbody"><span class="postbody">First you have to push lr to stack together with r4, then you have to set lr to your return address somehow (don't know thumb good enough).
+<br/>
+Are you calling a thumb routine or ARM routine? that might as well be of concern.<br/>_________________<br/>I probably suck, my not is a programmer.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#68730 - ProblemBaby - Thu Jan 26, 2006 3:58 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+First you have to push lr to stack together with r4, then you have to set lr to your return address somehow 
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+pop lr isnt supported. The thing is that I aint sure how a standard C function returns.
+<br/>
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+Are you calling a thumb routine or ARM routine? that might as well be of concern.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Thumb</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#68791 - Cearn - Thu Jan 26, 2006 8:10 pm</h4>
+    <div class="postbody"><span class="postbody">What exactly are you trying to do here? What it looks like is that you have a function pointer in r0, load that in r4 and then jump to there. Have I got that right?
+<br/>
+<br/>
+If so, what happens is that when the called function ends it'll probably jump back to <span style="font-style: italic">lr</span>, which is still the old lr -- from the function that calls myFunc. So last piece of code is skipped. 
+<br/>
+<br/>
+<span style="font-style: italic">bx</span> is used for returning from a function. If you want to call functions, use <span style="font-style: italic">bl</span>. That sets <span style="font-style: italic">lr</span> to after the call so that the called function returns there. Of course, you'll have to push/pop the old <span style="font-style: italic">lr</span> to get out of myFunc again. Or something like that, because you can't pop <span style="font-style: italic">lr</span> directly. However, you don't have to use that particular register for returning, just use something else like <span style="font-style: italic">r3</span>:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">    .thumb_func
+<br/>
+    .align 2
+<br/>
+    .global myFunc
+<br/>
+myFunc:
+<br/>
+    push    {r4, lr}
+<br/>
+    ldr     r4, [r0, #0]
+<br/>
+<br/>
+    mov     r0, #1
+<br/>
+    mov     r1, #2
+<br/>
+    mov     r2, #3
+<br/>
+    mov     r3, #4
+<br/>
+    bl      r4      @ jump to function loaded from r0
+<br/>
+    pop     {r4}    @ pop r4
+<br/>
+    pop     {r3}    @ pop 'lr'. You _can't_ combine these pops because
+<br/>
+                    @ that'd reverse the order!
+<br/>
+    bx      r3      @ jump back to 'lr'
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Untested for little bugs, but this is more like how it should be. Also compile with -S to see how GCC manages it.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#68800 - ProblemBaby - Thu Jan 26, 2006 8:50 pm</h4>
+    <div class="postbody"><span class="postbody">Ive tried bl and it seems it cant call from a register.
+<br/>
+But ive fixed it, I changed it to three parameters so I dont have to push anything
+<br/>
+<br/>
+Thanks</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#68801 - Cearn - Thu Jan 26, 2006 9:00 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Ive tried bl and it seems it cant call from a register. </td> </tr></table><span class="postbody">
+<br/>
+Right, I forgot there was something strange there. 
+<br/>
+<br/>
+Well, here's one thing that might work if you need it. There seem to be functions called '_call_via_r0', '_call_via_r1', etc. These are what GCC uses when you do long calls. You can use <span style="font-style: italic">bl</span> with those, and they'll take care of the rest. For a sample use, see devkitARM's arm-elf/lib/gba_ctr0.s</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#68803 - ProblemBaby - Thu Jan 26, 2006 9:25 pm</h4>
+    <div class="postbody"><span class="postbody">thanks I'll check it out!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#68820 - wintermute - Thu Jan 26, 2006 11:12 pm</h4>
+    <div class="postbody"><span class="postbody">If code is compiled for interworking then the function returns with bx lr, for non interworking code it's mov pc,lr
+<br/>
+<br/>
+There are two ways you can call C functions from asm, the first is to use the functions provided in libgcc as the standard devkitARM crt0s do
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+   mov   r0, #0         @ int argc
+<br/>
+   mov   r1, #0         @ char *argv[]
+<br/>
+   ldr   r3, =main
+<br/>
+   bl   _call_via_r3      @ jump to user code
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+there are _call_via_rX functions for all registers, for your example _call_via_r4 would work fine. You can provide your own code for this function if you don't want to link libgcc, it's simply
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+_call_via_r4:
+<br/>
+   bx   r4
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+The bl to this function sets lr.
+<br/>
+<br/>
+The simplest way to write the code you've shown here is this 
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+   .thumb
+<br/>
+<br/>
+_call_via_r4:
+<br/>
+   bx   r4
+<br/>
+<br/>
+   .thumb_func
+<br/>
+   .global myFunc
+<br/>
+myFunc:
+<br/>
+   push   { r4, lr }
+<br/>
+   ldr   r4, [r0, #0]
+<br/>
+<br/>
+   mov   r0, #1
+<br/>
+   mov   r1, #2
+<br/>
+   mov   r2, #3
+<br/>
+   mov   r3, #4
+<br/>
+   bl   _call_via_r4
+<br/>
+   pop   { r4, pc }
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+the pop {r4, pc} returns to the caller and changes thumb/arm state as needed.
+<br/>
+<br/>
+The other way is to set the return address directly as the libgba &amp; libnds interrupt dispactchers do but I'm afraid I don't know how to do this efficiently from thumb atm.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

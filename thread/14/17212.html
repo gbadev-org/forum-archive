@@ -1,0 +1,269 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Yay! Translucent plasma. - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Beginners > Yay! Translucent plasma.</h2>
+<div id="posts">
+<div class="post">
+    <h4>#173589 - relminator - Sun Apr 18, 2010 9:17 am</h4>
+    <div class="postbody"><span class="postbody">It's in Framebuffer mode. Anyway i could combine this with standard mode 5 screens?
+<br/>
+<br/>
+Source + executable:
+<br/>
+<a class="postlink" href="http://www.file-pasta.com/file/0/plasma.zip" target="_blank">http://www.file-pasta.com/file/0/plasma.zip</a>
+<br/>
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+/*
+<br/>
+NDS Translucent Plasma
+<br/>
+Relminator
+<br/>
+<br/>
+http://rel.betterwebber.com
+<br/>
+<br/>
+*/
+<br/>
+<br/>
+#include &lt;nds.h&gt;
+<br/>
+#include &lt;stdio.h&gt;
+<br/>
+#include &lt;math.h&gt;
+<br/>
+<br/>
+<br/>
+// some sine LUTs
+<br/>
+u8 lsin1[2048];
+<br/>
+u8 lsin2[2048];
+<br/>
+u8 lsin3[2048];
+<br/>
+<br/>
+// RGB palette
+<br/>
+u16 pal[256];    
+<br/>
+<br/>
+int main(void)
+<br/>
+{
+<br/>
+   
+<br/>
+   // constant sine divisor
+<br/>
+   const u8 K1 = 32;
+<br/>
+    const u8 K2 = 12;
+<br/>
+    const u8 K3 = 28;
+<br/>
+   
+<br/>
+   // maximum values our dynamic plasmas can move
+<br/>
+   u16 KSIN1 = u8(K1 *(360/57.3f));
+<br/>
+    u16 KSIN2 = u8(K2 *(360/57.3f));
+<br/>
+    u16 KSIN3 = u8(K3 *(360/57.3f));
+<br/>
+   
+<br/>
+   
+<br/>
+          
+<br/>
+   // precalculate our luts
+<br/>
+   for (int i = 0; i&lt; ((2048) - 1); i++)
+<br/>
+   {
+<br/>
+        lsin1[i] = sin(i/(float)K1) * 32+32;
+<br/>
+        lsin2[i] = sin(i/(float)K2) * 16+16;
+<br/>
+        lsin3[i] = sin(i/(float)K3) * 20+20;
+<br/>
+    }    
+<br/>
+<br/>
+   // generate our 256 color palette
+<br/>
+   for (int i=0; i&lt;256; i++)
+<br/>
+   {
+<br/>
+       u8 r = (u8)(abs(int(16 - 15 * sin(i * M_PI / 16.0f))));
+<br/>
+      u8 g = (u8)(abs(int(16 - 15 * sin(i * M_PI / 12.0f))));
+<br/>
+      u8 b = (u8)(abs(int(16 - 15 * sin(i * M_PI / 18.0f))));
+<br/>
+      pal[i] = RGB15(r,g,b);
+<br/>
+   }
+<br/>
+<br/>
+   irqInit();
+<br/>
+   irqEnable(IRQ_VBLANK);
+<br/>
+   
+<br/>
+   
+<br/>
+   //initialize the DS Dos-like functionality
+<br/>
+   consoleDemoInit();
+<br/>
+   
+<br/>
+   iprintf("\x1b[1;1HTranslucent Plasma!");
+<br/>
+   iprintf("\x1b[2;1HFramebuffer madness!");
+<br/>
+   iprintf("\x1b[3;1HRelsoft");
+<br/>
+   iprintf("\x1b[4;1Hhttp://rel.betterwebber.com");
+<br/>
+   iprintf("\x1b[6;1HAnya Therese B. Lope");
+<br/>
+ 
+<br/>
+   //set frame buffer mode 0
+<br/>
+   videoSetMode(MODE_FB0);
+<br/>
+ 
+<br/>
+   //enable VRAM A for writting by the cpu and use 
+<br/>
+   //as a framebuffer by video hardware
+<br/>
+   vramSetBankA(VRAM_A_LCD);
+<br/>
+ 
+<br/>
+   u8 rot;                  // translucent factor
+<br/>
+   u16 counter =0;            // frame counter
+<br/>
+   u16 a = 0, b = 0, ct = 0;   // movement deltas
+<br/>
+   u16 c;                  // palette color index
+<br/>
+   
+<br/>
+   while(1)
+<br/>
+   {
+<br/>
+<br/>
+      // dynamically move our plasmas 
+<br/>
+      a= (a + 1) % (KSIN1 + 1);
+<br/>
+      b = (b + 1) % (KSIN2 + 1);
+<br/>
+      ct = (ct + 1) % (KSIN3 + 1);
+<br/>
+      
+<br/>
+      // offset 2nd plasma by a factor of 64 * 2 or (-64 to 64)
+<br/>
+      rot = 64 * (((counter &amp; 1) == 1) | 1);
+<br/>
+      
+<br/>
+      // inc frame
+<br/>
+      counter++;
+<br/>
+       
+<br/>
+      //write to vram directly
+<br/>
+      short unsigned int *vram_offset = VRAM_A;
+<br/>
+      
+<br/>
+      for (int ya = 0; ya&lt;SCREEN_HEIGHT; ya++)
+<br/>
+      {
+<br/>
+         for (int xa = 0; xa &lt;SCREEN_WIDTH-1; xa++)
+<br/>
+         {
+<br/>
+            rot = -rot;      // draw plasmas every other pixel
+<br/>
+            // calculate colors
+<br/>
+            c = (lsin1[xa + a + rot] + lsin2[ya + b + rot] +lsin3[1024+xa + ya - ct]);
+<br/>
+            c = (lsin1[xa + a + rot+c] + lsin2[ya + b + rot+c] +lsin3[1024+xa + ya - ct+c]);
+<br/>
+            // write to vram
+<br/>
+            *vram_offset++ = pal[c];
+<br/>
+         }
+<br/>
+         vram_offset++;      // magic
+<br/>
+      }      
+<br/>
+      swiWaitForVBlank();
+<br/>
+   }
+<br/>
+ 
+<br/>
+   return 0;
+<br/>
+}
+<br/>
+ 
+<br/>
+</td> </tr></table><span class="postbody"><br/>_________________<br/><a href="http://rel.betterwebber.com" target="_blank">http://rel.betterwebber.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#173590 - Ruben - Sun Apr 18, 2010 10:38 am</h4>
+    <div class="postbody"><span class="postbody">Nice effect. A few recommendations:
+<br/>
+<br/>
+-Upsize u8/u16 to u32 unless you absolutely need them to be that type; this will speed things up a bit.
+<br/>
+-How about mode 0 tile-blitting? You could pack two pixels at once
+<br/>
+-Wait for VBlank *before* drawing; tiny but yeah
+<br/>
+-I'm not 100% sure, but libnds may have hardware division/modulo routines
+<br/>
+-Pre-calculate LUT data</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

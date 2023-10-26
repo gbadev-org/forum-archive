@@ -1,0 +1,297 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>dma interrupts - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > dma interrupts</h2>
+<div id="posts">
+<div class="post">
+    <h4>#174057 - coreyh2 - Sun May 16, 2010 5:05 am</h4>
+    <div class="postbody"><span class="postbody">I was trying to see if dma interrupts worked. I have some code that doesn't produce the results I expect. The dma interrupts never seem to go off. It doesn't seem to crash as the variable change from the VblankHandler works.
+<br/>
+<br/>
+This code is just a test. I know the multiple dmaCopyHalfWordsAsynch won't actually work asynchronously. I have some more tests planned to see how fast different copies are.
+<br/>
+<br/>
+<a class="postlink" href="http://tank.windwireless.net/~crsntlvs/admatests01.7z" target="_blank">http://tank.windwireless.net/~crsntlvs/admatests01.7z</a>
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+/* CHH */
+<br/>
+<br/>
+#include &lt;nds.h&gt;
+<br/>
+#include &lt;stdlib.h&gt;
+<br/>
+#include "chhprint.h"
+<br/>
+ 
+<br/>
+<br/>
+DTCM_DATA unsigned int frame_count = 0;
+<br/>
+<br/>
+/*
+<br/>
+DTCM_DATA char* DMA00_string01;
+<br/>
+DTCM_DATA char* DMA00_string02;
+<br/>
+<br/>
+DTCM_DATA char* DMA01_string01;
+<br/>
+DTCM_DATA char* DMA01_string02;
+<br/>
+<br/>
+DTCM_DATA char* DMA02_string01;
+<br/>
+DTCM_DATA char* DMA02_string02;
+<br/>
+<br/>
+DTCM_DATA char* DMA03_string01;
+<br/>
+DTCM_DATA char* DMA03_string02;
+<br/>
+*/ 
+<br/>
+//ITCM_CODE void VblankHandler();
+<br/>
+<br/>
+void VblankHandler();
+<br/>
+void dma00Handler();
+<br/>
+void dma01Handler();
+<br/>
+void dma02Handler();
+<br/>
+void dma03Handler();
+<br/>
+<br/>
+int main(void) 
+<br/>
+{
+<br/>
+   
+<br/>
+   int frame_index = 0;
+<br/>
+   int ContineUpdating = true;
+<br/>
+   const int d_buffersize = 128;
+<br/>
+<br/>
+   char* DMA00_string01;
+<br/>
+   char* DMA00_string02;
+<br/>
+<br/>
+   char* DMA01_string01;
+<br/>
+   char* DMA01_string02;
+<br/>
+<br/>
+   char* DMA02_string01;
+<br/>
+   char* DMA02_string02;
+<br/>
+<br/>
+   char* DMA03_string01;
+<br/>
+   char* DMA03_string02;
+<br/>
+<br/>
+   chhprintinit();
+<br/>
+<br/>
+   /*
+<br/>
+   DMA00_string01 = memalign(32, sizeof(char) * d_buffersize);
+<br/>
+   DMA00_string02 = memalign(32, sizeof(char) * d_buffersize);
+<br/>
+   DMA01_string01 = memalign(32, sizeof(char) * d_buffersize);
+<br/>
+   DMA01_string02 = memalign(32, sizeof(char) * d_buffersize);
+<br/>
+   DMA02_string01 = memalign(32, sizeof(char) * d_buffersize);
+<br/>
+   DMA02_string02 = memalign(32, sizeof(char) * d_buffersize);
+<br/>
+   DMA03_string01 = memalign(32, sizeof(char) * d_buffersize);
+<br/>
+   DMA03_string02 = memalign(32, sizeof(char) * d_buffersize);
+<br/>
+   */
+<br/>
+<br/>
+   DMA00_string01 = malloc(sizeof(char) * d_buffersize);
+<br/>
+   DMA00_string02 = malloc(sizeof(char) * d_buffersize);
+<br/>
+   DMA01_string01 = malloc(sizeof(char) * d_buffersize);
+<br/>
+   DMA01_string02 = malloc(sizeof(char) * d_buffersize);
+<br/>
+   DMA02_string01 = malloc(sizeof(char) * d_buffersize);
+<br/>
+   DMA02_string02 = malloc(sizeof(char) * d_buffersize);
+<br/>
+   DMA03_string01 = malloc(sizeof(char) * d_buffersize);
+<br/>
+   DMA03_string02 = malloc(sizeof(char) * d_buffersize);
+<br/>
+<br/>
+   irqEnable(IRQ_DMA0 | IRQ_DMA1 | IRQ_DMA2 | IRQ_DMA3);
+<br/>
+<br/>
+//   irqSet(IRQ_VBLANK, (void(*)())VblankHandler); 
+<br/>
+<br/>
+   irqSet(IRQ_VBLANK, VblankHandler); 
+<br/>
+   irqSet(IRQ_DMA0, dma00Handler); 
+<br/>
+   irqSet(IRQ_DMA1, dma01Handler); 
+<br/>
+   irqSet(IRQ_DMA2, dma02Handler); 
+<br/>
+   irqSet(IRQ_DMA3, dma03Handler); 
+<br/>
+   
+<br/>
+   DC_FlushAll();
+<br/>
+   dmaCopyHalfWordsAsynch(0, DMA00_string01, DMA00_string02, d_buffersize);   
+<br/>
+   dmaCopyHalfWordsAsynch(1, DMA01_string01, DMA01_string02, d_buffersize);   
+<br/>
+   dmaCopyHalfWordsAsynch(2, DMA02_string01, DMA02_string02, d_buffersize);   
+<br/>
+   dmaCopyHalfWordsAsynch(3, DMA03_string01, DMA03_string02, d_buffersize);   
+<br/>
+<br/>
+   while(1)
+<br/>
+   {
+<br/>
+      swiWaitForVBlank();
+<br/>
+      if(ContineUpdating)
+<br/>
+      {
+<br/>
+           if((frame_index % 60) == 0)
+<br/>
+         {
+<br/>
+              chhprintf(chh_TOP_SCREEN, "%d\n", frame_count);
+<br/>
+         }
+<br/>
+         if(frame_index &gt;= (60 * 20)) ContineUpdating = false;
+<br/>
+         frame_index++;
+<br/>
+      }
+<br/>
+   }   
+<br/>
+   return 0;
+<br/>
+}
+<br/>
+<br/>
+//ITCM_CODE void VblankHandler()
+<br/>
+<br/>
+<br/>
+void VblankHandler()
+<br/>
+{
+<br/>
+   frame_count++;
+<br/>
+}
+<br/>
+<br/>
+void dma00Handler()
+<br/>
+{
+<br/>
+   chhprintf(chh_BOTTOM_SCREEN, "dma00 done\n");
+<br/>
+}
+<br/>
+void dma01Handler()
+<br/>
+{
+<br/>
+   chhprintf(chh_BOTTOM_SCREEN, "dma01 done\n");
+<br/>
+}
+<br/>
+void dma02Handler()
+<br/>
+{
+<br/>
+   chhprintf(chh_BOTTOM_SCREEN, "dma02 done\n");
+<br/>
+}
+<br/>
+void dma03Handler()
+<br/>
+{
+<br/>
+   chhprintf(chh_BOTTOM_SCREEN, "dma03 done\n");
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody"><br/>_________________<br/><a class="postlink" href="http://nwvault.ign.com/View.php?view=NWN2ModulesEnglish.Detail&amp;id=245" target="_blank">Deadening 2</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#174058 - Cearn - Sun May 16, 2010 8:43 am</h4>
+    <div class="postbody"><span class="postbody">Enabling IRQs requires two toggles: one for the sender (in this case DMA) and one for the receiver (the IRQ system). irqSet() and irqEnable() sets the receiver bits, but only the sender bits for REG_DISPSTAT. You need to add DMA_IRQ_REQ to the DMA flags. See also <a class="postlink" href="http://nocash.emubase.de/gbatek.htm#gbadmatransfers" target="_blank">gbatek:dma</a> <span style="font-size: 9px; line-height: normal">(but note that libnds uses one 32bit REG_DMAnCNT, whereas GBATek splits it in two 16bit ones)</span>.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#174060 - coreyh2 - Sun May 16, 2010 11:40 am</h4>
+    <div class="postbody"><span class="postbody">thanks. 
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+static inline void dmaCopyHalfWordsAsynch_IRQ(uint8 channel, const void* src, void* dest, 
+<br/>
+                                   uint32 size)
+<br/>
+{
+<br/>
+   DMA_SRC(channel) = (uint32)src;
+<br/>
+   DMA_DEST(channel) = (uint32)dest;
+<br/>
+   DMA_CR(channel) = DMA_COPY_HALFWORDS | DMA_IRQ_REQ | (size&gt;&gt;1);
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Using this worked.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

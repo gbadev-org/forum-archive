@@ -1,0 +1,248 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Quickest way to load a 16bit array with a integer - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > Quickest way to load a 16bit array with a integer</h2>
+<div id="posts">
+<div class="post">
+    <h4>#20580 - nath86 - Thu May 13, 2004 1:18 pm</h4>
+    <div class="postbody"><span class="postbody">Hey just wanted to know a quick way to load a array with a integer. Would want something very similar to the memset function except 16bit, any suggestions would be helpful.....I have a feeling it's going to be assembly based...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#20581 - Lupin - Thu May 13, 2004 2:01 pm</h4>
+    <div class="postbody"><span class="postbody">You want to fill some memory with just one 16 bit value? You need DMA to do that... use something like this:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#define DMAClearMemory16(dest,wc)    REG_DMA3SAD = (u32)&amp;clear; \
+<br/>
+            REG_DMA3DAD = (u32)dest; \
+<br/>
+            REG_DMA3CNT = wc | DMA_ENABLE | DMA_TIMEING_IMMEDIATE | DMA_16 | DMA_SOURCE_FIXED;
+<br/>
+<br/>
+u16 clear = 0x1337;
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Call this macro by giving it a pointer as dest and the count of 16 bit words you want to fill with your number<br/>_________________<br/><a class="postlink" href="http://pokeme.shizzle.it/" target="_blank">Team Pokeme</a>
+<br/>
+<a class="postlink" href="http://lupin.shizzle.it/" target="_blank">My blog and PM ASM tutorials</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#20582 - poslundc - Thu May 13, 2004 2:03 pm</h4>
+    <div class="postbody"><span class="postbody">Use the 32-bit memset function; just set the 32-bit word that you're using to the same 16 bits in the low and high halfwords. For example, if I want to set the array to 0xFA06, I'd use CPUMemSet with the value 0xFA06FA06 and just tell it to repeat half as many times as you need.
+<br/>
+<br/>
+Only problem is that the BIOS functions are apparently quite slow to load, so if you need it to be <span style="font-style: italic">really</span> quick you should write your own ASM function and place it in IWRAM.
+<br/>
+<br/>
+... Heck, I'm not doing anything at the moment, I'll even write it for you:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">   .section   .iwram
+<br/>
+   .arm
+<br/>
+   .global      FastMemSet
+<br/>
+   .type      FastMemSet, function
+<br/>
+   
+<br/>
+FastMemSet:
+<br/>
+   stmfd      sp!, {r4-r8}
+<br/>
+   mov         r3, r0
+<br/>
+   mov         r4, r0
+<br/>
+   mov         r5, r0
+<br/>
+   mov         r6, r0
+<br/>
+   mov         r7, r0
+<br/>
+   mov         r8, r0
+<br/>
+   mov         r12, r0
+<br/>
+L_MEMLOOP:
+<br/>
+   stmia      r1!, {r0, r3-r8, r12}
+<br/>
+   subs      r2, r2, #8
+<br/>
+   bgt         L_MEMLOOP
+<br/>
+   ldmfd      sp!, {r4-r8}
+<br/>
+   bx         lr</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Then the prototype for this function is:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">extern __attribute__ ((long_call)) void FastMemSet(unsigned int val, unsigned int dest, unsigned int count);</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+The first parameter is the 32-bit word you want copied, the second parameter is the destination address, an the third parameter is how many 32-bit copies you want to make (should be a multiple of 8, meaning you are setting 32 bytes at a time).
+<br/>
+<br/>
+And here's an unrolled version for really large transfers. The third parameter is still the number of 32-bit copies, but now it should be a multiple of 64, meaning you are setting 256 bytes at a time).
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">   .section   .iwram
+<br/>
+   .arm
+<br/>
+   .global      FastMemSetLarge
+<br/>
+   .type      FastMemSetLarge, function
+<br/>
+   
+<br/>
+FastMemSet:
+<br/>
+   stmfd      sp!, {r4-r8}
+<br/>
+   mov         r3, r0
+<br/>
+   mov         r4, r0
+<br/>
+   mov         r5, r0
+<br/>
+   mov         r6, r0
+<br/>
+   mov         r7, r0
+<br/>
+   mov         r8, r0
+<br/>
+   mov         r12, r0
+<br/>
+L_BIGMEMLOOP:
+<br/>
+   stmia      r1!, {r0, r3-r8, r12}
+<br/>
+   stmia      r1!, {r0, r3-r8, r12}
+<br/>
+   stmia      r1!, {r0, r3-r8, r12}
+<br/>
+   stmia      r1!, {r0, r3-r8, r12}
+<br/>
+   stmia      r1!, {r0, r3-r8, r12}
+<br/>
+   stmia      r1!, {r0, r3-r8, r12}
+<br/>
+   stmia      r1!, {r0, r3-r8, r12}
+<br/>
+   stmia      r1!, {r0, r3-r8, r12}
+<br/>
+   subs      r2, r2, #64
+<br/>
+   bgt         L_BIGMEMLOOP
+<br/>
+   ldmfd      sp!, {r4-r8}
+<br/>
+   bx         lr</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Hope this helps,
+<br/>
+<br/>
+Dan.
+<br/>
+<br/>
+<span style="font-weight: bold">Edit:</span> fixed a stack error in the code...
+<br/>
+<br/>
+<span style="font-weight: bold">Edit:</span> fixed ANOTHER error... if it doesn't work now, I'm going back to programming HyperCard.</span><span class="gensmall"><br/><br/>Last edited by poslundc on Thu May 13, 2004 8:06 pm; edited 2 times in total</span></div>    
+</div>
+<div class="post">
+    <h4>#20583 - poslundc - Thu May 13, 2004 2:05 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Lupin wrote:</b></span></td> </tr> <tr> <td class="quote">You want to fill some memory with just one 16 bit value? You need DMA to do that...</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+DMA is generally a poor choice if you are trying to fill it quickly, because it needs to re-read the value being copied each iteration through. I remember DekuTree64 did some testing of it and it came out as being considerably slower overall.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#20584 - Lupin - Thu May 13, 2004 2:07 pm</h4>
+    <div class="postbody"><span class="postbody">ok, the stmia method is indeed faster... but the function will always fill chuncks of 8 32 bit words or 64 32 bit words (as far as i can state from taking a brief look at the code).
+<br/>
+<br/>
+poslundc, won't you use stmfd / ldmfd for stack operations instead of stmia or ldmia? Or doesn't it matter?<br/>_________________<br/><a class="postlink" href="http://pokeme.shizzle.it/" target="_blank">Team Pokeme</a>
+<br/>
+<a class="postlink" href="http://lupin.shizzle.it/" target="_blank">My blog and PM ASM tutorials</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#20588 - poslundc - Thu May 13, 2004 2:23 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Lupin wrote:</b></span></td> </tr> <tr> <td class="quote">poslundc, won't you use stmfd / ldmfd for stack operations instead of stmia or ldmia? Or doesn't it matter?</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+You're correct... I will go back and edit it.
+<br/>
+<br/>
+(I didn't claim I'd tested the code... :P)
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#20598 - ampz - Thu May 13, 2004 4:13 pm</h4>
+    <div class="postbody"><span class="postbody">Or if you are working in C (you probably are), and just want to initialize an 16bit array at boot, you do it like this:
+<br/>
+<br/>
+short int array[8] = {0xFA06, 0xFA06, 0xFA06, 0xFA06, 0xFA06, 0xFA06, 0xFA06, 0xFA06};
+<br/>
+<br/>
+Of course, it is not as efficient as the asm stmia alternative.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#20604 - sajiimori - Thu May 13, 2004 6:03 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+stmia      r1!, {r0, r2-r7, r12}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+You wanna store <span style="font-style: italic">where</span>?  :D</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#20616 - poslundc - Thu May 13, 2004 7:59 pm</h4>
+    <div class="postbody"><span class="postbody">Goddamnit, this is what I get for blind coding in the morning. OK, as soon as I send this I'm gonna edit the original message for the LAST time. &gt;:(
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#20658 - nath86 - Fri May 14, 2004 2:36 pm</h4>
+    <div class="postbody"><span class="postbody">wow thanks heaps guys, expecially Dan *huggles* I don't understand it, but it looks the part...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#20678 - sajiimori - Fri May 14, 2004 6:38 pm</h4>
+    <div class="postbody"><span class="postbody">If you don't understand it, then it's more important to understand its limitations.  The first version only works on multiples of 8 words, and the unrolled version only works on multiples of 64 words.
+<br/>
+<br/>
+To get around those limitations, write a wrapper function in C that does the remainder first, then calls the unrolled version.  The overhead is not significant for large copies.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

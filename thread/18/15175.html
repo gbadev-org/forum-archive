@@ -1,0 +1,438 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Crap packet latency with dswifi - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Crap packet latency with dswifi</h2>
+<div id="posts">
+<div class="post">
+    <h4>#152285 - simonjhall - Thu Mar 13, 2008 10:36 am</h4>
+    <div class="postbody"><span class="postbody">I've gone back to developing my debugger for the DS.
+<br/>
+First thing I want to address is the crap speed. Due to the way gdb works, in order to step a line of code lots of comms has to happen with the target, and due to the round-trip time this makes stepping kinda sluggish.
+<br/>
+To find the bottleneck a bit I've made the test a bit more replicatable - get gdb to download 64k of data from the target to disk. The comms goes like this:
+<br/>
+<br/>
+GDB asks stub for ~128b of data
+<br/>
+Stub asks DS for the data
+<br/>
+DS sends data to stub
+<br/>
+Stub sends data to GDB.
+<br/>
+<br/>
+This'll happen over and over until the data has been copied.
+<br/>
+If I snoop all the packets with a packet sniffer, it seems that once the message gets sent to the DS the DS won't respond with a packet for nearly 50ms. The DS is sitting in a tight loop waiting for messages (with a small delay if no message) and once one shows it'll reply straight away.
+<br/>
+Profiling the DS-side of the code says that most of the time the machine is idling waiting for a message and when the reply message is actually sent only a small amount of time is spent doing the sending.
+<br/>
+<br/>
+So what can I do to improve the latency? I've changed the ARM9 wifi stuff from the default timer of 50ms to 20ms - no change. I've put the ARM7 Wifi_Update call into the hblank - no change. Is there some kind of internal buffering going on that I need to flush? What can I do?! Does anyone else get poor round-trip times?<br/>_________________<br/><span style="font-weight: bold"><a class="postlink" href="https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&amp;business=simonjhall%40gmail%2ecom&amp;no_shipping=2&amp;no_note=1&amp;tax=0&amp;currency_code=GBP&amp;lc=GB&amp;bn=PP%2dDonationsBF&amp;charset=UTF%2d8" target="_blank">Big thanks to everyone who donated for Quake2</a></span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#152292 - masscat - Thu Mar 13, 2008 12:01 pm</h4>
+    <div class="postbody"><span class="postbody">If you are sending small amounts of data in a request/reply type scenario using TCP then you will be left waiting for a timeout whilst the TCP layer waits to see if more data is going to be sent. In other places TCP sockets have an option (TCP_NO_DELAY) to remove this wait and send the data out immediately but dswifi has not implemented it (or it had not when I last looked - a very long time ago).
+<br/>
+<br/>
+You can hack the TCP_NO_DELAY effect easily (see this <a class="postlink" href="http://forum.gbadev.org/viewtopic.php?t=15059" target="_blank">thread</a>). Out of interest, I did this when developing my GDB stub and it greatly improves the performance.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#152295 - simonjhall - Thu Mar 13, 2008 12:48 pm</h4>
+    <div class="postbody"><span class="postbody">Kewl, thanks. I'll try this later.
+<br/>
+<br/>
+If kusma's reading this.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">This lead me to believing that nagling wasn't supported in dswifi, so I looked for other issues. So, I fired up Wireshark (a TCP packet debugger), and I saw that the packets seemed to be attempted to be sent when I expected them to. BUT! Wireshark reported lots of problems when those specific packets were sent! The issues seems to start with a TCP Out of order, and continue with TCP Dup ACKs and TCP Retransmissions. Then, a bit later, when the server sends a two-byte packet, the client sends back one big packet containing all the data that failed (due to the errors described above).</td> </tr></table><span class="postbody">I get LOADS of packets like this too. Gallons of out-of-order packets, lots of broken ACKs and lots of retransmissions. I also get lots of packets that aren't complete. Pretty much every other packet sent by the DS is knackered.
+<br/>
+<br/>
+One thing I noticed with Quake is that if one machine sends packets are a rate that's too high for it (but is still relatively low) the DS will get slower and slower at picking up any given packet. In the end it would turn into seconds before a packet sent by my computer was picked up by the DS. It'd then run out of buffer space (?) and the packets would never get through.
+<br/>
+<br/>
+Solution: get Quake to drop every other packet. Score...<br/>_________________<br/><span style="font-weight: bold"><a class="postlink" href="https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&amp;business=simonjhall%40gmail%2ecom&amp;no_shipping=2&amp;no_note=1&amp;tax=0&amp;currency_code=GBP&amp;lc=GB&amp;bn=PP%2dDonationsBF&amp;charset=UTF%2d8" target="_blank">Big thanks to everyone who donated for Quake2</a></span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#152340 - masscat - Thu Mar 13, 2008 11:14 pm</h4>
+    <div class="postbody"><span class="postbody">The TCP side of dswifi does need a bit of love.
+<br/>
+<br/>
+I may look at bringing the patch to fix the TCP retransmission (see <a class="postlink" href="http://www.1emulation.com/forums/index.php?showtopic=19677" target="_blank">here</a>) up to date.
+<br/>
+And implementing a TCP_NO_DELAY option should be reasonably easy.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#152401 - simonjhall - Sat Mar 15, 2008 1:04 am</h4>
+    <div class="postbody"><span class="postbody">Yo, just an update on this.
+<br/>
+Doing the tcp no delay change did nothing - however, I've found a bit more respone from playing with SGIP_TCP_TRANSMIT_DELAY, up to a point.
+<br/>
+But whatever I do, literally every single packet is getting corrupted the first time it's sent! Normally on the second send is the packet intact. Uh...<br/>_________________<br/><span style="font-weight: bold"><a class="postlink" href="https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&amp;business=simonjhall%40gmail%2ecom&amp;no_shipping=2&amp;no_note=1&amp;tax=0&amp;currency_code=GBP&amp;lc=GB&amp;bn=PP%2dDonationsBF&amp;charset=UTF%2d8" target="_blank">Big thanks to everyone who donated for Quake2</a></span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#152408 - TwentySeven - Sat Mar 15, 2008 1:51 am</h4>
+    <div class="postbody"><span class="postbody">Is the original author of this still around?   I'm wondering if we can get some insight on this so we can perhaps sink some time into some specific fixes?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#152415 - simonjhall - Sat Mar 15, 2008 1:49 pm</h4>
+    <div class="postbody"><span class="postbody">I don't think so. I seem to remember Stephen stopping development of this quite some time ago...
+<br/>
+Ok. I think I'll stick my debug hat on and see what needs to be fixed! These retransmissions and corrupt packets happen all over the place so it's not too hard to replicate!<br/>_________________<br/><span style="font-weight: bold"><a class="postlink" href="https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&amp;business=simonjhall%40gmail%2ecom&amp;no_shipping=2&amp;no_note=1&amp;tax=0&amp;currency_code=GBP&amp;lc=GB&amp;bn=PP%2dDonationsBF&amp;charset=UTF%2d8" target="_blank">Big thanks to everyone who donated for Quake2</a></span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#152416 - masscat - Sat Mar 15, 2008 3:17 pm</h4>
+    <div class="postbody"><span class="postbody">Looking at the CVS on sourceforge it looks like nothing much (apart from bug fixes) has happened to dswifi for a while. Sgstair was talking of a rewrite in the 1emulation.com thread I linked to but I do not think it ever happened.
+<br/>
+<br/>
+Personally I would like to see dswifi split into a number of parts:
+<br/>
+<ul><li>Low level wifi hardware driver.
+<br/>
+</li><li>The 802.11 stuff.
+<br/>
+</li><li>The IP layer.</li></ul></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#152452 - sgstair - Sun Mar 16, 2008 6:34 am</h4>
+    <div class="postbody"><span class="postbody">Yeah, I'm aware of this stuff- haven't said a whole lot about it lately but a rewrite of the wifi library is definitely in the pipeline, I had expected to be a lot further by now, but - stuff happens. To me, a lot, it seems :)
+<br/>
+As it is, currently I have the TCP/IP rewrite scheduled to start properly in 2-3 weeks and after it's at a working level I plan to go back into RE'ing the hardware, to get proper knowledge on some things and ensure the next version works more cleanly.
+<br/>
+I have been reluctant to patch the existing wifilib because it is pretty bad, it does need a lot of work, and the rewrite is going to take care of all of this stuff anyway - of course the rewrite has been the next thing on my list for a while now. If I had known it would get pushed back this far, well, I probably would have put more effort into maintenence.
+<br/>
+I actually have a planned start date now, and while that may get pushed back I really expect and hope it doesn't - I'll make more specific notes when it starts on my blog.<br/>_________________<br/><a class="postlink" href="http://blog.akkit.org/" target="_blank">http://blog.akkit.org/</a> - <a class="postlink" href="http://www.akkit.org/dswifi/" target="_blank">http://www.akkit.org/dswifi/</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#152456 - TwentySeven - Sun Mar 16, 2008 9:30 am</h4>
+    <div class="postbody"><span class="postbody">Can you use help with it?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#152461 - simonjhall - Sun Mar 16, 2008 12:01 pm</h4>
+    <div class="postbody"><span class="postbody">Hello mate I thought you'd given up on the wifi system! Glad to hear you're back at it. I guess I won't bother trying to find where all the retransmits are coming from then ;-)<br/>_________________<br/><span style="font-weight: bold"><a class="postlink" href="https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&amp;business=simonjhall%40gmail%2ecom&amp;no_shipping=2&amp;no_note=1&amp;tax=0&amp;currency_code=GBP&amp;lc=GB&amp;bn=PP%2dDonationsBF&amp;charset=UTF%2d8" target="_blank">Big thanks to everyone who donated for Quake2</a></span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#152498 - sgstair - Sun Mar 16, 2008 7:19 pm</h4>
+    <div class="postbody"><span class="postbody">nah, I don't give up so easily :)
+<br/>
+You can still try to find where the retransmits are coming from if you like :P I have a pretty good idea though. And, well, the entire retransmit system needs to be better understood to prevent data loss.
+<br/>
+<br/>
+TwentySeven: Yeah, I can use help with it. Have been looking for people to work with me on the tcp/ip lib and other stuff for a while (See <a href="http://wiki.akkit.org/Project_revolution" target="_blank">http://wiki.akkit.org/Project_revolution</a> ) - if you're interested let me know.<br/>_________________<br/><a class="postlink" href="http://blog.akkit.org/" target="_blank">http://blog.akkit.org/</a> - <a class="postlink" href="http://www.akkit.org/dswifi/" target="_blank">http://www.akkit.org/dswifi/</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#152502 - simonjhall - Sun Mar 16, 2008 10:05 pm</h4>
+    <div class="postbody"><span class="postbody">Cool, that (your project page) sounds pretty ghetto.
+<br/>
+However, would it be possible to just take an existing networking stack and plug it into your send/receive data commands? No sense in (re-)writing your own version when there are likely to be systems out there which have already been written and tested...<br/>_________________<br/><span style="font-weight: bold"><a class="postlink" href="https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&amp;business=simonjhall%40gmail%2ecom&amp;no_shipping=2&amp;no_note=1&amp;tax=0&amp;currency_code=GBP&amp;lc=GB&amp;bn=PP%2dDonationsBF&amp;charset=UTF%2d8" target="_blank">Big thanks to everyone who donated for Quake2</a></span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#152503 - sgstair - Sun Mar 16, 2008 10:13 pm</h4>
+    <div class="postbody"><span class="postbody">Well, it seems to me you're missing the point a bit :)
+<br/>
+I'm rewriting it because I want to, not any other reason - That's why I wrote the first version too; although it would have taken less effort to make other stacks work in the ds environment.
+<br/>
+I don't trust other stacks to be properly written and tested - I think writing my own stack with verification mechanisms is the best way to remedy that, and perhaps benefit other projects as well.<br/>_________________<br/><a class="postlink" href="http://blog.akkit.org/" target="_blank">http://blog.akkit.org/</a> - <a class="postlink" href="http://www.akkit.org/dswifi/" target="_blank">http://www.akkit.org/dswifi/</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#152512 - TwentySeven - Mon Mar 17, 2008 1:00 am</h4>
+    <div class="postbody"><span class="postbody">The BSD stack and sockets are very clean code.  As much as I admire your enthusiasm for implementing everything from scratch, it seems to me with such a difficult to debug problem where you're trying to RE the hardware at the same time as build a library, having a good known library to work from would be a godsend.
+<br/>
+<br/>
+Just my opinion, anyway.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#152513 - sgstair - Mon Mar 17, 2008 1:21 am</h4>
+    <div class="postbody"><span class="postbody">I have nothing against the BSD stack; but on the DS the playing field is different; the reason so many of the stacks would take a lot of effort to port to DS is the "tried and true" variants -rely- on threads, so you're left with code that may not work at all, or will have to be kluged significantly to deal with the absence of some of the normal posix stuff that these libs have usually relied on. The library I'm writing is going to eliminate this problem completely and create a library that can be proven to work correctly in a less posix environment, i.e. on the DS or other smaller embedded platforms - that's what I mean by saying I don't trust the other stacks, I don't think a (freely available) solution for doing networks properly on small embedded systems without major headaches exists.<br/>_________________<br/><a class="postlink" href="http://blog.akkit.org/" target="_blank">http://blog.akkit.org/</a> - <a class="postlink" href="http://www.akkit.org/dswifi/" target="_blank">http://www.akkit.org/dswifi/</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#152532 - masscat - Mon Mar 17, 2008 11:14 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>simonjhall wrote:</b></span></td> </tr> <tr> <td class="quote">Cool, that (your project page) sounds pretty ghetto.
+<br/>
+However, would it be possible to just take an existing networking stack and plug it into your send/receive data commands? No sense in (re-)writing your own version when there are likely to be systems out there which have already been written and tested...</td> </tr></table><span class="postbody">
+<br/>
+<a class="postlink" href="http://masscat.afraid.org/ninds/lwip.php" target="_blank">lwIP ports</a> easily over to DS and sits happily on dswifi's wifi layer. Well it did back in 2006. <a class="postlink" href="http://savannah.nongnu.org/projects/lwip/" target="_blank">lwip</a> appears to be under active development and released under the friendly Modified BSD License.
+<br/>
+The only problem with it was that the Berkeley sockets implementation does require threads but it would be possible to write a non-threaded socket api to sit on top of lwip. There are also some advantages to having access to the low level interface of lwip, for instance you can use a zero-copy regime in an application's network services - more complex but, depending on the application, could be useful.
+<br/>
+<br/>
+I also had a quick look at <a class="postlink" href="http://www.sics.se/~adam/uip/index.php/Main_Page" target="_blank">uIP</a> with the idea of running a stack down on the ARM7 (for a GDB stub on the arm7).</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#152952 - bsder - Sun Mar 23, 2008 7:03 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>masscat wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>simonjhall wrote:</b></span></td> </tr> <tr> <td class="quote">Cool, that (your project page) sounds pretty ghetto.
+<br/>
+However, would it be possible to just take an existing networking stack and plug it into your send/receive data commands? No sense in (re-)writing your own version when there are likely to be systems out there which have already been written and tested...</td> </tr></table><span class="postbody">
+<br/>
+<a class="postlink" href="http://masscat.afraid.org/ninds/lwip.php" target="_blank">lwIP ports</a> easily over to DS and sits happily on dswifi's wifi layer. Well it did back in 2006. <a class="postlink" href="http://savannah.nongnu.org/projects/lwip/" target="_blank">lwip</a> appears to be under active development and released under the friendly Modified BSD License.
+<br/>
+The only problem with it was that the Berkeley sockets implementation does require threads but it would be possible to write a non-threaded socket api to sit on top of lwip. There are also some advantages to having access to the low level interface of lwip, for instance you can use a zero-copy regime in an application's network services - more complex but, depending on the application, could be useful.
+<br/>
+<br/>
+I also had a quick look at <a class="postlink" href="http://www.sics.se/~adam/uip/index.php/Main_Page" target="_blank">uIP</a> with the idea of running a stack down on the ARM7 (for a GDB stub on the arm7).</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Yeah, I also looked at the lwIP stuff.  I actually tried to do the port but kept getting hung up on the ARM7 hardware interface to WiFi along with IPC.
+<br/>
+<br/>
+I really think lwip is the way to go.  It gets a *lot* more users than the DSWiFi stack ever will and so gets a lot more debugging.  It also provides quite a bit more in terms of applications than DSWiFi probably ever will.
+<br/>
+<br/>
+The Berkeley sockets layer for lwip only require two threads.  If you can stash the lwip low-level code into the ARM7, that gives you the two threads you need for a real socket system.  However, I find that the first thing I do is have to drop to non-blocking sockets *anyway* in embedded systems so I don't get any advantage to using the sockets interface (and actually get stuck with the fact that you *must* copy data around).  I'd rather have a lower level interface like lwIP's event loop with the possibility of zero copy.
+<br/>
+<br/>
+However, it is always more fun to write your own code than understand somebody else's.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#152955 - sgstair - Sun Mar 23, 2008 10:50 am</h4>
+    <div class="postbody"><span class="postbody">Some of this has already been said, but to be very clear:
+<br/>
+* Berkley compatibility was the second priority (behind "working") in the current wifilib iteration
+<br/>
+* Berkley sockets in lwIP are profoundly painful
+<br/>
+* Even beoynd that, the version of lwIP itself was completely and utterly broken on ARM, even after correcting dozens of misaligned elements in structures and other issues, I still wasn't able to make it run without crashing after a few weeks of tinkering. I realize now I may have picked a bad version to try to port, but that was a major factor of my decision to write my own at the time.
+<br/>
+* What I'm doing now is far different - it's a coordinated, possibly multi-programmer project to produce a lightweight complete TCP/IP stack with an extremely high quality bar. It will put lwIP to shame, and I -will- be testing against it (and other stacks) for performance.
+<br/>
+<br/>
+So, if you want to ramble on about how great lwIP is, I'm not really paying attention. It's awful from a variety of perspectives, in my mind. I feel like the only reason people use it is because it's the least awful alternative - I intend to change that. 
+<br/>
+I've already decided to write the tcp/ip lib as the groundwork for the new wifilib, so I strongly recommend not to waste time with kluging together lwIP/etc - The era of the new wifilib is coming, within a few months.<br/>_________________<br/><a class="postlink" href="http://blog.akkit.org/" target="_blank">http://blog.akkit.org/</a> - <a class="postlink" href="http://www.akkit.org/dswifi/" target="_blank">http://www.akkit.org/dswifi/</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#153003 - bsder - Mon Mar 24, 2008 3:42 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sgstair wrote:</b></span></td> </tr> <tr> <td class="quote">Some of this has already been said, but to be very clear:
+<br/>
+* Berkley compatibility was the second priority (behind "working") in the current wifilib iteration
+<br/>
+* Berkley sockets in lwIP are profoundly painful
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+As I pointed out, programmers normally have to switch to something other than Berkeley sockets anyhow because BSD sockets require A) threading and B) copying.  Both of these are not particularly welcome on embedded hardware.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sgstair wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+* What I'm doing now is far different - it's a coordinated, possibly multi-programmer project to produce a lightweight complete TCP/IP stack with an extremely high quality bar. It will put lwIP to shame, and I -will- be testing against it (and other stacks) for performance.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+That would be quite welcome, actually.  I find lwIP to be obtuse in many ways.  I look forward to breaking^H^H^H^H^H^H^H^Htesting your stack. :)
+<br/>
+<br/>
+One thing that lwIP *did* get right was having a version that runs under Linux using ethertap.  It sure makes debugging the stack easier.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sgstair wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+So, if you want to ramble on about how great lwIP is, I'm not really paying attention. It's awful from a variety of perspectives, in my mind. I feel like the only reason people use it is because it's the least awful alternative - I intend to change that. 
+<br/>
+I've already decided to write the tcp/ip lib as the groundwork for the new wifilib, so I strongly recommend not to waste time with kluging together lwIP/etc - The era of the new wifilib is coming, within a few months.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Actually, I'm more interested in a clean WiFi abstraction.  This wasn't really possible before we had a decent IPC library (which we now have).
+<br/>
+<br/>
+With a clean WiFi abstraction, someone else can take over maintaining code when you decide you are tired of the project rather than having the library languish.  It also makes debugging the WiFi vs. debugging the stack a much easier process.
+<br/>
+<br/>
+In addition, the WiFi abstraction could be used for stacks other than TCP (like SCTP).
+<br/>
+<br/>
+Just be aware of the tendency for programmers to always label the code of others as "crap".</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#153020 - sgstair - Mon Mar 24, 2008 7:21 am</h4>
+    <div class="postbody"><span class="postbody">Hiya bsder;
+<br/>
+Thanks for the reply, sorry if I was being too harsh earlier.
+<br/>
+<br/>
+I really don't consider the DS to be at the same level as other embedded systems from a sockets perspective - We (as a community) have worked to develop filesystem abstractions, a GL interface, and other things that very closely mirror the PC counterparts in the interest of providing a familiar environment, over just the fastest thing possible.
+<br/>
+<br/>
+I intend to provide a berkley sockets-like interface that doesn't require threading (only needs to be interrupt driven), and does as little copying as possible (current lib copies 4 times per byte, will be 2 or 3 times per byte with the new version depending on which is faster)
+<br/>
+You'll be more than welcome to poke and prod the new stack - and I am still interested in suggestions to improve usability - about debugging, the library I'll be building will have a full suite of unit tests built alongside it, so I don't think there will be much debugging necessary.
+<br/>
+<br/>
+Yes, the current wifi abstraction is extremely messy (to say the least) - after the tcp/ip stack is written, my next step will be to go back to my reverse engineering and clarify all the necessary parts in the hardware, document them more thoroughly, and write a less klugey wifi layer. It has always been my goal to seperate the TCP/IP stack and the wifi layer - and in fact if you want to break apart the two at the moment, you will find that it's quite simple even with the current version.
+<br/>
+It has not been my choice to leave the wifilib in the state that it's in now- I can't say too much about this, but I was less experienced a year ago, and then I was not allowed to work on it for quite a while (due to work-related concerns.)
+<br/>
+<br/>
+At this point, I think the old lib is "crap" :) but the new project will have very high standards, both in functionality and readability. I hope few competent programmers will think it is bad (though, I won't be devastated if they do :P)<br/>_________________<br/><a class="postlink" href="http://blog.akkit.org/" target="_blank">http://blog.akkit.org/</a> - <a class="postlink" href="http://www.akkit.org/dswifi/" target="_blank">http://www.akkit.org/dswifi/</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#153023 - bsder - Mon Mar 24, 2008 9:53 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sgstair wrote:</b></span></td> </tr> <tr> <td class="quote">Hiya bsder;
+<br/>
+Thanks for the reply, sorry if I was being too harsh earlier.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Don't worry about it.  I've got a thick skin.  Comes with age.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sgstair wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+I intend to provide a berkley sockets-like interface that doesn't require threading (only needs to be interrupt driven), and does as little copying as possible (current lib copies 4 times per byte, will be 2 or 3 times per byte with the new version depending on which is faster)
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I've been up and down this road a couple of times on different projects.  I used to think that there was a big benefit to staying with the BSD sockets interface, but I'm less convinced now.  I've just had too much pain with threading on embedded systems, and the Berkeley sockets interface doesn't give you any option about copying data.  You must copy it even if you just need it for a little bit and can then throw it out.  The BSD interface is nice for the initial prototype, but once performance matters that interface just gets in the way and the programmers start groveling inside the library anyhow.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sgstair wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+You'll be more than welcome to poke and prod the new stack - and I am still interested in suggestions to improve usability - about debugging, the library I'll be building will have a full suite of unit tests built alongside it, so I don't think there will be much debugging necessary.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Just a piece of advice from someone who has felt the pain of having written a couple of network stacks.  There *will* be debugging no matter how good your unit tests are.  Especially with TCP.  Make it run on Linux ...  You will thank yourself later.
+<br/>
+<br/>
+Side note: one of the primary reasons you want to do this is that you can do nasty things to the interface.  If you want to emulate 10% packet loss, you can.  If you want to emulate losing every third packet, you can.  If you want to emulate 2 second latency, you can.  Sure, you could do it with timers and stuff on the DS, but with Linux, it's easy.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sgstair wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+Yes, the current wifi abstraction is extremely messy (to say the least) - after the tcp/ip stack is written, my next step will be to go back to my reverse engineering and clarify all the necessary parts in the hardware, document them more thoroughly, and write a less klugey wifi layer. It has always been my goal to seperate the TCP/IP stack and the wifi layer - and in fact if you want to break apart the two at the moment, you will find that it's quite simple even with the current version.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Primarily, I've been waiting for a couple of updates to come through.  Once devkitpro started using IPC in earnest, I had planned to take a look at that.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sgstair wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+It has not been my choice to leave the wifilib in the state that it's in now- I can't say too much about this, but I was less experienced a year ago
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Heh.  Experience is something you don't get until just after you need it.  Sometimes simple projects wind up not being so simple.  A TCP stack is one of those deceptive projects.  The concept is simple; the implementation, not so much.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sgstair wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+At this point, I think the old lib is "crap" :) but the new project will have very high standards, both in functionality and readability. I hope few competent programmers will think it is bad (though, I won't be devastated if they do :P)</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Even if the code is crap, it's working crap.  People often underestimate the work that went into the "crappy" code.
+<br/>
+<br/>
+You will note that I'm not jumping to replace your DSWiFi library myself nor am I attempting to proselytize lwIP.  I understand how much work porting a TCP stack is.  I wish you nothing but the best and look forward to your code.  ;)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#153061 - sgstair - Mon Mar 24, 2008 5:44 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>bsder wrote:</b></span></td> </tr> <tr> <td class="quote">I've been up and down this road a couple of times on different projects.  I used to think that there was a big benefit to staying with the BSD sockets interface, but I'm less convinced now.  I've just had too much pain with threading on embedded systems, and the Berkeley sockets interface doesn't give you any option about copying data.  You must copy it even if you just need it for a little bit and can then throw it out.  The BSD interface is nice for the initial prototype, but once performance matters that interface just gets in the way and the programmers start groveling inside the library anyhow.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I'm still not really sure about this. I'll probably provide a "no-copy" interface for use in the native interface, berkley layer is more of an add-on in this lib - there are a few problems with it though in my opinion: first, you can't control the chunk size of data - so excessively fragmented data is more difficult to deal with (it does happen on occasion). I can't provide a way to receive a "full" UDP packet without copying if it's fragmented, or without expecting you to understand the internals of the memory system.
+<br/>
+The other big concern is I'm trying to build this as a multiplatform affair, and if it's deployed as an OS component, I don't really want processes accessing the lib's memory directly. So, it's one feature I will be able to turn off if it's developed (which, it probably will be, there are reasons to explore that route)
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>bsder wrote:</b></span></td> </tr> <tr> <td class="quote">Just a piece of advice from someone who has felt the pain of having written a couple of network stacks.  There *will* be debugging no matter how good your unit tests are.  Especially with TCP.  Make it run on Linux ...  You will thank yourself later.
+<br/>
+<br/>
+Side note: one of the primary reasons you want to do this is that you can do nasty things to the interface.  If you want to emulate 10% packet loss, you can.  If you want to emulate losing every third packet, you can.  If you want to emulate 2 second latency, you can.  Sure, you could do it with timers and stuff on the DS, but with Linux, it's easy.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Still not convinced on the debugging thing ;)
+<br/>
+But I do agree that doing bad things to the interface is a good reason; and also, it will be a good testbed to do performance comparisons in.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>bsder wrote:</b></span></td> </tr> <tr> <td class="quote">Primarily, I've been waiting for a couple of updates to come through.  Once devkitpro started using IPC in earnest, I had planned to take a look at that.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Ah, it's been trying to come through for a while now :) Just a lot of work has been necessary to make the IPC useful and nice to work with, and some sort of standard layer is still in development for easy access to facilities on arm7 - the new wifilib will definitely make use of the new IPC layer to send notifications, pointers, control messages, etc back and forth rather than the huge complex shared memory structure it's using at the moment.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>bsder wrote:</b></span></td> </tr> <tr> <td class="quote">You will note that I'm not jumping to replace your DSWiFi library myself nor am I attempting to proselytize lwIP.  I understand how much work porting a TCP stack is.  I wish you nothing but the best and look forward to your code.  ;)</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Indeed; thanks - I only hope I can now live up to the hype I'm generating, hehe.<br/>_________________<br/><a class="postlink" href="http://blog.akkit.org/" target="_blank">http://blog.akkit.org/</a> - <a class="postlink" href="http://www.akkit.org/dswifi/" target="_blank">http://www.akkit.org/dswifi/</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#153077 - simonjhall - Mon Mar 24, 2008 8:27 pm</h4>
+    <div class="postbody"><span class="postbody">Dumb question, but what's wrong with copying? Also, if there is copying of data, why is it done (so much)?
+<br/>
+I can understand that you're moving data through the different levels of the OSI model, but couldn't a lot of this be done with pointers or something?<br/>_________________<br/><span style="font-weight: bold"><a class="postlink" href="https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&amp;business=simonjhall%40gmail%2ecom&amp;no_shipping=2&amp;no_note=1&amp;tax=0&amp;currency_code=GBP&amp;lc=GB&amp;bn=PP%2dDonationsBF&amp;charset=UTF%2d8" target="_blank">Big thanks to everyone who donated for Quake2</a></span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#153079 - sgstair - Mon Mar 24, 2008 8:55 pm</h4>
+    <div class="postbody"><span class="postbody">Mostly because every time you copy data, that's additional cputime and sometimes memory resources that are used without doing anything really useful. And yeah, we don't presume to treat the OSI model as an absolute guide of seperation - in fact the layers are quite nicely mashed together in the current wifilib :P 
+<br/>
+Current lib isn't actually very bad about copying data in my opinion, the shared memory FIFO stage was done because there wasn't a great way to send data between arm7-arm9 reliably across everyone's programs. And now with the FIFO lib taking care of that specific problem, the next version can have memory management on arm9 with arm7 requesting dynamic data blocks as well as the arm7 sending those data blocks back to arm9 when they're filled - this and the potential for a cleaner control/request interface will eliminate a -lot- of the unhappiness in the current lib.
+<br/>
+<br/>
+In the current wifilib, received data goes on the following path:
+<br/>
+(arm7) wifi HW buffer -&gt; shared memory FIFO
+<br/>
+(arm9) shared memory FIFO -&gt; memory block
+<br/>
+(arm9) memory block -&gt; TCP buffer
+<br/>
+(arm9) TCP buffer -&gt; application buffer
+<br/>
+And the opposite path for sending data.
+<br/>
+<br/>
+In the new lib it will take the following path:
+<br/>
+(arm7) HW -&gt; allocated memory block (or HW -&gt; local memory -&gt; DMA to allocated memory block)
+<br/>
+(arm9) allocated memory block -&gt; application buffer
+<br/>
+<br/>
+And in the "no copy" route, that last copy wouldn't exist, the application would read data out of the wifilib's memory, and only copy stuff if it really needed to.
+<br/>
+<br/>
+Personally I think the DS is a "big" enough system to work well without a no-copy option, but that does remain to be seen and I'll reserve my ultimate judgement until I get a chance to tinker with it further.<br/>_________________<br/><a class="postlink" href="http://blog.akkit.org/" target="_blank">http://blog.akkit.org/</a> - <a class="postlink" href="http://www.akkit.org/dswifi/" target="_blank">http://www.akkit.org/dswifi/</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#153092 - masscat - Mon Mar 24, 2008 10:02 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>simonjhall wrote:</b></span></td> </tr> <tr> <td class="quote">I can understand that you're moving data through the different levels of the OSI model, but couldn't a lot of this be done with pointers or something?</td> </tr></table><span class="postbody">
+<br/>
+Often in networking stacks data is moved around using pointers to buffer (zero-copy). What is more packets may be made up of a set of buffers strung together. This is very convenient as it fits how network stacks work, that is, the application data is encapsulated inside some network protocol packet which may itself be encapsulated inside another protocol's packet and again and again.
+<br/>
+This encapsulation can be simply achieved by attaching another buffer (or two) to the front/end of the original set of buffers.
+<br/>
+Certain hardware (not the DS - packets must be copied into its wifi memory to be sent out) can even read (and write) a single packet from a group of buffers meaning that there truely are zero copies (from the CPU's point of view) between the application and network hardware.
+<br/>
+<br/>
+The problem with all this buffering is that sometimes your data be spread across more than one buffer so your application must be written to handle this. Although you can size your buffers so that this is unlikely to happen.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

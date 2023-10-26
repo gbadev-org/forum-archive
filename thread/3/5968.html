@@ -1,0 +1,226 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Multiboot Protocol Details - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Hardware > Multiboot Protocol Details</h2>
+<div id="posts">
+<div class="post">
+    <h4>#45071 - ZeroX - Tue Jun 07, 2005 2:21 pm</h4>
+    <div class="postbody"><span class="postbody">Hi. I'm trying to write a multiboot transfer software using the xboo cable that works on windows XP/2000, but im having difficulties understanding certain parts. Ive manage to transfer the header, but i dont understand how to specify the length before transfering the main data. All my coding is based on no$gba document by martin. this is what he wrote
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">Times  Send   Receive  Expl. 
+<br/>
+ -----------------------Required Transfer Initiation in master program 
+<br/>
+ ...    6200   FFFF     Slave not in multiplay/normal mode yet 
+<br/>
+ 1      6200   0000     Slave entered correct mode now 
+<br/>
+ 15     6200   720x     Repeat 15 times, if failed: delay 1/16s and restart 
+<br/>
+ 1      610y   720x     Recognition okay, exchange master/slave info 
+<br/>
+ 60h    xxxx   NN0x     Transfer C0h bytes header data in units of 16bits 
+<br/>
+ 1      6200   000x     Transfer of header data completed 
+<br/>
+ 1      620y   720x     Exchange master/slave info again 
+<br/>
+ ...    63pp   720x     Wait until all slaves reply 73cc instead 720x 
+<br/>
+ 1      63pp   73cc     Send palette_data and receive client_data[1-3] 
+<br/>
+ 1      64hh   73uu     Send handshake_data for final transfer completion 
+<br/>
+ -----------------------Below is SWI 37 MultiBoot handler in BIOS 
+<br/>
+ DELAY  -      -        Wait 1/16 seconds at master side 
+<br/>
+ 1      llll   73rr     Send length information and receive random data[1-3] 
+<br/>
+ LEN    yyyy   nnnn     Transfer main data block in units of 16 or 32 bits 
+<br/>
+ 1      0065   nnnn     Transfer of main data block completed, request CRC 
+<br/>
+ ...    0065   0074     Wait until all slaves reply 0075 instead 0074 
+<br/>
+ 1      0065   0075     All slaves ready for CRC transfer 
+<br/>
+ 1      0066   0075     Signalize that transfer of CRC follows 
+<br/>
+ 1      zzzz   zzzz     Exchange CRC must be same for master and slaves 
+<br/>
+ -----------------------Optional Handshake (NOT part of master/slave BIOS) 
+<br/>
+ ...    ....   ....     Exchange whatever custom data 
+<br/>
+<br/>
+Legend for above Protocol 
+<br/>
+<br/>
+ y     client_bit, bit(s) 1-3 set if slave(s) 1-3 detected 
+<br/>
+ x     bit 1,2,or 3 set if slave 1,2,or 3 
+<br/>
+ xxxx  header data, transferred in 16bit (!) units (even in 32bit normal mode) 
+<br/>
+ nn    response value for header transfer, decreasing 60h..01h 
+<br/>
+ pp    palette_data 
+<br/>
+ cc    random client_data[1..3] from slave 1-3, FFh if slave not exists 
+<br/>
+ hh    handshake_data, 11h+client_data[1]+client_data[2]+client_data[3] 
+<br/>
+ uu    random data, not used, ignore this value 
+<br/>
+<br/>
+Below automatically calculated by SWI 37 BIOS function (don't care about) 
+<br/>
+<br/>
+ llll  download length/4-34h 
+<br/>
+ rr    random data from each slave for encryption, FFh if slave not exists 
+<br/>
+ yyyy  encoded data in 16bit (multiplay) or 32bit (normal mode) units 
+<br/>
+ nnnn  response value, lower 16bit of destadr in AGB memory (00C0h and up) 
+<br/>
+ zzzz  16bit download CRC value, must be same for master and slaves</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+<br/>
+I have no idea what llll stands for, how to send it. Any help will be appreaciated. Im doing this so that i can help a lot of users out the who cant get Userport or other programs working, and also because i have done nothing to help this community.
+<br/>
+<br/>
+Another thing i would like to know is how do i choose what mode of transfer im using, Normal or multiplay. Right now the code uses 32 bit transfers, ( upper 16 bit zeroes,  lower 16 bit are the data needed to be sent). Im assuming that multiboot uses normal mode. Please correct me on my mistakes.
+<br/>
+<br/>
+The nintendo logo shows up, but sometimes garbled because i change that damn llll value. i dont know how to set it. My transfer code is correct, i got the timing down....i think, cause im getting the right responses.    : )
+<br/>
+<br/>
+If anybody thinks that Martin's xboo software works fine (i seem to think so, his program is great)  and think im wasting my time, please say so. i will abandon this project, and come up with a different idea like maybe finishing MGS 3, or bullying my little brother by making wierd sound   : )</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#45134 - arundel - Tue Jun 07, 2005 9:48 pm</h4>
+    <div class="postbody"><span class="postbody">The length value is quite simple. You take the lenth (in bytes) of the entire ROM. Then just substract C0h, because you should already have sent the header at the time you exchange the length information.
+<br/>
+<br/>
+However the standard multiboot mode (at least the one xboo is using) is NORMAL_MODE, which operates in 32bit mode. Since you send the main data in sets of 32bit the length needs to be divided by 4 (byte = 8bit -&gt; dword = 32bit).
+<br/>
+<br/>
+The necessaty to substract 34h is just due to some BIOS convention Nintendo programed into the BIOS.
+<br/>
+<br/>
+The BIOS will determine whether the AGB will operate in NORMAL_MODE or MULTIPLAYER_MODE, after being set into multiboot mode. This will simply be chosen depending on the protocol used.
+<br/>
+<br/>
+However I don't recommend using Multiplayer Mode when using PC &lt;-&gt; AGB communication. I talked to Martin and he wrote some test code to do that. The results were not very convincing. The transfer was slow and completely unstable.
+<br/>
+<br/>
+Use NORMAL_MODE for the multiboot procedure. If you want to implement Single/Double-Burst-Boot later on you should be using GENERAL_PURPOSE_MODE.
+<br/>
+<br/>
+If you need more help or some code examples just drop me a short note. I wrote an xboo client for FreeBSD/Linux  a little while ago. The sources are open (of course). ;)<br/>_________________<br/><span style="font-weight: bold">http://www.nausicaa.net</span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#45151 - kudzoo - Wed Jun 08, 2005 3:04 am</h4>
+    <div class="postbody"><span class="postbody">i'm trying to get the xcomms client to work on linux but it segfaults when click the gba icon to open the file dialog. any ideas why? is the linux xboo client you put together something i could use arundel?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#45173 - ZeroX - Wed Jun 08, 2005 7:24 am</h4>
+    <div class="postbody"><span class="postbody">Thanks for the offer to help arundel. I'll send u private messages.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#45204 - arundel - Wed Jun 08, 2005 4:18 pm</h4>
+    <div class="postbody"><span class="postbody">Unfortunately the webspace where I was uploading my files to is no longer avilable. My ISP offered 10MB webspace to all it's customers, but for some reason it isn't offering that option any longer. Pretty lame.
+<br/>
+<br/>
+So right now I don't have any place where I can host the sources. The sources are ~ 80k and the binary is 6.4k. So I don't really need that much space. Maybe 1 or 2 megs.
+<br/>
+<br/>
+Does anybody know a place where I can host the files?
+<br/>
+<br/>
+Here's the project page. Well actually it's just my crappy BLOG. The links however don't work, because of my crappy ISP:
+<br/>
+<br/>
+<a href="http://arundel.blog.de/main/index.php/arundel?tag=gbadev" target="_blank">http://arundel.blog.de/main/index.php/arundel?tag=gbadev</a>
+<br/>
+<br/>
+If you need the sources right now, just drop me a PM with you e-mail address and I'll send the files to you. Please keep in mind that this is just a little project I did for myself in order to use multiboot upload under FreeBSD. It's not perfect.<br/>_________________<br/><span style="font-weight: bold">http://www.nausicaa.net</span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#45205 - strager - Wed Jun 08, 2005 4:55 pm</h4>
+    <div class="postbody"><span class="postbody">Try uploading to <a href="http://www.ripway.com" target="_blank">www.ripway.com</a> .  They offer 30MB maximum filesize (unlimited files, I believe), and it is free with registration.  And good luck with the code.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#45238 - wintermute - Wed Jun 08, 2005 10:23 pm</h4>
+    <div class="postbody"><span class="postbody"><a href="http://devkitpro.sourceforge.net/downloads.shtml" target="_blank">http://devkitpro.sourceforge.net/downloads.shtml</a>
+<br/>
+<br/>
+see Xboo Communicator</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#45474 - arundel - Sat Jun 11, 2005 1:05 am</h4>
+    <div class="postbody"><span class="postbody">OK. Sources are up. Some pals of mine are hosting the files now:
+<br/>
+<br/>
+<a href="http://arundel.blog.de/main/index.php/arundel?tag=gbadev" target="_blank">http://arundel.blog.de/main/index.php/arundel?tag=gbadev</a>
+<br/>
+<br/>
+Please mail/PM any bugs. Again this app is just a custom project for myself. I didn't write it for you guys out there. That's why it natively compiles under FreeBSD.
+<br/>
+<br/>
+To use it under Linux you have to define LINUX (-DLINUX=yes when you're using nasm).
+<br/>
+<br/>
+Chers.<br/>_________________<br/><span style="font-weight: bold">http://www.nausicaa.net</span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#46628 - ZeroX - Tue Jun 28, 2005 10:05 am</h4>
+    <div class="postbody"><span class="postbody">Alright, i've finished the xboo program for winXP. I dont know how to submit this program to the website. But before that, i need beta testers. Anybody wanna be beta testers? I've already asked Arundel, cause he has helped me a lot with this program.
+<br/>
+<br/>
+PM me if u wanna help. This program works in winXP, and doesnt require Userport or anything like that. The timing is set properly, but i have put a way to change it, if there are any problems.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#54260 - Spektre - Sat Sep 17, 2005 8:20 am</h4>
+    <div class="postbody"><span class="postbody">Does your softare allow the up and downloading of data in game?
+<br/>
+<br/>
+I.e. sending a file to the PC?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#54323 - ZeroX - Sun Sep 18, 2005 9:06 am</h4>
+    <div class="postbody"><span class="postbody">No, it doesnt not. But i dont quite understand your question. Please elaborate.
+<br/>
+<br/>
+My program allows a user to send a ROM image(which must be under 256 kB) to the gba and run it. The ROM image must be compiled as a multiboot image. This is useful for small homebrew programs.
+<br/>
+<br/>
+Currently im working on a code that allows you to download the ROM into your PC. It will save it as a ROM image. Since you must have the cart with you to do this, i guess there's nothing wrong.
+<br/>
+<br/>
+I've finish a minor part of reading the SRAM. But you need to specify the size by yourself. Anyone want to lend a hand in beta testing?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#54324 - ZeroX - Sun Sep 18, 2005 9:11 am</h4>
+    <div class="postbody"><span class="postbody">Oh yeah, and you need to use an XBOO cable. Its a dumb cable, easy to build. There are guides everywhere.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

@@ -1,0 +1,1769 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Optimization - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>C/C++ > Optimization</h2>
+<div id="posts">
+<div class="post">
+    <h4>#176393 - GLaDOS - Fri Jul 22, 2011 4:44 am</h4>
+    <div class="postbody"><span class="postbody">I'm writing a GBA game in simple C++ with devkitpro. After a great deal of effort, I've gotten a simple demo of the first room working and playable. The problem is that it is way to slow. As far as I can tell, my update function takes 1-2 frames to update, meaning that it only runs at half speed. So I need to at least double the speed in order to get it to run normally.
+<br/>
+<br/>
+So now I'm trying to figure out how to optimize it. Unfortunately, I'm a beginner and have no idea where to start. One possible step I discovered is attempt to put more things in IWRAM. Unfortunately, I know nothing about linker scripts and I'm not sure how to find out what things are currently placed where, let alone how to optimize the section placement.
+<br/>
+<br/>
+By the way, no I don't use exceptions, or rtti, or floating point, or virtual functions, or dynamic memory, or the standard library. So there aren't any really obvious speedups like that. 
+<br/>
+<br/>
+Also, I know that my physics code is the main bottleneck, so I don't need to worry about graphics (and I use DMA for that anyway). When I comment out parts of the physics code, my game runs at full speed.
+<br/>
+<br/>
+Also, here are my current compile options
+<br/>
+-g -Wall -O2 -mcpu=arm7tdmi -mtune=arm7tdmi -fomit-frame-pointer -ffast-math -mthumb -mthumb-interwork -fno-rtti -fno-exceptions -std=c++0x</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176397 - elhobbs - Fri Jul 22, 2011 1:14 pm</h4>
+    <div class="postbody"><span class="postbody">It is not possible to offer advice without more information. code would be best, or at a minimum a description of the algorithm you are using.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176398 - gauauu - Fri Jul 22, 2011 2:50 pm</h4>
+    <div class="postbody"><span class="postbody">What elhobbs said is true, but also consider that it isn't necessarily bad to actually run at 30 fps instead of 60 -- miked says they often do that in commercial games, even.  
+<br/>
+<br/>
+If you can run at a solid 30, and make everything move twice as fast as what you had before, it's often "good enough" and gives you tons more time for processing each frame.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176400 - GLaDOS - Fri Jul 22, 2011 3:39 pm</h4>
+    <div class="postbody"><span class="postbody">The problem is that I'm not sure what code to post.
+<br/>
+<br/>
+Here's my collision detection code. It's probably one of the most performance hogging parts of the game.
+<br/>
+<br/>
+Fixed&lt;E&gt;, Vec&lt;E&gt;, and UnitVec are part of the fixed point library I wrote. Fixed is a single fixed point number (32bit), where E is the shift. So Fixed&lt;20&gt; represents a 11.20 number, which is used for all coordinates in my game. Vec is a 2d vector. UnitVec is a special class for axis aligned unit vectors. 
+<br/>
+The named functions (Add, Mult, Div, etc.) use a 64bit intermediate value for better accuracy. The operators (+, -) just call the corresponding operator on the values directly without worrying about rounding or overflow.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#pragma once
+<br/>
+#include "array.h"
+<br/>
+<br/>
+template &lt;class T, class DirType&gt; //Should be shape types
+<br/>
+Fixed&lt;20&gt; PenetrationAlongDir(const DirType&amp; N, const Fixed&lt;20&gt; baseN, const Vec&lt;20&gt;&amp; centerOffset, const T&amp; shapeB)
+<br/>
+{
+<br/>
+    auto minB = Fixed&lt;20&gt;::MAX();
+<br/>
+<br/>
+    for(u32 i=0; i&lt;4; ++i)
+<br/>
+    {
+<br/>
+        auto newB = Dot&lt;20&gt;(N, centerOffset + shapeB.GetPoint(i));
+<br/>
+        minB = Min(minB, newB);
+<br/>
+    }
+<br/>
+<br/>
+    return baseN - minB;
+<br/>
+}
+<br/>
+<br/>
+template &lt;class T1, class T2, class DirType&gt;
+<br/>
+void GetPenetrationSAT(DirType&amp; bestNorm, Fixed&lt;20&gt;&amp; bestPen, const Vec&lt;20&gt;&amp; dist /*centerOffset*/, const T1&amp; shapeA, const T2&amp; shapeB)
+<br/>
+{
+<br/>
+    bestPen = Fixed&lt;20&gt;::MAX();
+<br/>
+<br/>
+    for(u32 i=0; i&lt;4; ++i)
+<br/>
+    {
+<br/>
+        const auto N = shapeB.GetSidePerp(i);
+<br/>
+        const auto baseN = Dot&lt;20&gt;(shapeB.GetPoint(i), N);
+<br/>
+        const auto newPen = PenetrationAlongDir(N, baseN, -dist, shapeA);
+<br/>
+<br/>
+        if (newPen &lt; bestPen)
+<br/>
+        {
+<br/>
+            bestPen = newPen;
+<br/>
+            bestNorm = N;
+<br/>
+            if (newPen.val &lt; 0) {return;}
+<br/>
+        }
+<br/>
+    }
+<br/>
+<br/>
+    for(u32 i=0; i&lt;4; ++i)
+<br/>
+    {
+<br/>
+        const auto N = shapeA.GetSidePerp(i);
+<br/>
+        const auto baseN = Dot&lt;20&gt;(shapeA.GetPoint(i), N);
+<br/>
+        const auto newPen = PenetrationAlongDir(N, baseN, dist, shapeB);
+<br/>
+<br/>
+        if (newPen &lt; bestPen)
+<br/>
+        {
+<br/>
+            bestPen = newPen;
+<br/>
+            bestNorm = -N;
+<br/>
+            if (newPen.val &lt; 0) {return;}
+<br/>
+        }
+<br/>
+    }
+<br/>
+}
+<br/>
+<br/>
+//Will return pt2 if it is exactly on the line, but not pt1
+<br/>
+template &lt;class DirType&gt;
+<br/>
+bool GetLineIntersection(Vec&lt;20&gt;&amp; rval, const DirType&amp; N, const Fixed&lt;20&gt;&amp; baseN, const Vec&lt;20&gt;&amp; pt1, const Vec&lt;20&gt;&amp; pt2)
+<br/>
+{
+<br/>
+    const auto lastN = Dot&lt;20&gt;(pt1, N);
+<br/>
+    const auto nextN = Dot&lt;20&gt;(pt2, N);
+<br/>
+<br/>
+    //Point is exactly on side
+<br/>
+    if (nextN == baseN)
+<br/>
+    {
+<br/>
+        rval = pt2;
+<br/>
+        return true;
+<br/>
+    }
+<br/>
+    else if (((nextN&gt;baseN) &amp;&amp; (lastN&lt;baseN)) || ((nextN&lt;baseN) &amp;&amp; (lastN&gt;baseN)))
+<br/>
+    {
+<br/>
+        //Clip the two sides together to get intersection point. We use a waited sum of the points on either side
+<br/>
+        const auto W2 = Div&lt;30&gt;(baseN - nextN, lastN - nextN);
+<br/>
+        const auto W1 = Fixed&lt;30&gt;(1073741824 /*1.0*/) - W2;
+<br/>
+        assert(W2.val &gt;= 0 &amp;&amp; W1.val &gt;= 0);
+<br/>
+<br/>
+        rval = VecMult&lt;20&gt;(pt2, W1) + VecMult&lt;20&gt;(pt1, W2);
+<br/>
+        return true;
+<br/>
+    }
+<br/>
+<br/>
+    return false;
+<br/>
+}
+<br/>
+<br/>
+template &lt;class T1, class T2&gt; //Should be shape types
+<br/>
+bool FindContactPoints(Array&lt;Vec&lt;20&gt;, 2&gt;&amp; Points, const Vec&lt;30&gt;&amp; N, const Vec&lt;20&gt;&amp; centerOffset, const T1&amp; shapeA, const T2&amp; shapeB)
+<br/>
+{
+<br/>
+    //Figure out what side of a is being intersected. If none match the norm, return false (failure)
+<br/>
+    int aside = -1;
+<br/>
+    for(u32 i=0; i&lt;4; ++i)
+<br/>
+    {
+<br/>
+        if (static_cast&lt;decltype(N)&gt;(shapeA.GetSidePerp(i)) == N)
+<br/>
+        {
+<br/>
+            aside = i; break;
+<br/>
+        }
+<br/>
+    }
+<br/>
+<br/>
+    if (aside &lt; 0) {return false;}
+<br/>
+<br/>
+    //Array&lt;Vec&lt;20&gt;, 2&gt; Points;
+<br/>
+    u32 pi = 0;
+<br/>
+<br/>
+    const auto baseN = Dot&lt;20&gt;(shapeA.GetPoint(aside), N);
+<br/>
+<br/>
+    for(u32 i=0; i&lt;4 &amp;&amp; pi &lt; 2; ++i)
+<br/>
+    {
+<br/>
+        //If there's an intersection, it will store in first argument and return true
+<br/>
+        if (GetLineIntersection(Points[pi], N, baseN, centerOffset + shapeB.GetPoint(i-1), centerOffset + shapeB.GetPoint(i)))
+<br/>
+            {   ++pi;   }
+<br/>
+    }
+<br/>
+<br/>
+    //If no points were found return failure
+<br/>
+    if (pi &lt;= 0) {return false;}
+<br/>
+<br/>
+    //Now make sure that both points are actually on the side, i.e. clip them to the corners if not
+<br/>
+    const auto baseT1 = Dot&lt;20&gt;(shapeA.GetPoint(aside), Rot90(N));
+<br/>
+    const auto baseT2 = Dot&lt;20&gt;(shapeA.GetPoint(aside+1), Rot90(N));
+<br/>
+    assert(baseT2 &lt; baseT1);
+<br/>
+<br/>
+    for(u32 p=0; p&lt;pi; ++p)
+<br/>
+    {
+<br/>
+        const auto newT = Dot&lt;20&gt;(Points[p], Rot90(N));
+<br/>
+<br/>
+        if (newT &gt;= baseT1) {Points[p] = shapeA.GetPoint(aside);}
+<br/>
+        else if (newT &lt;= baseT2) {Points[p] = shapeA.GetPoint(aside+1);}
+<br/>
+    }
+<br/>
+<br/>
+    //It is possible to only find one point if the shape has a corner just barely touching the other. In this case, just double it for now
+<br/>
+    //And the calling function will deal with it
+<br/>
+    if (pi == 1) {Points[pi++] = Points[0];}
+<br/>
+    assert(pi == 2);
+<br/>
+    return true;
+<br/>
+}
+<br/>
+<br/>
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+<br/>
+template &lt;class T2&gt; //Should be shape types
+<br/>
+void ShapeCollisionTest(ContactList&amp; contacts, CubeData* bodyA, PosVel* bodyB, Vec&lt;20&gt; offsetB, const T2&amp; shapeB, eMassType massB)
+<br/>
+{
+<br/>
+    assert(bodyA &amp;&amp; bodyB);
+<br/>
+    const auto&amp; shapeA = bodyA-&gt;shape();
+<br/>
+    const auto dist = (bodyB-&gt;pos + offsetB) - bodyA-&gt;pos;
+<br/>
+<br/>
+    Vec&lt;30&gt; bestNorm;
+<br/>
+    auto bestPen = Fixed&lt;20&gt;::MAX();
+<br/>
+    GetPenetrationSAT(bestNorm, bestPen, dist, shapeA, shapeB);
+<br/>
+    if (bestPen.val &lt; 0) {return;}
+<br/>
+<br/>
+    Array&lt;Vec&lt;20&gt;, 2&gt; Points; //Contact points
+<br/>
+    bool done = false;
+<br/>
+    done = FindContactPoints(Points, -bestNorm, dist, shapeA, shapeB);
+<br/>
+<br/>
+    if (!done) //Try cutting against the sides of shape B if shape A didn't work
+<br/>
+    {
+<br/>
+        done = FindContactPoints(Points, bestNorm, -dist, shapeB, shapeA);
+<br/>
+<br/>
+        if (!done)
+<br/>
+        {
+<br/>
+            PRINT("!!!!!!!!!!!!!!!!!!!!!!!!!");
+<br/>
+            PRINT(bestNorm);
+<br/>
+            PRINT(dist);
+<br/>
+            PRINT(shapeA.GetPoint(0));
+<br/>
+            PRINT(shapeB.GetPoint(0));
+<br/>
+            PRINT(cube.dir);
+<br/>
+        }
+<br/>
+<br/>
+        assert(done);
+<br/>
+<br/>
+        Points[0] += dist; //FCP returns points in the reference frame of the first shape argument.
+<br/>
+        Points[1] += dist; //Since we passed b first, we have to move them back to a
+<br/>
+    }
+<br/>
+<br/>
+    contacts.addCubeContact(bodyA, bodyB, massB, bestNorm, -Points[0], -Points[1], bestPen);
+<br/>
+}
+<br/>
+<br/>
+template &lt;class T2&gt; //Should be shape types
+<br/>
+void ShapeCollisionTest(ContactList&amp; contacts, PickoryData* bodyA, PosVel* bodyB, Vec&lt;20&gt; offsetB, const T2&amp; shapeB, eMassType massB)
+<br/>
+{
+<br/>
+    assert(bodyA &amp;&amp; bodyB);
+<br/>
+    const auto&amp; shapeA = bodyA-&gt;shape();
+<br/>
+    const auto dist = (bodyB-&gt;pos + offsetB) - bodyA-&gt;pos;
+<br/>
+<br/>
+    //Vec&lt;30&gt; bestNorm;
+<br/>
+    UnitVec bestNorm;
+<br/>
+    auto bestPen = Fixed&lt;20&gt;::MAX();
+<br/>
+    GetPenetrationSAT(bestNorm, bestPen, dist, shapeA, shapeB);
+<br/>
+    if (bestPen.val &lt; 0) {return;}
+<br/>
+<br/>
+    contacts.addContact(bodyA, bodyB, massB, bestNorm, bestPen);
+<br/>
+}
+<br/>
+<br/>
+template &lt;class T2&gt;
+<br/>
+void DoShapeCollisionTests(ContactList&amp; contacts, CubeData* bodyA1, PickoryData* bodyA2, PosVel* bodyB, Vec&lt;20&gt; offsetB, const T2&amp; shapeB, eMassType massB)
+<br/>
+{
+<br/>
+    ShapeCollisionTest(contacts, bodyA1, bodyB, offsetB, shapeB, massB);
+<br/>
+    ShapeCollisionTest(contacts, bodyA2, bodyB, offsetB, shapeB, massB);
+<br/>
+}
+<br/>
+<br/>
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+<br/>
+<br/>
+void LineCollisionTest(ContactList&amp; contacts, CubeData* bodyA, const Surface&amp; s)
+<br/>
+{
+<br/>
+    PosVel* const bodyB = &amp;dummy;
+<br/>
+    assert(bodyA);
+<br/>
+<br/>
+    const auto&amp; shapeA = bodyA-&gt;shape();
+<br/>
+    const auto T = s.dir;
+<br/>
+    const auto N = -Rot90(s.dir);
+<br/>
+    assert(T == Rot90(N));
+<br/>
+<br/>
+    const auto BBsize = Fixed&lt;20&gt;(22985121 /*21.92032*/); // Half width of a bounding square for the cube
+<br/>
+<br/>
+    const auto surfN = Dot&lt;20&gt;(s.pos, N);
+<br/>
+    const auto cubeN = Dot&lt;20&gt;(bodyA-&gt;pos, N);
+<br/>
+<br/>
+    //Bounding box check
+<br/>
+    if (cubeN &gt;= surfN + BBsize) {return;}
+<br/>
+    if (cubeN &lt; surfN) {return;} //If cube is already more than half way in, there's no real hope of resolving the collision, so just bail
+<br/>
+<br/>
+    const auto surfT1 = Dot&lt;20&gt;(s.pos, T);
+<br/>
+    const auto surfT2 = surfT1 + s.length;
+<br/>
+    const auto cubeT = Dot&lt;20&gt;(bodyA-&gt;pos, T);
+<br/>
+<br/>
+    //Bounding box check
+<br/>
+    if (cubeT &lt;= surfT1 - BBsize) {return;}
+<br/>
+    if (cubeT &gt;= surfT2 + BBsize) {return;}
+<br/>
+<br/>
+    auto bestPen = -Fixed&lt;20&gt;::MAX(); //Best penetration
+<br/>
+    Array&lt;Vec&lt;20&gt;, 2&gt; Points; //Contact points
+<br/>
+    u32 pi = 0;
+<br/>
+<br/>
+    //Clip each side of the cube to get the contact points and calculate penetration while we're at it
+<br/>
+    for(u32 i=0; i&lt;4 &amp;&amp; pi &lt; 2; ++i)
+<br/>
+    {
+<br/>
+        const auto nextN = cubeN + Dot&lt;20&gt;(shapeA.GetPoint(i), N);
+<br/>
+        bestPen = Max(bestPen, surfN - nextN);
+<br/>
+<br/>
+        //If there's an intersection, it will store in first argument and return true
+<br/>
+        if (GetLineIntersection(Points[pi], N, surfN, bodyA-&gt;pos + shapeA.GetPoint(i-1), bodyA-&gt;pos + shapeA.GetPoint(i)))
+<br/>
+            {   ++pi;   }
+<br/>
+    }
+<br/>
+<br/>
+    //Check if penetration is nonnegative
+<br/>
+    if(bestPen.val &lt; 0) {return;}
+<br/>
+<br/>
+    if (pi == 1) {Points[pi++] = Points[0];}
+<br/>
+    assert(pi == 2);
+<br/>
+<br/>
+    const auto ptT1 = Dot&lt;20&gt;(Points[0], T);
+<br/>
+    const auto ptT2 = Dot&lt;20&gt;(Points[1], T);
+<br/>
+<br/>
+    //Check if the collision actually occured within the bounds of the line segment
+<br/>
+    if ((ptT1 &lt;= surfT1 &amp;&amp; ptT2 &lt;= surfT1) || (ptT1 &gt;= surfT2 &amp;&amp; ptT2 &gt;= surfT2)) {return;}
+<br/>
+<br/>
+    for(int pi=0; pi&lt;2; ++pi)
+<br/>
+    {
+<br/>
+        const auto temp = Dot&lt;20&gt;(Points[pi], T);
+<br/>
+<br/>
+        if (temp &lt;= surfT1) {Points[pi] = s.pos;}
+<br/>
+        else if (temp &gt;= surfT2) {Points[pi] = s.pos + VecMult&lt;20&gt;(s.dir, s.length);}
+<br/>
+    }
+<br/>
+<br/>
+    contacts.addCubeContact(bodyA, bodyB, mtSTATIC, N, bodyA-&gt;pos - Points[0], bodyA-&gt;pos - Points[1], bestPen);
+<br/>
+}
+<br/>
+<br/>
+void LineCollisionTest(ContactList&amp; contacts, PickoryData* bodyA, const Surface&amp; s)
+<br/>
+{
+<br/>
+    PosVel* const bodyB = &amp;dummy;
+<br/>
+    assert(bodyA);
+<br/>
+<br/>
+    const auto&amp; shapeA = bodyA-&gt;shape();
+<br/>
+    const auto T = s.dir;
+<br/>
+    const auto N = -Rot90(s.dir);
+<br/>
+<br/>
+    //calculate bounding box size along N and T
+<br/>
+    const auto boxN = Abs(shapeA.GetPoint(0) * N);
+<br/>
+    const auto boxT = Abs(shapeA.GetPoint(0) * T);
+<br/>
+<br/>
+    const auto surfN = Dot&lt;20&gt;(s.pos, N);
+<br/>
+    const auto kidN = Dot&lt;20&gt;(bodyA-&gt;pos, N);
+<br/>
+<br/>
+    //Bounding box check
+<br/>
+    if (kidN &gt; surfN + boxN) {return;}
+<br/>
+    if (kidN &lt; surfN) {return;} //If kid is already more than half way in, there's no real hope of resolving the collision, so just bail
+<br/>
+<br/>
+    const auto surfT1 = Dot&lt;20&gt;(s.pos, T);
+<br/>
+    const auto surfT2 = surfT1 + s.length;
+<br/>
+    const auto kidT = Dot&lt;20&gt;(bodyA-&gt;pos, T);
+<br/>
+<br/>
+    //Bounding box check along T
+<br/>
+    if (kidT &lt;= surfT1 - boxT) {return;}
+<br/>
+    if (kidT &gt;= surfT2 + boxT) {return;}
+<br/>
+<br/>
+    const auto bestPen = surfN - (kidN - boxN);
+<br/>
+    contacts.addContact(bodyA, bodyB, mtSTATIC, N, bestPen);
+<br/>
+}
+<br/>
+<br/>
+template &lt;class T1&gt; //should be CubeData or PickoryData
+<br/>
+bool EdgeChainCollisionTest(ContactList&amp; contacts, T1* bodyA, const Surface&amp; s1, const Surface&amp; s2)
+<br/>
+{
+<br/>
+    assert(s2.pos == s1.end());
+<br/>
+    const auto&amp; shapeA = bodyA-&gt;shape();
+<br/>
+<br/>
+    //Check if corner is convex
+<br/>
+    if (Rot90(s1.dir) == s2.dir)
+<br/>
+    {
+<br/>
+        //Check if corner is inside cube
+<br/>
+        if (shapeA.Contains(s2.pos - bodyA-&gt;pos))
+<br/>
+        {
+<br/>
+            const auto offset = half(s2.end() - s1.pos);
+<br/>
+            const auto center = s1.pos + offset;
+<br/>
+            const Rect r(offset);
+<br/>
+            ShapeCollisionTest(contacts, bodyA, &amp;dummy, center, r, mtSTATIC);
+<br/>
+            return true;
+<br/>
+        }
+<br/>
+    }
+<br/>
+<br/>
+    //If we reach this point, we didn't do a corner check
+<br/>
+    //LineCollisionTest(contacts, bodyA, s1);
+<br/>
+<br/>
+    if (portals.Linked() &amp;&amp; s1.portal)
+<br/>
+    {
+<br/>
+        ArrayList&lt;interval, 4&gt; intvs;
+<br/>
+<br/>
+        //Calculate pieces
+<br/>
+        for(u32 ptli=0; ptli&lt;2; ++ptli)
+<br/>
+        {
+<br/>
+            if (portals[ptli].surf == &amp;s1)
+<br/>
+            {
+<br/>
+                intvs.add(portals[ptli].left);
+<br/>
+                intvs.add(portals[ptli].right);
+<br/>
+            }
+<br/>
+        }
+<br/>
+<br/>
+        for(u32 ivi = 0; ivi&lt;intvs.size(); ++ivi)
+<br/>
+        {
+<br/>
+            const auto&amp; iv = intvs[ivi];
+<br/>
+            //if (iv.s2 == iv.s1) {continue;} //skip intervals with 0 length
+<br/>
+<br/>
+            const auto offset = VecMult&lt;20&gt;(s1.dir, half(iv.s2 - iv.s1)) + VecMult&lt;20&gt;(Rot90(s1.dir), Fixed&lt;20&gt;(16777216 /*16.0*/));
+<br/>
+            const auto center = s1.pos + offset + VecMult&lt;20&gt;(s1.dir, iv.s1);
+<br/>
+<br/>
+            const Rect r(offset);
+<br/>
+            ShapeCollisionTest(contacts, bodyA, &amp;dummy, center, r, mtSTATIC);
+<br/>
+        }
+<br/>
+<br/>
+        if (intvs.size() &gt; 0) {return false;}
+<br/>
+    }
+<br/>
+<br/>
+    LineCollisionTest(contacts, bodyA, s1);
+<br/>
+    return false;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176401 - ant512 - Fri Jul 22, 2011 3:55 pm</h4>
+    <div class="postbody"><span class="postbody">Yiminy!  You know that you don't need to use the "auto" keyword, right?  It's implicit.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176402 - GLaDOS - Fri Jul 22, 2011 3:58 pm</h4>
+    <div class="postbody"><span class="postbody">No I'm using the C++0x auto keyword for automatic type deduction.
+<br/>
+It makes the code more generic and easier to change.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176403 - elhobbs - Fri Jul 22, 2011 6:11 pm</h4>
+    <div class="postbody"><span class="postbody">I think you are going to need to do a little profiling to see where your time is spent. nothing really exists for the ds/gba platform. there are hardware timers that you can use - although you will have to manually insert time sampling into your code.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176404 - GLaDOS - Fri Jul 22, 2011 6:16 pm</h4>
+    <div class="postbody"><span class="postbody">Do you have any guides to timing? I haven't used timers before. (Or interrupts for that matter)
+<br/>
+<br/>
+<br/>
+Also, how do you make sure that all the code and data is placed in the right section?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176405 - Miked0801 - Fri Jul 22, 2011 6:20 pm</h4>
+    <div class="postbody"><span class="postbody">Do you have access to any sort of profiler?  Without that, you are indeed guessing on where the slowdown is.  Perhaps even an intrusive, timer based callback that stores and counts stack locations (a profiler) you could write yourself.
+<br/>
+<br/>
+Looking at the code you uploaded:
+<br/>
+Everytime I see newT, I jump and think you are allocating memory.  :)
+<br/>
+pi as a local also threw me off.
+<br/>
+What exactly does Array&lt;&gt; do?  Is this allocating heap or stack memory and how heavy is it?  In general, dynamic memory allocations tend to get pretty heavy on performance if done in tight loops.
+<br/>
+<br/>
+I'd also venture to say that this is a pretty heavy duty collision detection routine for a GBA, but if you aren't doing too much else, it's probably fine.
+<br/>
+<br/>
+Overall, this is very well constructed code.  Easy to follow and well asserted.  :)
+<br/>
+<br/>
+I see no immediately obvious things that are "slow" here outside of the possibility of dynamic memory allocations for the Array and ArrayList stuff.  You minimize divides, don't sqrt, don't float, and do your work quickly.  Have you considered moving some of this code to ITCM and/or making it ARM/Thumb to see if it helps?  I'd also like to confirm your stack is it DTCM.  Finally, do you have other code running like sound/music?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176407 - Dwedit - Fri Jul 22, 2011 6:51 pm</h4>
+    <div class="postbody"><span class="postbody">I made a <a class="postlink" href="http://www.dwedit.org/dwedit_board/viewtopic.php?pid=2967#p2967" target="_blank">modified version of VisualBoyAdavnce</a> that does simple profiling (counts the number of times each memory address was executed).  For ARM instructions only.
+<br/>
+<br/>
+I use it with some other programs I made that put it against a disassembly.
+<br/>
+<br/>
+I usually found that inner loops account for by far the most time of any program.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176408 - GLaDOS - Fri Jul 22, 2011 7:07 pm</h4>
+    <div class="postbody"><span class="postbody">I don't have any sound or music code. I figured that is something I can worry about after I get the rest of the game working.
+<br/>
+<br/>
+Here's my array classes. I don't do any dynamic memory allocations.
+<br/>
+<br/>
+The ArrayList is basically just a plain array that also keeps track of how many elements have been stored. I had troubling deciding what to name it but I eventually decided ArrayList would be the least confusing name.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#pragma once
+<br/>
+#include "ints.h"
+<br/>
+#include "macros.h"
+<br/>
+<br/>
+template &lt;typename T, u32 N&gt;
+<br/>
+class Array
+<br/>
+{
+<br/>
+    T arr[N];
+<br/>
+<br/>
+    public:
+<br/>
+<br/>
+    T&amp; operator[](u32 i) {assert(i &lt; size()); return arr[i];}
+<br/>
+    const T&amp; operator[](u32 i) const {assert(i &lt; size()); return arr[i];}
+<br/>
+    static u32 size() {return N;}
+<br/>
+};
+<br/>
+<br/>
+template &lt;typename T, u32 N&gt;
+<br/>
+class ArrayList
+<br/>
+{
+<br/>
+    T arr[N];
+<br/>
+    u32 m_size;
+<br/>
+<br/>
+    public:
+<br/>
+    ArrayList() : m_size(0) {}
+<br/>
+<br/>
+    T&amp; operator[](u32 i) {assert(i &lt; size()); return arr[i];}
+<br/>
+    const T&amp; operator[](u32 i) const {assert(i &lt; size()); return arr[i];}
+<br/>
+<br/>
+    u32 size() const {return m_size;}
+<br/>
+    u32 capacity() const {return N;}
+<br/>
+<br/>
+    void clear() {m_size = 0;}
+<br/>
+<br/>
+    void add(const T&amp; val)
+<br/>
+    {
+<br/>
+        assert(m_size &lt; N);
+<br/>
+        if (m_size &lt; N) {arr[m_size++] = val;}
+<br/>
+    }
+<br/>
+<br/>
+    typedef T* iterator;
+<br/>
+    typedef const T* const_iterator;
+<br/>
+    const T* begin() const {return arr;}
+<br/>
+    const T* end() const {return arr+size();}
+<br/>
+    T* begin()  {return arr;}
+<br/>
+    T* end()  {return arr+size();}
+<br/>
+<br/>
+    //These functions are useful for adding elements in place
+<br/>
+    //T&amp; next() {assert(m_size &lt; N); return arr[m_size];}
+<br/>
+    //void sizeinc() {m_size++;}
+<br/>
+};
+<br/>
+<br/>
+template &lt;typename T&gt;
+<br/>
+struct ArrayConstPtr
+<br/>
+{
+<br/>
+    const T* arr;
+<br/>
+    u32 N;
+<br/>
+<br/>
+    //T&amp; operator[](u32 i) {assert(i &lt; size()); return arr[i];}
+<br/>
+    const T&amp; operator[](u32 i) const {assert(i &lt; size()); return arr[i];}
+<br/>
+    u32 size() const {return N;}
+<br/>
+<br/>
+    typedef const T* iterator;
+<br/>
+    typedef const T* const_iterator;
+<br/>
+    const T* begin() const {return arr;}
+<br/>
+    const T* end() const {return arr+size();}
+<br/>
+};
+<br/>
+<br/>
+template &lt;typename T&gt; auto begin(T&amp; container) -&gt; decltype(container.begin()) {return container.begin();}
+<br/>
+template &lt;typename T&gt; auto end(T&amp; container) -&gt; decltype(container.end()) {return container.end();}
+<br/>
+template &lt;typename T&gt; auto begin(const T&amp; container) -&gt; decltype(container.begin()) {return container.begin();}
+<br/>
+template &lt;typename T&gt; auto end(const T&amp; container) -&gt; decltype(container.end()) {return container.end();}
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176409 - Dwedit - Fri Jul 22, 2011 7:26 pm</h4>
+    <div class="postbody"><span class="postbody">You do have optimizations turned on, right?
+<br/>
+You could try defining NDEBUG to remove all asserts from the generated code.
+<br/>
+<br/>
+Otherwise, find out what's executed the most (with a profiler), build it as ARM code and move it to IWRAM.
+<br/>
+<br/>
+Also, look at the disassembly of your code to see how good it is.
+<br/>
+<br/>
+If you send me the .ELF file, I'll try to profile it.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176410 - GLaDOS - Fri Jul 22, 2011 7:30 pm</h4>
+    <div class="postbody"><span class="postbody">Yes, I have O2 on. I already posted my compiler flags in the first post.
+<br/>
+And the assert is already just defined as nothing. I have no idea how to code a useful assert statement for the GBA anyway.
+<br/>
+<br/>
+As far as looking at the assembly, I don't know how to do that. Do you have any guides? Also, how do I send you the elf?
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#pragma once
+<br/>
+<br/>
+#define STATICASSERT(x) static_assert((x), #x)
+<br/>
+<br/>
+#ifdef TESTING
+<br/>
+    #include &lt;cassert&gt;
+<br/>
+    #define PRINT(x) std::cout &lt;&lt; #x ": " &lt;&lt; (x) &lt;&lt; '\n'
+<br/>
+#else
+<br/>
+    #define PRINT(x)
+<br/>
+    #define assert(x)
+<br/>
+#endif
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176411 - Dwedit - Fri Jul 22, 2011 7:36 pm</h4>
+    <div class="postbody"><span class="postbody">Easy way to do disassembly:
+<br/>
+arm-eabi-objdump -d filename.elf &gt; outputfile.s
+<br/>
+<br/>
+If you are using the example makefiles, you get an ELF file before it makes a GBA file.  The ELF file is basically the same as the GBA file since the code is already relocated to its final addresses, but it still has the symbols intact.
+<br/>
+<br/>
+Right now, my profiling tools are very limited, you need to build it as ARM mode instead of thumb mode, but they still work okay.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176412 - GLaDOS - Fri Jul 22, 2011 7:40 pm</h4>
+    <div class="postbody"><span class="postbody">I have the elf file, I was just wondering how to send it to you.
+<br/>
+<br/>
+Edit: I figured out that dekitpro was making a multiboot image by default. I tried changing it, but there is no visible effect on speed.</span><span class="gensmall"><br/><br/>Last edited by GLaDOS on Fri Jul 22, 2011 8:08 pm; edited 2 times in total</span></div>    
+</div>
+<div class="post">
+    <h4>#176413 - Dwedit - Fri Jul 22, 2011 7:43 pm</h4>
+    <div class="postbody"><span class="postbody">Just <a class="postlink" href="http://www.dwedit.org/dwedit_board/" target="_blank">post it on my board somewhere</a>, I allow guests to upload files.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176414 - GLaDOS - Fri Jul 22, 2011 7:51 pm</h4>
+    <div class="postbody"><span class="postbody">I tried to post it but the attachment won't show up.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176415 - Dwedit - Fri Jul 22, 2011 8:13 pm</h4>
+    <div class="postbody"><span class="postbody">Sorry, forgot to turn off the 100k size limit...  I increased it to 10MB.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176417 - GLaDOS - Sat Jul 23, 2011 1:36 am</h4>
+    <div class="postbody"><span class="postbody">I added a rudimentary by recording the scanline counter at certain points and drawing a sprite at that location. It's crude but at least it's better than nothing.
+<br/>
+<br/>
+I found some divisions in my contact solving code that seem unnecessary. I tried to replace the 3 divisions with 1 division followed by multiplication by the reciprocal. There was a large speedup, but unfortunately, the physics became very unstable. 
+<br/>
+Presumably there were large rounding errors introduced by taking the reciprocal, though I'm not sure why. Even in the worse case scenario, it should have a relative error of at most 1/139665.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">            //Construct inverse matrix
+<br/>
+            const auto cc = Mult&lt;20&gt;(c, c);         // max 1922, min .25
+<br/>
+            const auto det = Mult&lt;19&gt;(cc, invM);    // 1922*2 to .25
+<br/>
+            const auto iim = Mult&lt;24&gt;(I, invM);     // 40 to 80
+<br/>
+<br/>
+            //Multiplying by reciprocal is faster than division
+<br/>
+            /*const auto invDet = Div&lt;28&gt;( Fixed&lt;30&gt;(1073741824), det );
+<br/>
+<br/>
+            const auto AInv11 = Mult&lt;19&gt;( Add&lt;21&gt;(iim, bb), invDet);
+<br/>
+            const auto AInv12 = Mult&lt;19&gt;( Add&lt;21&gt;(iim, ab), invDet);
+<br/>
+            const auto AInv21 = AInv12;
+<br/>
+            const auto AInv22 = Mult&lt;19&gt;( Add&lt;21&gt;(iim, aa), invDet);*/
+<br/>
+<br/>
+            const auto AInv11 = Div&lt;19&gt;( Add&lt;21&gt;(iim, bb), det);   // max 2242
+<br/>
+            const auto AInv12 = -Div&lt;19&gt;( Add&lt;21&gt;(iim, ab), det);
+<br/>
+            const auto AInv21 = AInv12;
+<br/>
+            const auto AInv22 = Div&lt;19&gt;( Add&lt;21&gt;(iim, aa), det);
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176418 - Dwedit - Sat Jul 23, 2011 4:59 am</h4>
+    <div class="postbody"><span class="postbody">I can see that you are using the "Noob method" of waiting for vblank, one that repeatedly checks VCOUNT inside a while loop.  It sticks out like a sore thumb in the profile.  You should replace it with a call to VBlankIntrWait(), which halts the processor until an interrupt happens, and uses less power.
+<br/>
+<br/>
+Looks like it spends lots of time in __aeabi_lmul and __aeabi_uidiv, which are slow ways of doing multiplication and division.
+<br/>
+<br/>
+Normally multiplying two 32 bit numbers into a 64 bit number is a single ARM instruction that takes 7 cycles to complete, not a call to a 36 instruction long THUMB multiply function.  If you can, find a way to eliminate 64 bit x 64 bit multiplication, and get it down to 32 bit x 32 bit.
+<br/>
+Also, if you are dividing by the same number a lot, find out its reciprocal, then multiply by it instead.  So you take 0x100000000 (a 64 bit number), and do the division using some slower division code.  You get the reciprocal.  You can then use 32x32 to 64 bit multiplication to divide, just by discarding the low 32 bits of your result.
+<br/>
+<br/>
+I suggest you try to avoid using THUMB mode, since it just makes horrible choices of how to do multiplication and division.
+<br/>
+<br/>
+Also, the program fails to run on NO$GBA, but runs fine on VisualBoyAdvance.
+<br/>
+<br/>
+If you still can't get the compiler to generate good code for multiplying, you can use inline assembly to force it to use the MULL/UMULL instruction.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176419 - GLaDOS - Sat Jul 23, 2011 6:00 am</h4>
+    <div class="postbody"><span class="postbody">Wait, so if I have a line like 
+<br/>
+s64 p = (s64)a.val * (s64)b.val;
+<br/>
+should I just get rid of the casts?
+<br/>
+<br/>
+Also, I already got rid of several divisions since I posted that elf. The remaining ones are either impossible to get rid of or cause bugs when removed (I'm looking into that at the moment.)
+<br/>
+<br/>
+And sorry about the noob thing. I'm not very experienced with GBA coding. I've never even used an interrupt before.
+<br/>
+By the way, do you know why it doesn't run on No$GBA? I use VBa so I didn't notice.
+<br/>
+<br/>
+<br/>
+EDIT: I tried getting rid of the s64 casts in the multiplication function, and everything completely broke, presumably due to overflow. If I get rid of only one of the casts, then it works like normal but there is also no speed increase.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176420 - Dwedit - Sat Jul 23, 2011 7:35 am</h4>
+    <div class="postbody"><span class="postbody">Build in ARM mode, not THUMB mode.
+<br/>
+<br/>
+This little piece of code here:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+s32 test(s32 a, s32 b)
+<br/>
+{
+<br/>
+   s64 value = (s64)a * (s64)b;
+<br/>
+   return value &gt;&gt; 32;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+In ARM mode, it builds to this:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+test:
+<br/>
+   str   r4, [sp, #-4]!
+<br/>
+   smull   r3, r4, r1, r0
+<br/>
+   mov   r0, r4
+<br/>
+   ldmfd   sp!, {r4}
+<br/>
+   bx   lr
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Not too bad, but the compiler could have done this better, eliminate the mov, and eliminate the stack push/pop.
+<br/>
+<br/>
+In THUMB mode, it builds to this:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+test:
+<br/>
+   push   {r3, lr}
+<br/>
+   mov   r2, r0
+<br/>
+   asr   r3, r2, #31
+<br/>
+   mov   r0, r1
+<br/>
+   asr   r1, r1, #31
+<br/>
+   bl   __aeabi_lmul
+<br/>
+   @ sp needed for prologue
+<br/>
+   mov   r0, r1
+<br/>
+   pop   {r3}
+<br/>
+   pop   {r1}
+<br/>
+   bx   r1
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+So you want to avoid THUMB mode for anything that does any multiplication, otherwise it calls some slow multiply function to actually do the work, instead of simply using the SMULL instruction.
+<br/>
+<br/>
+Using reciprocals for signed division is a tad problematic, you should work with absolute values, and set the sign at the end.  Otherwise you could end up with problems such as negative numbers off by 1.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176422 - GLaDOS - Sat Jul 23, 2011 5:06 pm</h4>
+    <div class="postbody"><span class="postbody">I changed the options from -mthumb -mthumb-interwork to -marm and it's now much faster. Thanks!
+<br/>
+<br/>
+It now lags only in complicated situations.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176423 - Miked0801 - Sat Jul 23, 2011 5:21 pm</h4>
+    <div class="postbody"><span class="postbody">Ah the beuaty of profiling, showing exactly where one needs to improve things :)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176424 - GLaDOS - Sun Jul 24, 2011 3:38 pm</h4>
+    <div class="postbody"><span class="postbody">I figured out why the game broke when I change the division with multiplication by reciprocal.
+<br/>
+<br/>
+It turns out to be a really stupid mistake. I accidentally got rid of a minus sign while changing the divisions to multiplications.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176425 - ant512 - Mon Jul 25, 2011 8:59 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>GLaDOS wrote:</b></span></td> </tr> <tr> <td class="quote">No I'm using the C++0x auto keyword for automatic type deduction.
+<br/>
+It makes the code more generic and easier to change.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Oh yes!  They've re-purposed "auto" to work like C#'s "var".</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176427 - Dwedit - Mon Jul 25, 2011 4:30 pm</h4>
+    <div class="postbody"><span class="postbody">In fact, you can just "#define var auto" if you really like the var keyword.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176555 - Exophase - Wed Aug 17, 2011 5:39 pm</h4>
+    <div class="postbody"><span class="postbody">Also note that VBA tends to have worse timings than the real thing. If you run the game on hardware you might find that it's faster.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176556 - GLaDOS - Wed Aug 17, 2011 5:48 pm</h4>
+    <div class="postbody"><span class="postbody">Most people will probably be playing it on an emulator though since I don't exactly have the resources to manufacture cartridges.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176563 - GLaDOS - Thu Aug 18, 2011 5:12 am</h4>
+    <div class="postbody"><span class="postbody">Update: Once again, my game is running too slow. I think one possible target for optimization is my portal spark code.
+<br/>
+It is intended to create an animated spark effect coming out of portals when they are linked. Each spark has a random start position, velocity, and lifetime.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+class Xorshift32
+<br/>
+{
+<br/>
+    u32 val;
+<br/>
+<br/>
+    public:
+<br/>
+    Xorshift32(u32 seed=0x92D68CA2): val(seed) {}
+<br/>
+<br/>
+    u32 GetNext()
+<br/>
+    {
+<br/>
+        val ^=(val&lt;&lt;13);
+<br/>
+        val ^=(val&gt;&gt;17);
+<br/>
+        val ^=(val&lt;&lt;5);
+<br/>
+<br/>
+        assert(val != 0);
+<br/>
+        return val;
+<br/>
+    }
+<br/>
+<br/>
+    //GetNext always returns nonzero. Shift so it is never intmin
+<br/>
+    s32 GetSigned() {   return (GetNext() + 0x80000000u);  }
+<br/>
+};
+<br/>
+<br/>
+struct SparkData{
+<br/>
+    Vec&lt;20&gt; pos;
+<br/>
+    Vec&lt;20&gt; vel;
+<br/>
+    u32 time;
+<br/>
+};
+<br/>
+<br/>
+Array&lt;ArrayList&lt;SparkData, 16&gt;, 2&gt; sparkdata;
+<br/>
+Xorshift32 prng;
+<br/>
+<br/>
+void updateSparks(u32 pi)
+<br/>
+{
+<br/>
+    auto&amp; data = sparkdata[pi];
+<br/>
+<br/>
+    for(u32 i = 0; i &lt; data.size();)
+<br/>
+    {
+<br/>
+        if (data[i].time)
+<br/>
+        {
+<br/>
+            data[i].pos += data[i].vel;
+<br/>
+            --data[i].time;
+<br/>
+            ++i;
+<br/>
+        }
+<br/>
+        else {data.swapremove(i);} //Don't increment i if we're removing an element or else we'll skip one
+<br/>
+    }
+<br/>
+<br/>
+    if (portals.Linked() &amp;&amp; data.size() &lt; data.capacity())
+<br/>
+    {
+<br/>
+        //CreateSpark(myprng.GetRange(-HALFWIDTH(),HALFWIDTH()), -2, myprng.GetRange(.7,1.3), 5 + myprng.GetNext() % 23);
+<br/>
+        const auto px = prng.GetSigned() &gt;&gt; 6; // -32.0 to 32.0
+<br/>
+        const auto vy = 393216 /*0.375*/ + (s32)(prng.GetNext() &gt;&gt; 14); //0.375 to 0.625
+<br/>
+<br/>
+        //generate number from 0 to 44 without using modulo. 0 - 18 are slightly more likely
+<br/>
+        //empirically, it doesn't appear to make any difference in speed though, probably because it only runs once or twice per tick
+<br/>
+        u32 t = prng.GetNext() &gt;&gt; 26;
+<br/>
+        if (t &gt;= 45) {t -= 45;}
+<br/>
+<br/>
+        SparkData s;
+<br/>
+        s.pos = portals[pi].ToWorld( Vec&lt;20&gt;(px, 0) );
+<br/>
+        s.vel = portals[pi].Transform( Vec&lt;20&gt;(0, vy) );
+<br/>
+        s.time = 10u + t;
+<br/>
+        data.add(s);
+<br/>
+    }
+<br/>
+}</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176567 - Dwedit - Thu Aug 18, 2011 5:51 pm</h4>
+    <div class="postbody"><span class="postbody">Break out the profiler again and see what still needs optimization?<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176568 - GLaDOS - Thu Aug 18, 2011 5:52 pm</h4>
+    <div class="postbody"><span class="postbody">How do I profile it?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176569 - Dwedit - Thu Aug 18, 2011 6:29 pm</h4>
+    <div class="postbody"><span class="postbody">Tools needed:
+<br/>
+DevKitArm (for arm-eabi-objdump)
+<br/>
+<a class="postlink" href="http://www.dwedit.org/dwedit_board/attachment.php?item=323" target="_blank">VBA_TEH_PROFILER.EXE</a>
+<br/>
+<a class="postlink" href="http://www.dwedit.org/dwedit_board/attachment.php?item=324" target="_blank">profiler_merge.exe</a>
+<br/>
+<a class="postlink" href="http://www.textpad.com/download/index.html" target="_blank">TextPad Text Editor</a> (because it has a Sort feature)
+<br/>
+<br/>
+Start with your ELF file.  Disassemble it to ASM:
+<br/>
+<br/>
+arm-eabi-objdump -D portal.elf &gt; portal.s
+<br/>
+<br/>
+Run your GBA file in a special version of VBA that I built, called "VBA_TEH_PROFILER".  Run it for a short time, 2 minutes is plenty, making sure to cover all the code you're interested in checking.  Then save the profile log using "File &gt; Save Profile Data".
+<br/>
+<br/>
+Run "profiler_merge" to merge the instruction execution count with the disassembly.
+<br/>
+<br/>
+profiler_merge portal.s portal.profile portal_output.s
+<br/>
+<br/>
+Now you have some huge file that looks like this:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+00001E30 08000304 &lt;_Z17NeedToChangeBlocki&gt;:
+<br/>
+00001E30  8000304:   b570         push   {r4, r5, r6, lr}
+<br/>
+00001E30  8000306:   4b14         ldr   r3, [pc, #80]   ; (8000358 &lt;_Z17NeedToChangeBlocki+0x54&gt;)
+<br/>
+00001E30  8000308:   681a         ldr   r2, [r3, #0]
+<br/>
+00001E30  800030a:   2001         movs   r0, #1
+<br/>
+00001E30  800030c:   2a00         cmp   r2, #0
+<br/>
+<br/>
+... snipped ...
+<br/>
+<br/>
+00001E26  8000348:   428d         cmp   r5, r1
+<br/>
+00001E26  800034a:   db00         blt.n   800034e &lt;_Z17NeedToChangeBlocki+0x4a&gt;
+<br/>
+00001E26  800034c:   2000         movs   r0, #0
+<br/>
+00001E26  800034e:   0600         lsls   r0, r0, #24
+<br/>
+00001E2B  8000350:   0e00         lsrs   r0, r0, #24
+<br/>
+00001E2B  8000352:   bc70         pop   {r4, r5, r6}
+<br/>
+00001E30  8000354:   bc02         pop   {r1}
+<br/>
+00001E30  8000356:   4708         bx   r1
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Left column is the number of times that instruction was executed.  (it's approximate for THUMB instructions though, it counts both halves of the word as the same address, but it's accurate for ARM instructions)
+<br/>
+Middle column is the address in ROM of the code.
+<br/>
+Rest of the line is the disassembly.
+<br/>
+<br/>
+Now get TextPad, a great text editor.  It can sort the file.  If you sort the text by column 1 in descending order, it will put all the most executed code at the top of the file.  Of course, everything will be in semi-random order after a sort, so you can search the original file for the address if you want to see the code near there.
+<br/>
+<br/>
+You usually see that inner loops are much hotter than their surrounding code, and they tend to need optimization the most.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176570 - GLaDOS - Thu Aug 18, 2011 6:57 pm</h4>
+    <div class="postbody"><span class="postbody">Here's the first few lines of the results. I'm guessing that the first 3 are the busy waiting part of the game loop (haven't tried interrupts yet). But that won't affect speed for obvious reasons.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">03072536  80071bc:   9afffffc    bls   80071b4 &lt;main+0xe4&gt;
+<br/>
+03072536  80071b8:   e353009f    cmp   r3, #159   ; 0x9f
+<br/>
+03072536  80071b4:   e1d430b6    ldrh   r3, [r4, #6]
+<br/>
+00D020CE  80071b0:   8afffffc    bhi   80071a8 &lt;main+0xd8&gt;
+<br/>
+00D020CE  80071ac:   e353009f    cmp   r3, #159   ; 0x9f
+<br/>
+00D020CE  80071a8:   e1d430b6    ldrh   r3, [r4, #6]
+<br/>
+000E3494  800048c:   1affffe4    bne   8000424 &lt;_Z13SurfaceMergerR7SurfaceRPKS_S2_RK13PortalManagerb+0x60&gt;
+<br/>
+000E3494  8000488:   e1520006    cmp   r2, r6
+<br/>
+000E3494  8000484:   e5932008    ldr   r2, [r3, #8]
+<br/>
+000A426B  8000428:   0a00001e    beq   80004a8 &lt;_Z13SurfaceMergerR7SurfaceRPKS_S2_RK13PortalManagerb+0xe4&gt;
+<br/>
+000A426B  8000424:   e1520005    cmp   r2, r5
+<br/>
+0008DB54  8006008:   1afffffb    bne   8005ffc &lt;memcpy+0xc0&gt;
+<br/>
+0008DB54  8006004:   e4c3c001    strb   ip, [r3], #1
+<br/>
+0008DB54  8006000:   e2522001    subs   r2, r2, #1
+<br/>
+0008DB54  8005ffc:   e4d1c001    ldrb   ip, [r1], #1
+<br/>
+0007A0F9  8000434:   0a000009    beq   8000460 &lt;_Z13SurfaceMergerR7SurfaceRPKS_S2_RK13PortalManagerb+0x9c&gt;
+<br/>
+0007A0F9  8000430:   e3510000    cmp   r1, #0
+<br/>
+0007A0F9  800042c:   e5971000    ldr   r1, [r7]
+<br/>
+00078766  8000480:   0a000015    beq   80004dc &lt;_Z13SurfaceMergerR7SurfaceRPKS_S2_RK13PortalManagerb+0x118&gt;
+<br/>
+00078766  800047c:   e58a3000    str   r3, [sl]
+<br/>
+00078766  8000478:   e1a04003    mov   r4, r3
+<br/>
+00078766  8000474:   e58c2010    str   r2, [ip, #16]
+<br/>
+00078766  8000470:   e1580003    cmp   r8, r3
+<br/>
+00078766  800046c:   e0812002    add   r2, r1, r2
+<br/>
+00078766  8000468:   e2843018    add   r3, r4, #24
+<br/>
+00078766  8000464:   e59c1010    ldr   r1, [ip, #16]
+<br/>
+00078766  8000460:   e5932010    ldr   r2, [r3, #16]
+<br/>
+0006F085 080003c4 &lt;_Z13SurfaceMergerR7SurfaceRPKS_S2_RK13PortalManagerb&gt;:
+<br/>
+0006F085  80004a4:   e12fff1e    bx   lr
+<br/>
+0006F085  80004a0:   e8bd0ff0    pop   {r4, r5, r6, r7, r8, r9, sl, fp}
+<br/>
+0006F085  8000420:   ea000017    b   8000484 &lt;_Z13SurfaceMergerR7SurfaceRPKS_S2_RK13PortalManagerb+0xc0&gt;
+<br/>
+0006F085  800041c:   e269b000    rsb   fp, r9, #0
+<br/>
+0006F085  8000418:   e2656000    rsb   r6, r5, #0
+<br/>
+0006F085  8000414:   e59c9008    ldr   r9, [ip, #8]
+<br/>
+0006F085  8000410:   e59c500c    ldr   r5, [ip, #12]
+<br/>
+0006F085  800040c:   0a000032    beq   80004dc &lt;_Z13SurfaceMergerR7SurfaceRPKS_S2_RK13PortalManagerb+0x118&gt;
+<br/>
+0006F085  8000408:   e1a03004    mov   r3, r4
+<br/>
+0006F085  8000404:   e1580004    cmp   r8, r4
+<br/>
+0006F085  8000400:   158c3010    strne   r3, [ip, #16]
+<br/>
+0006F085  80003fc:   18850003    stmne   r5, {r0, r1}
+<br/>
+0006F085  80003f8:   13a03000    movne   r3, #0
+<br/>
+0006F085  80003f4:   18960003    ldmne   r6, {r0, r1}
+<br/>
+0006F085  80003f0:   18a5000f    stmiane   r5!, {r0, r1, r2, r3}
+<br/>
+0006F085  80003ec:   11a0500c    movne   r5, ip
+<br/>
+0006F085  80003e8:   18b6000f    ldmne   r6!, {r0, r1, r2, r3}
+<br/>
+0006F085  80003e4:   e1a08002    mov   r8, r2
+<br/>
+0006F085  80003e0:   e1a0a001    mov   sl, r1
+<br/>
+0006F085  80003dc:   e1a07003    mov   r7, r3
+<br/>
+0006F085  80003d8:   e1a0c000    mov   ip, r0
+<br/>
+0006F085  80003d4:   11a06004    movne   r6, r4
+<br/>
+0006F085  80003d0:   e35c0000    cmp   ip, #0
+<br/>
+0006F085  80003cc:   e5914000    ldr   r4, [r1]
+<br/>
+0006F085  80003c8:   e5ddc020    ldrb   ip, [sp, #32]
+<br/>
+0006F085  80003c4:   e92d0ff0    push   {r4, r5, r6, r7, r8, r9, sl, fp}
+<br/>
+000671DA  8005de0:   1affffef    bne   8005da4 &lt;__aeabi_uidiv+0x58&gt;
+<br/>
+000671DA  8005ddc:   11a01221    lsrne   r1, r1, #4
+<br/>
+000671DA  8005dd8:   11b03223    lsrsne   r3, r3, #4
+<br/>
+000671DA  8005dd4:   e3500000    cmp   r0, #0
+<br/>
+000671DA  8005dd0:   218221a3    orrcs   r2, r2, r3, lsr #3
+<br/>
+000671DA  8005dcc:   204001a1    subcs   r0, r0, r1, lsr #3
+<br/>
+000671DA  8005dc8:   e15001a1    cmp   r0, r1, lsr #3
+<br/>
+000671DA  8005dc4:   21822123    orrcs   r2, r2, r3, lsr #2
+<br/>
+000671DA  8005dc0:   20400121    subcs   r0, r0, r1, lsr #2
+<br/>
+000671DA  8005dbc:   e1500121    cmp   r0, r1, lsr #2
+<br/>
+000671DA  8005db8:   218220a3    orrcs   r2, r2, r3, lsr #1
+<br/>
+000671DA  8005db4:   204000a1    subcs   r0, r0, r1, lsr #1
+<br/>
+000671DA  8005db0:   e15000a1    cmp   r0, r1, lsr #1
+<br/>
+000671DA  8005dac:   21822003    orrcs   r2, r2, r3
+<br/>
+000671DA  8005da8:   20400001    subcs   r0, r0, r1
+<br/>
+000671DA  8005da4:   e1500001    cmp   r0, r1
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+It looks like SurfaceMerger is a good place for optimization, but I'm not sure what to do about it. Here's the source.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">enum class BreakType {LISTEND, CONCAVE, CONVEX, PORTAL_MID, PORTAL_END};
+<br/>
+//Automatically merge adjacent surfaces and return type of break at the end
+<br/>
+BreakType SurfaceMerger(Surface&amp; s, const Surface*&amp; sp, const Surface* end, const PortalManager&amp; portals, bool reset)
+<br/>
+{
+<br/>
+    assert(sp &amp;&amp; end);
+<br/>
+    assert(reset || (sp == end) || (s.end() == sp-&gt;pos));
+<br/>
+<br/>
+    if (reset) //If the next surface might be a portal, we want to resuse that code. So create a sort of stub surface and continue as normal
+<br/>
+    {
+<br/>
+        assert(sp != end);
+<br/>
+        s = *sp;
+<br/>
+        s.length.val = 0;
+<br/>
+    }
+<br/>
+<br/>
+    while (sp != end)
+<br/>
+    {
+<br/>
+        if (-Rot90(s.dir) == sp-&gt;dir) {return BreakType::CONCAVE;}
+<br/>
+        if (Rot90(s.dir) == sp-&gt;dir) {return BreakType::CONVEX;}
+<br/>
+<br/>
+        assert(s.dir == sp-&gt;dir);
+<br/>
+        if (portals.Linked() &amp;&amp; sp-&gt;portal())
+<br/>
+        {
+<br/>
+            //If next surface is split up by portals, merge only the first portion and return appropriately
+<br/>
+            if (portals[0].surf == sp &amp;&amp; portals[1].surf == sp)
+<br/>
+            {
+<br/>
+                if (portals[0].left.s1.val == 0) {s.length += portals[0].left.s2;}
+<br/>
+                else {assert(portals[1].left.s1.val == 0); s.length += portals[1].left.s2;}
+<br/>
+                return BreakType::PORTAL_MID;
+<br/>
+            }
+<br/>
+            else if (portals[0].surf == sp)
+<br/>
+            {
+<br/>
+                s.length += portals[0].left.s2;
+<br/>
+                return BreakType::PORTAL_END;
+<br/>
+            }
+<br/>
+            else if (portals[1].surf == sp)
+<br/>
+            {
+<br/>
+                s.length += portals[1].left.s2;
+<br/>
+                return BreakType::PORTAL_END;
+<br/>
+            }
+<br/>
+        }
+<br/>
+<br/>
+        s.length += sp-&gt;length;
+<br/>
+        ++sp;
+<br/>
+    }
+<br/>
+<br/>
+    return BreakType::LISTEND;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176571 - Dwedit - Thu Aug 18, 2011 9:16 pm</h4>
+    <div class="postbody"><span class="postbody">Don't just look at the sorted code, look back at the original code too, especially whenever the execution count changes, so you can see what function it's part of.  Just because some labels appear in the sorted toplist doesn't mean they are necessarily smoking guns.
+<br/>
+<br/>
+And if you can't optimize something, call it less often.  For example, for collision detection, there are ways to reduce the number of collision checks by maintaining separate object lists.
+<br/>
+<br/>
+edit: also, what's up with the byte-based memcpy I see there?  Which data isn't word aligned?<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176572 - GLaDOS - Thu Aug 18, 2011 10:09 pm</h4>
+    <div class="postbody"><span class="postbody">The problem is that I don't know assembly so I can't really tell what's going on.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176573 - Dwedit - Thu Aug 18, 2011 10:50 pm</h4>
+    <div class="postbody"><span class="postbody">I can't even read compiler output very well, the labels suck, and there's no comments.
+<br/>
+But you don't really need to read ASM, just look for the function, and see which loop seems to be hot.  They correspond roughly to the original C++ source.
+<br/>
+<br/>
+By the way, what exactly does surface merging do?  And can you figure out how to call the function less often?<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176574 - GLaDOS - Thu Aug 18, 2011 11:00 pm</h4>
+    <div class="postbody"><span class="postbody">Well when you have adjacent surfaces, you don't want to create a separate contact for each one because it's slower and less accurate.
+<br/>
+<br/>
+I suppose one way to avoid that is to maintain a list of surfaces in memory, assuming there's enough space for that.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176575 - Dwedit - Thu Aug 18, 2011 11:36 pm</h4>
+    <div class="postbody"><span class="postbody">Also, you can speed up your program by eliminating the explicit Vblank wait if you've already hit vblank.  Then you can frame rates that continuously vary up to 60, instead of just 60 or 30.
+<br/>
+<br/>
+I think sprite uploading still has to be done during Vblank time though, so use IRQs for that.  Use triple buffering for the sprite tables, one is the physical OAM, one "to be copied to OAM", and one "to be written to".  Swap the "one to copy" and "one to write to" after every frame is finished calculating. (this is a pointer swap, not a data copy)<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176576 - GLaDOS - Thu Aug 18, 2011 11:41 pm</h4>
+    <div class="postbody"><span class="postbody">Variable framerates are a nightmare to work with and rather pointless as well since everything is visible at an integral multiple of the refresh rate anyway.
+<br/>
+<br/>
+<br/>
+I guess what I really need is a more efficient way to do collision detection but I'm having trouble coming up with a solution.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176580 - Dwedit - Fri Aug 19, 2011 10:40 pm</h4>
+    <div class="postbody"><span class="postbody">By the way, the same code usually runs 4-8 times as fast when moved into IWRAM, vs executing the code from ROM.  So see what you can move there.
+<br/>
+<br/>
+You can also use Video RAM for fast code execution, but Devkitarm doesn't directly support it.
+<br/>
+<br/>
+If you have any lookup tables with 8 or 16 bit values, stick them in VRAM too.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"><br/><br/>Last edited by Dwedit on Fri Aug 19, 2011 10:47 pm; edited 1 time in total</span></div>    
+</div>
+<div class="post">
+    <h4>#176581 - GLaDOS - Fri Aug 19, 2011 10:41 pm</h4>
+    <div class="postbody"><span class="postbody">How do you tell what's in ROM and what's in IWRAM? Also, how do you tell how much free space in IWRAM you have? It might be especially tricky figuring out the maximum stack size.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176582 - Dwedit - Fri Aug 19, 2011 11:13 pm</h4>
+    <div class="postbody"><span class="postbody">GBATEK has a table showing how slow each type of memory is:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+  Region        Bus   Read      Write     Cycles
+<br/>
+  BIOS ROM      32    8/16/32   -         1/1/1
+<br/>
+  Work RAM 32K  32    8/16/32   8/16/32   1/1/1
+<br/>
+  I/O           32    8/16/32   8/16/32   1/1/1
+<br/>
+  OAM           32    8/16/32   16/32     1/1/1 *
+<br/>
+  Work RAM 256K 16    8/16/32   8/16/32   3/3/6 **
+<br/>
+  Palette RAM   16    8/16/32   16/32     1/1/2 *
+<br/>
+  VRAM          16    8/16/32   16/32     1/1/2 *
+<br/>
+  GamePak ROM   16    8/16/32   -         5/5/8 **/***
+<br/>
+  GamePak Flash 16    8/16/32   16/32     5/5/8 **/***
+<br/>
+  GamePak SRAM  8     8         8         5     **
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+"GamePak ROM" costs 8 cycles to execute an ARM instruction, and 5 cycles to execute a THUMB instruction.  That's why people usually build things in THUMB mode, since it runs code faster from the slowest kind of memory.
+<br/>
+But IWRAM costs 1 cycle to execute an ARM instruction, so that's the best place to put ARM code.
+<br/>
+<br/>
+But we've seen that GCC acts stupidly in THUMB mode, and generates very crappy code if you do any long multiplication.
+<br/>
+<br/>
+You can tell the DevKitARM magic makefiles which mode you want your code generated for by renaming the source file, so "File.thumb.cpp" makes THUMB code, but "File.arm.cpp" makes ARM code.
+<br/>
+<br/>
+All your code is in ROM, unless you put it somewhere else.  Use "IWRAM_CODE" to mark a function as one to move to IWRAM.  There are also filename features for ".iwram.cpp", but they don't actually work, instead it just does the same as ".arm.cpp"
+<br/>
+<br/>
+Global variables go into the BSS section, which is in IWRAM.
+<br/>
+Heap variables (allocated with the New operator or malloc) go into EWRAM.
+<br/>
+The stack is in IWRAM.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176583 - GLaDOS - Fri Aug 19, 2011 11:15 pm</h4>
+    <div class="postbody"><span class="postbody">What happens if you try to put too much code in IWRAM? Is it just a linker error? Or do you get a runtime stack overflow or what?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176584 - Dwedit - Fri Aug 19, 2011 11:21 pm</h4>
+    <div class="postbody"><span class="postbody">If you put too much code in RAM, you get link errors.  If you put barely too much code that it's still within the 32k limit, but don't have enough space for the stack actually used, your global variables and RAM code eventually gets clobbered by the stack, and it crashes.
+<br/>
+<br/>
+To check how much memory your code is using, loiok at the .map file in the build directory.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176585 - GLaDOS - Sat Aug 20, 2011 3:46 am</h4>
+    <div class="postbody"><span class="postbody">I rewrote the searching algorithm and it's much faster now. Before, it did a brute force search against even surface in the level. Now I divide up the level into 128x128 blocks and only search the surfaces in the same block as the shape being tested. The level data now takes up more space due to all the extra data structures involved but its faster at runtime, and I don't think there's any shortage of ROM.
+<br/>
+<br/>
+I'd estimate that the collision search phase is now twice as fast as it was before. And the speedup factor will only increase as I larger and more complicated levels.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176592 - GLaDOS - Sun Aug 21, 2011 6:17 pm</h4>
+    <div class="postbody"><span class="postbody">Another question: It is worth disabling windows when I'm not using them? I'm planning on using windows for the level transitions, but they won't be used during normal gameplay.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176593 - Dwedit - Sun Aug 21, 2011 9:40 pm</h4>
+    <div class="postbody"><span class="postbody">As long as you're displaying stuff correctly, it doesn't matter whether windows are enabled or not.  In fact, windows are the recommended way to disable background layers on a scanline-by-scanline basis.
+<br/>
+<br/>
+Remember that window parameters can be changed each scanline, so your effect doesn't need to be a simple rectangle.  One of the simplest scanline-by-scanline window effects is to make a circle instead of a rectangle.  But you can make it any shape you want, as long is there's only one hole in the middle.  If you need even more possible shapes, you can use the Object Window feature, where sprites become windows.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176612 - GLaDOS - Fri Aug 26, 2011 9:01 pm</h4>
+    <div class="postbody"><span class="postbody">Ug, I made a new level with some more features and now the game is too slow again. It looks like the main culprit is the collision detection phase, which is now taking almost half the frame for no apparent reason.
+<br/>
+<br/>
+<br/>
+Also, I've done the profiling again, but I still have no clue how to make sense of the data.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176676 - Dwedit - Tue Sep 13, 2011 10:07 pm</h4>
+    <div class="postbody"><span class="postbody">By the way, you can do "arm-eabi-objdump -dS file.elf &gt; output.s" to get source code annotations with the disassembly.  I just read about this.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176677 - Miked0801 - Tue Sep 13, 2011 11:36 pm</h4>
+    <div class="postbody"><span class="postbody">How do you handle your collision detection and how many objects are you collding with?</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

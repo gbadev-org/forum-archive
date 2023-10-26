@@ -1,0 +1,522 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>N00b needs help with X and Y buttons - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > N00b needs help with X and Y buttons</h2>
+<div id="posts">
+<div class="post">
+    <h4>#67065 - HyperHacker - Sun Jan 15, 2006 6:26 am</h4>
+    <div class="postbody"><span class="postbody">I've just flashed my DS and started coding for it today. I've managed some simple console output and key input, but I've hit a problem. How do I read the X and Y keys? In the <a class="postlink" href="http://www.bottledlight.com/ds/index.php/Misc/KeyInput" target="_blank">Bottledlight Wiki</a> it says they can only be read by ARM7, but ndslib only has key input functions for ARM9. When I read them (on ARM9), with no buttons pressed the return value from keysHeld() is 0x1C00 (the X, Y, and another bit are always set). O_o</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#67081 - revo - Sun Jan 15, 2006 11:35 am</h4>
+    <div class="postbody"><span class="postbody">take a look here <a href="http://www.double.co.nz/nintendo_ds/" target="_blank">http://www.double.co.nz/nintendo_ds/</a><br/>_________________<br/>[ sorry for all mistakes, but my english isn't as good as I wish it to be ]</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#67143 - HyperHacker - Sun Jan 15, 2006 9:21 pm</h4>
+    <div class="postbody"><span class="postbody">Ah, how ironic, I'd just done #2 and decided to mess with keys before I go on. ^_^;; But does that mean keysDown() and keysHeld() can't detect X/Y?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#67331 - tepples - Tue Jan 17, 2006 1:51 am</h4>
+    <div class="postbody"><span class="postbody">Your ARM9 code has to ask the ARM7 code to poll the X and Y buttons and put their state in shared memory.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#67333 - Joat - Tue Jan 17, 2006 1:56 am</h4>
+    <div class="postbody"><span class="postbody">Which libnds already does if you're using an arm9 only project, or the combined template without totally rewriting the arm7 program.
+<br/>
+<br/>
+Every v-blank, it reads the X/Y/PENIRQ/etc... bits and sticks them into the IPC struct.
+<br/>
+<br/>
+On the ARM9, the keysHeld / keysDown functions use both the KEYS register and the data in the IPC structure to determine pressed buttons, so no special code is needed, you just use the KEY_X / KEY_Y just like you'd use KEY_A / KEY_B / etc...<br/>_________________<br/>Joat
+<br/>
+<a href="http://www.bottledlight.com" target="_blank">http://www.bottledlight.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#67457 - HyperHacker - Wed Jan 18, 2006 7:00 am</h4>
+    <div class="postbody"><span class="postbody">Eh, not a big fan of using someone else's code, and I need that ARM7. I got it pretty much working manually (just haven't implemented held vs pressed yet).
+<br/>
+<br/>
+And someone renamed my thread... I gave it a generic name because I planned to ask all my questions in here as they came up. :-/
+<br/>
+<br/>
+So, more questions.
+<br/>
+1) How do I calculate temperature? (touchReadTemperature() returns ~75000. O_o) All I found was this:
+<br/>
+<span style="font-style: italic">8490 * (V_I91 - V_I1) - 273*4096;</span>
+<br/>
+Unfortunately there doesn't seem to be any explanation of what V_I91 and V_I1 are. :-( And just how accurate is the sensor? It seems to read fairly high sometimes. I took it out this morning (gotta have MP3s when I walk) in -15?C weather, keeping it in my inside coat pocket (can't have it freezing to death) and when I arrived, I looked at the temperature in Moonshell and it said 3?C. I would hope it's warmer in my inside pocket than outside, but that much? (And was taking it out in that cold a dumb idea?)
+<br/>
+<span style="font-weight: bold">edit:</span> touchReadTemperature() returns a 20.12-bit value, which means the first 20 bits go before the decimal, and the last 12 go after. 61902 (latest reading) = 00000000 00000000 11110001 11001110. The first 20 bits, alone, equal 15, and the last 12 equal 462, so the current temperature is 15.462?C - exactly what Moonshell says. (Well, Moonshell rounds up to 15.3.) :-) (Yes, it's cold in here. My window's cracked. :-()
+<br/>
+The code is simple:
+<br/>
+int t1 = (IPC-&gt;temperature &amp; 0xFFFFF000) &gt;&gt; 12; //Before decimal
+<br/>
+int t2 = (IPC-&gt;temperature &amp; 0x00000FFF); //after
+<br/>
+Still wondering about accuracy though.
+<br/>
+<br/>
+2) How can I start whatever game is in the DS slot?
+<br/>
+<br/>
+3) Is there some faster way to fill/copy memory than just using an incrementing pointer in a loop? This is the best I've come up with, in this case for filling rectangles on a frame buffer:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void FillRect(uint16* Dest, uint16 DX, uint16 DY, uint16 W, uint16 H, uint16 Colour)
+<br/>
+{
+<br/>
+   int x,y;
+<br/>
+   Dest += DX + (DY &lt;&lt; 8);
+<br/>
+   for(y=0;y&lt;H;y++)
+<br/>
+   {
+<br/>
+      for(x=0;x&lt;W;x++)
+<br/>
+         (*(Dest + x)) = Colour;
+<br/>
+      Dest += SCREEN_WIDTH;
+<br/>
+   }
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+However it doesn't seem to be fast enough, and I keep running out of vblank time with only a few graphics. I suppose I should be using double-buffering, but it bothers me that this is slow enough to need it.
+<br/>
+<br/>
+4) In ipc.h in libnds, there's a structure mapped to 0x027FF000 meant for inter-processor communication, with things like button status, touch position, current time etc. Do I have to use this structure or could I put whatever I wanted there? How much room do I have? (The area's not on any memory map...)
+<br/>
+<span style="font-weight: bold">edit:</span> Pretty much answered this in another thread. Will ndslib code care if I modify the IPC struct though? (Using #if, of course, so that it still uses the original for other peoples' code.)
+<br/>
+<span style="font-weight: bold">edit 2:</span> Doesn't seem to, but I haven't used a lot of it...
+<br/>
+<br/>
+5) What time units are the SWI delay loops in?
+<br/>
+<br/>
+6) Why do all the tutorials do this in the interrupt handler?
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">if(REG_IF &amp; IRQ_VBLANK)
+<br/>
+{
+<br/>
+[...]
+<br/>
+REG_IF |= IRQ_VBLANK;
+<br/>
+}
+<br/>
+else
+<br/>
+REG_IF = REG_IF;</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+7) How can I improve download performance? I load my programs via DS Download Play and it keeps giving me problems. Yesterday it would sometimes take the DS a really long time (up to 3 minutes) to notice the signal, and today I keep getting download errors. Multiplayer Mario Kart worked fine just yesterday though, against two people, one with the game and one without (and the one without downloaded it from me without any problems). I have an Edimax EW-7128G, and the antenna is right on top of the computer, only about 2 feet from the DS in direct line of sight.
+<br/>
+<br/>
+8) How do I enter GBA mode? swiSetHaltCR(0x40) won't do it on either CPU.
+<br/>
+<br/>
+Thanks for the help btw. :-)
+<br/>
+<br/>
+<span style="font-weight: bold">edit:</span> Solved #1 myself. Detailed answers for anyone else who needs to know. Also added #8.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#67778 - HyperHacker - Fri Jan 20, 2006 8:38 am</h4>
+    <div class="postbody"><span class="postbody">OK, sorry to bring this back up, but backgrounds are giving me grief and I've already stayed up way too late. What I need to do is just display a 16-bit-colour, 256x192 bitmap on each screen. I don't need any of that scaling or rotation or sprites or whatnot. (It would be nice if I could have at least one more bitmap that I could scroll overtop of the others, but I can live without it.) The trick is, they need to be double-buffered. Right now I've got 2 bitmaps displaying on the screens (256x256, just not using the off-screen part), and I do have a simple double-buffering system in place, but it's actually just copying from main RAM each frame. It does work, but it means having to use up 256KB of my main RAM for these buffers, and I imagine there must be some way to keep them in VRAM instead as I'm only using 2 banks (A and C).
+<br/>
+<br/>
+My first thought was to have banks A and B devoted to one screen, and C and D devoted to the other, and swap them. That is, on one frame, banks A and C are displayed while I draw in banks B and D. Then in vblank, I swap them so B and D are displayed while I draw in A and C. Problem? Well for one, I can't figure out how exactly to do this, and for two, despite what a few technical documents say, NDSlib indicates that only bank C (and a few banks which are &lt;128KB and thus no good for the job) can be used for the sub screen.
+<br/>
+<br/>
+My next idea, and probably the best one, was to just use 512x256 bitmaps to achieve the same effect. I can alternate between showing the top half and the bottom half of the bitmap each frame, while drawing on the other half. But this isn't working, because I can't get it to only display the top half. Depending what I set the scaling registers to (using mode 5), I can either have it scaled to 50% height, or normal size but for some reason distorted. (It looks as if the images were being stretched to 200%, when they shouldn't be stretched at all.)
+<br/>
+<br/>
+The third method I've thought of is to swap BG layers. Since I'm only using one at a time, I could switch between them. Right now I draw everything on BG3. I am able to switch to BG1, but I can't figure out how to draw on it. I just draw to BG_GFX, which seems to always draw on both BG2 and BG3.
+<br/>
+<br/>
+Here's the messy code I've hacked up so far which tries to do method 3. Pressing B switches to BG1 (which is blank), A switches to BG3. (ARM7 just loops, fetching button and touch status. Also note that I'm using a slightly modified version of the IPC struct from ipc.h.) The bottom screen is 'double-buffered'; the image is drawn on a buffer in main RAM and copied to VRAM.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">//DS Test App 3 ARM9 Code
+<br/>
+#include "main.h"
+<br/>
+<br/>
+/*
+<br/>
+Entry Point
+<br/>
+CPU: ARM9
+<br/>
+Inputs:
+<br/>
+   -argc: Number of arguments
+<br/>
+   -argv: Pointer to arguments
+<br/>
+Returns: Program return code
+<br/>
+*/
+<br/>
+int main(int argc, char** argv)
+<br/>
+{
+<br/>
+   powerON(POWER_ALL_2D); //Turn stuff on (required for some flash cards)
+<br/>
+   videoSetMode(MODE_5_2D | DISPLAY_BG3_ACTIVE);
+<br/>
+   videoSetModeSub(MODE_5_2D | DISPLAY_BG3_ACTIVE);
+<br/>
+   vramSetMainBanks(VRAM_A_MAIN_BG_0x6000000, VRAM_B_LCD, VRAM_C_SUB_BG_0x6200000, VRAM_D_LCD);
+<br/>
+<br/>
+   BG1_CR = BG_BMP16_256x256;
+<br/>
+   BG1_X0 = 0;
+<br/>
+   BG1_Y0 = 0;
+<br/>
+<br/>
+   BG3_CR = BG_BMP16_256x256;
+<br/>
+   BG3_XDX = 1 &lt;&lt; 8;
+<br/>
+   BG3_XDY = 0;
+<br/>
+   BG3_YDX = 0;
+<br/>
+   BG3_YDY = 1 &lt;&lt; 8;
+<br/>
+   BG3_CX = 0;
+<br/>
+   BG3_CY = 0;
+<br/>
+<br/>
+   SUB_BG3_CR = BG_BMP16_256x256;
+<br/>
+   SUB_BG3_XDX = 1 &lt;&lt; 8;
+<br/>
+   SUB_BG3_XDY = 0;
+<br/>
+   SUB_BG3_YDX = 0;
+<br/>
+   SUB_BG3_YDY = 1 &lt;&lt; 8;
+<br/>
+   SUB_BG3_CX = 0;
+<br/>
+   SUB_BG3_CY = 0;
+<br/>
+<br/>
+   //Init interrupts
+<br/>
+   REG_IME = 0; //Disable interrupts while changing them
+<br/>
+   IRQ_HANDLER = Interrupt; //Set handler callback
+<br/>
+   REG_IE = IRQ_VBLANK; //Interrupt on vblank only
+<br/>
+   REG_IF = ~0;
+<br/>
+   DISP_SR = DISP_VBLANK_IRQ;
+<br/>
+   REG_IME = 1; //Enable interrupts
+<br/>
+<br/>
+   while(true)
+<br/>
+   {
+<br/>
+      int i, x, tk1=KeysPressed, tk2=KeysHeld;
+<br/>
+      char Text[1024], PKeyBits[21], HKeyBits[21], AuxBits[21];
+<br/>
+      int A = IPC-&gt;aux;
+<br/>
+      static int FC = 0, FPS = 0, FS = IPC-&gt;rtc_seconds;
+<br/>
+<br/>
+      //Temperature is a 20.12-bit value, which means the first 20 bits are before the decimal,
+<br/>
+      //and the last 12 are after. (Value is in Celcius, because Metric rocks.)
+<br/>
+      int IPC_temp = IPC-&gt;temperature; //Just in case
+<br/>
+      int temp1 = (IPC_temp &amp; 0xFFFFF000) &gt;&gt; 12; //Before decimal
+<br/>
+      int temp2 = (IPC_temp &amp; 0x00000FFF); //after
+<br/>
+      temp2 = (int)((double)temp2 / 409.6); //4096ths -&gt; 10ths
+<br/>
+<br/>
+      x = 0;
+<br/>
+      uint16 bit = 0x8000;
+<br/>
+      for(i=1;i&lt;=16;i++)
+<br/>
+      {
+<br/>
+         PKeyBits[x] = (tk1 &amp; bit) ? '1' : '0';
+<br/>
+         HKeyBits[x] = (tk2 &amp; bit) ? '1' : '0';
+<br/>
+         AuxBits[x] = (A &amp; bit) ? '1' : '0';
+<br/>
+         if(!(i % 4))
+<br/>
+         {
+<br/>
+            x++;
+<br/>
+            PKeyBits[x] = ' ';
+<br/>
+            HKeyBits[x] = ' ';
+<br/>
+            AuxBits[x] = ' ';
+<br/>
+         }
+<br/>
+         x++;
+<br/>
+         bit &gt;&gt;= 1;
+<br/>
+      }
+<br/>
+      x--;
+<br/>
+      PKeyBits[x] = 0;
+<br/>
+      HKeyBits[x] = 0;
+<br/>
+      AuxBits[x] = 0;
+<br/>
+      FillRect((uint16*)DispBuf,0,0,SCREEN_WIDTH,26,RGB15(0,0,8) | 0x8000);
+<br/>
+<br/>
+      sprintf(Text,"Touch:\t%3d %3d\tFPS: %d\nKeys:\t%s\nTime:\t%02d/%02d/%02d %02d:%02d:%02d i=%d c=%d\nTemp:\t%d.%d C\tAux: %d (0x%X)", IPC-&gt;touchXpx, IPC-&gt;touchYpx, FPS, HKeyBits, IPC-&gt;rtc_day, IPC-&gt;rtc_month, IPC-&gt;rtc_year, IPC-&gt;rtc_hours, IPC-&gt;rtc_minutes, IPC-&gt;rtc_seconds, IPC-&gt;rtc_incr, IPC-&gt;rtc_command, temp1, temp2, IPC-&gt;aux, IPC-&gt;aux);      
+<br/>
+      printxy((uint16*)DispBuf,Text,0,0);
+<br/>
+<br/>
+      //Draw a pixel wherever the touch screen is touched.
+<br/>
+      /* Note: Removing the KeysPressed check might improve accuracy, but will only
+<br/>
+      register touches that last for more than one frame, making it bad for things
+<br/>
+      like buttons and keyboards but good for drawing. */
+<br/>
+      if((KeysHeld &amp; KEY_TOUCH) || (KeysPressed &amp; KEY_TOUCH))
+<br/>
+         DispBuf[IPC-&gt;touchYpx][IPC-&gt;touchXpx] = RGB15(0,0,31) | 0x8000;
+<br/>
+         //DrawPixel((uint16*)DispBuf,IPC-&gt;touchXpx,IPC-&gt;touchYpx,RGB15(0,0,31));
+<br/>
+<br/>
+      //Measure frame count
+<br/>
+      FC++;
+<br/>
+      if(IPC-&gt;rtc_seconds != FS)
+<br/>
+      {
+<br/>
+         FS = IPC-&gt;rtc_seconds;
+<br/>
+         FPS = FC;
+<br/>
+         FC = 0;
+<br/>
+      }
+<br/>
+<br/>
+      swiFastCopy((uint16*)DispBuf,BG_GFX,SCREEN_WIDTH*SCREEN_HEIGHT);
+<br/>
+      printxy(BG_GFX_SUB,"woot",0,0);
+<br/>
+      //printxy(VRAM_B,"VRAM B",0,0);
+<br/>
+      //swiWaitForVBlank();
+<br/>
+   }
+<br/>
+   return 0;
+<br/>
+}
+<br/>
+<br/>
+<br/>
+/*
+<br/>
+Interrupt handler
+<br/>
+CPU: ARM9
+<br/>
+*/
+<br/>
+void Interrupt()
+<br/>
+{
+<br/>
+   if(REG_IF &amp; IRQ_VBLANK) //VBlank interrupt
+<br/>
+   {
+<br/>
+      KeysPressed = IPC-&gt;buttons_pressed; //Best to keep a local copy, since the ARM7 may modify it
+<br/>
+      KeysHeld = IPC-&gt;buttons_held;
+<br/>
+      if(KeysPressed &amp; KEY_SELECT)
+<br/>
+         lcdSwap();
+<br/>
+      if(KeysPressed &amp; KEY_START)
+<br/>
+      {
+<br/>
+         if(FontColour == RGB15(31,0,0))
+<br/>
+            FontColour = RGB15(0,31,0);
+<br/>
+         else if(FontColour == RGB15(0,31,0))
+<br/>
+            FontColour = RGB15(0,0,31);
+<br/>
+         else if(FontColour == RGB15(0,0,31))
+<br/>
+            FontColour = RGB15(31,0,0);
+<br/>
+      }
+<br/>
+      if(KeysPressed &amp; KEY_A)
+<br/>
+         videoSetMode(MODE_5_2D | DISPLAY_BG3_ACTIVE);
+<br/>
+      else if(KeysPressed &amp; KEY_B)
+<br/>
+         videoSetMode(MODE_5_2D | DISPLAY_BG1_ACTIVE);
+<br/>
+      VBLANK_INTR_WAIT_FLAGS |= IRQ_VBLANK; //Signal that vblank interrupt has been processed
+<br/>
+      REG_IF |= IRQ_VBLANK; //Dunno what this is for...
+<br/>
+   }
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+I run this on a real DS via WMB. It shows various info on the bottom screen, and draws a blue pixel wherever you touch. The top screen just says 'woot' on it.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#67782 - doublec - Fri Jan 20, 2006 9:47 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">3) Is there some faster way to fill/copy memory than just using an incrementing pointer in a loop? </td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Yes, use dmaCopy. See the ndslib docs and some of the examples. Think of it as a high speed hardware assisted memcpy.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">4) In ipc.h in libnds, there's a structure mapped to 0x027FF000 meant for inter-processor communication, with things like button status, touch position, current time etc. Do I have to use this structure or could I put whatever I wanted there? </td> </tr></table><span class="postbody">
+<br/>
+<br/>
+You don't have to use it if you rewrite your own ARM7 code. You can then use any IPC mechanism you choose. Be aware that this make prevent your code running on some emulators (It doesn't affect current DSEmu versions but older versions it would have).
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">6) Why do all the tutorials do this in the interrupt handler?</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Take a look at my interrupts tutorial. It explains why:
+<br/>
+<br/>
+<a href="http://www.double.co.nz/nintendo_ds/nds_develop8.html" target="_blank">http://www.double.co.nz/nintendo_ds/nds_develop8.html</a>
+<br/>
+<br/>
+It is out of date with respect to how libnds works but it does explain how the low level interrupt mechanism works. Since you don't want to use libnds this will probably be what you want.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#67880 - HyperHacker - Sat Jan 21, 2006 1:27 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>doublec wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">3) Is there some faster way to fill/copy memory than just using an incrementing pointer in a loop? </td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Yes, use dmaCopy. See the ndslib docs and some of the examples. Think of it as a high speed hardware assisted memcpy.</span></td> </tr></table><span class="postbody">That's what I thought. No way to fill memory using DMA though?
+<br/>
+<br/>
+Holy sh... replacing that swiFastCopy() call with a dmaCopy() call tripled the FPS! I knew DMA would be faster than a software copy, but dang...
+<br/>
+<br/>
+[edit] Alright, I managed to get a double-buffering system working using the code above, but I dunno how good it is. I make BG3 a 256x256 bitmap, and actually draw beyond that as if it were 384x256. This doesn't seem to cause any problems, presumably because bank B is empty, but I'm worried some might come up later... I haven't implemented it for the other screen yet. To swap buffers I just toggle the BG3 y-scroll between 0 and 192, and change the buffer pointer to the part that's off the screen. (This is done in vblank, using a flag to tell whether to swap.)
+<br/>
+<br/>
+[edit 2] Just added it for the second screen, doesn't work so well. If I draw at the top of the screen, it works fine, but if I try to draw at say 0,180, on the first buffer (0-191 in the bitmap) it's in the right place but on the second it's about halfway down the screen. :( Seems like the sub background won't scroll that far down. Bank D is empty, though...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#67918 - tepples - Sat Jan 21, 2006 8:18 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>HyperHacker wrote:</b></span></td> </tr> <tr> <td class="quote">And someone renamed my thread... I gave it a generic name because I planned to ask all my questions in here as they came up. :-/</td> </tr></table><span class="postbody">
+<br/>
+I renamed and split your thread because it is better to have a thread for each problem than a generic thread for all your problems.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#67927 - HyperHacker - Sat Jan 21, 2006 8:46 am</h4>
+    <div class="postbody"><span class="postbody">I knew something odd happened there, I didn't recall posting that other thread separately. :-p
+<br/>
+<br/>
+And most boards I go to prefer people not to make a lot of threads for all their questions.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#67928 - tepples - Sat Jan 21, 2006 9:01 am</h4>
+    <div class="postbody"><span class="postbody">There's a reason why the phpBB software calls a thread a "topic": limiting a thread to one topic keeps the discussion focused, which is supposed to lead to getting your question answered instead of drifting onto some other track like this.
+<br/>
+<br/>
+As for other forums, I have worked with Bugzilla, which strongly discourages filing one bug report that covers multiple perceived defects.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#67934 - HyperHacker - Sat Jan 21, 2006 10:16 am</h4>
+    <div class="postbody"><span class="postbody">Well Bugzilla isn't intended for discussion so much as reporting problems, so it makes sense there.
+<br/>
+<br/>
+Getting back on topic (no pun intended), I've discovered that a similar problem appears with this method on the main screen:
+<br/>
+<br/>
+<a href="http://hypernova.amarok-shadow.com/MyStuff/dstext.jpg">[Images not permitted - Click here to view it]</a>
+<br/>
+<br/>
+At first it's OK, but halfway down it dims. That dim part is actually flickering, indicating that it only appears on one buffer. o_O If I could just figure out how to draw on BG1/2 in modes 3 or 5, or display a 512x256 bitmap without it being scaled down or distorted, I bet these problems would clear up... &gt;_&lt; I'm using a buffer in main RAM for the sub screen right now.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

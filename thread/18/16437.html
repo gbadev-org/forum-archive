@@ -1,0 +1,166 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Artifacting issue -- Am I doing something wrong? [SOLVED] - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Artifacting issue -- Am I doing something wrong? [SOLVED]</h2>
+<div id="posts">
+<div class="post">
+    <h4>#166605 - albinofrenchy - Wed Feb 11, 2009 3:12 pm</h4>
+    <div class="postbody"><span class="postbody">I'm encountering weird artifacts when I redraw the screen. In general it is only there for a split second, but I actually need to READ from the memory buffer of the screen, so the corruption is something I have to fix.
+<br/>
+<br/>
+Here is my initialization of the video stuff:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+    powerOn(POWER_ALL);
+<br/>
+    videoSetMode(MODE_5_2D);
+<br/>
+    vramSetBankA(VRAM_A_MAIN_BG);
+<br/>
+    u16* sub_buffer;
+<br/>
+   if(drawSub){
+<br/>
+      videoSetModeSub(MODE_5_2D);
+<br/>
+      vramSetBankC(VRAM_C_SUB_BG);
+<br/>
+      bg_sub = bgInitSub(2, BgType_Bmp16, BgSize_B16_256x256,0,0);
+<br/>
+      sub_buffer = (u16*)bgGetGfxPtr(bg_sub);
+<br/>
+   }
+<br/>
+<br/>
+    bg = bgInit(2, BgType_Bmp16, BgSize_B16_256x256,0,0);
+<br/>
+   u16* buffer = (u16*)bgGetGfxPtr(bg);
+<br/>
+   
+<br/>
+        for(int iy = 0; iy &lt; 192; iy++)
+<br/>
+         for(int ix = 0; ix &lt; 256; ix++)
+<br/>
+         {
+<br/>
+            buffer[ix + iy * 256] = ARGB16(1,31,0,0);
+<br/>
+            if(drawSub){
+<br/>
+               sub_buffer[ix + iy * 256] = 0xF000;
+<br/>
+            }
+<br/>
+         }
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+The variable 'drawSub' is 'true'. 
+<br/>
+<br/>
+Later on, I find the relevant buffers and read parts in via 
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+   u16* src = (u16*)bgGetGfxPtr(bg);
+<br/>
+   u16* src2 = (u16*)bgGetGfxPtr(bg_sub);
+<br/>
+<br/>
+   for(int i = R.x0;i &lt; R.x1;i++){
+<br/>
+      for(int j = R.y0;j&lt; R.y1;j++){
+<br/>
+            if(drawSub){
+<br/>
+               bool useSrc2 = j - drag.y &gt;= SCREEN_HEIGHT;
+<br/>
+               int dj = useSrc2 ? j - SCREEN_HEIGHT - drag.y: j - drag.y;
+<br/>
+               dst[i + j * SCREEN_WIDTH] = 
+<br/>
+               (useSrc2 ? src2 : src)
+<br/>
+               [i - drag.x + dj * SCREEN_WIDTH];
+<br/>
+            } else {
+<br/>
+               dst[i+j*SCREEN_WIDTH] = ARGB16(1,31,0,0);
+<br/>
+            }
+<br/>
+      }
+<br/>
+   }
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Where R is a 'box' where I want to reuse the screen to copy to a buffer. dst is an appropriately sized buffer. After a bit more rendering to dst, I throw all of dst onto the buffer with:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+int y, x;
+<br/>
+   for(x = 0; x &lt; SCREEN_WIDTH;x++){
+<br/>
+      for(y = 0; y &lt; SCREEN_HEIGHT * 2;y++){
+<br/>
+         bool topScreen = y &lt; SCREEN_HEIGHT;
+<br/>
+         uint16* screen = topScreen ? main : sub;
+<br/>
+         int dy = topScreen ? y : (y-SCREEN_HEIGHT);
+<br/>
+         if(topScreen || drawSub){
+<br/>
+            screen[x + dy * SCREEN_WIDTH ] = image[x + y * SCREEN_WIDTH];
+<br/>
+         }
+<br/>
+      }
+<br/>
+   }
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Where image = dst; and 'main'/'sub' are found the same way I found 'src' and 'src2' up above.
+<br/>
+<br/>
+Is this all correct? It looks like something is writing a datastructure to my VRAM, but surely this is disallowed in general right? 
+<br/>
+<br/>
+If you want to see this bug in action, <a class="postlink" href="http://ands-pdf.blogspot.com/" target="_blank">grab the release build</a> and open a pdf then scroll around. Source code is available on that same page if you want to look at it in more detail. 
+<br/>
+<br/>
+As always, Any help on this is appreciated!</span><span class="gensmall"><br/><br/>Last edited by albinofrenchy on Sat Feb 14, 2009 2:32 pm; edited 1 time in total</span></div>    
+</div>
+<div class="post">
+    <h4>#166687 - albinofrenchy - Sat Feb 14, 2009 2:32 pm</h4>
+    <div class="postbody"><span class="postbody">I found the problem: I had previously been using the same VRAM in console mode; and had neglected to do anything about printf statements executing. So the area you see as 'glitched' is a result of the console code writing to the VRAM that I am now using for something else.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

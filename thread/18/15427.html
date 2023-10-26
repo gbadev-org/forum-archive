@@ -1,0 +1,159 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Subscreen with BG3/BG1 problem - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Subscreen with BG3/BG1 problem</h2>
+<div id="posts">
+<div class="post">
+    <h4>#154808 - a128 - Mon Apr 21, 2008 9:20 pm</h4>
+    <div class="postbody"><span class="postbody">This works on Emu BUT not on hardware..the console layer is distorted.
+<br/>
+<br/>
+I tried various char_base/screen_base values no one worked
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code"> 
+<br/>
+vramSetBankC(VRAM_C_SUB_BG); // 128Kbyte
+<br/>
+vramSetBankH(VRAM_H_SUB_BG);
+<br/>
+<br/>
+<br/>
+ vramSetBankD(VRAM_D_SUB_SPRITE);
+<br/>
+ vramSetBankI(VRAM_I_SUB_SPRITE);
+<br/>
+<br/>
+ videoSetModeSub(MODE_5_2D |
+<br/>
+                                        DISPLAY_SPR_ACTIVE |   
+<br/>
+                                        DISPLAY_SPR_1D_BMP  |   
+<br/>
+                                        DISPLAY_BG3_ACTIVE |      DISPLAY_BG1_ACTIVE
+<br/>
+               );
+<br/>
+<br/>
+ int  char_base = 0;
+<br/>
+ int screen_base = 15;
+<br/>
+ // text
+<br/>
+ SUB_BG1_CR = BG_256_COLOR | BG_TILE_BASE(char_base) | BG_MAP_BASE(screen_base)  |BG_PRIORITY(0);
+<br/>
+<br/>
+    u16* sub_tile = u16*)CHAR_BASE_BLOCK_SUB(char_base);
+<br/>
+     u16* sub_map = (u16*)SCREEN_BASE_BLOCK_SUB(screen_base);
+<br/>
+<br/>
+<br/>
+  consoleInitDefault( sub_map,   sub_tile, 8);
+<br/>
+<br/>
+BG_PALETTE_SUB[255] = RGB15(31, 31, 31);
+<br/>
+<br/>
+BG_PALETTE_SUB[0] =0; 
+<br/>
+<br/>
+                        video_buffer =  (u16*)BG_BMP_RAM_SUB(2);
+<br/>
+<br/>
+                        // create background image
+<br/>
+                        SUB_BG3_CR = BG_BMP16_256x256 | BG_BMP_BASE(2)  |  BG_PRIORITY(1);
+<br/>
+<br/>
+                        SUB_BG3_XDX = 1 &lt;&lt; 8;
+<br/>
+                        SUB_BG3_XDY = 0;
+<br/>
+                        SUB_BG3_YDX = 0;
+<br/>
+                        SUB_BG3_YDY = 1 &lt;&lt; 8;
+<br/>
+                        SUB_BG3_CX = 0;
+<br/>
+                        SUB_BG3_CY = 0;
+<br/>
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I use video_bufer for CPU access..which works.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#154813 - Cydrak - Mon Apr 21, 2008 9:56 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+vramSetBankC(VRAM_C_SUB_BG);         // 128K @ 0x6200000
+<br/>
+vramSetBankH(VRAM_H_SUB_BG);         //  32K @ 0x6200000
+<br/>
+vramSetBankD(VRAM_D_SUB_SPRITE);     // 128K @ 0x6600000
+<br/>
+vramSetBankI(VRAM_I_SUB_SPRITE);     //  16K @ 0x6600000
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+This is a problem (and yup, not well emulated, if at all). Probably what you see is C/H and D/I sitting right on top of each other. Worse yet, H/I "repeat" to fill the whole 128K, clobbering their larger siblings.
+<br/>
+<br/>
+Unfortunately, the sub mappings use hardwired locations; if you put C or D on the subscreen you can't then use H or I for the same thing. H/I can be mapped as ext-palettes, though... or just used as fast RAM.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#154816 - Lazy1 - Mon Apr 21, 2008 10:11 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+consoleInitDefault( sub_map,   sub_tile, 8);
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Should have 16 as the last parameter.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#154818 - Cydrak - Mon Apr 21, 2008 10:30 pm</h4>
+    <div class="postbody"><span class="postbody">Good point, didn't see that actually. But then one also needs BG_16_COLOR, not 256.
+<br/>
+<br/>
+Side note: If you check the source, consoleInit() looks specifically for 16; other values give 256 color tiles (confusingly enough, for an arg called <span style="font-style: italic">bitDepth</span>). So that line ought to match the BG setup after all..</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#154881 - a128 - Tue Apr 22, 2008 8:38 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Cydrak wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+vramSetBankC(VRAM_C_SUB_BG);         // 128K @ 0x6200000
+<br/>
+vramSetBankH(VRAM_H_SUB_BG);         //  32K @ 0x6200000
+<br/>
+vramSetBankD(VRAM_D_SUB_SPRITE);     // 128K @ 0x6600000
+<br/>
+vramSetBankI(VRAM_I_SUB_SPRITE);     //  16K @ 0x6600000
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Thanks I really ignored the memory locations.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

@@ -1,0 +1,186 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>plotting a pixel n mode 4 - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > plotting a pixel n mode 4</h2>
+<div id="posts">
+<div class="post">
+    <h4>#10250 - Omega81 - Sun Aug 31, 2003 5:30 pm</h4>
+    <div class="postbody"><span class="postbody">This may sound stupid but how how do you do it? I mean I know the procedure,  but I guess what I want to know is how the palatte register comes into it. When I want to plot the pixel do I send an entry from the palatte register or just a number from 0-256?
+<br/>
+thanks<br/>_________________<br/>Keep it real, keep it Free, Keep it GNU</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10251 - Cyberman - Sun Aug 31, 2003 6:31 pm</h4>
+    <div class="postbody"><span class="postbody">I believe this is a FAQ and is probably answered all over the place but.. what the heck.
+<br/>
+I suggest reading the documentation on the GBA.  Try <a class="postlink" href="http://www.work.de/nocash/gbatek.htm" target="_blank">this for html</a> or <a class="postlink" href="http://www.work.de/nocash/gbatek.txt" target="_blank">this for the text</a> version.  I do mean read it to not just peruse it, it won't tell you how to plot pixels (hehehe) at all though. It will tell you the structure of the GBA and answer wither 8 or 16 to plot pixels in mode 4 however.
+<br/>
+<br/>
+To answer your question though 8bit pixels that means each element is a byte sized entity in VRAM.  How big is a byte? A byte represents a number from 0 to 255.  That kind of answers your question about the palette versus the VRAM writting doesn't it?
+<br/>
+<br/>
+What you should really think about is can you write a byte to VRAM (in fact you can't). VRAM is maped as word (16 bit)  entitys. So to plot a single pixel that is 8 bits into VRAM you need to do something like
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+void pixel_plot_4(unsigned short X, unsigned short Y, unsigned char Color)
+<br/>
+{
+<br/>
+  unsigned short Temp;
+<br/>
+  unsigned short *Addr;
+<br/>
+<br/>
+  // prevent out of bounds ploting
+<br/>
+  if (X &gt;= 240)  return;
+<br/>
+  if (Y &gt;= 160)  return;
+<br/>
+  // set Addr to VRAM
+<br/>
+  Addr = (unsigned short *) 0x6000000; // page 0 mode 4
+<br/>
+  // add the number of lines to the address
+<br/>
+  Addr += Y * 120; 
+<br/>
+  // count the number of words horizontally
+<br/>
+  Addr += (X &gt;&gt; 1);
+<br/>
+  // read the VRAM location
+<br/>
+  Temp = *Addr;
+<br/>
+  // modify the hi or low byte
+<br/>
+  if (X &amp; 1)
+<br/>
+  {
+<br/>
+    Temp &amp;= 0x00FF;
+<br/>
+    Temp |=  Color &lt;&lt; 8;
+<br/>
+  }
+<br/>
+  else
+<br/>
+  {
+<br/>
+    Temp &amp;= 0xFF00;
+<br/>
+    Temp |= Color;
+<br/>
+  }
+<br/>
+  // write back the VRAM location
+<br/>
+  *Addr = Temp;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+for line drawing etc this can be really fast (because it's mostly manipulating pointers and playing with a temporary buffer you only write it out when.. you change the Y value or your X value is outside the range of the temp buffer (2 pixels).
+<br/>
+<br/>
+Cyb</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10253 - Omega81 - Sun Aug 31, 2003 6:56 pm</h4>
+    <div class="postbody"><span class="postbody">thank Cyberman. I was wondering why you are multipling Y by 120 surely you mean Y*240 right?
+<br/>
+<br/>
+I understand the general architecture of the GBA just wasn't sure how to deal with writing 8bit to a 16bit screen, currently, I was writeing a pixel colour to the x,y location by...
+<br/>
+<br/>
+Plotpixel(x,y,((color&lt;&lt;8)|color));
+<br/>
+<br/>
+basically converting the bit color to a 16bit color if two halves both the same value. your method is different though. I will try that and see what happens.
+<br/>
+<br/>
+thanks again.<br/>_________________<br/>Keep it real, keep it Free, Keep it GNU</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10266 - Archeious - Mon Sep 01, 2003 3:08 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Omega81 wrote:</b></span></td> </tr> <tr> <td class="quote">thank Cyberman. I was wondering why you are multipling Y by 120 surely you mean Y*240 right?
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+You multiply by 120 because the screen in 120 unsigned shorts (16 bit) wide.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Omega81 wrote:</b></span></td> </tr> <tr> <td class="quote">I understand the general architecture of the GBA just wasn't sure how to deal with writing 8bit to a 16bit screen, currently, I was writeing a pixel colour to the x,y location by...
+<br/>
+<br/>
+Plotpixel(x,y,((color&lt;&lt;8)|color));
+<br/>
+<br/>
+basically converting the bit color to a 16bit color if two halves both the same value. your method is different though. I will try that and see what happens.
+<br/>
+<br/>
+thanks again.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+By do this you are making a 120x160 screen.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10289 - Cyberman - Mon Sep 01, 2003 7:17 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Omega81 wrote:</b></span></td> </tr> <tr> <td class="quote">thank Cyberman. I was wondering why you are multipling Y by 120 surely you mean Y*240 right?
+<br/>
+<br/>
+I understand the general architecture of the GBA just wasn't sure how to deal with writing 8bit to a 16bit screen, currently, I was writeing a pixel colour to the x,y location by...
+<br/>
+<br/>
+Plotpixel(x,y,((color&lt;&lt;8)|color));
+<br/>
+<br/>
+basically converting the bit color to a 16bit color if two halves both the same value. your method is different though. I will try that and see what happens.
+<br/>
+<br/>
+thanks again.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Well as I suggested you need to read the technical documentation CAREFULLY.  You are making a lot of mistakes you wouldn't be if you did. Or maybe you are posting in the wrong forum (the newbie forum might be more appropriate in other words).
+<br/>
+<br/>
+First let me explain to you something called display pitch.  Pitch is NOT width (don't confuse those because they are completely different). Display pitch is the number of words per horizontal line.
+<br/>
+<br/>
+Mode 3 has a display pitch of 240 mode 4 has one of 120.  See a pattern? :)
+<br/>
+<br/>
+Hence why one multiplies by 120 instead of 240. Think of Mode 4 as  120 x 320 word screen instead of 240x160 8 bit pixels.  Think in words not pixels and you will understand what is going on a lot betters.  Mode 3 is 240 x 160 words same number of pixels different shape.
+<br/>
+<br/>
+Your plot pixel routine I am assuming is designed for mode 3 right?  You are combining the same color (1 of 256 possible ones in the palette) and storing it on the display. So basically you are ploting two pixels in mode 4 at a time?  All your X and Y coordinates are going to be wrong if you do this using plot code made for mode 3.  The method I gave as an example will draw an individual pixel at a given location within the 240x160 screen coordinates.
+<br/>
+<br/>
+Here is why it won't work X = 239 in Mode 3 is address 0x60001DE X = 239 is the lower byte of of address 0x60000EF two completely different locations.  It gets much worse as you plot down the screen as well.  For example X = 239 Y = 159 is the lower byte of 0x60095FF Mode 4 in Mode 3 it is 0x6012BFE ( Note this is why one only has 16K of sprite space available in the graphics modes).
+<br/>
+<br/>
+Cyb<br/>_________________<br/>If at first you don't succeed parachuting is NOT for you.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

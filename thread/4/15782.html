@@ -1,0 +1,347 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Tall sprites & correct priorities - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > Tall sprites & correct priorities</h2>
+<div id="posts">
+<div class="post">
+    <h4>#159892 - f33ldead - Mon Jul 07, 2008 11:21 pm</h4>
+    <div class="postbody"><span class="postbody">I'm using tall sprites for a RPG, but the problem with them is, it's not easy to get the correct priorities for sprites.
+<br/>
+<br/>
+With the "usual", square characters, whole sprite is obstruction, meaning none of them can ever overlap on the screen. However, for tall sprites, this's not the case. To illustrate, check out the characters in this image
+<br/>
+<br/>
+<a href="http://img243.imagevenue.com/img.php?image=67539_psiv_122_245lo.jpg" target="_blank">http://img243.imagevenue.com/img.php?image=67539_psiv_122_245lo.jpg</a>
+<br/>
+<br/>
+Upper part of the girl is drawn above the guy, apparently she has lower priority. But switch the positions of these characters and this time guy will -naturally- be drawn above.
+<br/>
+<br/>
+I haven't investigated how they actually achieved this in the Sega Genesis game; but I wonder how can we achieve the same thing on GBA <span style="font-style: italic">effectively</span>. The solution on top my mind is using 2 OAM entries for one character. One for the lower part, one for the upper part. OAM entry corresponding to lower parts would have higher priority, and upper parts would have lower priority. The downside is, by doing so, we cut the number of possible characters one the screen to half, and every OAM-related operation (moving, rotating, etc...) will be doubled, instruction-wise. This's the most sensible solution I've come up with so far.
+<br/>
+<br/>
+I also thought about keeping the characters one piece, and dynamically adjusting priorities: 1) the character with lower Y coordinate should have higher priority. Nice, but there're just 4 priority levels, not 1024 to cover up entire map! 2) Watch out for overlaps and alter priorities accordingly.  However, checking for collisions among each character seems overkill. There're 128 OAM entries, which roughly means C(128,2) = 8128 checks per frame in the worst case.
+<br/>
+<br/>
+Well, that's all I could think of by now. All ideas can save me from this hell are greatly welcome!<br/>_________________<br/>It's real, spooky action at distance!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#159895 - DiscoStew - Mon Jul 07, 2008 11:34 pm</h4>
+    <div class="postbody"><span class="postbody">Yes, there are only 4 priorities, *but*, should all of them be of the same priority, they are all drawn from the last in the OAM to the first, with the last being underneath the rest, and the first being shown "above" them all (it's been a while since I dealt with sprites, so it may be the other way around).
+<br/>
+<br/>
+Say you have 2 sprites (like you show in your image). Put them in OAM spots 0 and 1, give them the same priority, and place them at the same spot on the screen. What should happen is that sprite 0 will show above sprite 1. Switch their spots in OAM, and the other sprite will show on top.
+<br/>
+<br/>
+To make a comparison, the sprite priorities affect sprites like layers, much like BG layers. Within those layers, their order determines which sprite on that layer will show on top.
+<br/>
+<br/>
+So, what you should do is scan throughout all your sprites, and for all that are on-screen, organize them so the ones that are lower on the screen are listed at the front of the array, and the ones at the top being at the last. Don't worry about the actual sprite priorities until you get to multiple BG layers That's where you'll need to worry about that for the most part.
+<br/>
+<br/>
+For now, just remember that the ordering of same priority sprites will determine which sprites are shown above/beneath.
+<br/>
+<br/>
+Hope that helps.<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#159896 - f33ldead - Mon Jul 07, 2008 11:42 pm</h4>
+    <div class="postbody"><span class="postbody">The priorities should change as the characters' Y positions change, which means the order you said changes as they move (and this's where my trouble begins). Now, are you implying that I should reload ALL sprites ordered each time as they move around? Man, thanks for the idea, but as I emphasized before, I'm looking for an <span style="font-style: italic">effective</span> solution.<br/>_________________<br/>It's real, spooky action at distance!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#159898 - DekuTree64 - Mon Jul 07, 2008 11:53 pm</h4>
+    <div class="postbody"><span class="postbody">Yeah, since they all the positions have to change every time the camera moves, and some go on/offscreen and so on, it's usually faster just to rebuild the OAM list every frame. I'd recommend:
+<br/>
+1. Make a list of on screen guys.
+<br/>
+2. Sort list by y coordinate of their feet.
+<br/>
+3. Generate OAMs from sorted list (into a RAM buffer).
+<br/>
+4. On VBlank, DMA the OAM buffer to hardware.
+<br/>
+<br/>
+You can optimize the DMA step so it only sends the entries it has to. So if you only have 10 guys running around, you're not wasting time sending 128 OAMs every frame.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#159899 - Dwedit - Mon Jul 07, 2008 11:56 pm</h4>
+    <div class="postbody"><span class="postbody">Use some kind of binary search tree (maybe red-black or AVL), remove and re-add nodes when their position changes.  Have the tree sorted by Y coordinate.  Then do a pre-order traversal on the tree to get a sorted list of nodes.
+<br/>
+<br/>
+Or alternatively, if you are using a grid type RPG map where sprites do not extend outside a square, make the top halves high priority and the bottom half low priority.  But that will fail if you move through other people, or have party members following you.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#159901 - DiscoStew - Tue Jul 08, 2008 12:02 am</h4>
+    <div class="postbody"><span class="postbody">All sprites? No. All visible sprites? Yes.
+<br/>
+<br/>
+Sometimes the best solution is the one that is the simplest. Remember this though. Starting with an ineffective (but working) method can lead to an effective method. That's where optimization comes in, not before.<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#159905 - silent_code - Tue Jul 08, 2008 12:33 am</h4>
+    <div class="postbody"><span class="postbody">This all sounds scarier than it actually is. :^)
+<br/>
+Believe those guys. ;^)
+<br/>
+<br/>
+With a little optimization, you won't even need to recreate the whole object table each frame most of the time. Give it a try... after all, that's how it's being made for "centuries." ;^D
+<br/>
+<br/>
+Good luck!
+<br/>
+<br/>
+PS: The image looks very good! :^)<br/>_________________<br/><span style="font-size: 9px; line-height: normal"><span style="text-decoration: underline"><span style="font-weight: bold"></span></span> July 5th 08: "<span style="font-weight: bold">Volumetric Shadow Demo</span>" 1.6.0 (final) source released
+<br/>
+June 5th 08: "<span style="font-weight: bold">Zombie NDS</span>" WIP released!
+<br/>
+It's all on my page, just click <span style="font-weight: bold">WWW</span> below.</span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#159906 - f33ldead - Tue Jul 08, 2008 12:49 am</h4>
+    <div class="postbody"><span class="postbody">Considering that we can DMA out the OAM, it really sounds plausible. But best sorting algorithms work in O(nlog(n)) on average, and all operations on AVL trees take O(log(n)) time on average. And rebuilding OAM, albeit at O(1) on average, would take sometime. I believe there're much more efficient methods than this.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Dwedit wrote:</b></span></td> </tr> <tr> <td class="quote">Or alternatively, if you are using a grid type RPG map where sprites do not extend outside a square, make the top halves high priority and the bottom half low priority. But that will fail if you move through other people, or have party members following you.</td> </tr></table><span class="postbody">
+<br/>
+It won't fail for my case. The lower parts are counted as obstruction, even to the party members, so there's no way a character can move through another. Truly it's useless if characters are allowed to pass through each other.
+<br/>
+<br/>
+DiscoStew, thanks for your advice, but I'm not just trying to get <span style="font-style: italic">something</span> working. I already have something that works. I guess I should note that if we're talking about <span style="font-style: italic">practical</span> matters where "quick-n-dirty" stuff counts as <span style="font-style: italic">the</span> solution, I already have an optimal solution, which is a LOT faster than all these mentioned. You see, it halves the # of characters to 64, but this hardly matters since you never see more than 20 characters on the screen on an average RPG. And though OAM operations are doubled, one displacement per frame per character is all there is to a character for most of runtime, which's just 2-3 assembly instructions overhead per frame per character in the worst case.
+<br/>
+The point of this thread is to come up with ideas and point out what's good and what's bad about them. As the ideas are piled up, I was planning to pick out the best.
+<br/>
+<br/>
+silent_code, is this really the way it is done? I mean, do you know any commercial games that implements that method?<br/>_________________<br/>It's real, spooky action at distance!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#159912 - gauauu - Tue Jul 08, 2008 3:00 am</h4>
+    <div class="postbody"><span class="postbody">Unless you're really hammering your cpu, which you probably aren't on normal top-down RPG-type stuff, there's no need to avoid sorting and building your OAM data.  It works well, really isn't that slow, and just works.  Don't worry about optimizing unless you know something is too slow.  And believe me, it's usually not too slow.  
+<br/>
+<br/>
+If you divide your sprites into two portions, you can get weird visuals when they walk near other objects, if the bottom half of the character is in front of an object, and the top half is behind.  This can be avoided by making bounding boxes completely bigger than the sprites, but if you have things like weapons hanging off the sprites which are bigger than your bounding box, you'll run into trouble. 
+<br/>
+<br/>
+I know this from experience:  when I was working on Anguna, I thought the same thing you did, and avoided the "costly" sorting and rebuilding of OAM.  I tried the split sprites.  And after plenty of work dividing my sprites, things still were screwy -- a piece of background would be in front of a character's head, and behind their waist, which looked STUPID.  I finally bit the bullet and sorted my on-screen characters and built the sprite list from them.  It wasn't very much work, and did the trick perfectly.  I had no performance problems with this, and was even using a fairly slow sort algorithm.  (Note that realistically, for small values of n, the constant time matters as much or more than the big-O of an algorithm)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#159913 - f33ldead - Tue Jul 08, 2008 3:45 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>gauauu wrote:</b></span></td> </tr> <tr> <td class="quote">a piece of background would be in front of a character's head, and behind their waist</td> </tr></table><span class="postbody">
+<br/>
+Doesn't this mean you just didn't set up the priorities well? I can't see the reason why it won't work. I'd use priorities 1-2 for sprites, and 0,3. Priority 0 bgs will be "over" the sprites and 3 will be "below". And that'd be enough. There's no way the "bug" you mentioned can appear with this setup, right?
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>gauauu wrote:</b></span></td> </tr> <tr> <td class="quote">I had no performance problems with this, and was even using a fairly slow sort algorithm.</td> </tr></table><span class="postbody">
+<br/>
+I believe that is so. Neither I expected the game would start crawling after adding this. However, as I said earlier, there might be better ways to do this. And if there is, why not use it?
+<br/>
+<br/>
+Guys, it'd be great if someone comes up with something fresh!<br/>_________________<br/>It's real, spooky action at distance!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#159914 - gauauu - Tue Jul 08, 2008 3:58 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>f33ldead wrote:</b></span></td> </tr> <tr> <td class="quote">Doesn't this mean you just didn't set up the priorities well? I can't see the reason why it won't work. I'd use priorities 1-2 for sprites, and 0,3. Priority 0 bgs will be "over" the sprites and 3 will be "below". And that'd be enough. There's no way the "bug" you mentioned can appear with this setup, right?</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+If it's that simple for you, then yes, that should work, as long as sprites also stay within their bounding boxes.  If any sprites are larger in their torsos or have weapons that extend outside their bounding boxes, then you run into the issues again.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Guys, it'd be great if someone comes up with something fresh!</td> </tr></table><span class="postbody">
+<br/>
+The reason you keep hearing the same things is because it works well.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#159915 - f33ldead - Tue Jul 08, 2008 5:00 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>gauauu wrote:</b></span></td> </tr> <tr> <td class="quote">The reason you keep hearing the same things is because it works well.</td> </tr></table><span class="postbody">
+<br/>
+And is it the best way ever?
+<br/>
+Geez. Anyway, forget it.<br/>_________________<br/>It's real, spooky action at distance!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#159918 - DiscoStew - Tue Jul 08, 2008 7:15 am</h4>
+    <div class="postbody"><span class="postbody">I guess the reason why we all say the same similar thing is because it is a well working method in general, usable with multiple situations. Once you start optimizing it to the needs of your program, it will soon become application-specific.
+<br/>
+<br/>
+While we don't have the full knowledge of how you are dealing with your program, we try to offer up what we generally can give. I'm sure with your program, there is a better way to do it. The problem in our case is that unless we know how your program currently works to get to that point, we can't offer much, other than what was mentioned earlier.<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#159919 - sgeos - Tue Jul 08, 2008 7:51 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>f33ldead wrote:</b></span></td> </tr> <tr> <td class="quote">The solution on top my mind is using 2 OAM entries for one character. One for the lower part, one for the upper part. OAM entry corresponding to lower parts would have higher priority, and upper parts would have lower priority.</td> </tr></table><span class="postbody">
+<br/>
+Yes, this will take two sprites per on screen entity.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>f33ldead wrote:</b></span></td> </tr> <tr> <td class="quote">The downside is, by doing so, we cut the number of possible characters one the screen to half,</td> </tr></table><span class="postbody">
+<br/>
+This will generally not cause any problems, because you never need that many guys on the screen at once, and you can use other tricks to take care of things like text if you really need to.  Chances are high that sprites will need to be Z-sorted and/or Y-sorted even if you split the critters, but a clever OAM slotting system might work just as well.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>f33ldead wrote:</b></span></td> </tr> <tr> <td class="quote">and every OAM-related operation (moving, rotating, etc...) will be doubled, instruction-wise.</td> </tr></table><span class="postbody">
+<br/>
+This is a non-issue.  If OAM management is a bottleneck, you are doing something wrong.  There are many ways to handle sprites; rebuilding the OAM table from your critter list every frame is the simplest solution and many games do this even if it not the most efficient solution cycle-wise.  Your model-display code will take a critter's coordinates and do everything it needs to do to put the right parts in the right places so you get something that is logically a single unit.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>f33ldead wrote:</b></span></td> </tr> <tr> <td class="quote">I also thought about keeping the characters one piece, and dynamically adjusting priorities: ... There're 128 OAM entries, which roughly means C(128,2) = 8128 checks per frame in the worst case.</td> </tr></table><span class="postbody">
+<br/>
+If you dynamically adjust priorities every frame, you are talking about Z-sorting, Y-sorting or some other custom sorting system.  If you adjust priorities every scanline I'd have my doubts about the system unless we are only talking about a couple of special cases.
+<br/>
+<br/>
+-Brendan</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#159921 - silent_code - Tue Jul 08, 2008 10:29 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>f33ldead wrote:</b></span></td> </tr> <tr> <td class="quote">And is it the best way ever?
+<br/>
+Geez. Anyway, forget it.</td> </tr></table><span class="postbody">
+<br/>
+What's that attitude?
+<br/>
+<br/>
+Seriously, if you don't want to be helped, then maybe you should try to develop a method yourself? Then it would be "ultra nice" to share it with the community. ;^)
+<br/>
+<br/>
+There is no "best way ever" and maybe there will never be. In any case, you always need a models that works. Efficiency is important, yes, but sometimes there are even more important aspects to an implementation or algorithm than that (like maintainability, easy adaptability etc.)
+<br/>
+<br/>
+Some of those guys on the forum are professional developers and if that means anything, I guess most of them know what they are talking about and why they are talking about it.
+<br/>
+<br/>
+You can get away with other solutions (like the one you are using right now), but in most cases that means restricting some part of the design, like avoiding certain configurations in maps etc.
+<br/>
+<br/>
+Good luck finding the best solution for your needs.<br/>_________________<br/><span style="font-size: 9px; line-height: normal"><span style="text-decoration: underline"><span style="font-weight: bold"></span></span> July 5th 08: "<span style="font-weight: bold">Volumetric Shadow Demo</span>" 1.6.0 (final) source released
+<br/>
+June 5th 08: "<span style="font-weight: bold">Zombie NDS</span>" WIP released!
+<br/>
+It's all on my page, just click <span style="font-weight: bold">WWW</span> below.</span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#159934 - Miked0801 - Tue Jul 08, 2008 4:06 pm</h4>
+    <div class="postbody"><span class="postbody">No, sorting every tic is not the 'best way ever'.  But, it's what we did for all our games over the years.  Hell, for the first few titles, we bubble-sorted the stupid OAM list.  This was with over 100 oams being used every tic.  Later, we switched it over to an efficient shell sort and it went from being just on the edge of noticing performance wise (at around 2% cpu) to not even in the top 50.
+<br/>
+<br/>
+The point is, why bother wasting time on making the Y-Sorter the best ever when you can spend better quality time making your game better?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#159943 - gauauu - Tue Jul 08, 2008 7:18 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>f33ldead wrote:</b></span></td> </tr> <tr> <td class="quote"> I mean, do you know any commercial games that implements that method?</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+There you go.  Miked has worked on multiple commercial games :)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#159955 - Dwedit - Tue Jul 08, 2008 9:04 pm</h4>
+    <div class="postbody"><span class="postbody">I still like that iterative merge sort routine I made.
+<br/>
+Size of stride starts at 1 and keeps doubling until you have covered the entire array.
+<br/>
+Only data that gets sorted/repeated is a table of index numbers.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#159964 - Miked0801 - Tue Jul 08, 2008 9:44 pm</h4>
+    <div class="postbody"><span class="postbody">Starting at large strides and going to small is what shell sort does. ;)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#159968 - gauauu - Tue Jul 08, 2008 10:05 pm</h4>
+    <div class="postbody"><span class="postbody">Although really, if you don't totally nuke your old list from each frame, something like a bubble sort really might be fairly efficient, as probably only one or two objects switched places during any given frame.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#159971 - Dwedit - Tue Jul 08, 2008 10:21 pm</h4>
+    <div class="postbody"><span class="postbody">How about a modified merge sort?  Look at elements as long as they are in sorted order, look for the first element out of order.  That ends list #1
+<br/>
+Then look for another list of elements until there is one that is out of order.  That is list #2.  Merge the lists in sorted order.  Then go further down.
+<br/>
+<br/>
+edit: wait, is that actually an improvement?  Still lots of comparisons, just within the list instead of against something else.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#159983 - silent_code - Wed Jul 09, 2008 1:29 am</h4>
+    <div class="postbody"><span class="postbody">A full sort would just have to be done each time a new scene is entered or new characters get on screen. In other cases, which pretty much depends on the game, a simpler sorting could be used and only when a character changes it's vertical position (assuming Y-sorting.) Trees are your friends here. ("Tree hugger!") :^)
+<br/>
+<br/>
+PS: Did anyone realize the OP probably resigned from the discussion? at least I take it from his last post and the fact, that he did not answer to the recently made post, yet. For me, it's not a problem, though. Keep the ideas coming! :^)<br/>_________________<br/><span style="font-size: 9px; line-height: normal"><span style="text-decoration: underline"><span style="font-weight: bold"></span></span> July 5th 08: "<span style="font-weight: bold">Volumetric Shadow Demo</span>" 1.6.0 (final) source released
+<br/>
+June 5th 08: "<span style="font-weight: bold">Zombie NDS</span>" WIP released!
+<br/>
+It's all on my page, just click <span style="font-weight: bold">WWW</span> below.</span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#159985 - koryspansel - Wed Jul 09, 2008 1:39 am</h4>
+    <div class="postbody"><span class="postbody">If you haven't already come across this, it may prove to be useful (specifically the section on OAM management): <a class="postlink" href="http://www.gamasutra.com/features/20010509/baptista_01.htm" target="_blank">http://www.gamasutra.com/features/20010509/baptista_01.htm</a>
+<br/>
+<br/>
+Basically, instead of sorting each time you add a new sprite or before you upload to OAM, keep a 'shadow' OAM copy that maintains its order when you add a new sprite and upload that each frame.  Nice and simple.  On an unrelated note, I find the biggest benefit of this approach is that you get constant OAM IDs, which simplifies things immensely!
+<br/>
+<br/>
+--
+<br/>
+Kory</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#159989 - tepples - Wed Jul 09, 2008 1:46 am</h4>
+    <div class="postbody"><span class="postbody">gauauu: In fact, there is a whole family of sorts that works well on already-sorted data. The first improvement over <a class="postlink" href="http://en.wikipedia.org/wiki/Bubble_sort" target="_blank">bubble sort</a> is <a class="postlink" href="http://en.wikipedia.org/wiki/Gnome_sort" target="_blank">gnome sort</a>. From there, save the index of the first unsorted element, giving <a class="postlink" href="http://en.wikipedia.org/wiki/Insertion_sort" target="_blank">insertion sort</a>. Finally, try making multiple passes over the list, comparing items distant from each other in the earlier passes, and you have <a class="postlink" href="http://en.wikipedia.org/wiki/Shell_sort" target="_blank">Shell sort</a>, which is efficient yet comparatively easy to implement, even in 6502 assembly language for the NES.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#159997 - sgeos - Wed Jul 09, 2008 3:28 am</h4>
+    <div class="postbody"><span class="postbody">Depending on what you are doing, you may not need to sort at all.  You could assign OAM slots on a first come first serve basis using a system like the one below:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">0x00 - 0x1F: Projectiles / Special Effects / Text
+<br/>
+0x20 - 0x3F: Top half of characters
+<br/>
+0x40 - 0x5F: Bottom half of characters
+<br/>
+0x60 - 0x7F: Other in game objects
+<br/>
+<br/>
+Valid Unit IDs:  0x00 - 0x1F
+<br/>
+Unit Projectile: Unit ID + 0x00
+<br/>
+Unit Top:        Unit ID + 0x20
+<br/>
+Unit Bottom:     Unit ID + 0x40
+<br/>
+<br/>
+Text: Disable Projectiles / Special Effects and pool 0x00 - 0x1F
+<br/>
+Special Effects: Disable Projectiles / Text and pool 0x00 - 0x1F
+<br/>
+Other in game objects: Use 0x60 - 0x7F
+<br/>
+<br/>
+Player character uses ID 0x00</td> </tr></table><span class="postbody">
+<br/>
+A Y-sort will probably look better, but if you are making something like a space shooter, this will not matter.
+<br/>
+<br/>
+-Brendan</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

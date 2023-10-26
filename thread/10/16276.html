@@ -1,0 +1,90 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Maxmod, and unable to stream IMA-ADPCM on the NDS? - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Audio > Maxmod, and unable to stream IMA-ADPCM on the NDS?</h2>
+<div id="posts">
+<div class="post">
+    <h4>#165330 - DiscoStew - Wed Dec 17, 2008 6:41 am</h4>
+    <div class="postbody"><span class="postbody">I've taken some time looking over the actual IMA-ADPCM format, and in my mind, I don't see how it can't be done. While it takes more input for correct streaming (particularly with the required buffer) and is much more restrictive in terms of editing on-the-fly, I still think it is possible.
+<br/>
+<br/>
+While PCM is completely uncompressed and has no specifics buffer-wise, IMA-ADPCM is comprised of blocks of compressed data of a set size, each having a header containing an initial uncompressed sample and table index followed by 4-bit compressed samples (or 3-bit if compressed that way). I'd say that if you have a buffer that was of exact size as the block alignment (which is provided in the file header of the IMA-ADPCM WAVE file being used), you could just stream each block in sequence into the buffer, and Maxmod + the hardware should handle the rest. That is of course if Maxmod doesn't do anything else to the data that wouldn't already be done with the PCM format.
+<br/>
+<br/>
+<br/>
+This is where I got my information...
+<br/>
+<br/>
+<a href="http://icculus.org/SDL_sound/downloads/external_documentation/wavecomp.htm" target="_blank">http://icculus.org/SDL_sound/downloads/external_documentation/wavecomp.htm</a>
+<br/>
+<br/>
+(Just scroll down to IMA ADPCM Wave Type or DVI ADPCM Wave Type, as they are basically the same)
+<br/>
+<br/>
+<br/>
+I'm actually making a fun side project which can playback streaming PCM WAV files with libfat (which is done, but needs cosmetic clean up on Isle 1), and am in the process of the manual decompression cycle of the IMA-ADPCM format via the callback function, so I'll see how that goes.<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#165340 - eKid - Wed Dec 17, 2008 3:03 pm</h4>
+    <div class="postbody"><span class="postbody">Streaming IMA-ADPCM without software decompression can't be done because the DS records the data at the loop point and reloads it whenever the sample loops (thus corrupting any ring buffers).</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#165349 - DiscoStew - Wed Dec 17, 2008 7:17 pm</h4>
+    <div class="postbody"><span class="postbody">You mean when it runs for the first time, it internally stores the starting initial uncompressed sample and step table index, and reloads those each loop, rather than retrieving them each time it loops around from that starting location?
+<br/>
+<br/>
+Well, that pretty much sucks.<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#165350 - eKid - Wed Dec 17, 2008 7:26 pm</h4>
+    <div class="postbody"><span class="postbody">Well, it records the data when it reaches the loop start point. It's a very useful feature if your samples are compressed and have loops, but yeah... pretty much kills streaming. :(</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#165461 - tepples - Mon Dec 22, 2008 3:51 am</h4>
+    <div class="postbody"><span class="postbody">Decoding IMA ADPCM in software has little CPU impact. The 8ad library for GBA did it at 18 kHz mono with less than 10% of the CPU.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#165464 - DiscoStew - Mon Dec 22, 2008 4:53 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote">Decoding IMA ADPCM in software has little CPU impact. The 8ad library for GBA did it at 18 kHz mono with less than 10% of the CPU.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Yeah, I resorted to software decoding because streaming IMA-ADPCM couldn't be done via hardware, but as I can see on the DS, playback of a 16kHz mono stream took about 1-2% CPU per frame, and even 44kHz stereo took about 16-22% (though from 16kHz mono, that doesn't seem to scale right). The % differences are from having to copy the data from the files themselves to a buffer for decompression, which doesn't happen every frame.
+<br/>
+<br/>
+I could get a little more speed out of it if I didn't swap channels every sample, and went via per 8 samples per channel, as that is how it is stored in the file in the first place.
+<br/>
+<br/>
+EDIT:
+<br/>
+<br/>
+Correction in next post.<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#165467 - DiscoStew - Mon Dec 22, 2008 9:38 am</h4>
+    <div class="postbody"><span class="postbody">Made a screw-up with the first test of 16kHz mono. It was actually a regular PCM type. The real test file was of 22kHz mono, which took about 4-6%, which is much more in line with my max test with 44kHz stereo.
+<br/>
+<br/>
+But progress has been made. The new changes (making it decode 8 samples per channel rather than switching between channel per sample) has dropped CPU usage when playing a 44kHz stereo IMA-ADPCM file from 16-22% to 10-15%. My 22kHz mono test file is now at 2-5%. The problem though from any IMA-ADPCM test I try, the audio seems to be slight off for a split second at times. I'll check it out in the morning.<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

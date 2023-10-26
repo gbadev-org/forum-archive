@@ -1,0 +1,344 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Touchscreen code - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Touchscreen code</h2>
+<div id="posts">
+<div class="post">
+    <h4>#58309 - Tobin - Sat Oct 22, 2005 2:11 pm</h4>
+    <div class="postbody"><span class="postbody">After a long morning I finally have written an accurate touchscreen code. The one coming with ndslib is not good enough for e.g. drag 'n drop (the sprite is flickering and it never stays where you have released it). The problem is, that the first few readings after a touch or a release give weird results. So we have to wait a few ms in the case of a touch before we set the IPC flag and in the case of a release we have to return an older position.
+<br/>
+Here is the code for the arm7 vblank interrupt handler:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#define ABS(x) ((x) &lt; 0) ? -(x) : (x)
+<br/>
+void VblankHandler(void) {
+<br/>
+   static int heartbeat = 0;
+<br/>
+   static const int savePad = 3;
+<br/>
+   static int oldX[3], oldY[3], oldKeys;
+<br/>
+   static int firsttouch;
+<br/>
+<br/>
+   uint16 but=0, z1=0, z2=0, batt=0, aux=0;
+<br/>
+   int t1=0, t2=0;
+<br/>
+   uint32 temp=0;
+<br/>
+   uint8 ct[sizeof(IPC-&gt;curtime)];
+<br/>
+   u32 i;
+<br/>
+   bool cleanread=false;
+<br/>
+<br/>
+   // Update the heartbeat
+<br/>
+   heartbeat++;
+<br/>
+<br/>
+   // Read the touch screen
+<br/>
+   but = REG_KEYXY;
+<br/>
+<br/>
+   if (!(but &amp; (1&lt;&lt;6))) {
+<br/>
+      cleanread = updateTouch();
+<br/>
+      if (((oldKeys &amp; (1&lt;&lt;6)) != 0)) firsttouch = heartbeat;
+<br/>
+   }
+<br/>
+...
+<br/>
+<br/>
+   // Update the IPC struct
+<br/>
+   IPC-&gt;heartbeat   = heartbeat;
+<br/>
+   IPC-&gt;touchZ1      = z1;
+<br/>
+   IPC-&gt;touchZ2      = z2;
+<br/>
+   IPC-&gt;battery      = batt;
+<br/>
+   IPC-&gt;aux         = aux;
+<br/>
+<br/>
+   //just released
+<br/>
+   if (((oldKeys &amp; (1&lt;&lt;6)) == 0) &amp;&amp; (!cleanread)){
+<br/>
+      setTouchIPC (oldX[0], oldY[0]);
+<br/>
+      IPC-&gt;buttons  = REG_KEYXY &amp; ~(1&lt;&lt;6);
+<br/>
+   }
+<br/>
+   else if (cleanread){
+<br/>
+      for (i=0; i&lt;savePad - 1; i++){
+<br/>
+         oldX[i]=oldX[i+1];
+<br/>
+         oldY[i]=oldY[i+1];
+<br/>
+      }
+<br/>
+      oldX[savePad-1] = nx;
+<br/>
+      oldY[savePad-1] = ny;
+<br/>
+      setTouchIPC (oldX[savePad - 2], oldY[savePad - 2]);
+<br/>
+   }
+<br/>
+   if (abs(heartbeat - firsttouch) &lt; 4){
+<br/>
+      //we have to wait
+<br/>
+      IPC-&gt;buttons = but | REG_KEYXY | (1&lt;&lt;6);
+<br/>
+   }
+<br/>
+   else IPC-&gt;buttons = but | REG_KEYXY;
+<br/>
+   oldKeys = but | REG_KEYXY;
+<br/>
+...
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+To read the current position I use the median of some reads. The median is better than the average, because outlier will not influence the result.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+static int nx, ny;
+<br/>
+static bool updateTouch(){
+<br/>
+   int c = 7;
+<br/>
+   int i,j;
+<br/>
+   int x[c];
+<br/>
+   int y[c];
+<br/>
+   int temp;
+<br/>
+<br/>
+   for (i=0; i&lt;c; i++){
+<br/>
+       if (!(REG_KEYXY &amp; (1&lt;&lt;6))){
+<br/>
+      x[i] = touchRead(TSC_MEASURE_X);
+<br/>
+          y[i] = touchRead(TSC_MEASURE_Y);
+<br/>
+       }
+<br/>
+       else return false;
+<br/>
+   }
+<br/>
+   //Bubblesort
+<br/>
+   for (i=0;i&lt;c-1;i++){
+<br/>
+      for (j=0;j&lt;c-1;j++){
+<br/>
+         if (x[j]&gt;x[j+1]){
+<br/>
+            temp = x[j];x[j] = x[j+1];x[j+1] = temp;
+<br/>
+         }
+<br/>
+         if (y[j]&gt;y[j+1]){
+<br/>
+            temp = y[j];y[j] = y[j+1];y[j+1] = temp;
+<br/>
+         }
+<br/>
+      }
+<br/>
+   }
+<br/>
+   //Take the median
+<br/>
+   nx = x[(c-1)/2];
+<br/>
+   ny = y[(c-1)/2];
+<br/>
+   return true;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+To set the IPC entries (setTouchIPC) I use the code from touchReadXY(). My code is not optimized and maybe there is a better choice of the parameters, but it works perfect for my purpose. Hope this helps.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#58319 - wintermute - Sat Oct 22, 2005 4:43 pm</h4>
+    <div class="postbody"><span class="postbody">Have you tried the latest touch code?
+<br/>
+<br/>
+The most recent interation takes a weighted average of several readings and works pretty well for me. It does need some more work to discard readings in some situations though.
+<br/>
+<br/>
+We intend to move away from the IPC struct in due course so depending on that is not recommended.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#58329 - Tobin - Sat Oct 22, 2005 6:45 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>wintermute wrote:</b></span></td> </tr> <tr> <td class="quote">Have you tried the latest touch code?
+<br/>
+<br/>
+The most recent interation takes a weighted average of several readings and works pretty well for me. It does need some more work to discard readings in some situations though.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+I have tried it and it does not work well in the cases described above. 
+<br/>
+<br/>
+I highly recommend to discard the readings short after a touch or a release.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#58330 - Mollusk - Sat Oct 22, 2005 6:51 pm</h4>
+    <div class="postbody"><span class="postbody">Wouldn't it be even better to discard depending on the pressure ? A new touch or a release has a very soft pressure, so that could maybe be a way to discriminate<br/>_________________<br/>PAlib official forum : <a class="postlink" href="http://www.palib.info" target="_blank">http://www.palib.info</a>
+<br/>
+PAlib official tutorials: <a class="postlink" href="http://www.palib.info/wiki" target="_blank">http://www.palib.info/wiki</a>
+<br/>
+Updates, help, code examples, tutorials, etc...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#58338 - tepples - Sat Oct 22, 2005 7:38 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Mollusk wrote:</b></span></td> </tr> <tr> <td class="quote">Wouldn't it be even better to discard depending on the pressure ? A new touch or a release has a very soft pressure, so that could maybe be a way to discriminate</td> </tr></table><span class="postbody">
+<br/>
+The threshold between a soft pressure and a hard pressure varies per make and model of touch screen (therefore it varies per DS), and it's not stored in the calibration part of the firmware.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#58466 - jandujar - Sun Oct 23, 2005 8:30 pm</h4>
+    <div class="postbody"><span class="postbody">can you apply this fixes on PA_lib?<br/>_________________<br/><a class="postlink" href="http://jandujar.homelinux.com" target="_blank">http://jandujar.homelinux.com</a>
+<br/>
+<a class="postlink" href="http://www.dsrobot.com" target="_blank">http://www.dsrobot.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#58468 - Mollusk - Sun Oct 23, 2005 8:33 pm</h4>
+    <div class="postbody"><span class="postbody">of course :)<br/>_________________<br/>PAlib official forum : <a class="postlink" href="http://www.palib.info" target="_blank">http://www.palib.info</a>
+<br/>
+PAlib official tutorials: <a class="postlink" href="http://www.palib.info/wiki" target="_blank">http://www.palib.info/wiki</a>
+<br/>
+Updates, help, code examples, tutorials, etc...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#58542 - wintermute - Mon Oct 24, 2005 2:19 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Mollusk wrote:</b></span></td> </tr> <tr> <td class="quote">Wouldn't it be even better to discard depending on the pressure ? A new touch or a release has a very soft pressure, so that could maybe be a way to discriminate</td> </tr></table><span class="postbody">
+<br/>
+The threshold between a soft pressure and a hard pressure varies per make and model of touch screen (therefore it varies per DS), and it's not stored in the calibration part of the firmware.</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I think this might also vary depending on whether the plastic film has been removed from the touchscreen. Most people complaining about the "accuracy" of the libnds code appear not to have removed this film which appears to distort the readings at the edges.
+<br/>
+<br/>
+Claims have been made that Pictochat works fine with the film still in place but that application doesn't read from the edges of the screen.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#58669 - KiwiBoi - Tue Oct 25, 2005 6:34 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>wintermute wrote:</b></span></td> </tr> <tr> <td class="quote">I think this might also vary depending on whether the plastic film has been removed from the touchscreen. Most people complaining about the "accuracy" of the libnds code appear not to have removed this film which appears to distort the readings at the edges.
+<br/>
+<br/>
+Claims have been made that Pictochat works fine with the film still in place but that application doesn't read from the edges of the screen.</td> </tr></table><span class="postbody">
+<br/>
+Most 4-wire resistive touch screens get rather non-linear near the edges, it's a common thing.
+<br/>
+<br/>
+Also, does anyone know which controller they are using for the touch screen (if any)? Is it that TI one that also does audio?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#58672 - Dwedit - Tue Oct 25, 2005 6:59 am</h4>
+    <div class="postbody"><span class="postbody">Don't know, but it does do audio.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#58673 - KiwiBoi - Tue Oct 25, 2005 7:03 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Dwedit wrote:</b></span></td> </tr> <tr> <td class="quote">Don't know, but it does do audio.</td> </tr></table><span class="postbody">
+<br/>
+I'll compare some of the #defines in ndslib with the datasheets I have at work tomorrow then.
+<br/>
+<br/>
+I don't suppose there is a BOM or something for the DS floating about at all?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#58674 - tepples - Tue Oct 25, 2005 7:07 am</h4>
+    <div class="postbody"><span class="postbody">I hope those aren't NDAtasheets...<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#58676 - wintermute - Tue Oct 25, 2005 8:29 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>KiwiBoi wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>wintermute wrote:</b></span></td> </tr> <tr> <td class="quote">I think this might also vary depending on whether the plastic film has been removed from the touchscreen. Most people complaining about the "accuracy" of the libnds code appear not to have removed this film which appears to distort the readings at the edges.
+<br/>
+<br/>
+Claims have been made that Pictochat works fine with the film still in place but that application doesn't read from the edges of the screen.</td> </tr></table><span class="postbody">
+<br/>
+Most 4-wire resistive touch screens get rather non-linear near the edges, it's a common thing.
+<br/>
+<br/>
+Also, does anyone know which controller they are using for the touch screen (if any)? Is it that TI one that also does audio?</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+That's kind of why I put "accuracy" in quotes. The distortion I'm talking about is allegedly a difference of around 30 pixels at top left and dropping to just under 10 at bottom left. We're having a lot of trouble getting touch code to behave well on all units.
+<br/>
+<br/>
+<a href="http://focus.ti.com/docs/prod/folders/print/tsc2046.html" target="_blank">http://focus.ti.com/docs/prod/folders/print/tsc2046.html</a>
+<br/>
+<br/>
+and apparently 
+<br/>
+<br/>
+<a href="http://www.asahi-kasei.co.jp/akm/en/product/ak4181a/ak4181a.html" target="_blank">http://www.asahi-kasei.co.jp/akm/en/product/ak4181a/ak4181a.html</a>
+<br/>
+<br/>
+on later DS versions</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#58682 - KiwiBoi - Tue Oct 25, 2005 10:27 am</h4>
+    <div class="postbody"><span class="postbody">One thing you could try, besides debouncing, is to read, say, the X axis first, then the Y then read the X again and check it is within a small limit of the first x reading (this will depend on the ADC bit size), 30 or so seems good at 10bits. This ensures it wasn't a bounce or brief hit that would throw your measurements out.
+<br/>
+<br/>
+EDIT: Also, give it some time to settle when switching plates. I don't know if there are any external caps on the lines in the DS but there is sure to be some capacitance somewhere.
+<br/>
+<br/>
+tepples: No, just regular ones :)</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

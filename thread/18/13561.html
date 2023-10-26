@@ -1,0 +1,1030 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>touchReadTemperature() makes touchReadXY() hang [fixt] - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > touchReadTemperature() makes touchReadXY() hang [fixt]</h2>
+<div id="posts">
+<div class="post">
+    <h4>#132980 - HyperHacker - Mon Jul 02, 2007 10:49 am</h4>
+    <div class="postbody"><span class="postbody">I'm noticing this code that used to work with older versions of DKP/libNDS no longer works anymore. If touchReadTemperature() has been called then touchReadXY() will never return and will sometimes turn the sound off. (IPC2-&gt;TEST stays at 7.) I tried disabling RTC stuff but the only way I found to make it not hang was to not call touchReadTemperature(). ARM9 is still running.
+<br/>
+<br/>
+Here's the ARM7 code, yeah it kinda sucks, it's fairly old and needs cleaning/updating. The relevant parts are in Interrupt(). (Feel free to point out any other bugs too. :-p)
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#include "main.h"
+<br/>
+<br/>
+/*
+<br/>
+Entry Point
+<br/>
+CPU: ARM7
+<br/>
+Inputs:
+<br/>
+   -argc: Number of arguments
+<br/>
+   -argv: Pointer to arguments
+<br/>
+Returns: Program return code
+<br/>
+*/
+<br/>
+int main(int argc, char** argv)
+<br/>
+{
+<br/>
+   s32 i;
+<br/>
+<br/>
+   //Message handling
+<br/>
+   u32 RawData;
+<br/>
+   A7_MESSAGE Message;
+<br/>
+   u8 NumParams;
+<br/>
+   u32 Param[4];
+<br/>
+<br/>
+   REG_IME = 0;
+<br/>
+<br/>
+   //Blank out IPC
+<br/>
+   IPC2-&gt;Time_Month = 12;
+<br/>
+   MEMZERO((u8*)IPC, sizeof(TransferRegion));
+<br/>
+   MEMZERO((u8*)IPC2, sizeof(CustomIPCData));
+<br/>
+<br/>
+<br/>
+   //Init interrupts
+<br/>
+   IRQ_HANDLER = Interrupt; //Set handler callback
+<br/>
+   REG_IE = IRQ_VBLANK | IRQ_TIMER3 | IRQ_WIFI;
+<br/>
+   REG_IF = ~0;
+<br/>
+   REG_DISPSTAT = DISP_VBLANK_IRQ;
+<br/>
+   REG_IME = 1; //Enable interrupts
+<br/>
+<br/>
+<br/>
+   //Init IPC
+<br/>
+   REG_IPC_SYNC = IPC_SYNC_IRQ_ENABLE; //Enable IRQs from ARM9
+<br/>
+   REG_IPC_FIFO_CR = IPC_FIFO_SEND_IRQ | IPC_FIFO_ENABLE; //Enable FIFO and interrupt on send FIFO empty/receive FIFO not empty
+<br/>
+<br/>
+   //Init clock
+<br/>
+   //Copied from a GBADev post. Todo: clean this up.
+<br/>
+   REG_RCNT = 0x8100;
+<br/>
+<br/>
+   //irqSet(IRQ_NETWORK, testSync);
+<br/>
+<br/>
+   // Reset the clock if needed
+<br/>
+   rtcReset();
+<br/>
+<br/>
+   rtcGetTimeAndDate((uint8 *)&amp;(IPC2-&gt;Time_Year));
+<br/>
+<br/>
+   uint8 command[4];
+<br/>
+<br/>
+   command[0] = READ_STATUS_REG2;
+<br/>
+   rtcTransaction(command, 1, &amp;command[1], 1);
+<br/>
+<br/>
+   command[0] = WRITE_STATUS_REG2;
+<br/>
+   command[1] = 0x41;
+<br/>
+<br/>
+   rtcTransaction(command, 2, 0, 0);
+<br/>
+<br/>
+   command[0] = WRITE_INT_REG1;
+<br/>
+   command[1] = 0x01;
+<br/>
+   rtcTransaction(command, 2, 0, 0);
+<br/>
+<br/>
+   command[0] = WRITE_INT_REG2;
+<br/>
+   command[1] = 0x00;
+<br/>
+   command[2] = 0x21;
+<br/>
+   command[3] = 0x35;
+<br/>
+<br/>
+   rtcTransaction(command, 4, 0, 0);
+<br/>
+<br/>
+   SOUND_CR = SOUND_VOL(127) | SOUND_ENABLE;
+<br/>
+   swiWaitForVBlank();
+<br/>
+   swiWaitForVBlank();
+<br/>
+   swiWaitForVBlank();
+<br/>
+<br/>
+   if(((*(uint8*)0x027FFCE4) &amp; 8) != 0)
+<br/>
+      IPC2-&gt;SysInfo |= SI_GBAONBOTTOM;
+<br/>
+<br/>
+<br/>
+<br/>
+   //See if this is a DS Lite
+<br/>
+   if(readPowerManagement(4) &amp; PM_NDSLITE_ISLITE) IPC2-&gt;SysInfo |= SI_DSLITE;
+<br/>
+<br/>
+<br/>
+   //Turn off wifi in case a loader left it on
+<br/>
+   Wifi_Deinit();
+<br/>
+<br/>
+<br/>
+   //Init timers
+<br/>
+   TIMER3_DATA = 65535 - 34318; //should be one interrupt every ~1ms
+<br/>
+   TIMER3_CR = TIMER_ENABLE | TIMER_IRQ_REQ;
+<br/>
+<br/>
+   SendA9Message(A9_INIT, 0, 0, 0, 0, 0);
+<br/>
+<br/>
+   REG_SPICNT = SPI_ENABLE | SPI_DEVICE_POWER | SPI_BAUD_1MHz | SPI_CONTINUOUS;
+<br/>
+   REG_SPIDATA = 0; //Offset: 0=power management, 1=battery status, 2=amplifier, 3=microphone
+<br/>
+   SerialWaitBusy();
+<br/>
+   REG_SPICNT = SPI_ENABLE | SPI_DEVICE_POWER | SPI_BAUD_1MHz;
+<br/>
+   REG_SPIDATA = PM_BACKLIGHT_TOP | PM_BACKLIGHT_BOTTOM | PM_SOUND_PWR;
+<br/>
+<br/>
+   //SCHANNEL_TIMER(8) = SOUND_FREQ(2600*8);
+<br/>
+   //SCHANNEL_CR(8) = SOUND_VOL(32) | SOUND_PAN(64) | SCHANNEL_WAVEDUTY(3) | SOUND_FORMAT_PSG | SCHANNEL_ENABLE;
+<br/>
+<br/>
+   //u16 n = 0;
+<br/>
+   while(true)
+<br/>
+   {
+<br/>
+      //Check for messages
+<br/>
+      while(!(REG_IPC_FIFO_CR &amp; IPC_FIFO_RECV_EMPTY))
+<br/>
+      {
+<br/>
+         RawData = REG_IPC_FIFO_RX;
+<br/>
+         Message = (A7_MESSAGE)(RawData &gt;&gt; 24);
+<br/>
+         NumParams = (RawData &gt;&gt; 16) &amp; 0xFF;
+<br/>
+         if(NumParams &gt; 4) NumParams = 4;
+<br/>
+<br/>
+         for(i=0; i&lt;NumParams; i++)
+<br/>
+         {
+<br/>
+            if(REG_IPC_FIFO_CR &amp; IPC_FIFO_RECV_EMPTY) break;
+<br/>
+            Param[i] = REG_IPC_FIFO_RX;
+<br/>
+         }
+<br/>
+<br/>
+         DoA7Message(Message, i, Param[0], Param[1], Param[2], Param[3], true);
+<br/>
+         IPC2-&gt;A7MessageCount++;
+<br/>
+      }
+<br/>
+      swiWaitForVBlank();
+<br/>
+   }
+<br/>
+   return 0;
+<br/>
+}
+<br/>
+<br/>
+<br/>
+/*
+<br/>
+Processes messages from ARM9. This is a separate function so that ARM7 routines
+<br/>
+can also perform these tasks without being signalled.
+<br/>
+CPU: ARM7
+<br/>
+Inputs:
+<br/>
+   -Message: Message ID.
+<br/>
+   -NumParams: Number of valid parameters.
+<br/>
+   -Param1..Param4: Message parameters, if any.
+<br/>
+   -FromA9: True if message sent from ARM9, false if called from an ARM7
+<br/>
+    routine. Used to determine whether to send messages in response.
+<br/>
+TODO: Disable interrupts while using the SPI bus.
+<br/>
+*/
+<br/>
+void DoA7Message(A7_MESSAGE Message, u8 NumParams, u32 Param1, u32 Param2, u32 Param3, u32 Param4, bool FromA9)
+<br/>
+{
+<br/>
+   u32 PowerStatus = 0;
+<br/>
+<br/>
+   switch(Message)
+<br/>
+   {
+<br/>
+      case A7_NULL: //Dummy message, no parameters.
+<br/>
+      break;
+<br/>
+<br/>
+<br/>
+      case A7_INIT: //Used to pass some data from ARM9 at startup. Param1=Pointer to ARM7StackDump.
+<br/>
+      ARM7StackDump = (u32*)Param1;
+<br/>
+      break;
+<br/>
+<br/>
+<br/>
+      case A7_RETURN: //Return value from a message; param1=message being responded to, others=return value.
+<br/>
+      break;
+<br/>
+<br/>
+<br/>
+      case A7_CHECK: //Used to check that ARM7 is still responding. Return value=anything; just returns a value to let ARM9 know it's still going.
+<br/>
+      if(FromA9) SendA9Message(A9_RETURN, 2, A7_CHECK, 0xD06FECE5, 0, 0);
+<br/>
+      break;
+<br/>
+<br/>
+<br/>
+      case A7_GBAMODE: //Reboot into GBA mode, no parameters.
+<br/>
+      /*
+<br/>
+      //TEST OF ERROR HANDLER
+<br/>
+      __asm (
+<br/>
+         ".arm\n"
+<br/>
+         "ldr r0, =ASMHackery\n"
+<br/>
+         "str r13, [r0]\n"
+<br/>
+         :
+<br/>
+         :
+<br/>
+         : "r0"
+<br/>
+      );
+<br/>
+      if(ARM7StackDump)
+<br/>
+      {
+<br/>
+         memcpy(ARM7StackDump, (u32*)(ASMHackery - A7_STACK_DUMP_NUMWORDS), A7_STACK_DUMP_NUMWORDS * 4);
+<br/>
+         SendA9Message(A9_FATALERROR, 2, 0xD06FECE5, ASMHackery, 0, 0);
+<br/>
+      }
+<br/>
+      else SendA9Message(A9_FATALERROR, 2, 0xAAAAAAAA, ASMHackery, 0, 0);
+<br/>
+      REG_IME = 0;
+<br/>
+      while(true) swiWaitForVBlank();
+<br/>
+      */
+<br/>
+<br/>
+      __asm (".arm\n"
+<br/>
+            "mov   r2, #0x40\n"
+<br/>
+            "swi   0x1F0000\n"
+<br/>
+      );
+<br/>
+      break;
+<br/>
+<br/>
+<br/>
+      case A7_SETPOWER: //Change power settings; param1=0 to write, 1 to AND, 2 to OR, 3 to XOR; param2=bitflags. Note that System Power bit is reversed; 1=turn off.
+<br/>
+      SerialWaitBusy(); //Get current status
+<br/>
+      REG_SPICNT = SPI_ENABLE | SPI_DEVICE_POWER | SPI_BAUD_1MHz | SPI_CONTINUOUS;
+<br/>
+      REG_SPIDATA = 0x80; //Set high bit for reading
+<br/>
+      SerialWaitBusy();
+<br/>
+      REG_SPICNT = SPI_ENABLE | SPI_DEVICE_POWER | SPI_BAUD_1MHz;
+<br/>
+      REG_SPIDATA = 0;
+<br/>
+      SerialWaitBusy();
+<br/>
+      PowerStatus = REG_SPIDATA &amp; 0xFF;
+<br/>
+<br/>
+      REG_SPICNT = SPI_ENABLE | SPI_DEVICE_POWER | SPI_BAUD_1MHz | SPI_CONTINUOUS;
+<br/>
+      REG_SPIDATA = 0; //Offset: 0=power management, 1=battery status, 2=amplifier, 3=microphone
+<br/>
+      SerialWaitBusy();
+<br/>
+      REG_SPICNT = SPI_ENABLE | SPI_DEVICE_POWER | SPI_BAUD_1MHz;
+<br/>
+<br/>
+      if(Param1 == 0)
+<br/>
+         REG_SPIDATA = Param2;
+<br/>
+      else if(Param1 == 1)
+<br/>
+         REG_SPIDATA = PowerStatus &amp; Param2;
+<br/>
+      else if(Param1 == 2)
+<br/>
+         REG_SPIDATA = PowerStatus | Param2;
+<br/>
+      else if(Param1 == 3)
+<br/>
+         REG_SPIDATA = PowerStatus ^ Param2;
+<br/>
+      break;
+<br/>
+<br/>
+<br/>
+      case A7_GETPOWER: //Retrieve power settings; no parameters, returns power bitflags.
+<br/>
+      SerialWaitBusy();
+<br/>
+      REG_SPICNT = SPI_ENABLE | SPI_DEVICE_POWER | SPI_BAUD_1MHz | SPI_CONTINUOUS;
+<br/>
+      REG_SPIDATA = 0x80;
+<br/>
+      SerialWaitBusy();
+<br/>
+      REG_SPICNT = SPI_ENABLE | SPI_DEVICE_POWER | SPI_BAUD_1MHz;
+<br/>
+      REG_SPIDATA = 0;
+<br/>
+      SerialWaitBusy();
+<br/>
+      if(FromA9) SendA9Message(A9_RETURN, 2, A7_GETPOWER, REG_SPIDATA &amp; 0xFF, 0, 0);
+<br/>
+      break;
+<br/>
+<br/>
+<br/>
+      case A7_SETVOLUME: //Set sound volume; param1=bits 0-6 set master sound volume, 7=1 to enable sound, 0 to disable.
+<br/>
+      SOUND_CR |= SOUND_VOL(Param1 &amp; 0x7F) | ((Param1 &amp; 0x80) ? SOUND_ENABLE : 0);
+<br/>
+      break;
+<br/>
+<br/>
+<br/>
+      case A7_GETVOLUME: //Retrieve sound volume; return bits 0-6=master volume, 7=1 if enabled, 0 if disabled.
+<br/>
+      if(FromA9) SendA9Message(A9_RETURN, 2, A7_GETVOLUME, (SOUND_CR &amp; SOUND_VOL(127)) | ((SOUND_CR &amp; SOUND_ENABLE) ? 0x80 : 0), 0, 0);
+<br/>
+      break;
+<br/>
+<br/>
+<br/>
+      case A7_SETSOUND: //Set flags for a sound channel; param1=channel (low 4 bits), param2=flags, param3=source, param4=length.
+<br/>
+      if(NumParams &gt;= 3)
+<br/>
+         SCHANNEL_SOURCE(Param1 &amp; 0xF) = Param3;
+<br/>
+      if(NumParams &gt;= 4)
+<br/>
+         SCHANNEL_LENGTH(Param1 &amp; 0xF) = Param4;
+<br/>
+<br/>
+      //Flag format: //evvvvvvv pppppppw wwffffff ffffffft
+<br/>
+      SCHANNEL_TIMER(Param1 &amp; 0xF) = ((Param2 &gt;&gt; 1) &amp; 0x1FFF) &lt;&lt; 3;
+<br/>
+      SCHANNEL_CR(Param1 &amp; 0xF) = ((Param2 &amp; 0x80000000) ? SCHANNEL_ENABLE : 0)
+<br/>
+      | SOUND_VOL((Param2 &gt;&gt; 24) &amp; 0x7F)
+<br/>
+      | SOUND_PAN((Param2 &gt;&gt; 17) &amp; 0x7F)
+<br/>
+      | SCHANNEL_WAVEDUTY((Param2 &gt;&gt; 14) &amp; 7)
+<br/>
+      | ((Param2 &amp; 1) ? SOUND_FORMAT_PSG : 0);
+<br/>
+      break;
+<br/>
+<br/>
+<br/>
+      case A7_GETSOUNDFLAGS: //Get flags for a sound channel; param1=channel (low 4 bits), return=flags.
+<br/>
+      if(FromA9) SendA9Message(A9_RETURN, 2, A7_GETSOUNDFLAGS,
+<br/>
+         ((SCHANNEL_CR(Param1 &amp; 0xF) &amp; SOUND_FORMAT_PSG) ? 1 : 0)
+<br/>
+         | (SCHANNEL_TIMER(Param1 &amp; 0xF) &gt;&gt; 2)
+<br/>
+         | ((SCHANNEL_CR(Param1 &amp; 0xF) &amp; SCHANNEL_WAVEDUTY(7)) &lt;&lt; 14)
+<br/>
+         | ((SCHANNEL_CR(Param1 &amp; 0xF) &amp; SOUND_PAN(0x7F)) &lt;&lt; 17)
+<br/>
+         | ((SCHANNEL_CR(Param1 &amp; 0xF) &amp; SOUND_VOL(0x7F)) &lt;&lt; 24)
+<br/>
+         | ((SCHANNEL_CR(Param1 &amp; 0xF) &amp; SCHANNEL_ENABLE) ? 0x80000000 : 0),
+<br/>
+         SCHANNEL_SOURCE(Param1 &amp; 0xF),
+<br/>
+         SCHANNEL_LENGTH(Param1 &amp; 0xF));
+<br/>
+      break;
+<br/>
+<br/>
+<br/>
+      case A7_BOOTNDS: //Enter wait loop to boot .nds file on GBAMP.
+<br/>
+      REG_IME = IME_DISABLE;   // Disable interrupts
+<br/>
+      *((vu32*)0x027FFE34) = (u32)0x08000000;   // Bootloader start address
+<br/>
+      swiSoftReset();   // Jump to boot loader
+<br/>
+      break;
+<br/>
+<br/>
+<br/>
+      case A7_WIFICTRL: //Wifi control messages
+<br/>
+      if(Param1 == WIFIPARAM_SYNC) Wifi_Sync();
+<br/>
+      else if(Param1 == WIFIPARAM_INIT) A7InitWifi(Param2);
+<br/>
+      else if(Param1 == WIFIPARAM_STOP)
+<br/>
+      {
+<br/>
+         //todo: stop the LED blinking; this function doesn't seem to do it.
+<br/>
+         Wifi_Deinit();
+<br/>
+         IPC2-&gt;WifiEnabled = false;
+<br/>
+      }
+<br/>
+      break;
+<br/>
+<br/>
+<br/>
+      case A7_BACKLIGHT: //Param1=Top light, Param2=Bottom light (-1=no change, 0=off, 1=on), Param3=Brightness (0-3 or -1 for no change, ignored if not DSLite)
+<br/>
+      if(Param1 == 0xFFFFFFFF); //do nothing
+<br/>
+      else if(Param1 == 0) //turn off
+<br/>
+         DoA7Message(A7_SETPOWER, 2, 1, ~PM_BACKLIGHT_TOP, 0, 0, false);
+<br/>
+      else if(Param1 == 1) //turn on
+<br/>
+         DoA7Message(A7_SETPOWER, 2, 2, PM_BACKLIGHT_TOP, 0, 0, false);
+<br/>
+      else if(FromA9) //invalid parameter
+<br/>
+         SendA9Message(A9_ERROR, 1, 1, 0, 0, 0);
+<br/>
+<br/>
+      if(Param2 == 0xFFFFFFFF); //do nothing
+<br/>
+      else if(Param2 == 0) //turn off
+<br/>
+         DoA7Message(A7_SETPOWER, 2, 1, ~PM_BACKLIGHT_BOTTOM, 0, 0, false);
+<br/>
+      else if(Param2 == 1) //turn on
+<br/>
+         DoA7Message(A7_SETPOWER, 2, 2, PM_BACKLIGHT_BOTTOM, 0, 0, false);
+<br/>
+      else if(FromA9) //invalid parameter
+<br/>
+         SendA9Message(A9_ERROR, 1, 2, 0, 0, 0);
+<br/>
+<br/>
+      if(Param3 == 0xFFFFFFFF); //do nothing
+<br/>
+      else if(Param3 &lt; 4) //set brightness
+<br/>
+      {
+<br/>
+         if(IPC2-&gt;SysInfo &amp; SI_DSLITE) writePowerManagement(4, (readPowerManagement(4) &amp; ~3) | Param3); //Set brightness - bits 0-1 of reg 4
+<br/>
+      }
+<br/>
+      else if(FromA9) //invalid parameter
+<br/>
+         SendA9Message(A9_ERROR, 1, 3, 0, 0, 0);
+<br/>
+<br/>
+      break;
+<br/>
+<br/>
+<br/>
+      default: //Invalid message
+<br/>
+      if(FromA9) SendA9Message(A9_ERROR, 0, 0, 0, 0, 0);
+<br/>
+      break;
+<br/>
+   }
+<br/>
+}
+<br/>
+<br/>
+<br/>
+/*
+<br/>
+Sends a message to ARM9.
+<br/>
+CPU: ARM7
+<br/>
+Inputs:
+<br/>
+   -Message: Message to send.
+<br/>
+   -NumParams: Number of valid parameters.
+<br/>
+   -Param1..Param4: Message parameters.
+<br/>
+Notes:
+<br/>
+   -If send FIFO is full, it will wait until space is available.
+<br/>
+    Todo: Implement some sort of check that the ARM9 is still responding,
+<br/>
+    so ARM7 doesn't get caught in an infinite loop as well and can at least
+<br/>
+    report the problem.
+<br/>
+*/
+<br/>
+void SendA9Message(A9_MESSAGE Message, u8 NumParams, u32 Param1, u32 Param2, u32 Param3, u32 Param4)
+<br/>
+{
+<br/>
+   while(REG_IPC_FIFO_CR &amp; IPC_FIFO_SEND_FULL) swiDelay(10);
+<br/>
+   REG_IPC_FIFO_TX = (Message &lt;&lt; 24) | (NumParams &lt;&lt; 16);
+<br/>
+<br/>
+   if(NumParams &lt; 1) return;
+<br/>
+   while(REG_IPC_FIFO_CR &amp; IPC_FIFO_SEND_FULL) swiDelay(10);
+<br/>
+   REG_IPC_FIFO_TX = Param1;
+<br/>
+<br/>
+   if(NumParams &lt; 2) return;
+<br/>
+   while(REG_IPC_FIFO_CR &amp; IPC_FIFO_SEND_FULL) swiDelay(10);
+<br/>
+   REG_IPC_FIFO_TX = Param2;
+<br/>
+<br/>
+   if(NumParams &lt; 3) return;
+<br/>
+   while(REG_IPC_FIFO_CR &amp; IPC_FIFO_SEND_FULL) swiDelay(10);
+<br/>
+   REG_IPC_FIFO_TX = Param3;
+<br/>
+<br/>
+   if(NumParams &lt; 4) return;
+<br/>
+   while(REG_IPC_FIFO_CR &amp; IPC_FIFO_SEND_FULL) swiDelay(10);
+<br/>
+   REG_IPC_FIFO_TX = Param4;
+<br/>
+}
+<br/>
+<br/>
+<br/>
+/*
+<br/>
+Interrupt handler
+<br/>
+CPU: ARM7
+<br/>
+*/
+<br/>
+void Interrupt()
+<br/>
+{
+<br/>
+   CustomIPCData Data;
+<br/>
+   s32 t1=0, t2=0;
+<br/>
+   static s16 SecCountdown = 1000; //Counts down to zero every second to signal re-read of RTC
+<br/>
+   touchPosition tempPos;
+<br/>
+<br/>
+<br/>
+   if(REG_IF &amp; IRQ_VBLANK)
+<br/>
+   {
+<br/>
+      if(need_reboot()) reboot();
+<br/>
+      if(IPC2-&gt;WifiEnabled) Wifi_Update();
+<br/>
+      memcpy((u8*)&amp;Data, (u8*)IPC2, sizeof(Data));
+<br/>
+<br/>
+      //Read the buttons and touch screen
+<br/>
+      uint32 B = ((~REG_KEYXY) &lt;&lt; 10) &amp; (KEY_X | KEY_Y);
+<br/>
+      B |= (~REG_KEYINPUT) &amp; 0x3FF;
+<br/>
+      if(REG_KEYXY &amp; 0x80) B |= KEY_LID;
+<br/>
+      if(!(REG_KEYXY &amp; 0x40)) //touched
+<br/>
+      {
+<br/>
+         B |= KEY_TOUCH;
+<br/>
+         IPC2-&gt;TEST = 7;
+<br/>
+         tempPos = touchReadXY();
+<br/>
+         IPC2-&gt;TEST = 8;
+<br/>
+         Data.TouchX = tempPos.px;
+<br/>
+         Data.TouchY = tempPos.py;
+<br/>
+      }
+<br/>
+<br/>
+      Data.ButtonsHeld = (Data.ButtonsHeld | Data.ButtonsPressed) &amp; B;
+<br/>
+      Data.ButtonsPressed = B &amp; ~Data.ButtonsHeld;
+<br/>
+<br/>
+      Data.TouchZ1 = touchRead(TSC_MEASURE_Z1);
+<br/>
+      Data.TouchZ2 = touchRead(TSC_MEASURE_Z2);
+<br/>
+<br/>
+<br/>
+      //Update IPC
+<br/>
+      IPC2-&gt;TouchX = Data.TouchX;
+<br/>
+      IPC2-&gt;TouchY = Data.TouchY;
+<br/>
+      IPC2-&gt;ButtonsHeld = Data.ButtonsHeld;
+<br/>
+      IPC2-&gt;ButtonsPressed = Data.ButtonsPressed;
+<br/>
+      IPC2-&gt;TouchZ1 = Data.TouchZ1;
+<br/>
+      IPC2-&gt;TouchZ2 = Data.TouchZ2;
+<br/>
+      memcpy((u8*)IPC-&gt;time.curtime, (u8*)Data.TimeData, sizeof(Data.TimeData)); //libFAT needs this
+<br/>
+      memcpy((u8*)IPC2-&gt;TimeData, (u8*)Data.TimeData, sizeof(Data.TimeData));
+<br/>
+      IPC2-&gt;Temperature = Data.Temperature;
+<br/>
+      IPC2-&gt;A7FrameCount++;
+<br/>
+<br/>
+<br/>
+      VBLANK_INTR_WAIT_FLAGS |= IRQ_VBLANK; //Signal that vblank interrupt has been processed
+<br/>
+      REG_IF |= IRQ_VBLANK;
+<br/>
+   }
+<br/>
+   else if(REG_IF &amp; IRQ_TIMER3)
+<br/>
+   {
+<br/>
+      IPC2-&gt;TEST = 1;
+<br/>
+      IPC2-&gt;TickCount++;
+<br/>
+      VBLANK_INTR_WAIT_FLAGS |= IRQ_TIMER3;
+<br/>
+      REG_IF |= IRQ_TIMER3;
+<br/>
+      IPC2-&gt;TEST = 2;
+<br/>
+<br/>
+      //Read the time
+<br/>
+      SecCountdown--;
+<br/>
+      if(SecCountdown &lt; 1)
+<br/>
+      {
+<br/>
+         SecCountdown = 1000;
+<br/>
+         IPC2-&gt;TEST = 3;
+<br/>
+         syncRTC();
+<br/>
+         IPC2-&gt;TEST = 4;
+<br/>
+<br/>
+         //Read the temperature
+<br/>
+<br/>
+         IPC2-&gt;Temperature = touchReadTemperature(&amp;t1, &amp;t2);
+<br/>
+         IPC2-&gt;TEST = 5;
+<br/>
+      }
+<br/>
+   }
+<br/>
+   else if(REG_IF &amp; IRQ_WIFI)
+<br/>
+   {
+<br/>
+      IPC2-&gt;TEST = 6;
+<br/>
+      if(IPC2-&gt;WifiEnabled) Wifi_Interrupt();
+<br/>
+      VBLANK_INTR_WAIT_FLAGS |= IRQ_WIFI;
+<br/>
+      REG_IF |= IRQ_WIFI;
+<br/>
+   }
+<br/>
+}
+<br/>
+<br/>
+<br/>
+/*
+<br/>
+Reads the clock.
+<br/>
+Copied from a GBADev post. Todo: clean this up.
+<br/>
+*/
+<br/>
+void syncRTC()
+<br/>
+{
+<br/>
+   int oldhours = IPC-&gt;time.rtc.hours;
+<br/>
+<br/>
+   uint8 command[2];
+<br/>
+<br/>
+   command[0] = READ_STATUS_REG1;
+<br/>
+   rtcTransaction(command, 1, &amp;command[1], 1);
+<br/>
+<br/>
+   IPC-&gt;mailSize = REG_RCNT;
+<br/>
+<br/>
+   if ( command[1] &amp; 0x30 ) {
+<br/>
+      IPC-&gt;mailRead = command[1];
+<br/>
+      REG_IF = IRQ_NETWORK;
+<br/>
+   } else {
+<br/>
+      IPC-&gt;mailAddr = command[1];
+<br/>
+   }
+<br/>
+<br/>
+   rtcGetTime((uint8 *)&amp;(IPC-&gt;time.rtc.hours));
+<br/>
+<br/>
+   if(oldhours&gt;IPC-&gt;time.rtc.hours) // going from 23 to 0 hours, update whole time struct
+<br/>
+      rtcGetTimeAndDate((uint8 *)&amp;(IPC-&gt;time.rtc.year));
+<br/>
+<br/>
+   memcpy((void*)IPC2-&gt;TimeData, (void*)IPC-&gt;time.curtime, sizeof(IPC2-&gt;TimeData));
+<br/>
+}
+<br/>
+<br/>
+<br/>
+/*
+<br/>
+Initializes the wifi hardware.
+<br/>
+Inputs:
+<br/>
+   -A9Param: Parameter passed from ARM9; must be passed to Wifi_Init().
+<br/>
+Returns: True on success, false otherwise.
+<br/>
+*/
+<br/>
+bool A7InitWifi(u32 A9Param)
+<br/>
+{
+<br/>
+   Wifi_SetSyncHandler(_A7WifiSync);
+<br/>
+   Wifi_Init(A9Param);
+<br/>
+   IPC2-&gt;WifiEnabled = true;
+<br/>
+<br/>
+   return true;
+<br/>
+}
+<br/>
+<br/>
+<br/>
+/*
+<br/>
+Wifi sync handler; called by wifi lib as necessary.
+<br/>
+*/
+<br/>
+void _A7WifiSync()
+<br/>
+{
+<br/>
+   SendA9Message(A9_WIFISYNC, 0, 0, 0, 0, 0);
+<br/>
+}
+<br/>
+<br/>
+<br/>
+/*
+<br/>
+Fatal error handler.
+<br/>
+Inputs:
+<br/>
+   -Code: Error code to display.
+<br/>
+Notes:
+<br/>
+   -Does not return. The error code is output in 3 ways:
+<br/>
+    1) The speakers will emit a tone whose frequency is Code * 100hz.
+<br/>
+    2) The screen should display an error message if ARM9 is still running.
+<br/>
+    3) The power LED will blink a number of times equal to the code. There is
+<br/>
+       a small delay afterward, then it begins again.
+<br/>
+*/
+<br/>
+void FatalError(u32 Code)
+<br/>
+{
+<br/>
+   u32 i;
+<br/>
+<br/>
+   //Play sound
+<br/>
+   SCHANNEL_TIMER(8) = SOUND_FREQ(Code * 800);
+<br/>
+   SCHANNEL_CR(8) = SOUND_VOL(32) | SOUND_PAN(64) | SCHANNEL_WAVEDUTY(3) | SOUND_FORMAT_PSG | SCHANNEL_ENABLE;
+<br/>
+   SendA9Message(A9_ERROR, 2, 5, Code, 0, 0); //Send ARM9 a fatal error message
+<br/>
+<br/>
+   //Blink power LED
+<br/>
+   while(true)
+<br/>
+   {
+<br/>
+      for(i=0; i&lt;Code; i++)
+<br/>
+       {
+<br/>
+         writePowerManagement(0, PM_SOUND_PWR | PM_BACKLIGHT_BOTTOM | BIT(4)); //Power LED off (slow blink)
+<br/>
+         swiDelay(3000000);
+<br/>
+         writePowerManagement(0, PM_SOUND_PWR | PM_BACKLIGHT_BOTTOM); //Power LED on
+<br/>
+         swiDelay(3000000);
+<br/>
+      }
+<br/>
+      swiDelay(10000000);
+<br/>
+   }
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I suspect touchReadTemperature() is leaving the hardware or some internal variable in a state that touchReadXY() doesn't account for.<br/>_________________<br/>I'm a PSP hacker now, but I still &lt;3 DS.</span><span class="gensmall"><br/><br/>Last edited by HyperHacker on Mon Jul 02, 2007 11:06 pm; edited 1 time in total</span></div>    
+</div>
+<div class="post">
+    <h4>#133013 - StoneCypher - Mon Jul 02, 2007 5:39 pm</h4>
+    <div class="postbody"><span class="postbody">You should track down some best practices or company standards documents.  You'll notice a pattern - they almost all say that functions should have a cap length in the neighborhood of 15-20 lines.
+<br/>
+<br/>
+There's a reason for that.  I started trying to read your code.  I had a cthulhu vertigo moment and gave up.<br/>_________________<br/>Quidquid Latine dictum sit, altum Sonatur
+<br/>
+<a href="http://feeds.feedburner.com/StoneHome.gif">[Images not permitted - Click here to view it]</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#133029 - simonjhall - Mon Jul 02, 2007 8:01 pm</h4>
+    <div class="postbody"><span class="postbody">I was originally gonna say that that's not a constructive comment (regarding the actual bug) but SC may have a point. Could you try trimming down the amount of code you've got to the bare minimum in order to see what isn't working right? I read about half of it and started to lose track!
+<br/>
+I'm sure if you cut out all of the non-essential stuff (eg wifi, clocks etc) and also had a minimal ARM9 (just enough to crash it!), then I'm sure you'll see whatever's the problem in a flash!<br/>_________________<br/><span style="font-weight: bold"><a class="postlink" href="https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&amp;business=simonjhall%40gmail%2ecom&amp;no_shipping=2&amp;no_note=1&amp;tax=0&amp;currency_code=GBP&amp;lc=GB&amp;bn=PP%2dDonationsBF&amp;charset=UTF%2d8" target="_blank">Big thanks to everyone who donated for Quake2</a></span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#133035 - HyperHacker - Mon Jul 02, 2007 9:19 pm</h4>
+    <div class="postbody"><span class="postbody">That's probably true, but the only really big function here is the message handler, which isn't really related. I'll see though if I can hack up a smaller program.<br/>_________________<br/>I'm a PSP hacker now, but I still &lt;3 DS.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#133037 - wintermute - Mon Jul 02, 2007 9:26 pm</h4>
+    <div class="postbody"><span class="postbody">You might also want to make use of the libnds interrupt support code instead of that nonsense you're currently using.<br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#133055 - HyperHacker - Mon Jul 02, 2007 11:05 pm</h4>
+    <div class="postbody"><span class="postbody">I guess Wintermute got it. When I switched to the libNDS interrupt functions, it stopped hanging (and looks cleaner too!). Thanks for pointing those out. :-)<br/>_________________<br/>I'm a PSP hacker now, but I still &lt;3 DS.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

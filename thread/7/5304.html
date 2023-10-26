@@ -1,0 +1,350 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Find this bug, win a Nintendo DS! - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>C/C++ > Find this bug, win a Nintendo DS!</h2>
+<div id="posts">
+<div class="post">
+    <h4>#38491 - cesium - Mon Mar 28, 2005 4:27 pm</h4>
+    <div class="postbody"><span class="postbody">I really need to squish this bug, and I've got a DS that I rarely use so... if you are the first person to find the root cause of the problem described below, I'll send you a Dual Screen. See the comments for details. Yell if you need the makefile.
+<br/>
+cesium
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+//main.cpp
+<br/>
+/*
+<br/>
+   This code illustrates a problem I'm having with devkitarm-r11.
+<br/>
+   I don't know if it is a bug in the compiler, or a bug in my code.
+<br/>
+   I have distilled my code into the following templated class: DataSet,
+<br/>
+   and a templated function: genDataSet.
+<br/>
+   I think these are the bare minimum structures that produce the problems.
+<br/>
+   I have observed this problem on actual hardware and in VisualBoyAdvance-SDL-1.7.2.
+<br/>
+<br/>
+   The problem seemed to morph as I was chopping down the code. Here is a
+<br/>
+   description of the current form as I have seen it using the Insight debugger
+<br/>
+   connecting to VisualBoyAdvance-SDL-1.7.2.
+<br/>
+<br/>
+   First off, a few definitions:
+<br/>
+      I'll use the term "Step into" to refer to Insight's Step(S) function.
+<br/>
+      I'll use the term "Step over" to refer to Insight's Next(N) function.
+<br/>
+      I'll use the term "Step out of" to refer to Insight's Finish(F) function.
+<br/>
+      
+<br/>
+   -Compile and load up the code in VisualBoyAdvance and Insight.
+<br/>
+   -Have Insight connect to VBA and run up until the line commented as: POINT A.
+<br/>
+   -This is an assignment statement that calls the genDataSet function.
+<br/>
+      The strange stuff happens during this assignment. The way I watch this
+<br/>
+      assignment happen is to step into the function and then "step into the
+<br/>
+      return process." That sounds odd, but I'll describe it.
+<br/>
+   -Step into the function genDataSet. Run up until the line: POINT B.
+<br/>
+   -Step into this return.
+<br/>
+      You'll end up in a DataSet destructor. Step out of this destructor.
+<br/>
+   -You're back at POINT B. Step into it again.
+<br/>
+      You'll be in some odd looking code that says Unwind. Step out.
+<br/>
+   -You're back at POINT B. Step in again.
+<br/>
+      Now we're someplace interesting, the assignment function DataSet&lt;T&gt;::operator=()
+<br/>
+   -Step over twice so that you get to POINT C, where the new operator is called.
+<br/>
+   -Step into the new operator.
+<br/>
+      Something odd happens, we end up at the bottom of main(). Is this bad? A debugger flaw?
+<br/>
+      Step out of this point at the end of main.
+<br/>
+   -We're back at POINT C. Step into the new operator again.
+<br/>
+   -Now we get to the good part. Here we are at POINT D in the DataSet constructor.
+<br/>
+      Step over the assignment: m_allocUnit=10
+<br/>
+      I find that m_allocUnit now contains 0, not 10.
+<br/>
+   -Step into POINT E, the call to NEW.
+<br/>
+   -I get a SIGTRAP message from the debugger. I have no idea what's going on.
+<br/>
+   -Step into the NEW function. n is not 0, it is not 10, it is 2560!! huh?
+<br/>
+<br/>
+  If you can help me determine if this is a compiler or a programmer problem,
+<br/>
+  I'd be very grateful.
+<br/>
+<br/>
+  I'm interested in solutions like:
+<br/>
+   "Hey, you dummy, you can't to that in C++, it's not allowed, here's why..."
+<br/>
+   or
+<br/>
+   "Yea, this is a known bug in gcc ver x.y.z, here's a workaround.
+<br/>
+<br/>
+  I'm not interested in solutions like:
+<br/>
+   "Why don't you just write your code like this, &lt;snip&gt; and then the
+<br/>
+   problem goes away!"
+<br/>
+<br/>
+  I'd like to know the root cause of this problem, since I have a few
+<br/>
+  thousand lines of code that "boil down" to this example.
+<br/>
+<br/>
+  Thanks,
+<br/>
+  cesium
+<br/>
+<br/>
+*/
+<br/>
+<br/>
+//templated NEW function to help debug strange values passed to new.
+<br/>
+template&lt;class T&gt; T* NEW(unsigned int n);
+<br/>
+//templated container class.
+<br/>
+template &lt;class T&gt; class DataSet  {
+<br/>
+public:
+<br/>
+   DataSet();
+<br/>
+   DataSet(const DataSet&amp; x);
+<br/>
+   DataSet&lt;T&gt;&amp; operator=(const DataSet&lt;T&gt;&amp; x);
+<br/>
+   ~DataSet();
+<br/>
+private:
+<br/>
+   unsigned int m_allocUnit;
+<br/>
+   T* mp_data;
+<br/>
+};
+<br/>
+template &lt;class T&gt; DataSet&lt;T&gt;::DataSet() {
+<br/>
+   m_allocUnit=10;//POINT D
+<br/>
+               //1 to 9 seem to work, but 10 and above do not.
+<br/>
+               //If this value is 10, the debugger shows it getting a
+<br/>
+               //value of 0, but the call to NEW below gets 2560. doh!
+<br/>
+<br/>
+   //mp_data=new T[m_allocUnit];//Usual way of allocating RAM,
+<br/>
+                        
+<br/>
+   mp_data=NEW&lt;T&gt;(m_allocUnit);//I used my NEW function to see what's happening.
+<br/>
+}
+<br/>
+template &lt;class T&gt; DataSet&lt;T&gt;::DataSet(const DataSet&lt;T&gt;&amp; x) {
+<br/>
+   m_allocUnit=x.m_allocUnit;
+<br/>
+   mp_data=new T[m_allocUnit];
+<br/>
+}
+<br/>
+template&lt;class T&gt; DataSet&lt;T&gt;&amp; DataSet&lt;T&gt;::operator=(const DataSet&lt;T&gt;&amp; x) {
+<br/>
+    if (&amp;x != this) {
+<br/>
+      m_allocUnit=x.m_allocUnit;
+<br/>
+      T* p_t=new T[m_allocUnit];//POINT C
+<br/>
+      delete mp_data;
+<br/>
+      mp_data=p_t;
+<br/>
+   }
+<br/>
+   return *this;
+<br/>
+}
+<br/>
+template &lt;class T&gt; DataSet&lt;T&gt;::~DataSet() {
+<br/>
+   delete mp_data;
+<br/>
+}
+<br/>
+<br/>
+//A templated function that returns a DataSet.
+<br/>
+template&lt;class T&gt; DataSet&lt;T&gt; genDataSet(void);
+<br/>
+<br/>
+int main(void) {
+<br/>
+   //set is a DataSet of DataSets. You might do this to create a 2 dimensional vector.
+<br/>
+   DataSet&lt;DataSet&lt;unsigned int&gt; &gt; set;
+<br/>
+   set=genDataSet&lt;DataSet&lt;unsigned int&gt; &gt;();//POINT A
+<br/>
+   return 0;
+<br/>
+}
+<br/>
+template&lt;class T&gt; DataSet&lt;T&gt; genDataSet(void) {
+<br/>
+   DataSet&lt;T&gt; ret;
+<br/>
+   DataSet&lt;T&gt; tSet;
+<br/>
+   ret=tSet;
+<br/>
+   return ret;   //POINT B
+<br/>
+}
+<br/>
+//Diagnostic routine to look at value passed to new.
+<br/>
+template&lt;class T&gt; T* NEW(unsigned int n) {
+<br/>
+   if (n==2560) {   //sometimes wierd values get passed to NEW.
+<br/>
+      unsigned int dummy=0;
+<br/>
+      while (1) {
+<br/>
+         dummy++;   //trap for goofy value, when m_allocUnit was supposed to be 10.
+<br/>
+      }
+<br/>
+   }
+<br/>
+   return new T[n];
+<br/>
+}
+<br/>
+<br/>
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#38521 - sajiimori - Mon Mar 28, 2005 9:51 pm</h4>
+    <div class="postbody"><span class="postbody">You're not using array delete in operator= and the destructor which means you've got a memory leak, but I don't know if that's related to the problem you're seeing.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#38527 - cesium - Mon Mar 28, 2005 10:53 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+You're not using array delete in operator= and the destructor which means you've got a memory leak, but I don't know if that's related to the problem you're seeing.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Did I botch the operator= ? This object contains a pointer to a list of T.
+<br/>
+When you copy a DataSet, you allocate new memory, and release the old.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+      T* p_t=new T[m_allocUnit];//POINT C 
+<br/>
+      delete mp_data; 
+<br/>
+      mp_data=p_t;
+<br/>
+ </td> </tr></table><span class="postbody">
+<br/>
+(I did not show the copy process where the new memory is filled from x.)
+<br/>
+<br/>
+When the DataSet goes out of scope, it releases its memory via
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+delete mp_data
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+in the destructor. So I'm a little confused by your statement. Honestly, I've been looking at code for the past 4 days and it's all starting to look like gummie bears.
+<br/>
+<br/>
+I'm happy to have you looking at my code, I'm really stumped.
+<br/>
+Cheers,
+<br/>
+cesium</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#38540 - sajiimori - Mon Mar 28, 2005 11:33 pm</h4>
+    <div class="postbody"><span class="postbody">If you allocate an array like this:</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">Type* array = new Type[size];</td> </tr></table><span class="postbody">then you must free it like this:</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">delete[] array;</td> </tr></table><span class="postbody">If you don't use the brackets when deleting, the behavior is undefined and may vary between compilers.  One common result is a memory leak.
+<br/>
+<br/>
+The reason you have to use array delete is because it cannot be known at compile time how many objects there are, and the destructor has to be run on every object.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#38541 - cesium - Mon Mar 28, 2005 11:46 pm</h4>
+    <div class="postbody"><span class="postbody">Incredible! I haven't seen 'delete[]' in years. I totally forgot about it. I just looked at my MSVC 6.0 code that I use daily, and I don't use it anywhere! The debugger in MSVC doesn't say I get leaks, but I probably should do a quick survey and fix this.
+<br/>
+<br/>
+I'll also do this for the GBA to see if I should start packing up the DS!
+<br/>
+cesium</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#38544 - cesium - Tue Mar 29, 2005 12:19 am</h4>
+    <div class="postbody"><span class="postbody">Hail sajiimori!
+<br/>
+Oh man, a weight has been lifted off my back.
+<br/>
+PM me your shipping address. The UPS store closes at 6pm Mountain.
+<br/>
+cesium</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

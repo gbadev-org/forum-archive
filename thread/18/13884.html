@@ -1,0 +1,417 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Avoiding missing interrupts - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Avoiding missing interrupts</h2>
+<div id="posts">
+<div class="post">
+    <h4>#137098 - simonjhall - Tue Aug 07, 2007 10:55 pm</h4>
+    <div class="postbody"><span class="postbody">I've got lots of code in interrupts doing different stuff, but the addition of this music playback stuff in quake requires me to never miss an event from timer #1.
+<br/>
+<br/>
+So, questions to those in the know :-)
+<br/>
+- if I'm in (say) the vblank handler and timer #1 happens, what happens?
+<br/>
+- if I'm in (say) the vblank handler and I've spent SO long in it that several timer #1 events occur. What happens?
+<br/>
+- if by default interrupts can't be nested (eg they're all disabled on entry to the handler), how do I make it so they can be?
+<br/>
+<br/>
+Yeah, so basically I can't afford to miss a timer event. I'm not too knowledgable about IRQs so a little help would be nice :-D<br/>_________________<br/><span style="font-weight: bold"><a class="postlink" href="https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&amp;business=simonjhall%40gmail%2ecom&amp;no_shipping=2&amp;no_note=1&amp;tax=0&amp;currency_code=GBP&amp;lc=GB&amp;bn=PP%2dDonationsBF&amp;charset=UTF%2d8" target="_blank">Big thanks to everyone who donated for Quake2</a></span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#137111 - DekuTree64 - Wed Aug 08, 2007 12:32 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>simonjhall wrote:</b></span></td> </tr> <tr> <td class="quote">- if I'm in (say) the vblank handler and timer #1 happens, what happens?</td> </tr></table><span class="postbody">
+<br/>
+It sets its flag in REG_IF. When you return from VBlank, timer1 interrupt fires.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">- if I'm in (say) the vblank handler and I've spent SO long in it that several timer #1 events occur. What happens?</td> </tr></table><span class="postbody">
+<br/>
+Each time timer1 overflows, it sets the bit in REG_IF. But if it's already set, setting it again doesn't make any difference, so when you return from VBlank, timer1 interrupt still just fires once.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">- if by default interrupts can't be nested (eg they're all disabled on entry to the handler), how do I make it so they can be?</td> </tr></table><span class="postbody">
+<br/>
+The libnds dispatcher used to support nesting, don't know if it still does. Basically you have to:
+<br/>
+<br/>
+1. Save spsr_irq.
+<br/>
+2. Save REG_IE, then set it for whatever interrupts you want to allow to nest (timer1 in your case).
+<br/>
+3. Save REG_IME, then set it to 1.
+<br/>
+4. Clear interrupt disable bit in CPSR.
+<br/>
+<br/>
+Then when you're done,
+<br/>
+<br/>
+1. Set interrupt disable bit in cpsr.
+<br/>
+2. Restore REG_IME.
+<br/>
+3. Restore REG_IE.
+<br/>
+4. Restore spsr_irq.
+<br/>
+<br/>
+I think that's everything. When writing it, just imagine an interrupt happening after every instruction.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#137135 - simonjhall - Wed Aug 08, 2007 9:36 am</h4>
+    <div class="postbody"><span class="postbody">Cool, thanks. I was originally worried that the irq stack would break if you were to do this, but since the stack isn't set up on entry to the libnds interrupt dispatcher nested interrupts look doable...
+<br/>
+<br/>
+However, yet more questions!
+<br/>
+<br/>
+On exit from the dispatcher it looks like it returns to the previous address (and mode?) the processor was in before ther interrupt happened. Am I right? ie if an interrupt happens during my interrupt handler, when that inner handler returns, it'll return to the outer handler, right? (and in the proper processor mode)
+<br/>
+<br/>
+If again I'm in my interrupt handler (let's call it interrupt #0) and timer #1 interrupt occurs (so we pause #0's handler and start #1's handler). Now what happens if a third interrupt (#2) occurs, but #1 doesn't allow nested interrupts? #2's event will be recorded in REG_IF, but when will #2's event be handled? On exit from #1's handler, or on exit from #0's handler?
+<br/>
+<br/>
+Note my excessive use of the the word 'interrupt' in this post :-)<br/>_________________<br/><span style="font-weight: bold"><a class="postlink" href="https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&amp;business=simonjhall%40gmail%2ecom&amp;no_shipping=2&amp;no_note=1&amp;tax=0&amp;currency_code=GBP&amp;lc=GB&amp;bn=PP%2dDonationsBF&amp;charset=UTF%2d8" target="_blank">Big thanks to everyone who donated for Quake2</a></span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#137137 - Dwedit - Wed Aug 08, 2007 10:31 am</h4>
+    <div class="postbody"><span class="postbody">Interrupt #2 will be handled immediately after you exit from Interrupt #1, then when Interrupt #2 finishes, it will execute the rest of Interrupt #0.
+<br/>
+You may or may not want to do something to prevent an interrupt handler from being called while it is already handling an interrupt.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#137148 - masscat - Wed Aug 08, 2007 12:12 pm</h4>
+    <div class="postbody"><span class="postbody">Take care with nesting interrupts. Since interrupts may occur at any point after they have been re-enabled the handlers must be designed to cope with this interruption and not allow data to be corrupted (eg two interrupt handlers updating the same data).
+<br/>
+Another possible cause of problems is the order of execution.
+<br/>
+For example, the timer fires and is being processed by the handler and the timer fires again, causing a jump to another instance of the handler. The second timer fire is processed completely before the first timer fire processing is completed.
+<br/>
+<br/>
+My advice would be to avoid the need for nesting of interrupts by keeping the amount of time spent in the handler to a minimum.
+<br/>
+If an interrupt is used to cause long periods of processing then instead of doing that in the handler, simply flag the occurrence in the handler and then notice the flag and do the processing in the main loop which is happily interruptible and there is only one thread of execution changing the data.
+<br/>
+In the case of the timer, the handler could implement a simple count of the number of fires. The main loop can then inspect this count, noticing the number of fires since the last inspection and act accordingly.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#137150 - Cearn - Wed Aug 08, 2007 12:34 pm</h4>
+    <div class="postbody"><span class="postbody">The <a class="postlink" href="http://www.coranac.com/tonc/text/interrupts.htm#sec-switch" target="_blank">dispatcher</a> I use in Tonc allows for prioritized, nested interrupts (e.g., timer can interrupt vblank, but not vice versa). I'm not sure if it can withstand interrupts that are very close together, but it may be worth a look.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#137158 - simonjhall - Wed Aug 08, 2007 1:50 pm</h4>
+    <div class="postbody"><span class="postbody">Yeah this does sound like doing this would be like entering A World of Pain, so maybe I can step round it somehow (as you say masscat, keeping time spent in an interrupt to the minimum).<br/>_________________<br/><span style="font-weight: bold"><a class="postlink" href="https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&amp;business=simonjhall%40gmail%2ecom&amp;no_shipping=2&amp;no_note=1&amp;tax=0&amp;currency_code=GBP&amp;lc=GB&amp;bn=PP%2dDonationsBF&amp;charset=UTF%2d8" target="_blank">Big thanks to everyone who donated for Quake2</a></span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#137175 - wintermute - Wed Aug 08, 2007 4:06 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>simonjhall wrote:</b></span></td> </tr> <tr> <td class="quote">Cool, thanks. I was originally worried that the irq stack would break if you were to do this, but since the stack isn't set up on entry to the libnds interrupt dispatcher nested interrupts look doable...
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+You mean "since the stack <span style="font-weight: bold">is</span> set up"
+<br/>
+<br/>
+The libnds and libgba dispatchers are designed to allow for nesting interrupts but default to single interrupt mode. In theory all you need to do is set REG_IME to 1 at the point in your handler where you're happy for other handlers to kick in.
+<br/>
+<br/>
+As DekuTree64 says, it's probably more manageable to only enable interrupts you want to occur before switching the master enable back on. The default dispatcher already performs most of the steps he recommends.
+<br/>
+<br/>
+(handled) 1. Save spsr_irq.
+<br/>
+(not handled) 2. Save REG_IE, then set it for whatever interrupts you want to allow to nest (timer1 in your case).
+<br/>
+( REG_IME saved) 3. Save REG_IME, then set it to 1.
+<br/>
+(handled) 4. Clear interrupt disable bit in CPSR.
+<br/>
+<br/>
+Then when you're done,
+<br/>
+<br/>
+( handled) 1. Set interrupt disable bit in cpsr.
+<br/>
+( handled) 2. Restore REG_IME.
+<br/>
+( not handled) 3. Restore REG_IE.
+<br/>
+( handled) 4. Restore spsr_irq.
+<br/>
+<br/>
+<br/>
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+On exit from the dispatcher it looks like it returns to the previous address (and mode?) the processor was in before ther interrupt happened. Am I right? ie if an interrupt happens during my interrupt handler, when that inner handler returns, it'll return to the outer handler, right? (and in the proper processor mode)
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+This is where it all starts to get a bit head bending.
+<br/>
+<br/>
+The dispatcher itself is the <span style="font-weight: bold">only</span> code that executes in irq mode. All the handlers are in system mode in order to prevent stack overflow problems.
+<br/>
+<br/>
+For each iteration of the dispatcher 16 bytes of irq stack are used. The BIOS irq vector uses a further 24 bytes so we have 30 bytes of stack used for each level of nesting. The default linkscripts allow for 256 bytes so we can, in theory, nest to 8 levels which should, also in theory, be more than sufficient for most purposes.
+<br/>
+<br/>
+Once you start nesting there are another set of interesting problems to deal with. On the ARM9 side the OAM needs to be set during vblank so you need to be careful that your vsync doesn't get delayed beyond vblank when other handlers are allowed to interrupt the vblank handler.
+<br/>
+<br/>
+SPI code must be treated as critical sections - having a microphone interrupt kick in during touch screen reading or vice versa will cause interesting artifacts in both.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+If again I'm in my interrupt handler (let's call it interrupt #0) and timer #1 interrupt occurs (so we pause #0's handler and start #1's handler). Now what happens if a third interrupt (#2) occurs, but #1 doesn't allow nested interrupts? #2's event will be recorded in REG_IF, but when will #2's event be handled? On exit from #1's handler, or on exit from #0's handler?
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I haven't explicitly tested this but from my understanding of the documentation #2 will be processed on exit from #1, assuming that #0 allowed #2 to happen.
+<br/>
+<br/>
+If this question was related to audio handling I'm coming rapidly to the conclusion that streaming audio should be implemented very carefully and designed to generate a buffer fill request at a fixed point during the frame, or at least as close to fixed as it's possible to get.<br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#137187 - simonjhall - Wed Aug 08, 2007 6:38 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>wintermute wrote:</b></span></td> </tr> <tr> <td class="quote">You mean "since the stack <span style="font-weight: bold">is</span> set up"</td> </tr></table><span class="postbody">Oops, sorry - I didn't quite mean it like that! I had guessed the handler you register via irqSet was run in irq mode (and did wonder why I never ran out of the 256b of stack...) and since I didn't see any "ldr sp, =__sp_irq" (or whatever) in IntrMain I had assumed that the stack *wasn't* initialised on every interrupt.
+<br/>
+If there had been a ldr sp on every interrupt (and the handler was run in irq mode) then nested interrupts would be a bit difficult as they'd all use the same bit of stack. That's what I meant!
+<br/>
+<br/>
+But as it stands, the existing setup you've done in libnds is exactly what I want :-D
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">The dispatcher itself is the only code that executes in irq mode. All the handlers are in system mode in order to prevent stack overflow problems.</td> </tr></table><span class="postbody">Yeah I missed the mode switch. Shouldn't read code whilst eating breakfast...
+<br/>
+<br/>
+Right, I'm gonna have a go with all the suggestions here. Thanks again guys!<br/>_________________<br/><span style="font-weight: bold"><a class="postlink" href="https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&amp;business=simonjhall%40gmail%2ecom&amp;no_shipping=2&amp;no_note=1&amp;tax=0&amp;currency_code=GBP&amp;lc=GB&amp;bn=PP%2dDonationsBF&amp;charset=UTF%2d8" target="_blank">Big thanks to everyone who donated for Quake2</a></span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#137201 - simonjhall - Wed Aug 08, 2007 8:23 pm</h4>
+    <div class="postbody"><span class="postbody">Hmm something's locking something up.
+<br/>
+At the moment I have
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void hblank_handler(void)
+<br/>
+{
+<br/>
+   if work available from main processor
+<br/>
+      do work
+<br/>
+}</td> </tr></table><span class="postbody">However sometimes the work takes too long and misses out some of my timer interrupts.
+<br/>
+<br/>
+So changing it to,
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void hblank_handler(void)
+<br/>
+{
+<br/>
+   volatile unsigned int old_regie = REG_IE;
+<br/>
+<br/>
+   REG_IE = IRQ_TIMER1;
+<br/>
+   REG_IME = 1;
+<br/>
+<br/>
+   if work available from main processor
+<br/>
+      do work
+<br/>
+   
+<br/>
+   REG_IME = 0;
+<br/>
+   REG_IE = old_regie;
+<br/>
+}</td> </tr></table><span class="postbody">Putting ANY IRQ_* in REG_IE will cause it to freeze...somewhere.
+<br/>
+What else should I be doing? Should I be doing anything with REG_IF?
+<br/>
+If REG_IE is set to zero and restored, the game runs fine. If the REG_IME is never changed, then it runs fine even if REG_IE is changed (and changed back).<br/>_________________<br/><span style="font-weight: bold"><a class="postlink" href="https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&amp;business=simonjhall%40gmail%2ecom&amp;no_shipping=2&amp;no_note=1&amp;tax=0&amp;currency_code=GBP&amp;lc=GB&amp;bn=PP%2dDonationsBF&amp;charset=UTF%2d8" target="_blank">Big thanks to everyone who donated for Quake2</a></span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#137213 - DekuTree64 - Wed Aug 08, 2007 9:28 pm</h4>
+    <div class="postbody"><span class="postbody">I'm assuming that by hblank_handler, you mean vblank_handler...
+<br/>
+<br/>
+REG_IF should be getting cleared by the libnds dispatcher before entering the user handler, so that shouldn't cause any trouble. But this does sound like what would happen if it wasn't being cleared, so just to test, reset your bit in it manually before enabling nesting.
+<br/>
+<br/>
+Also, what kind of work is done in the timer1 handler? Just incrementing a counter, or is the full sound mix done there?<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#137226 - Cydrak - Thu Aug 09, 2007 12:25 am</h4>
+    <div class="postbody"><span class="postbody">This is exactly what happens to me. Here's a short test: <a class="postlink" href="http://draci.chaosnet.org/code/IrqCrash.zip" target="_blank">http://draci.chaosnet.org/code/IrqCrash.zip</a>
+<br/>
+<br/>
+There's a vblank interrupt that can trigger a nested timer. The timer IRQ does absolutely nothing, it's only used for convenience and anything else would work.
+<br/>
+<br/>
+If you press L, and fire a top level interrupt, it works as expected--the timer fires, and trigger_irq() returns (after printf'ing the occurance). If you hit R to nest it though, it locks hard, every time. You can see that the IRQ nests fine, and trigger_irq() wakes up and returns, but the vblank never made it back to main().
+<br/>
+<br/>
+(Btw, it crashes just as well with the vblank-"nested" printf removed.)
+<br/>
+<br/>
+After a lot of tracing and hair-pulling (and noticing a oddity in the register dump), I have a suspicion as to what's happening. If you press B, the routine in interruptDispatcher2.s will be installed. It's the same as the one in libnds, except for the three ldm/stmfd lines--where LR_irq is saved, in addition to SPSR_irq and REG_IME. You can hit R all you want and it should work fine now.
+<br/>
+<br/>
+So I think the issue is, even though the BIOS seems to save LR_irq, in fact it's only saving it to call IntrMain. The value saved is the freshly-interrupted PC, not the outer nesting levels. That would be in main()--or for the nested case, in vblank() { trigger_irq() { swiIntrWait(); } } (?). It looks like when IntrMain resumes the second/outer time, it does a MOV PC,LR in IRQ mode, using the _nested_ value, which by now is a branch down the call-chain. Much fun ensues...
+<br/>
+<br/>
+Does this make any sense? Or is there something I'm still doing wrong?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#137379 - wintermute - Sat Aug 11, 2007 1:54 am</h4>
+    <div class="postbody"><span class="postbody">It makes a certain amount of sense but doesn't quite gel with what I thought I knew about the way interrupts work on the DS.
+<br/>
+<br/>
+I've spent a couple of hours making notes on the code flow, ably assisted by no$ but haven't yet found a definite explanation. I'll report back when I have a better explanation.
+<br/>
+<br/>
+For now it seems that your saving of lr_irq fixes the problem so I'd continue with that for now. Sorry I don't have a better answer atm.<br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#137385 - DekuTree64 - Sat Aug 11, 2007 2:52 am</h4>
+    <div class="postbody"><span class="postbody">Dang it, I should just write an article on nested interrupts so I have a reference for all the necessary steps :)
+<br/>
+<br/>
+Yes, you have to save lr_irq. This also reminded me of <a class="postlink" href="http://forum.gbadev.org/viewtopic.php?t=4063" target="_blank">this old post</a>, and that the switch to SYS mode is actually REQUIRED for nesting, unless you write all your handlers in assembly and never touch lr. That's why there is a seperate lr in the first place, because lr_irq is not preserved when an interrupt occurs.
+<br/>
+<br/>
+It's a bit debatable wether it should be done in the libnds dispatcher or in your own code though... It's an unnecessary load/store most of the time, but if it was added to the dispatcher then you could use nested interrupts without any custom assembly code at all.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#137387 - wintermute - Sat Aug 11, 2007 4:11 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>DekuTree64 wrote:</b></span></td> </tr> <tr> <td class="quote">Dang it, I should just write an article on nested interrupts so I have a reference for all the necessary steps :)
+<br/>
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Yes you bloody should :P
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+Yes, you have to save lr_irq.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+It's not immediately obvious why this needs to be saved. The bios code saves it before calling the dispatcher and restores it on return.
+<br/>
+<br/>
+code flow for this code
+<br/>
+<br/>
+pc -&gt; lr_irq ( user code)
+<br/>
+BIOS code - saves R0-R3,R12,LR_IRQ ( user code)
+<br/>
+bios return -&gt; lr_irq
+<br/>
+libnds dispatcher - saves spsr, IME, switch to system mode
+<br/>
+vblank irq - stalls past next interrupt
+<br/>
+pc -&gt; lr_irq ( vblank code)
+<br/>
+BIOS code - saves R0-R3,R12,LR_IRQ ( vblank code )
+<br/>
+BIOS return -&gt; lr_irq
+<br/>
+libnds dispatcher - saves spsr, IME, switch to system mode
+<br/>
+timer irq
+<br/>
+libnds dispatcher - restore spsr, IME, switch to irq mode
+<br/>
+lr_irq -&gt; pc ( bios )
+<br/>
+BIOS - restore R0-R3,R12,LR_IRQ ( vblank code )
+<br/>
+vblank irq
+<br/>
+libnds dispatcher - restore spsr, IME, switch to irq mode
+<br/>
+lr_irq -&gt; pc ( returning to vbank instead of bios)
+<br/>
+<br/>
+nasty
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+and that the switch to SYS mode is actually REQUIRED for nesting, unless you write all your handlers in assembly and never touch lr. That's why there is a seperate lr in the first place, because lr_irq is not preserved when an interrupt occurs.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+well, we *could* switch to FIQ mode which appears to be completely unused on DS and GBA. I really don't want to think about the implications of that though - it's really much easier to make everything work with the same stack for user code and user interrupt handlers.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+It's a bit debatable wether it should be done in the libnds dispatcher or in your own code though... It's an unnecessary load/store most of the time, but if it was added to the dispatcher then you could use nested interrupts without any custom assembly code at all.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+My vote is for doing this in the libnds dispatcher - it simplifies the programmer's life a great deal. It may be redundant under normal circumstances but one of the reasons I went this route was to avoid all the oddities that used to be prevalent with devkit advance.
+<br/>
+<br/>
+Thanks to everyone involved in this thread. My head got bent but I think we all learned something.<br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

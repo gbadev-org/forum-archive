@@ -1,0 +1,178 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Linking the SWI library - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>C/C++ > Linking the SWI library</h2>
+<div id="posts">
+<div class="post">
+    <h4>#9136 - slip - Tue Jul 29, 2003 4:02 am</h4>
+    <div class="postbody"><span class="postbody">I downloaded the SWI library by Andrew P. Bilyk, I link with the following command:
+<br/>
+<br/>
+g++ -o main.elf *.o -lm swi(iwram).lib
+<br/>
+<br/>
+I've included swi.h and I get "undefined reference to which ever function I try to call.
+<br/>
+<br/>
+Can someone tell me whats going on?
+<br/>
+thanks<br/>_________________<br/>[url="http://www.ice-d.com"]www.ice-d.com[/url]</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#9142 - abilyk - Tue Jul 29, 2003 6:53 am</h4>
+    <div class="postbody"><span class="postbody">Hmm...
+<br/>
+<br/>
+I'm trying to reproduce the error myself and I can't, though I'm getting different errors. ;)
+<br/>
+<br/>
+When I submitted the libs to the site, I forgot to mention that you need to compile your other objects with -mthumb-interwork (since the libraries themselves support interworking, otherwise you'll get a warning) and possibly -mlong-calls.  If the code that calls a SWI function is in a different section of memory (example: library in iwram, code in ROM), I believe -mlong-calls is necessary.
+<br/>
+<br/>
+Beyond that, perhaps you are using a SWI function in a source code file that hasn't seen swi.h's external declarations.  Again, this is something I should have done before submitting the libs, but if you add
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#ifndef SWI_H
+<br/>
+#define SWI_H</td> </tr></table><span class="postbody"> to the beginning of swi.h and </span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#endif</td> </tr></table><span class="postbody">to the end, you can include swi.h in every file that needs it without worrying about multiple declarations.  Hope this helps you out.
+<br/>
+<br/>
+- Andrew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#9150 - slip - Tue Jul 29, 2003 12:01 pm</h4>
+    <div class="postbody"><span class="postbody">My objects arn't being compiled with -mthumb-interwork and I don't get a warning, when trying to link. But I tried compiling my objects with -mthumb-interwork then I get warnings. I also tried adding -mlong-calls, but I still get undefined reference to the function I'm trying to call. All my sources include the swi.h file and I've got the defines there.
+<br/>
+any ideas?<br/>_________________<br/>[url="http://www.ice-d.com"]www.ice-d.com[/url]</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#9152 - mtg101 - Tue Jul 29, 2003 1:25 pm</h4>
+    <div class="postbody"><span class="postbody">My guess is that it's a C++ / C linkage problem.  You're using g++, so I assume you're using C++ (or at least compiling in C++ mode).  The SWI libraries look like they're in C. So maybe you want to try using extern "C" {} in swi.h to force C linkage.
+<br/>
+<br/>
+I'm sure you know how to do this... but as it's a slow day I think I'll show what it would look like anyhow :)
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+///////////////////////
+<br/>
+// swi.h              /
+<br/>
+// andrew p. bilyk    /
+<br/>
+// july 21, 2003      /
+<br/>
+///////////////////////
+<br/>
+<br/>
+#ifdef __cplusplus
+<br/>
+extern "C" {
+<br/>
+#endif
+<br/>
+extern void SWI_SoftReset();
+<br/>
+extern void SWI_RegisterRamReset(u32 reset_flags);
+<br/>
+extern void SWI_Halt();
+<br/>
+extern void SWI_Stop();
+<br/>
+extern void SWI_IntrWait(u32 initflagclear, u32 interrrupt);
+<br/>
+extern void SWI_VBlankInterWait();
+<br/>
+extern u32  SWI_Div(u32 numerator, u32 denominator);
+<br/>
+extern u32  SWI_AbsDiv(u32 numerator, u32 denominator); // SWI_Div + mov r0, r3
+<br/>
+extern u32  SWI_Mod(u32 numerator, u32 denominator);    // SWI_Div + mov r0, r1
+<br/>
+extern u32  SWI_DivArm(u32 denominator, u32 numerator);
+<br/>
+extern u32  SWI_AbsDivArm(u32 denominator, u32 numerator); // SWI_DivArm + mov r0, r3
+<br/>
+extern u32  SWI_ModArm(u32 denominator, u32 numerator);    // SWI_DivArm + mov r0, r1
+<br/>
+extern u32  SWI_Sqrt(u32 number);
+<br/>
+extern s16  SWI_ArcTan(s16 tangent);
+<br/>
+extern u16  SWI_ArcTan2(s16 x, s16 y);
+<br/>
+extern void SWI_CPUSet(void *source, void *destination, u32 length_mode);
+<br/>
+extern void SWI_CPUFastSet(void *source, void *destination, u32 length_mode);
+<br/>
+extern u32  SWI_GetBiosChecksum();
+<br/>
+extern void SWI_BgAffineSet(void *source, void *destination, u32 number);
+<br/>
+extern void SWI_ObjAffineSet(void *source, void *destination, u32 number, u32 offset);
+<br/>
+extern void SWI_BitUnPack(void *source, void *destination, void *parameters);
+<br/>
+extern void SWI_LZ77UnCompWRAM(void *source, void *destination);
+<br/>
+extern void SWI_LZ77UnCompVRAM(void *source, void *destination);
+<br/>
+extern void SWI_HuffUnComp(void *source, void *destination);
+<br/>
+extern void SWI_RLUnCompWRAM(void *source, void *destination);
+<br/>
+extern void SWI_RLUnCompVRAM(void *source, void *destination);
+<br/>
+extern void SWI_Diff8bitUnFilterWRAM(void *source, void *destination);
+<br/>
+extern void SWI_Diff8bitUnFilterVRAM(void *source, void *destination);
+<br/>
+extern void SWI_Diff16bitUnFilter(void *source, void *destination);
+<br/>
+#ifdef __cplusplus
+<br/>
+}
+<br/>
+#endif
+<br/>
+</td> </tr></table><span class="postbody"><br/>_________________<br/>---
+<br/>
+Speaker for the Dead</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#9153 - slip - Tue Jul 29, 2003 2:16 pm</h4>
+    <div class="postbody"><span class="postbody">You know I haddn't seen the extern "C" {} thing until just last week, I'd never used it before but now I've used it twice on the same project... lol oh well, what works works right? That sorta fixed the problem thanks =). I can now make the calls, but I still get a whole heap of warnings about .o files not being interworking. I've also compiled everything again with -mthumb-interwork. I also changed the library I was using from iwram to text, when trying to link the iwram one I got relocation error, but just now when I tried again I didn't get it. Though now my program seems to stop when making a call to SWI_ArcTan2 using iwram, =\... odd.
+<br/>
+<br/>
+I have a Question about ArcTan and ArcTan2. In school we use artan, is arctan and artan the same thing, artan short for arctan? I though I heard that somewhere. If thats the case, then whats the number format for the inputs, I can understand that ArcTan2 could take x and y and perform a y/x then find the ar(c?)tan. But how is ArcTan suposed to work with just a single signed integer?
+<br/>
+<br/>
+For example I'm testing ArcTan2 using 9 as my x and 4 as my y, I'm assuming what I said before... ar(c?)tan(y/x). So on my trusty old calculator I put in 4/9 = 0.444444444444, I get the artan of that which in degrees is 23.96248897, in radians its 0.418224329 and in gradients its 26.62498775. Unless my Integer display routine isn't working right I get a result of 4362, which is not any of the above, I thought it might be a fixed point number but by shifting left by 8 I get 17.0390625 and if I shift by 7 I get 34.078125, which you can see is not 23 degrees.
+<br/>
+<br/>
+In the case of just ArcTan, how are you supposed to input 0.44444444444? Is it supposed to be a fixed point number?
+<br/>
+Or have I got all this wrong? If I do, has anyone got any ideas about how I can calculate the ar(c?)tan of an angle?
+<br/>
+<br/>
+Thanks again guys
+<br/>
+<br/>
+EDIT: Ok I spoke to my Maths Teacher and Artan is the same as Arctan.<br/>_________________<br/>[url="http://www.ice-d.com"]www.ice-d.com[/url]</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

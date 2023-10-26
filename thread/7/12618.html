@@ -1,0 +1,526 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Pointer problems - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>C/C++ > Pointer problems</h2>
+<div id="posts">
+<div class="post">
+    <h4>#120555 - Rajveer - Sun Mar 04, 2007 6:11 pm</h4>
+    <div class="postbody"><span class="postbody">Hi guys, I'm using an octree, and in each node there is a linked list of polygons numbers to test collision against.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">struct polyListNode
+<br/>
+{
+<br/>
+   int polyNo;
+<br/>
+   struct node* polyListNode;
+<br/>
+};
+<br/>
+<br/>
+struct polyListNode* currentPolyListNode;
+<br/>
+<br/>
+struct node
+<br/>
+{
+<br/>
+   u8 split;
+<br/>
+   u8 polyCount;
+<br/>
+   f32 maxx, maxy, maxz, minx, miny, minz;
+<br/>
+   struct polyListNode* polyList;
+<br/>
+   struct node* subnode[8];
+<br/>
+};</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+When trying to go through the linked list of a node, I get a few errors:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">         struct polyListNode* tempPolyList = malloc(sizeof(struct polyListNode));
+<br/>
+         tempPolyList = (*noderef)-&gt;polyList;
+<br/>
+         
+<br/>
+         while(tempPolyList-&gt;polyListNode != NULL)
+<br/>
+         {
+<br/>
+            tempPolyList = tempPolyList-&gt;polyListNode; **ERROR**
+<br/>
+         }</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void addLinkedListNode(struct polyListNode* *currentListNode, int c, int temppolycount)
+<br/>
+{
+<br/>
+   if((temppolycount - c) == 1)
+<br/>
+   {
+<br/>
+      return;
+<br/>
+   }
+<br/>
+   else
+<br/>
+   {
+<br/>
+      struct polyListNode* tempPolyListNode = malloc(sizeof(struct polyListNode));
+<br/>
+      (*currentListNode)-&gt;polyListNode = tempPolyListNode; **ERROR**
+<br/>
+      addLinkedListNode(&amp;tempPolyListNode, (c + 1), temppolycount);
+<br/>
+   }
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">      currentPolyListNode = correctNode-&gt;polyList;
+<br/>
+      
+<br/>
+      int r = 0;
+<br/>
+      if(q != 0)
+<br/>
+      {
+<br/>
+         for(r = 0; r &lt; q; r++)
+<br/>
+         {
+<br/>
+            currentPolyListNode = currentPolyListNode-&gt;polyListNode; **ERROR**
+<br/>
+         }
+<br/>
+      }</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+The warning I am getting is:
+<br/>
+<br/>
+warning: assignment from incompatible pointer type
+<br/>
+<br/>
+Note: Just to let you know they're all in different functions. The problem seems constant though.
+<br/>
+<br/>
+Anybody see what I'm doing wrong? I'm tired and ill and at the moment, I'm blind to the problem!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#120573 - Cearn - Sun Mar 04, 2007 7:36 pm</h4>
+    <div class="postbody"><span class="postbody">polyListNode exists in three different contexts: a variable, a struct name and a member name. That's gotta give some friction. Doing a little renaming should help.
+<br/>
+<br/>
+As for the code:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>rajveer wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">         struct polyListNode* tempPolyList = malloc(sizeof(struct polyListNode));
+<br/>
+         tempPolyList = (*noderef)-&gt;polyList;
+<br/>
+         
+<br/>
+         while(tempPolyList-&gt;polyListNode != NULL)
+<br/>
+         {
+<br/>
+            tempPolyList = tempPolyList-&gt;polyListNode; **ERROR**
+<br/>
+         }</td> </tr></table><span class="postbody"></span></td> </tr></table><span class="postbody">
+<br/>
+You're alllocating a pointer tempPolyList and then making it point to something else. The allocated space is now unreferenced, causing a memory leak. 
+<br/>
+The reason why 'tempPolyList = tempPolyList-&gt;polyListNode' doesn't work is because the lefthand side is a <span style="font-style: italic">struct polyListNode</span> and the righthand side a <span style="font-style: italic">node</span>. These are not the same. I can't be sure what it should be, because everything has the same names. Possibly 'tempPolyList= tempPolyList-&gt;polyListNode-&gt;polyList;'.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Rajveer wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void addLinkedListNode(struct polyListNode* *currentListNode, int c, int temppolycount)
+<br/>
+{
+<br/>
+   if((temppolycount - c) == 1)
+<br/>
+   {
+<br/>
+      return;
+<br/>
+   }
+<br/>
+   else
+<br/>
+   {
+<br/>
+      struct polyListNode* tempPolyListNode = malloc(sizeof(struct polyListNode));
+<br/>
+      (*currentListNode)-&gt;polyListNode = tempPolyListNode; **ERROR**
+<br/>
+      addLinkedListNode(&amp;tempPolyListNode, (c + 1), temppolycount);
+<br/>
+   }
+<br/>
+}</td> </tr></table><span class="postbody"></span></td> </tr></table><span class="postbody">
+<br/>
+'struct polyListNode* *currentListNode'. If this is the whole function, you don't need the double pointer -- it only confuses things. 'foo-&gt;' is clearer than '(*foo)-&gt;'. And again, mismatch between <span style="font-style: italic">polyListNode</span> and <span style="font-style: italic">node</span> pointers. Same goes for the third function.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#120574 - gmiller - Sun Mar 04, 2007 7:48 pm</h4>
+    <div class="postbody"><span class="postbody">I agree with Cearn about the name confusion.  If the top nodes link together with each node having a link list of nodes associated with the top node (the one with polyNo in it) then the top node is miss-defined.  If you only need a link list of the nodes that have the combined data then there is no reason to separate them.  The way it is laid out is is confusing as to what you intended.  Does the "struct node" want a list of associated "nodes" or is there something else you are trying to do?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#120578 - Rajveer - Sun Mar 04, 2007 8:38 pm</h4>
+    <div class="postbody"><span class="postbody">Oh god, I told you I was tired and ill, what a stupid mistake with the naming of the polyListNode data structure! I've now changed the datastructure for the polyListNode to:
+<br/>
+<br/>
+struct polyListNode
+<br/>
+{
+<br/>
+	int polyNo;
+<br/>
+	struct <span style="color: red">polyListNode* nextNode;</span>
+<br/>
+};
+<br/>
+<br/>
+struct polyListNode* currentPolyListNode;
+<br/>
+<br/>
+Thanks guys for pointing it out :)
+<br/>
+<br/>
+Basically I was trying to create a linked list of polygon numbers for each octree node, because the number for each octree cannot be preset to a value in my example (and therefore cannot use a simple array). Cheers again.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#120582 - Rajveer - Sun Mar 04, 2007 9:27 pm</h4>
+    <div class="postbody"><span class="postbody">Cearn, you said that the code I presented causes a memory leak. If I allocated space for <span style="font-style: italic">tempPolyListNode</span> and then made it point somewhere else, then the memory leak comes from the space I created for the integer <span style="font-style: italic">polyNo</span> which is part of the polyListNode data structure? How would I free this part of space and still allow tempPolyListNode point to where I want it to, as two pointers have to be the same type no? (So I'm thinking that I HAVE to assign tempPolyListNode some space in order for it to be of the same type, then point it to somewhere else)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#120586 - gmiller - Sun Mar 04, 2007 10:20 pm</h4>
+    <div class="postbody"><span class="postbody">With the way the structure is defined the malloc of polyListNode only gets space enough to hold the int polyNo and a pointer that should point to something of the same type.  So this list can only hold polyNo data and a pointer to the next data.  I assume this is not what you wanted to do.  When you allocate the space with malloc the pointer nextNode will not point to anything that has been allocated. if you want a link list when you allocate the data you have a choice on where in the list you put the new node (even though I think the node is miss defined), you could make it the new head of the list or put it on the end of the list.  This will determine how your addLinkListNode should operate.
+<br/>
+<br/>
+Could you state what data you think should be in each node so I can see how you logically think it should be.  Here is my guess:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+struct polyListNode
+<br/>
+{
+<br/>
+   int polyNo;
+<br/>
+   u8 split;
+<br/>
+   u8 polyCount;
+<br/>
+   f32 maxx, maxy, maxz, minx, miny, minz;
+<br/>
+   struct polyListNode* nextNode;
+<br/>
+   struct node subnode[8];
+<br/>
+};
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+In this case each node contains this information and a pointer to the next node with more information on a different polyNo.  Of course this is a guess.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#120588 - KayH - Sun Mar 04, 2007 10:21 pm</h4>
+    <div class="postbody"><span class="postbody">Hi,
+<br/>
+<br/>
+I use for structs something like:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+typedef struct _Poly
+<br/>
+{
+<br/>
+    int value;
+<br/>
+    // some more here
+<br/>
+} Poly;
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+then I can use the "Poly" as a new variable typ without that "struct" everytime, this is much more readable. Of course you can use a better name for "Poly" ... ;-)
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+// malloc space on the heap
+<br/>
+Poly* pPoly;
+<br/>
+pPoly = (Poly*) malloc (sizeof (Poly));
+<br/>
+<br/>
+// free them later
+<br/>
+free(pPoly), pPoly=NULL;
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Additional you should ever test the return value of malloc, if there was not enough space available you get no space and no valid pointer back. Then you get a Null pointer ... 
+<br/>
+If you ever test the pointer for beeing not Null before you use it, you avoid hard to find issues!
+<br/>
+That's why after freeing the space the pointer (pPoly) was set to Null, as you should ever test this(!) you will not use the pointer. Do you see what I mean?
+<br/>
+<br/>
+HTH
+<br/>
+KaY</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#120612 - Rajveer - Mon Mar 05, 2007 12:35 am</h4>
+    <div class="postbody"><span class="postbody">Cheers for the replies guys.
+<br/>
+<br/>
+@gmiller: </span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>gmiller wrote:</b></span></td> </tr> <tr> <td class="quote">With the way the structure is defined the malloc of polyListNode only gets space enough to hold the int polyNo and a pointer that should point to something of the same type.  So this list can only hold polyNo data and a pointer to the next data.  I assume this is not what you wanted to do.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Actually thats precisely what I wanted to do :) I've created two separate linked lists. The first is an octree data structure called node (the second data structure defined) which holds information to do with the size of each node, whether its split or not, the number of polygons it holds, and I used to store an array of ints for the polygon numbers. I got rid of that as I dont know how many polygons are to be in each octree node anymore, so I created a second data structure called polyListNode which is simply a linked list of ints, storing only the polygon number. I put a node for the linked list into each octree nodes, but defined it wrong before because...well...I blame it on dopeyness ;) Here's how I should have defined the structures:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">struct polyListNode
+<br/>
+{
+<br/>
+   int polyNo;
+<br/>
+   struct polyListNode* nextNode;
+<br/>
+};
+<br/>
+<br/>
+struct node
+<br/>
+{
+<br/>
+   u8 split;
+<br/>
+   int polyCount;
+<br/>
+   f32 maxx, maxy, maxz, minx, miny, minz;
+<br/>
+   struct polyListNode* polyList;
+<br/>
+   struct node* subnode[8];
+<br/>
+};</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+@KayH: I've never used a typedef before, does it only do what you said? So instead of having to type "struct poly" you would just type "poly" each time?
+<br/>
+<br/>
+Also, good call on testing if malloc worked (I never thought of what you said) but when you made pPoly free, does freeing it not get rid of the pointer, or does it still exist when there is no memory allocated to it?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#120623 - KayH - Mon Mar 05, 2007 1:21 am</h4>
+    <div class="postbody"><span class="postbody">Rajveer wrote:</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+@KayH: I've never used a typedef before, does it only do what you said? So instead of having to type "struct poly" you would just type "poly" each time?
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Yes, that is what I do (and lot of others too). You give the compiler the possibility to make a typecheck. I would call it: on-the-fly extension of the language. The compiler knows then all about it, as he knows e.g. for double or int. You already use the type "u8"! :-) It is exactly this. Maybe some of the guru's can explain it better. ;-) Or any decent C tutorial.
+<br/>
+<br/>
+When the malloc fails, you have not so many option anymore. No space for you means normally also no space for the rest of the program. You should immediately free some resources.
+<br/>
+It is more important to check the pointer while your program is running, that means when you try to assign some values.
+<br/>
+<br/>
+Freeing only frees the space allocated by malloc! The pointer himself is another variable which get not automatically freed! Freeing it depends on the place where you defined the pointer. If you defined it inside a method, it is normally placed on the stack and will be "freed" when the program leaves the scope of the method. If it is a global pointer variable it is freed when the program ends. If it was "malloced" you now know when it is freed. ;-)
+<br/>
+<br/>
+You may also think about reading good tutorials about linked lists. Probably you also often need methods for append, insert, delete one element (from the inner list), exchange two elements and sort the list.
+<br/>
+<br/>
+When you often needs this it is possible to code all this one time and use it often for each datatyp you want:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+typedef struct _dLinkedList
+<br/>
+{
+<br/>
+    void* data; // here you add a link to what you want
+<br/>
+    _dLinkedList* prev;
+<br/>
+    _dLinkedList* next;
+<br/>
+} dLinkedList;
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+For this new type dLinkedList you implement all the methods you need. In the data pointer you can store a pointer to what you want.
+<br/>
+<br/>
+HTH
+<br/>
+KaY</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#120624 - sajiimori - Mon Mar 05, 2007 1:23 am</h4>
+    <div class="postbody"><span class="postbody">Rather than explaining how pointers and dynamic allocation work, I'd suggest picking up a good C book.  A few posts on a message board aren't going to give you a comparable level of understanding.
+<br/>
+<br/>
+<a href="http://www.amazon.com/dp/0672326965" target="_blank">http://www.amazon.com/dp/0672326965</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#120681 - gmiller - Mon Mar 05, 2007 2:12 pm</h4>
+    <div class="postbody"><span class="postbody">From the data you defined this is what you have.
+<br/>
+<br/>
+There is a struct node that can point at a struct polyListNode.  The polyListNodes are linked together holding only a PloyNode and the link to the "next" polyListNode.  There could be multiple struct nodes that can point to ployListNodes (but no pointers the other way) and then up to 8 other "nodes" linked to a single node.  Of course this is reading your data definition.  I don't know what else you wanted but the data as defined implies the previous definition.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+struct polyListNode
+<br/>
+{
+<br/>
+   int polyNo;
+<br/>
+   struct polyListNode* nextNode;
+<br/>
+};
+<br/>
+<br/>
+struct node
+<br/>
+{
+<br/>
+   u8 split;
+<br/>
+   int polyCount;
+<br/>
+   f32 maxx, maxy, maxz, minx, miny, minz;
+<br/>
+   struct polyListNode* polyList;
+<br/>
+   struct node* subnode[8];
+<br/>
+};
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#121071 - OogyBoogy - Thu Mar 08, 2007 5:29 pm</h4>
+    <div class="postbody"><span class="postbody">If you are going to use linked lists, it is far easier to create a seperate Node structure, and include this as the first member of the structures you actualy want to link together.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+typedef struct Node {
+<br/>
+    struct Node *next, *previous;
+<br/>
+} Node;
+<br/>
+<br/>
+typedef struct MyData {
+<br/>
+    Node *node;
+<br/>
+    /* Add your structure data here... */
+<br/>
+} MyData;
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+This way you can treat any structure as a Node structure simply by typecasting. For instance:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+AddNode (mylist, (Node *) mydata);
+<br/>
+</td> </tr></table><span class="postbody"><br/>_________________<br/>OogyBoogy</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#121113 - sgeos - Fri Mar 09, 2007 1:45 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>OogyBoogy wrote:</b></span></td> </tr> <tr> <td class="quote">If you are going to use linked lists, it is far easier to create a seperate Node structure, and include this as the first member of the structures you actualy want to link together.</td> </tr></table><span class="postbody">
+<br/>
+Clever.  I do not recommend this for a beginner.
+<br/>
+<br/>
+-Brendan</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#121118 - sajiimori - Fri Mar 09, 2007 3:23 am</h4>
+    <div class="postbody"><span class="postbody">Yikes, delicate.
+<br/>
+<br/>
+Oh, the lengths people will go to to avoid using a basic C++ feature...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#121186 - poslundc - Sat Mar 10, 2007 12:54 am</h4>
+    <div class="postbody"><span class="postbody">Oof. Type unsafe.
+<br/>
+<br/>
+Good luck if you're working on a team, or if your code has to be maintained/upgraded by others.
+<br/>
+<br/>
+I would still prefer void pointers to this method. At least that way the absence of type-safety is upfront and obvious, by virtue of the absence of type.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#121190 - tepples - Sat Mar 10, 2007 1:25 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sajiimori wrote:</b></span></td> </tr> <tr> <td class="quote">Oh, the lengths people will go to to avoid using a basic C++ feature...</td> </tr></table><span class="postbody">
+<br/>
+Could it have something to do with conflating the perceived overhead of C++ with the known overheads of exceptions, RTTI, and static linked &lt;iostream&gt;, all of which are in the "hello world" executable compiled with Free tools using the default settings?<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#121199 - sajiimori - Sat Mar 10, 2007 3:56 am</h4>
+    <div class="postbody"><span class="postbody">Yes!  =)
+<br/>
+<br/>
+Out of curiosity, I just compiled "Hello world" using MinGW, one in C and one in C++, and they were exactly the same size, as long as they both used printf.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

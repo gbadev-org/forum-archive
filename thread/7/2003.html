@@ -1,0 +1,412 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Pern Projects mode7 tutorial on DAY 5 - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>C/C++ > Pern Projects mode7 tutorial on DAY 5</h2>
+<div id="posts">
+<div class="post">
+    <h4>#10362 - Mr. GBA - Wed Sep 03, 2003 2:00 pm</h4>
+    <div class="postbody"><span class="postbody">Has anyone had any success in getting this to work? I mean, the "test.bin" inlcuded works but whenever I recompile the code the gba file does not appear in 3d.
+<br/>
+Could someone please tell me what to add to the file(below) to get the mode7 effect to work: thanks
+<br/>
+<br/>
+/********************************************************
+<br/>
+*	
+<br/>
+*
+<br/>
+*				by devoto
+<br/>
+*
+<br/>
+*   
+<br/>
+********************************************************/
+<br/>
+#include&lt;math.h&gt; //sign and cos stuff
+<br/>
+#include"gba.h"
+<br/>
+#include"screenmode.h"
+<br/>
+#include"keypad.h"
+<br/>
+#include"sprite.h"
+<br/>
+#include"backgrounds.h"
+<br/>
+#include "dma.h"
+<br/>
+#include "interupts.h"
+<br/>
+<br/>
+#include "sunset.h"
+<br/>
+<br/>
+FIXED SIN[360];		//my LUTs for sign and cosign
+<br/>
+FIXED COS[360];
+<br/>
+FIXED div[160];  //a LUT table for divides
+<br/>
+<br/>
+//global variables as it is kind of hard to pass variables to an interupt
+<br/>
+int angle = 0;  //rotation angle
+<br/>
+FIXED x = 0;      //x and y background scroll
+<br/>
+FIXED y = 0;
+<br/>
+int height = (32&lt;&lt;8);     //height of the player
+<br/>
+<br/>
+void GetInput(void);
+<br/>
+<br/>
+///main entry point from the boot.asm startup file
+<br/>
+int main(void)
+<br/>
+{
+<br/>
+<br/>
+	u16 loop,loopx,loopy;
+<br/>
+<br/>
+	Bg bg2;	
+<br/>
+<br/>
+	bg2.charBaseBlock = 0;
+<br/>
+	bg2.colorMode = BG_COLOR_256;
+<br/>
+	bg2.number = 2;
+<br/>
+	bg2.screenBaseBlock = 30;
+<br/>
+	bg2.wraparound = 1;
+<br/>
+	bg2.size = ROTBG_SIZE_256x256;
+<br/>
+<br/>
+<br/>
+	EnableBackground(&amp;bg2);//this sets up my background if all the members are filled in
+<br/>
+							//and validates the tiledata and mapdata pointers
+<br/>
+<br/>
+	SetMode(MODE_2 | BG2_ENABLE);
+<br/>
+	//the palette is from a pcx file but I deleted all the graphics data and just put to tiles in there manualy
+<br/>
+	DMA_Copy(3,(void*)SunsetPalette,(void*)BGPaletteMem,128,DMA_32NOW);	//da palette
+<br/>
+	DMA_Copy(3,(void*)SunsetDatatemp, (void*)bg2.tileData,32, DMA_32NOW); //just two tiles a black and a white
+<br/>
+<br/>
+<br/>
+	//just alternates the tiles to put blocks on the screen
+<br/>
+<br/>
+	for(loopy = 0; loopy&lt;32; loopy++)
+<br/>
+	{
+<br/>
+		for(loopx = 0; loopx&lt;16; loopx++)
+<br/>
+		{
+<br/>
+			if( loopx&amp;1 &amp;&amp; loopy&amp;2)
+<br/>
+				bg2.mapData[loopy*16+loopx] = (1&lt;&lt;8)+1;
+<br/>
+			if( !(loopx&amp;1) &amp;&amp; !(loopy&amp;2))
+<br/>
+				bg2.mapData[loopy*16+loopx] = (1&lt;&lt;8)+1;
+<br/>
+		}
+<br/>
+	}
+<br/>
+<br/>
+	//sine cos LUT
+<br/>
+	for(loop = 0; loop &lt; 360; loop++)
+<br/>
+	{
+<br/>
+		SIN[loop] = (FIXED)(sin(RADIAN(loop)) * (float)(1&lt;&lt;16));  //sin and cos are computed and cast to fixed							//fixed
+<br/>
+		COS[loop] = (FIXED)(cos(RADIAN(loop)) * (float)(1&lt;&lt;16));
+<br/>
+	}
+<br/>
+<br/>
+	//calculate my divide look up table so I can use the property x/y = x*(1/y) = x*div[y]
+<br/>
+	for(loop=0;loop &lt;160;loop++)
+<br/>
+	{
+<br/>
+		div[loop] = (FIXED)( (float)( (1&lt;&lt;16)/loop) ); //our fixed point divide table is 8.24 (24 bits of fraction)
+<br/>
+	}
+<br/>
+<br/>
+<br/>
+<br/>
+<br/>
+//	EnableInterupts(INT_HBLANK | INT_VBLANK);  //turn on my interupts...dont realy need vblank
+<br/>
+<br/>
+	while(1)
+<br/>
+	{
+<br/>
+		GetInput();
+<br/>
+		while(REG_VCOUNT &lt; 160){}
+<br/>
+<br/>
+<br/>
+	}	
+<br/>
+return(0);
+<br/>
+<br/>
+}
+<br/>
+<br/>
+void GetInput(void)
+<br/>
+{
+<br/>
+	static int angletemp = 0; //this to give us a bit slower change in angle.  If i incremented it once per frame
+<br/>
+	//it would change 60 times a secont that is way too fast so I increment angletemp and divide  by 64 before puting in angle
+<br/>
+	//.  That means that angle temp has to increase 
+<br/>
+	//by 64 before angle will increase by one.
+<br/>
+<br/>
+<br/>
+	if(!(*KEYS &amp; KEY_LEFT))  //to move left and right is a simple sin of the angle...the shift is just to control how fast we move
+<br/>
+	{
+<br/>
+		y+=(SIN[angle])&gt;&gt;3;
+<br/>
+		x-=(COS[angle])&gt;&gt;3;
+<br/>
+	}
+<br/>
+	if(!(*KEYS &amp; KEY_RIGHT))
+<br/>
+	{
+<br/>
+		y-=(SIN[angle])&gt;&gt;3;
+<br/>
+		x+=(COS[angle])&gt;&gt;3;
+<br/>
+	}
+<br/>
+<br/>
+	if(angle &lt; 270) //since moving up and down we just rotate the angle by 90
+<br/>
+		angle += 90;//its okay that we destroy it because we restore it at the end of this function
+<br/>
+	else
+<br/>
+		angle-=270;
+<br/>
+<br/>
+<br/>
+	if(!(*KEYS &amp; KEY_UP))
+<br/>
+	{
+<br/>
+ 		y-=(SIN[angle])&gt;&gt;3;
+<br/>
+		x+=(COS[angle])&gt;&gt;3;
+<br/>
+	}
+<br/>
+	if(!(*KEYS &amp; KEY_DOWN))
+<br/>
+	{
+<br/>
+		y+=(SIN[angle])&gt;&gt;3;
+<br/>
+		x-=(COS[angle])&gt;&gt;3;
+<br/>
+	}	
+<br/>
+<br/>
+	if(!(*KEYS &amp; KEY_L))
+<br/>
+	{
+<br/>
+ 		angletemp--;
+<br/>
+		if(angletemp&lt;0)
+<br/>
+			angletemp = (359&lt;&lt;6);
+<br/>
+	}
+<br/>
+	if(!(*KEYS &amp; KEY_R))
+<br/>
+	{
+<br/>
+ 		angletemp++;
+<br/>
+		if(angletemp &gt; (359&lt;&lt;6))
+<br/>
+			angletemp = 0;
+<br/>
+	}
+<br/>
+	if(!(*KEYS &amp; KEY_A))
+<br/>
+	{
+<br/>
+ 		height++;
+<br/>
+	}
+<br/>
+	if(!(*KEYS &amp; KEY_B))
+<br/>
+	{
+<br/>
+ 		height--;
+<br/>
+	}
+<br/>
+	if(!(*KEYS &amp; KEY_START))
+<br/>
+	{
+<br/>
+<br/>
+	}
+<br/>
+	if(!(*KEYS &amp; KEY_SELECT))
+<br/>
+	{
+<br/>
+<br/>
+	}
+<br/>
+	angle = angletemp&gt;&gt;6;  //this is where I do the divide by 64
+<br/>
+<br/>
+}<br/>_________________<br/>my dev/business site:
+<br/>
+<br/>
+<a href="http://codebytesdev.afraid.org" target="_blank">http://codebytesdev.afraid.org</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10403 - sajiimori - Thu Sep 04, 2003 7:17 am</h4>
+    <div class="postbody"><span class="postbody">You probably need to enable interrupts in your crt0.S.  That is, assuming you're using devkit advance.  It's not configured for interrupts by default.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10417 - Mr. GBA - Thu Sep 04, 2003 1:30 pm</h4>
+    <div class="postbody"><span class="postbody">Sajimori, do you know how to configure interrupts using DevKitAdv?<br/>_________________<br/>my dev/business site:
+<br/>
+<br/>
+<a href="http://codebytesdev.afraid.org" target="_blank">http://codebytesdev.afraid.org</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10418 - Mr. GBA - Thu Sep 04, 2003 2:09 pm</h4>
+    <div class="postbody"><span class="postbody">I've been trying to configure interupts using the crt0 files and I get this from DevKitAdv:
+<br/>
+<br/>
+C:\WINDOWSM\Desktop\mode7&gt;
+<br/>
+C:\WINDOWSM\Desktop\mode7&gt;ld -o  Mode7.elf crt0.o crtbegin.o crtend.o  interupt.
+<br/>
+o tutor.o  DMA.o backgrounds.o
+<br/>
+tutor.o: In function `main':
+<br/>
+tutor.o(.text+0xa): undefined reference to `__gccmain'
+<br/>
+tutor.o(.text+0xfa): undefined reference to `__floatsisf'
+<br/>
+tutor.o(.text+0x104): undefined reference to `__divsf3'
+<br/>
+tutor.o(.text+0x108): undefined reference to `__extendsfdf2'
+<br/>
+tutor.o(.text+0x110): undefined reference to `__muldf3'
+<br/>
+tutor.o(.text+0x118): undefined reference to `__muldf3'
+<br/>
+tutor.o(.text+0x11c): undefined reference to `__fixdfsi'
+<br/>
+tutor.o(.text+0x128): undefined reference to `__floatsisf'
+<br/>
+tutor.o(.text+0x132): undefined reference to `__divsf3'
+<br/>
+tutor.o(.text+0x136): undefined reference to `__extendsfdf2'
+<br/>
+tutor.o(.text+0x13e): undefined reference to `__muldf3'
+<br/>
+tutor.o(.text+0x146): undefined reference to `__muldf3'
+<br/>
+tutor.o(.text+0x14a): undefined reference to `__fixdfsi'
+<br/>
+tutor.o(.text+0x16a): undefined reference to `__divsi3'
+<br/>
+tutor.o(.text+0x16e): undefined reference to `__floatsisf'
+<br/>
+tutor.o(.text+0x172): undefined reference to `__fixsfsi'
+<br/>
+tutor.o(.text+0x1a6): undefined reference to `__addsf3'
+<br/>
+tutor.o(.text+0x1ae): undefined reference to `__addsf3'
+<br/>
+<br/>
+Can anyone help?
+<br/>
+Thanks<br/>_________________<br/>my dev/business site:
+<br/>
+<br/>
+<a href="http://codebytesdev.afraid.org" target="_blank">http://codebytesdev.afraid.org</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10435 - tepples - Thu Sep 04, 2003 8:03 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Mr. GBA wrote:</b></span></td> </tr> <tr> <td class="quote">I've been trying to configure interupts using the crt0 files and I get this from DevKitAdv:
+<br/>
+<br/>
+C:\WINDOWSM\Desktop\mode7&gt;
+<br/>
+C:\WINDOWSM\Desktop\mode7&gt;ld -o  Mode7.elf crt0.o crtbegin.o crtend.o  interupt.o tutor.o  DMA.o backgrounds.o
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+You'll need to add <span style="font-weight: bold">-lgcc -lc -lgcc</span> if you're using ld.exe instead of gcc.exe.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

@@ -1,0 +1,210 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Realtime mixing - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > Realtime mixing</h2>
+<div id="posts">
+<div class="post">
+    <h4>#7649 - dreamc - Sun Jun 22, 2003 11:50 am</h4>
+    <div class="postbody"><span class="postbody">So, i started coding a modplayer for gba, it works nice but in the current state it won't be practically useful for (basically) anything else than stand-alone playing of mod-files. The problem is that the inner-loop that mixes it all takes way too many cycles (about 600 cycles when 4 channels are active, which is humongous). I'm currently using an interrupt called every 1024 cycles to do the mixing, but i am thinking about rendering to a buffer and doing DMA transfer to the sound FIFO (since frequency and volume information is only updated every frame anyhow). But the problem with that is that the player should be able to play at different BPMs, so the demanded size of the buffer isn't constant (ie frame time varies). Another issue is that i still have to support looping.
+<br/>
+<br/>
+Any ideas/hints/tips on how to optimize the performance of the mixer? Currently it's all written in C, but i'm trying my best to learn the ARM assembler well enough to be able to rewrite it.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7663 - tepples - Sun Jun 22, 2003 6:58 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>dreamc wrote:</b></span></td> </tr> <tr> <td class="quote">i am thinking about rendering to a buffer and doing DMA transfer to the sound FIFO (since frequency and volume information is only updated every frame anyhow).</td> </tr></table><span class="postbody">
+<br/>
+That's the best idea.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">But the problem with that is that the player should be able to play at different BPMs, so the demanded size of the buffer isn't constant (ie frame time varies).</td> </tr></table><span class="postbody">
+<br/>
+If you transcribe all your songs with a BPM of 150 and then change the actual song's tempo with the "speed" (ticks per row) control, you can clock your playback code off the 60Hz timer.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Any ideas/hints/tips on how to optimize the performance of the mixer?</td> </tr></table><span class="postbody">
+<br/>
+When writing the first optimized mixer, don't mix a sample at a time; instead, mix a channel at a time. Mix to a 16-bit-per-sample buffer. Unroll your loop a bit. Compile it as ARM code and put it in IWRAM. If you're doing true panned stereo (not just L/R stereo), pass volumes and pan settings to the mixer as (left ch vol | (right ch vol &lt;&lt; 16)); this way, you only have to do one multiplication per channel because you're doing makeshift vector processing.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7668 - dreamc - Sun Jun 22, 2003 7:44 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote">If you transcribe all your songs with a BPM of 150 and then change the actual song's tempo with the "speed" (ticks per row) control, you can clock your playback code off the 60Hz timer.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+As a part-time musician i almost find that idea offensive ;) The whole idea of the player was to be able to play back songs as correctly as possible, something i miss in the modplayers i've seen so far on GBA (and to learn how to play back music in the first place).
+<br/>
+<br/>
+Thanks for the tips though!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7672 - DekuTree64 - Sun Jun 22, 2003 8:45 pm</h4>
+    <div class="postbody"><span class="postbody">A better solution is to have a fixed-point tick counter. So say your bpm is 125, so normally you'd do bpm * 2 / 5 and get 50Hz, and set a timer to increment it 50 times/sec. 
+<br/>
+So then to base it on the VBlank, set your tick-per-frame to (Hz &lt;&lt; 8) / 60, and then add that every frame. Then just do like if((tick &gt;&gt; 8) &gt; speed) update patterns. Think of it like a fraction, you add 50/60 to your tick counter 60 times per second, so at the end of each second (60 frames), you have (50*60)/60, which is 50, which is the number you should have gotten to by the end of the second.
+<br/>
+The mixing buffer should be the same size whatever bpm you're playing at. The sound mixer and MOD player are really 2 seprate things. The player just needs to be able to set all the mixer parameters depending on the note/effects, but the end mixing rate (which determines the buffer size, if you're running based on VBlank) should be the same nomatter how fast the song is playing.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7689 - tepples - Mon Jun 23, 2003 12:03 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>dreamc wrote:</b></span></td> </tr> <tr> <td class="quote">As a part-time musician i almost find [locking bpm to 900 divided by an integer] offensive ;)</td> </tr></table><span class="postbody">
+<br/>
+That's what most games on older consoles seemed to do. Remember how most NES songs typically ran at a few tempos (90, 100, 113, 129, 150, 180)? For instance, <span style="font-style: italic">Tetris</span> for GB was pretty much fixed to 150 bpm, and <span style="font-style: italic">Klax</span> for NES ran music at 113 bpm. Some games had a way to set the Speed to alternate e.g. 6, 5, 6, 5, 6, 5, etc., producing an "in-between" tempo of 900/5.5 = 164 bpm.
+<br/>
+<br/>
+And yes, fixed-point tempo control can be made to work (see the music code in some adaptations between PAL and NTSC versions of a game), but make sure you can handle updating the channels twice in one frame if the set tempo goes over 150.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">The whole idea of the player was to be able to play back songs as correctly as possible, something i miss in the modplayers i've seen so far on GBA (and to learn how to play back music in the first place).</td> </tr></table><span class="postbody">
+<br/>
+The complexities of .mod are one reason why I didn't write a .mod player but instead an editor and player for my own custom format. Another reason is that I want to use the same bytecode format for NES music, which typically demands a smaller binary footprint.
+<br/>
+<br/>
+"But I wanna use .mods I got off the net in my game!"
+<br/>
+Write your own songs you dirty pirate ;-)<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7714 - wizardgsz - Mon Jun 23, 2003 2:16 pm</h4>
+    <div class="postbody"><span class="postbody">I'm still working to a S3m player, maybe we can share my source code so you can help me to resolve my bugs;-))
+<br/>
+Anyhow my code (cut&amp;pasted from fmoddoc series) is, hopefully, easy to understand. 
+<br/>
+It takes about 30% (it runs within vblank) for a 4-chn song with standard left-right-right-left panning. That's so slow:(
+<br/>
+It plays at different BPM, faster than required but it plays, *smile*.
+<br/>
+<br/>
+Please, let me know!!
+<br/>
+<br/>
+Ga<br/>_________________<br/><a href="http://www.geocities.com/gabriele_scibilia/" target="_blank">http://www.geocities.com/gabriele_scibilia/</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7734 - dreamc - Mon Jun 23, 2003 6:51 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote">"But I wanna use .mods I got off the net in my game!"
+<br/>
+Write your own songs you dirty pirate ;-)</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Heh, no, it's more like i'm a demoscener with loads of demoscene friends and we still like the .mod format for nostalgia reasons =)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7748 - wizardgsz - Mon Jun 23, 2003 11:19 pm</h4>
+    <div class="postbody"><span class="postbody">Anyhow if you need my code, that's yours... maybe you'll fix it for me too:-)
+<br/>
+Thanks<br/>_________________<br/><a href="http://www.geocities.com/gabriele_scibilia/" target="_blank">http://www.geocities.com/gabriele_scibilia/</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7779 - NitroSR - Tue Jun 24, 2003 4:21 pm</h4>
+    <div class="postbody"><span class="postbody">I will be delving into the ranks of writing an .s3m player for GBA in the near future.  I wrote one on my PC about 7 years ago, so I have experience with timing issues.  The fixed point timer works nicely, and fools the ear as to the rate at which the song updates.  I of course have performance concerns.
+<br/>
+<br/>
+I have a question about profiling.  How exactly do you go about calculating the percent of CPU/number of cycles a given routine on GBA?  What are the different techniques used in obtaining this information.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7780 - DekuTree64 - Tue Jun 24, 2003 4:38 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>NitroSR wrote:</b></span></td> </tr> <tr> <td class="quote"> How exactly do you go about calculating the percent of CPU/number of cycles a given routine on GBA?  What are the different techniques used in obtaining this information.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+The most obvious is to set up a timer, usually set to clock/64 or clock/256 to make sure it doesn't overflow. Or just cascade 2 timers.
+<br/>
+And the less obvious, but easier way is to wait until VCOUNT gets to 0, set background color 0 to something, call the mixer, and then set color 0 to something else. Then you can see how much of the screen drawing time it's taking. Not quite cycle-accurate, but it's a quick-to-read aproximation.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7789 - dreamc - Tue Jun 24, 2003 6:22 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>NitroSR wrote:</b></span></td> </tr> <tr> <td class="quote">I have a question about profiling.  How exactly do you go about calculating the percent of CPU/number of cycles a given routine on GBA?  What are the different techniques used in obtaining this information.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I just set up a timer running at the system clock frequency and subtracted the value before my routine with the value after my routine. Why make it complicated when you don't have to? ;) Of course that requires a more or less dedicated timer, but you have 4 so it shouldn't be any problems most times...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7790 - dreamc - Tue Jun 24, 2003 6:24 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>wizardgsz wrote:</b></span></td> </tr> <tr> <td class="quote">Anyhow if you need my code, that's yours... maybe you'll fix it for me too:-)
+<br/>
+Thanks</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I seriously doubt that i _need_ your code. Usually it takes more time to get into the right frame of mind to fully understand the code than to think about the issue yourself. And it's even more often not even half as rewarding ;) But i appreciate the offer.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7798 - NEiM0D - Tue Jun 24, 2003 10:53 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+When writing the first optimized mixer, don't mix a sample at a time; instead, mix a channel at a time. Mix to a 16-bit-per-sample buffer. Unroll your loop a bit. Compile it as ARM code and put it in IWRAM. If you're doing true panned stereo (not just L/R stereo), pass volumes and pan settings to the mixer as (left ch vol | (right ch vol &lt;&lt; 16)); this way, you only have to do one multiplication per channel because you're doing makeshift vector processing.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+That's a perfect timing! I was just experimenting with panning at the moment.
+<br/>
+<br/>
+I'll see if I can adapt this to my code ;)
+<br/>
+<br/>
+I assume you're talking about 8bit unsigned samples?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7805 - tepples - Wed Jun 25, 2003 5:04 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>NEiM0D wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote">pass volumes and pan settings to the mixer as (left ch vol | (right ch vol &lt;&lt; 16)); this way, you only have to do one multiplication per channel because you're doing makeshift vector processing.</td> </tr></table><span class="postbody">
+<br/>
+I assume you're talking about 8bit unsigned samples?</span></td> </tr></table><span class="postbody">
+<br/>
+I'm pretty sure the technique works with signed 8-bit samples as well. To correct for wraparound from + to - affecting the high-order bits, all you need to do is add 1 to the high-order 16-bit sample whenever the low-order sample is negative, before you shift down to 8 bits.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7807 - NEiM0D - Wed Jun 25, 2003 11:43 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>NEiM0D wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote">pass volumes and pan settings to the mixer as (left ch vol | (right ch vol &lt;&lt; 16)); this way, you only have to do one multiplication per channel because you're doing makeshift vector processing.</td> </tr></table><span class="postbody">
+<br/>
+I assume you're talking about 8bit unsigned samples?</span></td> </tr></table><span class="postbody">
+<br/>
+I'm pretty sure the technique works with signed 8-bit samples as well. To correct for wraparound from + to - affecting the high-order bits, all you need to do is add 1 to the high-order 16-bit sample whenever the low-order sample is negative, before you shift down to 8 bits.</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Ah, I see.
+<br/>
+<br/>
+I was thinking of some way of storing the result [16bit|16bit] in a buffer without modification and thus faster, however, you need to load the previous [16bit|16bit] from the buffer, and add these newly calculated ones to the previous result, and save. however, 16 channels need atleast a 32bit buffer unfortunatly.
+<br/>
+<br/>
+Got any more tips on this?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7815 - DekuTree64 - Wed Jun 25, 2003 3:53 pm</h4>
+    <div class="postbody"><span class="postbody">Well, you can cut down the volume levels to save bits. Max value for each channel is 0xff, * 16 channels is 0xff0, * 64 volume levels is 0x3fc00, which overflows by 2 bits, so if you use 16 vol levels, your max is 0xff00, which works. Volume changes would be pretty noticable with only 16 though. You could cut down on your samlpe resolution too, but that would involve either a time-wasting shift, or modifying the actual sample data, but I think 7-bit samples and 32 vol levels would sound pretty good.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7816 - NEiM0D - Wed Jun 25, 2003 4:12 pm</h4>
+    <div class="postbody"><span class="postbody">I'll be mixing 16bit samples too in the near future</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

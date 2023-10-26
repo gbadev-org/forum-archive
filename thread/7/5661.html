@@ -1,0 +1,514 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Partial template specialization - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>C/C++ > Partial template specialization</h2>
+<div id="posts">
+<div class="post">
+    <h4>#42177 - sajiimori - Sat May 07, 2005 4:18 am</h4>
+    <div class="postbody"><span class="postbody">This code compiles with GCC 3.2.3:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">template&lt;typename A, typename B&gt;
+<br/>
+void f(A, B)
+<br/>
+{
+<br/>
+}
+<br/>
+<br/>
+<br/>
+template&lt;typename A&gt;
+<br/>
+void f(A, int)
+<br/>
+{
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+But this doesn't:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">template&lt;typename A, typename B&gt;
+<br/>
+struct S
+<br/>
+{
+<br/>
+   void method(A, B)
+<br/>
+   {
+<br/>
+   }
+<br/>
+};
+<br/>
+<br/>
+<br/>
+template&lt;typename A&gt;
+<br/>
+void S&lt;A, int&gt;::method(A, int)
+<br/>
+{
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Though it lets me specialize the method if I provide all the template arguments:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void S&lt;int, int&gt;::method(int, int)
+<br/>
+{
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Anybody know what's going on?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#42178 - josath - Sat May 07, 2005 4:54 am</h4>
+    <div class="postbody"><span class="postbody">you can put methods in structs? i thought you could only put methods in classes.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#42181 - sajiimori - Sat May 07, 2005 5:25 am</h4>
+    <div class="postbody"><span class="postbody">Structs and classes are equivalent except structs default to public and classes default to private.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#42185 - poslundc - Sat May 07, 2005 8:14 am</h4>
+    <div class="postbody"><span class="postbody">Seems like it would be kosher to me. Could the difference be that the second template also attempts to instantiate an incompletely defined class, whereas the first example only instantiates the function?
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#42201 - sajiimori - Sat May 07, 2005 6:08 pm</h4>
+    <div class="postbody"><span class="postbody">Looks like I can specialize some of the methods on all of the arguments, or all of the methods on some of the arguments (see below), but not some of the methods on some of the arguments.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">template&lt;typename A&gt;
+<br/>
+struct S&lt;A, int&gt;
+<br/>
+{
+<br/>
+   void method(A, int)
+<br/>
+   {
+<br/>
+   }
+<br/>
+};
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+If I want to specialize a single method on some of the template arguments, is there a better way then duplicating the entire class?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#42214 - MumblyJoe - Sun May 08, 2005 1:49 am</h4>
+    <div class="postbody"><span class="postbody">I also just tested this, you pretty much have to specialise the entire class and not just the function it looks like.
+<br/>
+<br/>
+Luckily, that gave me an idea, use the funky powers of C++ to solve the problem!
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">template&lt;typename AA, typename BB&gt;
+<br/>
+struct method_class
+<br/>
+{
+<br/>
+   void operator()(AA,BB);
+<br/>
+};
+<br/>
+<br/>
+template&lt;typename A, typename B&gt;
+<br/>
+struct S
+<br/>
+{
+<br/>
+   method_class&lt;A,B&gt; method;
+<br/>
+};
+<br/>
+<br/>
+template&lt;typename A&gt;
+<br/>
+struct method_class&lt;A,int&gt;
+<br/>
+{
+<br/>
+   void operator()(A,int){}
+<br/>
+};</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Now if you create a S&lt;anything,int&gt; it creates a method_class&lt;anything,int&gt; inside of itself and uses the partial specialization. The operator() allows it to look enough like a normal member function, with the only obvious problem bieng that it cant DIRECTLY access the member data of the S object calling it, but that can be solved by passing it the "this" pointer as a constructor argument.
+<br/>
+<br/>
+It's a bit of a workaround I know, but if this is what you need it works like a charm.<br/>_________________<br/><a class="postlink" href="http://www.hungrydeveloper.com" target="_blank">www.hungrydeveloper.com</a>
+<br/>
+Version 2.0 now up - guaranteed at least 100% more pleasing!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#42217 - poslundc - Sun May 08, 2005 2:30 am</h4>
+    <div class="postbody"><span class="postbody">Jesus.
+<br/>
+<br/>
+Not that I'm unimpressed with your solution, MumblyJoe - I certainly wouldn't have thought of doing it that way - but talk about having to obfuscate your code in order to do what you want to do... <span style="font-style: italic">I</span> certainly wouldn't want to be the programmer reviewing/maintaining that code.
+<br/>
+<br/>
+If you ask me, it's just a poor "feature" of GCC that it doesn't let you create a partial-specialization of a template class unless the first one is completely specified in the second, but if you think about the way template expansion actually works (in theory, anyway), you can chalk it to the same kind of way pre-processor commands like #define and #include are (much more commonly) misused: it is designed as more of a physical tool than a logical one... it does something specific rather than solve a specific problem.
+<br/>
+<br/>
+From a practical standpoint, sajimori, while I think your intent is clear the way you were originally writing the code, I think the extra code the compiler wants you to write is preferable to any workaround. This is kind of like defining operators in a class... it's intended to save work down the line, not at the creation stage.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#42229 - sajiimori - Sun May 08, 2005 3:28 am</h4>
+    <div class="postbody"><span class="postbody">CodeWarrior doesn't let me do it, either.  It might not be part of the C++ standard.
+<br/>
+<br/>
+MumblyJoe, I was thinking something along those lines, but I ended up duplicating the entire set of classes because the length is comparable with each approach.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">talk about having to obfuscate your code in order to do what you want to do</td> </tr></table><span class="postbody">Isn't that the C++ slogan?  For reference, open up Caller.h in our project.  Then close it before your brain essplode.  Life without closures is fun!
+<br/>
+<br/>
+Incidentally, this is the functionality I was implementing when I ran into the problem:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+// Delayed method calling with up to 3 arguments, some or all of which
+<br/>
+// can be provided when creating the caller.
+<br/>
+<br/>
+class Test
+<br/>
+{
+<br/>
+public:
+<br/>
+   Test(int x)
+<br/>
+      : m_X(x) {}
+<br/>
+<br/>
+   double method(int a, short b, float c)
+<br/>
+   {
+<br/>
+      return (a + b + c) * m_X;
+<br/>
+   }
+<br/>
+<br/>
+private:
+<br/>
+   int m_X;
+<br/>
+};
+<br/>
+<br/>
+void test()
+<br/>
+{
+<br/>
+   Test t(2);
+<br/>
+<br/>
+   // Create a Caller2 which means two arguments will be provided
+<br/>
+   // to the call() method.
+<br/>
+   //
+<br/>
+   // The template arguments specify that call() will take a short
+<br/>
+   // and a float, then return a double.
+<br/>
+   //
+<br/>
+   // Since the method takes 3 arguments, the first one is provided
+<br/>
+   // here and stored in the Caller.
+<br/>
+   //
+<br/>
+   Caller2&lt;short, float, double&gt;* c = newCaller(&amp;t, &amp;Test::method, 10);
+<br/>
+<br/>
+   // Calls t.method(10, 20, 30.0f), returning 120.0.
+<br/>
+   double result = c-&gt;call(20, 30.0f);
+<br/>
+<br/>
+   // Don't forget to clean up.
+<br/>
+   delete c;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#42230 - MumblyJoe - Sun May 08, 2005 3:54 am</h4>
+    <div class="postbody"><span class="postbody">sajiimori: The original code you posted didn't work in Visual C++, so we can assume if msvc, gcc and codewarrior don't accept it that it's either not allowed by the standard, or not worth doing if three good compilers don't accept it.
+<br/>
+<br/>
+poslundc: Yeah, I can't deny that I wouldn't want to maintain that code either, but it occured to me and I thought I would throw it into the ring.
+<br/>
+<br/>
+Also, I just tracked down my copy of Thinking in C++ Volume 2 by Bruce Eckel because it has a section on partial template specialisation. All of the examples rewrite the entire classes, not just one of the functions. Bruce Eckel blows me away constantly with the tricks he performs in his books, and if he didn't mention it then it probably can't be done.
+<br/>
+<br/>
+I am trying to think of anything I have seen to allow it, but I can't think of any tricks right now besides the one I posted earlier.<br/>_________________<br/><a class="postlink" href="http://www.hungrydeveloper.com" target="_blank">www.hungrydeveloper.com</a>
+<br/>
+Version 2.0 now up - guaranteed at least 100% more pleasing!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#42231 - MumblyJoe - Sun May 08, 2005 4:31 am</h4>
+    <div class="postbody"><span class="postbody">OK, I know I shouldn't keep thinking about this problem, but not bieng able to do something really elegantly in C++ drives me nuts.
+<br/>
+<br/>
+So here we have a far more elegant and maintainable version of my solution:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">template&lt;typename A, typename B&gt;
+<br/>
+struct S
+<br/>
+{
+<br/>
+   void method(A a,B b){method_func(a,b);}
+<br/>
+<br/>
+   private:
+<br/>
+<br/>
+   template&lt;typename AA, typename BB&gt;
+<br/>
+   void method_func(AA,BB){std::cout &lt;&lt; "Not specialised!" &lt;&lt; std::endl;}
+<br/>
+<br/>
+   template&lt;typename AA&gt;
+<br/>
+   void method_func(AA,int){std::cout &lt;&lt; "Specialised for 2nd arg as int!" &lt;&lt; std::endl;}
+<br/>
+};
+<br/>
+<br/>
+int _tmain(int argc, _TCHAR* argv[])
+<br/>
+{
+<br/>
+   S&lt;float,float&gt; ff;
+<br/>
+   S&lt;float,int&gt; fi;
+<br/>
+<br/>
+   ff.method(1.0f,1.0f);
+<br/>
+   fi.method(1.0f,1);
+<br/>
+<br/>
+   return 0;
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Note that technically what we are doing here is not a specialisation, but more just overloading method_func in a private sense so that it's arguments are only ever deduced from other member functions,  which will call the correct one because they take the template types as arguments. Give it a shot, even making ff in main have an int like 2 as it's 2nd argument still wont make it call the wrong method_func because it is transformed while passing due to the template.<br/>_________________<br/><a class="postlink" href="http://www.hungrydeveloper.com" target="_blank">www.hungrydeveloper.com</a>
+<br/>
+Version 2.0 now up - guaranteed at least 100% more pleasing!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#42236 - sajiimori - Sun May 08, 2005 6:23 am</h4>
+    <div class="postbody"><span class="postbody">Nice!  Unfortunately, I must now throw you a curve.  The template argument that I need to specialize is actually the return type of the method.  The specialization is for void.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">template&lt;typename A, typename R&gt;
+<br/>
+struct S
+<br/>
+{
+<br/>
+   R method(A)
+<br/>
+   {
+<br/>
+      return R();
+<br/>
+   }
+<br/>
+};
+<br/>
+<br/>
+<br/>
+template&lt;typename A&gt;
+<br/>
+void S&lt;A, void&gt;::method(A)
+<br/>
+{
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">I hope this does not deprive you of your peace of mind!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#42239 - tepples - Sun May 08, 2005 8:11 am</h4>
+    <div class="postbody"><span class="postbody">If it matters, functions in C++ can't be overloaded by return type.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#42240 - MumblyJoe - Sun May 08, 2005 8:21 am</h4>
+    <div class="postbody"><span class="postbody">Well I can't deny that when you said that it was the <span style="font-weight: bold">return type</span> you wanted, and that you were specializing for <span style="font-weight: bold">void</span> that I was certainly thrown back a little.
+<br/>
+<br/>
+Fortunately for you, I kick ass:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">template&lt;typename A, typename B&gt;
+<br/>
+struct S
+<br/>
+{
+<br/>
+   B method(A a){return method_func&lt;A,B&gt;(a);}
+<br/>
+<br/>
+   private:
+<br/>
+<br/>
+   template&lt;typename AA, typename BB&gt;
+<br/>
+   BB method_func(AA){std::cout &lt;&lt; "Not specialised!" &lt;&lt; std::endl; return BB();}
+<br/>
+<br/>
+   template&lt;&gt;
+<br/>
+   void method_func&lt;A,void&gt;(A){std::cout &lt;&lt; "Specialised for return as void!" &lt;&lt; std::endl;}
+<br/>
+};
+<br/>
+<br/>
+int _tmain(int argc, _TCHAR* argv[])
+<br/>
+{
+<br/>
+   S&lt;float,float&gt; ff;
+<br/>
+   S&lt;float,void&gt; fv;
+<br/>
+<br/>
+   ff.method(1.0f);
+<br/>
+   fv.method(1.0f);
+<br/>
+<br/>
+   return 0;
+<br/>
+}</td> </tr></table><span class="postbody"><br/>_________________<br/><a class="postlink" href="http://www.hungrydeveloper.com" target="_blank">www.hungrydeveloper.com</a>
+<br/>
+Version 2.0 now up - guaranteed at least 100% more pleasing!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#42259 - sajiimori - Sun May 08, 2005 5:55 pm</h4>
+    <div class="postbody"><span class="postbody">That did not compile for me.  Even if the template magic worked, I wouldn't expect the compiler to allow returning the value of a void method call.
+<br/>
+<br/>
+tepples: It's good that C++ doesn't allow normal overloading on return type because that would be ambiguous in many cases.  It works with class template arguments because they are explicit.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#42288 - MumblyJoe - Mon May 09, 2005 1:31 am</h4>
+    <div class="postbody"><span class="postbody">Sorry sajiimori, I was working with VC++8 and should have tested it with GCC too.
+<br/>
+<br/>
+Luckily, there is a workaround that works with both VC++8 and GCC 3.2.3 (in MinGW) and hopefully with other compilers. I believe the syntax is still very maintainable.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#include &lt;iostream&gt;
+<br/>
+<br/>
+template&lt;typename A, typename B&gt;
+<br/>
+struct S
+<br/>
+{
+<br/>
+   B method(A a){return method_func(a,(B*)(0));}
+<br/>
+<br/>
+   private:
+<br/>
+<br/>
+   template&lt;typename AA, typename BB&gt;
+<br/>
+   BB method_func(AA,BB*){std::cout &lt;&lt; "Not specialised!" &lt;&lt; std::endl; return BB();}
+<br/>
+<br/>
+<br/>
+   void method_func(A,void*){std::cout &lt;&lt; "Specialised for return as void!" &lt;&lt; std::endl;}
+<br/>
+<br/>
+};
+<br/>
+<br/>
+int main(int argc, char* argv[])
+<br/>
+{
+<br/>
+   S&lt;float,float&gt; ff;
+<br/>
+   S&lt;float,void&gt; fv;
+<br/>
+<br/>
+   ff.method(1.0f);
+<br/>
+   fv.method(1.0f);
+<br/>
+<br/>
+   return 0;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+By the way, returning the value of a void method call when the calling function also returns void makes neither compiler I tried even give a warning.<br/>_________________<br/><a class="postlink" href="http://www.hungrydeveloper.com" target="_blank">www.hungrydeveloper.com</a>
+<br/>
+Version 2.0 now up - guaranteed at least 100% more pleasing!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#42290 - sajiimori - Mon May 09, 2005 1:58 am</h4>
+    <div class="postbody"><span class="postbody">Amazing, well done!  You've taught me something about C++. ^_^</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#42293 - MumblyJoe - Mon May 09, 2005 3:06 am</h4>
+    <div class="postbody"><span class="postbody">No problem, now be quiet and don't pick on it or I will be up all night changing it to keep my dignity :P<br/>_________________<br/><a class="postlink" href="http://www.hungrydeveloper.com" target="_blank">www.hungrydeveloper.com</a>
+<br/>
+Version 2.0 now up - guaranteed at least 100% more pleasing!</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

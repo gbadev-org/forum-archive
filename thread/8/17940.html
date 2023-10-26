@@ -1,0 +1,521 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Use R15 as an opperand - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>ASM > Use R15 as an opperand</h2>
+<div id="posts">
+<div class="post">
+    <h4>#177898 - Bregalad - Sun Apr 21, 2013 5:25 pm</h4>
+    <div class="postbody"><span class="postbody">I tried to find info on datahseets, especially on ARM's own website, but it is quite vague in all cases.
+<br/>
+<br/>
+It's possible to use R15 as an operand from any instructions, that's a fact, but sometimes this is legal, and sometimes this is "illegal", i.e. the behaviour is undefined.
+<br/>
+<br/>
+Apparently when this is legal the returned value is the adress of the executed instruction + 8 because of pipeline exposure.
+<br/>
+<br/>
+However, when the instruction BL is used, and when an interruption occurs, the value stored in R14 is obviously not "PC + 8" but "PC + 4", as the LR have to point to the next instruction (and not the second next !).
+<br/>
+<br/>
+So how comes that when PC is used as an operand of any instruction it would read "PC + 8", but when it is used for BL or interrupt, it would read "PC + 4" ? Or are the interrupt / BL instruction handled one pipeline stage before all others instructions ?
+<br/>
+<br/>
+My other question is : When is it legal to use PC as an opperand. ARM's official docs are quite unclear about this. They say very clearly it's illegal for some cases (like mulitply instruction) but they are unclear for regular instructions.
+<br/>
+For example it seems crazy to use PC as a shifter like in :
+<br/>
+MOV R0, R1, lsl PC
+<br/>
+<br/>
+but theoretically it's possible.
+<br/>
+<br/>
+I am not asking this because of GBA development, but because I am developing an ARM CPU for my studies. I'd like to handle the instructions as "correctly" as possible.
+<br/>
+I don't know if any of you guys know more than I do, but if that would happen to be the case, please share ^^
+<br/>
+Otherwise I'll just allow reading the PC when it arrages me and return PC + 4 in all cases (since reading it like this, and relying on this behavious, is very likely to be crazy).
+<br/>
+<br/>
+Thanks in advance.
+<br/>
+<br/>
+PS : Apparently returning PC + 8 is important because of how branches are encoded. Something like
+<br/>
+B 0
+<br/>
+would actually skip 2 instructions, and
+<br/>
+B -2
+<br/>
+would be the instruction that jumps in place.
+<br/>
+<br/>
+This can however be done by using PC + 4 and forcing the carry in of the ALU to '1'. This way, only PC+4 have to be used at all times.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177903 - WriteASM - Tue Apr 23, 2013 1:04 pm</h4>
+    <div class="postbody"><span class="postbody">At least from my experience writing "bASMic's" ASM portion, the PC is always +8 in the GBA's ARM7TDMI when accessed as an operand.  The ARM CPU's different modes are implemented to make it generally easy to make an operating system.  
+<br/>
+<br/>
+A B/BL of -2 loops in place, as the "#offset" is stored with an "LSR #2".  A Branch with #-2 is actually #-8.  I've used "ADD PC, PC, R6, LSR #2" for a jump table based on R6, and always have to put one NOP after the ADD for table alignment.  (PC + 0 = two instructions skipped.)  
+<br/>
+<br/>
+Regarding LR on a "BL":
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">The PC value written into R14 is adjusted to allow for the prefetch, and contains the
+<br/>
+address of the instruction following the branch and link instruction.</td> </tr></table><span class="postbody">  I'm assuming that this same "adjustment" also takes place when entering an exception handler.
+<br/>
+<br/>
+Of course you can always use PC as an operand...if you don't mind undefined behavior :-).  
+<br/>
+The following instructions don't support PC as an argument: BX, MSR/MRS, MUL/MLA/(s/u)MLAL/(s/u)MULL, writeback or offset on LDR/STR, base register on LDM/STM, or anything on SWP.
+<br/>
+According to the ARM datasheet I have, PC can't be used as a shift operand, either:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">The amount by which the register should be shifted may be contained in an immediate ﬁeld
+<br/>
+in the instruction, or in the bottom byte of another register (other than R15).</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+The ARM datasheet "ARM DDI 0029E" seems to detail such things quite clearly.<br/>_________________<br/>"Finally, brethren, whatever is true, whatever is honorable, whatever is right, whatever is pure, whatever is lovely, whatever is of good repute, if there is any excellence and if anything worthy of praise, dwell on these things." (Philippians 4:8)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177904 - Bregalad - Tue Apr 23, 2013 2:50 pm</h4>
+    <div class="postbody"><span class="postbody">Thanks !
+<br/>
+<br/>
+I guess I'll allow using the PC all the time, because I don't see any optimisations that can be done by disalowwing the PC for i.e. MUL and the others instructions that disallow the usage of PC.
+<br/>
+<br/>
+Making it PC + 8 instead of PC will be quite simple, however, I'll also have to handle PC+4 for BL and interruptions. A bit annoying I don't know what ARM were thinking (why did they not use PC+4 everywhere since they needed it for the BL in the first place ?), but this is the price to pay for full ARM compliance.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">ADD PC, PC, R6, LSR #2</td> </tr></table><span class="postbody">
+<br/>
+Very elegant indeed !</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177905 - Dwedit - Tue Apr 23, 2013 3:44 pm</h4>
+    <div class="postbody"><span class="postbody">Don't forget about pushing sp to the stack either, that's another weird case, and GCC emits that instruction quite a bit.  NO$GBA got it wrong, so programs that use that instruction crash.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177906 - Bregalad - Tue Apr 23, 2013 4:12 pm</h4>
+    <div class="postbody"><span class="postbody">Then, how is it supposed to behave when you push the stack pointer to the stack - in other words - if the base register is in the register list of a STM instruction ?
+<br/>
+<br/>
+If I do it like I'm planning to implement it (and that is what will happen naturally) - what will happen will depend if writeback is enabled to the base register.
+<br/>
+If it's not the case, then the value of the register is perfectly defined (since it's unaffected by the instruction).
+<br/>
+<br/>
+Else, I'd change the value of the register either at the begining or at the end of the instruction (in order to do the write opperation only once), and then either the old or new value would be used. In no case any value inbetween would be used.
+<br/>
+<br/>
+It would be a bigger issue though when the base register is in the list of LDM.
+<br/>
+If writeback is disabled, then the instruction itself would affect the register during it's oppration, changing the value of the adresses for all the subsequent loads.
+<br/>
+<br/>
+If writeback is enabled, then either the value of the register is changed before the instruction , or after it.
+<br/>
+If it is changed before, then the same thing happens as if writeback was disabled.
+<br/>
+If it is changed after, the same register would change twice, first the adress would be "mangled" by the load instruction, then, an offset (equal to 4 times the number of "1" bits in the LDM instruction) would be added to the "mangled" value.
+<br/>
+<br/>
+Very likely not behaviour that is very "usable" for common programs.
+<br/>
+<br/>
+I'm pretty sure I've read in datasheets that the base register should not be in the register list, though (and they also said the register list should not be void), so I can stll be ARM compatible while implementing a different behaviour on those weird cases.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177907 - Dwedit - Tue Apr 23, 2013 4:56 pm</h4>
+    <div class="postbody"><span class="postbody">Okay, I found it...
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">4.11.6 Inclusion of the base in the register list
+<br/>
+When write-back is specified, the base is written back at the end of the second cycle
+<br/>
+of the instruction. During a STM, the first register is written out at the start of the
+<br/>
+second cycle. A STM which includes storing the base, with the base as the first register
+<br/>
+to be stored, will therefore store the unchanged value, whereas with the base second
+<br/>
+or later in the transfer order, will store the modified value. A LDM will always overwrite
+<br/>
+the updated base if the base is in the list.</td> </tr></table><span class="postbody">
+<br/>
+NO$GBA was screwing up by storing the final value of the register instead of the current value.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177908 - WriteASM - Tue Apr 23, 2013 5:05 pm</h4>
+    <div class="postbody"><span class="postbody">Taking a bit of time to re-read my post: a the jump table instruction should be "ADD PC, PC, R6, <span style="font-weight: bold">LSL </span>#2".  R6 needs to be <span style="font-style: italic">multiplied </span>by four, as each ARM instruction is 32-bit (four bytes.)  For THUMB instructions, obviously, use LSL #1.
+<br/>
+<br/>
+Sorry for that...but it's amazing what a bad headache can to do to logic!  (Creates more headaches down the road when the code doesn't work :-).)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177910 - Bregalad - Tue Apr 23, 2013 7:45 pm</h4>
+    <div class="postbody"><span class="postbody">Don't worry I didn't even notice it, because it was obvious you wanted to do a LSL by 2.
+<br/>
+<br/>
+@dwedit : This is insane. I mean, I would understand they'd do it on the first or last cycle, but on the second one ? Come on, what did they smoke when designing the processor ?
+<br/>
+<br/>
+And you're telling that GCC actually relies that the register is stored at the second cycle, which in itself produces some insane logic ? OMG...
+<br/>
+<br/>
+Anyways, compilance to compiled C code is completely optional for this project, just a basic working ARM (programmed in assembly, therefore I'm free to choose which instructions to implement) will do fine. My supervisor told me I don't have to implement LDM ans STM which makes me want me even more to implement them, because they're very challenging to do in N cycles. I'll see in due time - implementing MOV, ADD, BR/BL, LDM and STM are the only opcodes actually required for a fully working processor.
+<br/>
+(ok a fully working one can be done with less opcodes, but it gets insane from this point).
+<br/>
+<br/>
+My processor will definitely allow to MUL and rotate using the PC. It will make it supperior to actual ARMs in some way... ;)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177911 - Cydrak - Tue Apr 23, 2013 8:50 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Bregalad wrote:</b></span></td> </tr> <tr> <td class="quote">However, when the instruction BL is used, and when an interruption occurs, the value stored in R14 is obviously not "PC + 8" but "PC + 4", as the LR have to point to the next instruction (and not the second next !).</td> </tr></table><span class="postbody">
+<br/>
+Sorta. Mind, exceptions all have their own PC offsets. For example, SWI sets LR = <span style="font-style: italic">next_pc</span>; an interrupt sets LR = <span style="font-style: italic">next_pc</span>+4. Thus, to return from an IRQ, you have to say SUBS PC, LR, #4. Notice that I said <span style="font-style: italic">next_pc</span>+4, not PC+8 - the difference arises in THUMB mode.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Bregalad wrote:</b></span></td> </tr> <tr> <td class="quote">So how comes that when PC is used as an operand of any instruction it would read "PC + 8", but when it is used for BL or interrupt, it would read "PC + 4" ? Or are the interrupt / BL instruction handled one pipeline stage before all others instructions ?</td> </tr></table><span class="postbody">
+<br/>
+The ARM7 has a classic three-stage pipeline. This means at any given time, it's doing up to three things at once:
+<br/>
+1) Executing the current instruction
+<br/>
+2) Decoding the next instruction (insn+4)
+<br/>
+3) Fetching the instruction after that (PC = insn+8)
+<br/>
+<br/>
+With the exception of longer-running operations, such as B, MUL and LDR, instructions advance once stage per cycle. And by the time one gets to the execute stage, PC has already incremented twice, giving the +8 value.
+<br/>
+<br/>
+You might be tempted to surmise, from the above, that BL reads PC near the end of the decode stage - but then again, who's to say they don't subtract 4 instead? The possibility of interrupting THUMB code all but forces newer CPUs to do a manual adjustment. So, until we get a "Visual ARM" simulation, try not to overanalyze these things, because they're just how the chip was designed. If you were dealing with MIPS, you'd see even more of these pipeline effects - look up "branch delay slots."
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Bregalad wrote:</b></span></td> </tr> <tr> <td class="quote">I am not asking this because of GBA development, but because I am developing an ARM CPU for my studies. I'd like to handle the instructions as "correctly" as possible.</td> </tr></table><span class="postbody">
+<br/>
+Well, "undefined" implies there <span style="font-style: italic">is</span> no correct way. ARM kinda handwaves around this, implying that it shouldn't grant any privileged access from user mode... regardless, keep in mind that such behavior can and does change between CPU models. If that matters, you might wish to pick one and test it yourself.
+<br/>
+<br/>
+Also, keep an eye out for the older reference material. Sometimes they specify behavior which became undefined later on. For example, STR PC or MOV Rd, Rn, PC, LSL Rs. I believe that both these cases will use PC+12 on an ARM7 (due to reading PC during their extra cycle), but don't quote me on that!
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Bregalad wrote:</b></span></td> </tr> <tr> <td class="quote">Making it PC + 8 instead of PC will be quite simple, however, I'll also have to handle PC+4 for BL and interruptions. A bit annoying I don't know what ARM were thinking (why did they not use PC+4 everywhere since they needed it for the BL in the first place ?), but this is the price to pay for full ARM compliance.</td> </tr></table><span class="postbody">
+<br/>
+Oh, shush.. I've blithely started work on a dynarec over here, meaning I've got exposure to two instruction sets. x86 flags will be the death of me... so can I kindly ask you consider adjusting your irritation threshold? Thanks. q:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Bregalad wrote:</b></span></td> </tr> <tr> <td class="quote">Then, how is it supposed to behave when you push the stack pointer to the stack - in other words - if the base register is in the register list of a STM instruction ? </td> </tr></table><span class="postbody">
+<br/>
+If memory serves, that code calls a function with the address of a variable (actually a large return value) which happens to be on top of the stack. So it's quite legitimate to use STMDB SP!, {SP}, and that instruction needs to write the old stack pointer. Note however that STMDB SP!, {r3,SP}, isn't kosher. SP <span style="font-style: italic">must</span> be the lowest-numbered register.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Bregalad wrote:</b></span></td> </tr> <tr> <td class="quote">My other question is : When is it legal to use PC as an opperand. </td> </tr></table><span class="postbody">
+<br/>
+Aside from the various branch instructions, PC can be used for:
+<br/>
+- Rd, Rn or Rm in a data-processing instruction
+<br/>
+- Rd or Rn in a word-sized load/store (as Rd, the value stored may vary)
+<br/>
+- Rd in MRC; updates flags only
+<br/>
+- Switching to ARM mode: BX PC
+<br/>
+- Returns: LDM SP!, {..,PC}
+<br/>
+<br/>
+These uses aren't guaranteed to work (at least not the way you'd expect):
+<br/>
+- In special-purpose instructions: CLZ, multiplies, DSP arithmetic..
+<br/>
+- In a shift-by-register, even as Rd, Rn or Rm
+<br/>
+- In a branch to an unaligned target instruction
+<br/>
+- As Rd in LDRT and the like
+<br/>
+- As Rd in non-word load/store: STRB, LDRD..
+<br/>
+- As Rd in MRS, MCR, or similar
+<br/>
+- As Rn in LDM/STM
+<br/>
+- As Rn in a load/store with writeback
+<br/>
+- As Rm in a load/store
+<br/>
+<br/>
+As you can see, there's a wide variety of places PC can and can't appear, so many I may've missed a few. Here's some common examples, seen in practice:
+<br/>
+<br/>
+Calls:</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">BL offset
+<br/>
+MOV LR, PC; BX Rm             // pre-ARMv5 CPUs
+<br/>
+ADD LR, PC; LDR Rm..; BX Rm   // pre-ARMv5 call through table
+<br/>
+BLX offset                    // ARMv5+
+<br/>
+BLX Rm                        // ARMv5+
+<br/>
+MOV LR, PC; LDR PC..          // ARMv5+
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Returns:</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">MOV PC, LR                    // pre-THUMB CPUs
+<br/>
+LDM SP!, {..,PC}               // ARMv5+
+<br/>
+POP {R3}; BX R3               // pre-ARMv5
+<br/>
+MOVS PC, LR                   // return from SWI
+<br/>
+SUBS PC, LR, #4               // return from interrupt/exception
+<br/>
+SUBS PC, LR, #8               // return from data abort (after servicing a pagefault)
+<br/>
+LDM SP!, {..,PC}^              // alternate method; similar to to MOVS PC..
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Switch/jump table:</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">ADD PC, Rn, Rm, LSL #2        // leads to a branch table
+<br/>
+ADD PC, Rn, Rm, LSL #5        // leads to code snippets, up to 8 instructions each
+<br/>
+LDR PC, [PC, Rm, LSL #2]      // alternate method
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+PC-relative operations:</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">ADD Rn, PC, #n                // get PC-relative address (ADR Rd, label)
+<br/>
+LDR Rd, [PC, Rm..]            // load PC-relative constant (LDR Rd, =value)
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Change to ARM mode:</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">BX PC; NOP                    // yes, people do this (the BX should be word-aligned)
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Bregalad wrote:</b></span></td> </tr> <tr> <td class="quote">@dwedit : This is insane. I mean, I would understand they'd do it on the first or last cycle, but on the second one ? Come on, what did they smoke when designing the processor ? </td> </tr></table><span class="postbody">
+<br/>
+LDM/STM have to calculate <span style="font-style: italic">address</span> +/- (<span style="font-style: italic">num_regs</span> LSL #2) as the value to write back. The same address needs to be available for LDM/STMD*, so maybe it was easier to route the ALU result directly into Rn than to keep it around in a latch somewhere.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177912 - Bregalad - Tue Apr 23, 2013 9:52 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Cydrak wrote:</b></span></td> </tr> <tr> <td class="quote">an interrupt sets LR = <span style="font-style: italic">next_pc</span>+4. Thus, to return from an IRQ, you have to say SUBS PC, LR, #4. Notice that I said <span style="font-style: italic">next_pc</span>+4, not PC+8 - the difference arises in THUMB mode.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+In fact I think it does LR = nextPC. The thing is that, when an interrupt occured, you actually WANT to execute the instruction that was going to be executed before the interrupt happened (the instruction has been "replaced" by a BL in runtime), so this is why you use SUB, #4.
+<br/>
+<br/>
+In a software interrupt or undefined instruction you do NOT want to execute it again, else it'll lead to an infinite loop. Therefore you just use MOV to return.
+<br/>
+<br/>
+I can't comment about Thumb mode since I know almost nothing about it and my processor isn't going to support Thumb at all.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote"> With the exception of longer-running operations, such as B, MUL and LDR, instructions advance once stage per cycle. And by the time one gets to the execute stage, PC has already incremented twice, giving the +8 value.</td> </tr></table><span class="postbody">
+<br/>
+Unfortunately this is not the case if there was an instruction cache miss or if the decode encountered a multicycle instruction (in my design - I don't know about ARMs).
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote"> but then again, who's to say they don't subtract 4 instead?</td> </tr></table><span class="postbody">
+<br/>
+Because the ALU is already taken to calculating the destination of the branch ?
+<br/>
+BL is insane to implement because you need PC+8 for the calculation of the next PC, and PC+4 to put into the link register.
+<br/>
+Nevertheless I *think* I managed to implement this in theory. I'll see how it turns out in practice...
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">SP must be the lowest-numbered register.</td> </tr></table><span class="postbody">
+<br/>
+For some reason I think that in 99% of the cases R13 is used for the "stack". Although there is absolutely no technical reason behind it.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">LDM/STM have to calculate address +/- (num_regs LSL #2) as the value to write back. The same address needs to be available for LDM/STMD*, so maybe it was easier to route the ALU result directly into Rn than to keep it around in a latch somewhere.</td> </tr></table><span class="postbody">
+<br/>
+Interesting... This could be used for STM in fact, but definitely not for LDM since the writeback is already taken by the first register of the list, it can't be used for the opperand register too.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177913 - Cydrak - Tue Apr 23, 2013 10:26 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Bregalad wrote:</b></span></td> </tr> <tr> <td class="quote">In fact I think it does LR = nextPC. The thing is that, when an interrupt occured, you actually WANT to execute the instruction that was going to be executed before the interrupt happened (the instruction has been "replaced" by a BL in runtime), so this is why you use SUB, #4. </td> </tr></table><span class="postbody">
+<br/>
+Right, I abbreviated too much. It should be "next instruction to be executed", not the next PC itself.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Bregalad wrote:</b></span></td> </tr> <tr> <td class="quote">Unfortunately this is not the case if there was an instruction cache miss or if the decode encountered a multicycle instruction (in my design - I don't know about ARMs). </td> </tr></table><span class="postbody">
+<br/>
+Depends on your definition of a cycle. A memory cycle could take more than one clock to finish. This doesn't necessarily change the internal behavior.
+<br/>
+<br/>
+For multi-cycle ops, I think ARM does their fetching in the first cycle - that way they can simultaneously do addressing for a load/store, etc. And this means you'll normally still get PC+8, whilst the pipeline stalls to wait for the LDR/MUL.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Bregalad wrote:</b></span></td> </tr> <tr> <td class="quote">Because the ALU is already taken to calculating the destination of the branch ?</td> </tr></table><span class="postbody">
+<br/>
+A fair point, although that's really up to the implementation (some modern CPUs have dedicated addressing hardware, separate from the ALU(s), that's way beyond relevant to simple ARM chips though).
+<br/>
+<br/>
+I'm not sure if you're designing a software or hardware core... I'm going to guess the latter, since a normal emulator has little to no trouble here.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Bregalad wrote:</b></span></td> </tr> <tr> <td class="quote">For some reason I think that in 99% of the cases R13 is used for the "stack". Although there is absolutely no technical reason behind it.</td> </tr></table><span class="postbody">
+<br/>
+While this is true, each CPU mode (save USR, which is just unprivileged SYS) has its own unique SP/LR registers, so you're restricted to using them in your OS kernel, if you don't want to trash user-mode state inside an exception.
+<br/>
+<br/>
+If you don't use interrupts, exceptions, or THUMB - and your OS/user environment doesn't require a valid SP - then of course you can use whatever register you want. And there's FIQ, which banks in its own r8-r12, too, so you could still use those.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177914 - Bregalad - Wed Apr 24, 2013 11:25 am</h4>
+    <div class="postbody"><span class="postbody">Yes I'm designing a hardware core (on a FPGA).
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">For multi-cycle ops, I think ARM does their fetching in the first cycle - that way they can simultaneously do addressing for a load/store, etc. And this means you'll normally still get PC+8, whilst the pipeline stalls to wait for the LDR/MUL. </td> </tr></table><span class="postbody">
+<br/>
+Pehaps, but in my implementation a multicycle is none at it's decoding stage, which will lock the fetch in some state, preventing it to increment.
+<br/>
+However I added latches and this supposedly fixes the problem. I now read PC and PC+4 of the instruction which is currently at the decode stage (no matter what the fetch stage is doing), which turns out it will always be PC+4 and PC+8 of the instruction which is executed. The +4 is done by reading directly the incremented value from within the fetch stage (no matter if it is actually used or not) and latching it -&gt; no extra additioner required.
+<br/>
+<br/>
+<br/>
+I see the point that using R13 allows to have different stacks for main, IRQ, FIQ, ... threads, but it can also be desirable to have a single stack for all of them isn't it ? In this case, R13 should actually not be used.
+<br/>
+<br/>
+A funny thing would be to use R14 (LR) as a stack pointer. At every function call you would have to reserve N words, where N is the number of stack words needed.
+<br/>
+This has the adventage of not using any BSS RAM, at the expense of wasting program RAM, and being less secure ("stack overflows" could easily happen if one is not very careful all the time).
+<br/>
+<br/>
+Something like this :
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+<br/>
+ blah blah...
+<br/>
+<br/>
+ BL some_subroutine
+<br/>
+ .word 0, 0, 0, 0, 0, 0 @(assume "some_subroutine" requires 6 stack bytes)
+<br/>
+  blah blah   @ sequel of the program
+<br/>
+<br/>
+<br/>
+some_subroutine
+<br/>
+   stmia LR!, {R0-R5}  @use the "stack" where the caller did it
+<br/>
+   blah blah 
+<br/>
+   ldmdb LR, {R0-R5} @restore regs (note that this time LR is NOT written back)
+<br/>
+   mov PC, LR  @go after the "stack" space
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+This technique should only be used within a thread (not for interupts, obviously).</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177927 - Bregalad - Fri May 10, 2013 8:48 pm</h4>
+    <div class="postbody"><span class="postbody">Ok I have another small problem. I didn't find that info in the docs.
+<br/>
+<br/>
+When you execute a conditional load/store instruction with writeback enabled, is the writeback skipped as well when the condition is false ?
+<br/>
+Normally it should, because the entire instruction is conditional. At least that's my understanding on the matter.
+<br/>
+<br/>
+So if you want a conditional array load/store, but unconditional increment of the index you're forced to do both operations with 2 separate instructions.
+<br/>
+<br/>
+Second problem :
+<br/>
+Apparently you can't LSR and ASR #0, the range is 1-31.
+<br/>
+<br/>
+But if you LSR or ASR from a register which is 0x00, is there the same result ?
+<br/>
+If so, then it would be quite annoying to code something like :
+<br/>
+<br/>
+var1 &gt;&gt; var2;
+<br/>
+<br/>
+where var2 can be 0.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177928 - Dwedit - Fri May 10, 2013 10:39 pm</h4>
+    <div class="postbody"><span class="postbody">As far as I know, conditional instructions are all or nothing.  The only time an instruction executes partially has to do with data abort exceptions, and I've never actually seen those in action.
+<br/>
+<br/>
+I don't see why a restriction on an immediate value would be the same as a restriction placed on a value read from a register.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177929 - Bregalad - Fri May 10, 2013 10:53 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">I don't see why a restriction on an immediate value would be the same as a restriction placed on a value read from a register.</td> </tr></table><span class="postbody">
+<br/>
+Because the barrelshift "component" just see a 32 bit operand and 5-bit shift amount signals, along with several control signals.
+<br/>
+<br/>
+The multiplexers which select between a register (5 LSBs) and a literal value before the barrelshift are "invisible" to it.
+<br/>
+<br/>
+Of course if it's not like it's done I can change it, but that's the way which make the most sense on a hardware point of view.
+<br/>
+<br/>
+The other solution would be to have a, say, 32 bit sihft amount operand (handling all the overflows/underflows correctly), and if a literal value is used instead, it is padded correctly to this 32-bit amount before being sent to the multiplexer. Having the way the value is padded should depend on the barrel-shift mode.
+<br/>
+You can immediately see this is going to be more complex hardware side.
+<br/>
+<br/>
+EDIT :
+<br/>
+Oh okay I looked at the documentation, apparently the 8 LSB from the register are used. What a headache. ARM are really crazy in their design choices.
+<br/>
+However this can be optimized into 6 bits by OR-ing the 3 MSBs together, since, if bit 6, 7 or 8 is set, you know an overflow is going to happen.
+<br/>
+<br/>
+I'll have to think hard to get a nice and fast barrelshifter.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177937 - Bregalad - Tue May 14, 2013 12:59 pm</h4>
+    <div class="postbody"><span class="postbody">I have a new question related to my project.
+<br/>
+<br/>
+Is there a way to tell GCC to NOT use the BX instruction ?
+<br/>
+I used -mcpu=ARM2, -mcpu=ARM3, in all cases it would still use BX LR to return from subroutine instead of mov r15, r14, and complain about it's own code being incorrect if I tried to assemble it.
+<br/>
+<br/>
+I could solve this easily with a small script replacing BX by MOV PC, but I just wanted to know if this is a bug in GCC, or if it is I who am stupid, or if nobody cares anymore about older ARMS which does not support thumb.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

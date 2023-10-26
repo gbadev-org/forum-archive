@@ -1,0 +1,474 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Optimize mixing routine - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>ASM > Optimize mixing routine</h2>
+<div id="posts">
+<div class="post">
+    <h4>#34164 - ProblemBaby - Fri Jan 14, 2005 2:46 pm</h4>
+    <div class="postbody"><span class="postbody">Hello do someone have any good iedas how I can speed up this:
+<br/>
+<br/>
+for (n = 0; n &lt; MAX_CHANNELS; n++)
+<br/>
+{
+<br/>
+if (pChannel-&gt;Data)
+<br/>
+  MixChannel(TempBuffer, pChannel, SampleCount);
+<br/>
+}
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+.global MixChannel
+<br/>
+MixChannel:
+<br/>
+      STMFD sp!, { r4-r11 }
+<br/>
+      
+<br/>
+      @ r0: DestBuffer
+<br/>
+      @ r1: Channel
+<br/>
+      @ r2: Count
+<br/>
+      
+<br/>
+      LDR r3, [r1, #MODULECHANNEL_POSITION]
+<br/>
+      LDR r4, [r1, #MODULECHANNEL_INCREMENT]
+<br/>
+      LDR r5, [r1, #MODULECHANNEL_DATA]
+<br/>
+      LDR r7, [r1, #MODULECHANNEL_LENGTH]
+<br/>
+      LDR r8, [r1, #MODULECHANNEL_LOOPLENGTH]
+<br/>
+      LDRH r12, [r1, #MODULECHANNEL_FINALVOLUME]
+<br/>
+<br/>
+      STMFD sp!, { r1 }
+<br/>
+      MOV r1, r12
+<br/>
+<br/>
+   Copy:
+<br/>
+      MOV r9, r3, ASR#(SOUND_MIXING_ACCURACY)
+<br/>
+      ADD r3, r3, r4
+<br/>
+      
+<br/>
+      LDRSB r11, [r5, r9]         @ Sampledata
+<br/>
+      
+<br/>
+      AND r10, r1, #0xFF         @ Byte 0 = LeftVolume
+<br/>
+      MUL r9, r10, r11         @ Volume
+<br/>
+      
+<br/>
+      MOV r10, r1, ASR#8         @ Byte 1 = RightVolume
+<br/>
+      MUL r10, r10, r11         @ Volume
+<br/>
+<br/>
+<br/>
+      LDMFD r0!, { r11, r12 }      
+<br/>
+      
+<br/>
+      ADD r11, r11, r9
+<br/>
+      ADD r12, r12, r10
+<br/>
+<br/>
+      STMFD r0!, { r11, r12 }
+<br/>
+      ADD r0, r0, #8
+<br/>
+<br/>
+<br/>
+   
+<br/>
+      
+<br/>
+      CMP r3, r7
+<br/>
+      BLT Keep
+<br/>
+      
+<br/>
+      CMP r8, #0
+<br/>
+      BEQ End
+<br/>
+<br/>
+   Back:
+<br/>
+      SUB r3, r3, r8
+<br/>
+      CMP r3, r7
+<br/>
+      BGE Back
+<br/>
+      
+<br/>
+      B Keep
+<br/>
+   End:
+<br/>
+      MOV r8, #0
+<br/>
+      LDMFD sp!, { r1 }
+<br/>
+      STR r8, [r1, #MODULECHANNEL_DATA]
+<br/>
+      B End2
+<br/>
+      
+<br/>
+   Keep:
+<br/>
+      
+<br/>
+      SUBS r2, r2, #1
+<br/>
+      BNE Copy
+<br/>
+      LDMFD sp!, { r1 }
+<br/>
+      STR r3, [r1, #MODULECHANNEL_POSITION]
+<br/>
+   
+<br/>
+   End2:
+<br/>
+      
+<br/>
+      LDMFD sp!, { r4-r11 }
+<br/>
+      BX lr
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+As you see the TempBuffer is u32 thats because of two things:
+<br/>
+1. I dont have to make two shifts in the loop instead just one in the copy to mixbuffer routine.
+<br/>
+2. The Volume and overall mix is more correct (well I dont think I will here much difference)
+<br/>
+<br/>
+Is it worth it?
+<br/>
+Do you see something that can improve this function a lot in speed?
+<br/>
+<br/>
+Right now it takes ~6% per channel just for this function (31536hz)
+<br/>
+effect/envelope/volumecolumn process not included.
+<br/>
+<br/>
+Ive read about mixers that takes about 1% per channel how is that possible,?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#34166 - FluBBa - Fri Jan 14, 2005 4:12 pm</h4>
+    <div class="postbody"><span class="postbody">In PCEAdvance I mix 6 channels with stereo separation at 18kHz and it takes around 10% cpu.
+<br/>
+But I add the data unsigned and then add an offset, and the waveform data is only 32bytes for each channel.
+<br/>
+The mix loop mixes all channels at once and then only writes 2 bytes to the destination.
+<br/>
+You can download the source from my homepage, the mixer is in sound.s<br/>_________________<br/>I probably suck, my not is a programmer.</span><span class="gensmall"><br/><br/>Last edited by FluBBa on Sun Jan 16, 2005 1:04 am; edited 1 time in total</span></div>    
+</div>
+<div class="post">
+    <h4>#34173 - ProblemBaby - Fri Jan 14, 2005 8:19 pm</h4>
+    <div class="postbody"><span class="postbody">How is it possible to mix it unsigned??</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#34174 - DekuTree64 - Fri Jan 14, 2005 8:24 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>ProblemBaby wrote:</b></span></td> </tr> <tr> <td class="quote">Is it worth it?
+<br/>
+Do you see something that can improve this function a lot in speed?
+<br/>
+<br/>
+Right now it takes ~6% per channel just for this function (31536hz)
+<br/>
+effect/envelope/volumecolumn process not included.
+<br/>
+<br/>
+Ive read about mixers that takes about 1% per channel how is that possible,?</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Nope, you'll never get it down to 1%. The beauty of mixer optimizing is that you don't have to do everything directly. As long as you end up with all the channels incrementing and multiplying by their volumes and added together in the end, anything goes. 
+<br/>
+<br/>
+The easiest speedup is to load and store multiple samples from the temp buffer with ldmia/stmia. As Flubba says, unsigned mixing helps too (add 128 to all your sample values before you put them in ROM, so you can load unsigned bytes. Then subtract 128*volume to get back to signed after mixing).
+<br/>
+<br/>
+Still, it won't be incredibly fast. Try to come up with creative ways to get the job done, like mixing multiple channels in one pass, packing multiple values into registers to get more mileage out of each multiply, or not loading a new sample at all if only the fractional portion of the position chaged.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#34182 - ProblemBaby - Sat Jan 15, 2005 12:10 am</h4>
+    <div class="postbody"><span class="postbody">Flubba: your code looks very intersting but I doesnt understand it=)
+<br/>
+how do you handle loops?
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+pcmmixloop
+<br/>
+   ldrb r0,[r10,r4,lsr#27]         ;Channel 0
+<br/>
+   add r4,r4,r4,lsl#16
+<br/>
+   ldrb r1,[r10,r4,lsr#27]
+<br/>
+   add r4,r4,r4,lsl#16
+<br/>
+   orr r0,r0,r1,lsl#16
+<br/>
+vol0_L
+<br/>
+   movs r1,#0x00               ;volume left
+<br/>
+   mul r2,r0,r1
+<br/>
+vol0_R
+<br/>
+   movs r1,#0x00               ;volume right
+<br/>
+   mul r3,r0,r1
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+What is this doing in detail? how is the pos/freq stored
+<br/>
+If you come down to ~2% percent per channel Iam very interested!
+<br/>
+<br/>
+Thanks in advance</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#34199 - DekuTree64 - Sat Jan 15, 2005 9:40 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>ProblemBaby wrote:</b></span></td> </tr> <tr> <td class="quote">Flubba: your code looks very intersting but I doesnt understand it=)
+<br/>
+how do you handle loops?
+<br/>
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+pcmmixloop
+<br/>
+   ldrb r0,[r10,r4,lsr#27]         ;Channel 0
+<br/>
+   add r4,r4,r4,lsl#16
+<br/>
+   ldrb r1,[r10,r4,lsr#27]
+<br/>
+   add r4,r4,r4,lsl#16
+<br/>
+   orr r0,r0,r1,lsl#16
+<br/>
+vol0_L
+<br/>
+   movs r1,#0x00               ;volume left
+<br/>
+   mul r2,r0,r1
+<br/>
+vol0_R
+<br/>
+   movs r1,#0x00               ;volume right
+<br/>
+   mul r3,r0,r1
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+What is this doing in detail? how is the pos/freq stored
+<br/>
+If you come down to ~2% percent per channel Iam very interested!
+<br/>
+<br/>
+Thanks in advance</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Indeed some interesting code. Looks like r10 is the data address, and r4 stores the position in the upper 16 bits, and the increment in the lower 16. Similarly, r5-r9 are the pos/inc for the other 5 channels. Then the volumes are plugged into the mov 0 instructions by means of opcode hacking. 
+<br/>
+What's interesting though, is that the source datas all seem to be 32 bytes apart. I don't see any code to cache samples in there, do your channels only play short 32 sample chip sounds (and loop by natural position overflow)?
+<br/>
+You might actually be able to cache 32 samples for each channel and mix until one of the channels runs out, and then load more. Must think about that idea.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#34206 - ProblemBaby - Sat Jan 15, 2005 1:19 pm</h4>
+    <div class="postbody"><span class="postbody">hmm yeah I dont understand this instruction
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+ldrb r0,[r10,r4,lsr#27]
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+does it shift r4 by 27 or r0?
+<br/>
+what accuracy do you use how big samples is it possible to mix?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#34225 - ProblemBaby - Sat Jan 15, 2005 10:51 pm</h4>
+    <div class="postbody"><span class="postbody">And what is the advantage to mix them unsigned?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#34226 - tepples - Sat Jan 15, 2005 11:03 pm</h4>
+    <div class="postbody"><span class="postbody">In some mixer designs, unsigned mixing gives you access to more addressing modes, which might shave one or two cycles per sample. However, adding the bias to all the channels at the end might eat up all your savings.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#34228 - ProblemBaby - Sat Jan 15, 2005 11:20 pm</h4>
+    <div class="postbody"><span class="postbody">I thought BIAS just added a value to the samples.
+<br/>
+not subtracted?
+<br/>
+<br/>
+Dekutree: I read at AAS site that their mixer mix at ~1% per active channel</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#34232 - DekuTree64 - Sun Jan 16, 2005 12:30 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>ProblemBaby wrote:</b></span></td> </tr> <tr> <td class="quote">I thought BIAS just added a value to the samples.
+<br/>
+not subtracted?
+<br/>
+<br/>
+Dekutree: I read at AAS site that their mixer mix at ~1% per active channel</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Sorry, I meant you'd never get that particular algorithm down to 1%. It's quite possible using crazy new ideas that lessen the work (though I've never managed it). 
+<br/>
+<br/>
+And the bias can be thought of as adding or subtracting, just wether you make it a negative value or not :). Basically you're reversing the conversion to unsigned, which is to add 128. 
+<br/>
+The advantage is that if you have say 4 channels, you can add up the bias values for each of them into one master bias, and only have to add that in once at the end. If it saves you one cycle per sample on each of the 4 channels, then even if adding it in took 3 cycles, you'd still get a net gain.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#34275 - ProblemBaby - Sun Jan 16, 2005 11:47 pm</h4>
+    <div class="postbody"><span class="postbody">I didnt get that..=)
+<br/>
+<br/>
+Is it possible to change the BIAS so Instead
+<br/>
+of storing each signed byte seperatly in the final destbuffer
+<br/>
+I can make them unsigned and ORR/Shift them together and put four bytes at once?
+<br/>
+Well it is possible with signed data too but Ive heard that it takes about the same time to ORR together four signed bytes as Store them separatly.
+<br/>
+<br/>
+Thanks in adv</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#34285 - DekuTree64 - Mon Jan 17, 2005 2:52 am</h4>
+    <div class="postbody"><span class="postbody">Hmm, let's see if I can give a bit clearer of an explanation. Say you have an original 8-bit signed sample, which we'll call S, which ranges -128 to 127. To convert to unsigned, you add 128, pushing the range up to 0 to 255. Then you store that unsigned sample (which is S+128) in ROM.
+<br/>
+<br/>
+In your mixer, you load the unsigned sample with ldrb (which can do something like ldrb rTemp, [rData, rPos, lsr #16], to get rid of the fractional portion of rPos without an explicit add instruction).
+<br/>
+So, the value you just loaded is S+128, and you need to subtract that 128 to get it back to what the hardware wants. However, just subtracting it would completely defeat the purpose, since the sub would take just as long as the add that you saved by using ldrb instead of ldrsb.
+<br/>
+<br/>
+Now if you multiply that still-unsigned sample by the volume, you get:
+<br/>
+newSample = (S+128)*vol = (S*vol + 128*vol)
+<br/>
+S*vol is what you actually want to add into the mix anyway, and you can still get it back by subtracting 128*vol:
+<br/>
+newSample = (S*vol + 128*vol - 128*vol) = S*vol
+<br/>
+And then you can add that straight into the mix. The -128*vol is what we call the bias value.
+<br/>
+<br/>
+When you have multiple channels, get get something more like this:
+<br/>
+mixedSamples = (S1*vol1 + 128*vol1 - 128*vol1) + (S2*vol2 + 128*vol2 - 128*vol2) + (S3*vol3 + ...
+<br/>
+<br/>
+The important thing is that the volume doesn't change, so 128*vol for each of the channels is a constant. If you reorder things like this:
+<br/>
+mixedSamples = (S1*vol1 + 128*vol1) + (S2*vol2 + 128*vol2) + (S3*vol3 + 128*vol3) + (-128*vol1 - 128*vol2 - 128*vol3)
+<br/>
+<br/>
+The Sx*volx + 128*volx are the original unsignedSample*vol, and the -128*volx are all constants. Because they're constants, we can add them all up ahead of time:
+<br/>
+bias = (-128*vol1 - 128*vol2 - 128*vol3)
+<br/>
+<br/>
+And the formula above looks just the same, except with all the -128*volx replaced by that bias:
+<br/>
+mixedSamples = (S1*vol1 + 128*vol1) + (S2*vol2 + 128*vol2) + (S3*vol3 + 128*vol3) + bias
+<br/>
+<br/>
+And that's it. End result, you saved one add w/ shift to calculate the address to load from on each channel, but added one add instruction per final mixed sample. With 3 channels here, you still saved 2 cycles per final sample, and the savings only grow with more channels.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#34300 - ProblemBaby - Mon Jan 17, 2005 9:45 am</h4>
+    <div class="postbody"><span class="postbody">DekuTree46: Thanks alot for the explanation! 
+<br/>
+Now I just have to ask one thing about bias, the bias value you talks about is that an own or can I set REG_SGBIAS to this value and it will work I think I read that it max can be 512, maybe iam wrong?
+<br/>
+<br/>
+And then I wonder if it is somehow possible Load/store data from an address in some other way then using LDR/STR
+<br/>
+You talked about opcode hacking.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

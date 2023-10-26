@@ -1,0 +1,723 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>My nds works fine on DeSmuMe, but not on my actual DS >&a - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > My nds works fine on DeSmuMe, but not on my actual DS >&a</h2>
+<div id="posts">
+<div class="post">
+    <h4>#153232 - TheMagnitude - Wed Mar 26, 2008 8:18 pm</h4>
+    <div class="postbody"><span class="postbody">This is part of a tutorial on patater, but i changed the function initsprites() to my own function to initialize a single sprite, to save me copying and pasting lots of code when i progress with more sprites.
+<br/>
+<br/>
+It works fine on DeSmuMe, the orange shuttle moves horizontally across the screen and the moon moves vertically.
+<br/>
+<br/>
+But when i pop it onto my real ds the sprites turn out black, but still transparrent, and they move, except the moon sprite appears to have an posX of 0, when i set it to 150.
+<br/>
+<br/>
+Its the <span style="font-weight: bold">addObject()</span> function that seems to be the problem, since that is the only thing I have changed from the original source in the tutorial.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">/*
+<br/>
+ *  main.cpp
+<br/>
+ *  
+<br/>
+ *  Created by Jaeden Amero on 11/12/07.
+<br/>
+ *  Copyright 2007. All rights reserved.
+<br/>
+ *
+<br/>
+ */
+<br/>
+<br/>
+#include &lt;nds.h&gt;
+<br/>
+#include &lt;assert.h&gt;
+<br/>
+#include "sprites.h"
+<br/>
+<br/>
+/* Backgrounds */
+<br/>
+#include "starField.h"
+<br/>
+#include "planet.h"
+<br/>
+#include "splash.h"
+<br/>
+/* Sprites */
+<br/>
+#include "orangeShuttle.h"
+<br/>
+#include "moon.h"
+<br/>
+<br/>
+// SPRITE GLOBALS
+<br/>
+SpriteInfo spriteInfo[SPRITE_COUNT];
+<br/>
+tOAM *oam;
+<br/>
+<br/>
+static const int BYTES_PER_16_COLOR_TILE = 32;
+<br/>
+static const int COLORS_PER_PALETTE = 16;
+<br/>
+static const int BOUNDARY_VALUE = 32;
+<br/>
+static const int OFFSET_MULTIPLIER = BOUNDARY_VALUE / sizeof(SPRITE_GFX[0]);
+<br/>
+int nextAvailableTileIdx = 0;
+<br/>
+static int oamIdIterator = 0;
+<br/>
+<br/>
+/* Select a low priority DMA channel to perform our background copying. */
+<br/>
+static const int DMA_CHANNEL = 3;
+<br/>
+<br/>
+void initVideo() {
+<br/>
+    /*
+<br/>
+     *  Map VRAM to display a background on the main and sub screens.
+<br/>
+     * 
+<br/>
+     *  The vramSetMainBanks function takes four arguments, one for each of the
+<br/>
+     *  major VRAM banks. We can use it as shorthand for assigning values to
+<br/>
+     *  each of the VRAM bank's control registers.
+<br/>
+     *
+<br/>
+     *  We map banks A and B to main screen  background memory. This gives us
+<br/>
+     *  256KB, which is a healthy amount for 16-bit graphics.
+<br/>
+     *
+<br/>
+     *  We map bank C to sub screen background memory.
+<br/>
+     *
+<br/>
+     *  We map bank D to LCD. This setting is generally used for when we aren't
+<br/>
+     *  using a particular bank.
+<br/>
+     *
+<br/>
+     *  We map bank E to main screen sprite memory (aka object memory).
+<br/>
+     */
+<br/>
+    vramSetMainBanks(VRAM_A_MAIN_BG_0x06000000,
+<br/>
+                     VRAM_B_MAIN_BG_0x06020000,
+<br/>
+                     VRAM_C_SUB_BG_0x06200000,
+<br/>
+                     VRAM_D_LCD);
+<br/>
+<br/>
+    vramSetBankE(VRAM_E_MAIN_SPRITE);
+<br/>
+<br/>
+    /*  Set the video mode on the main screen. */
+<br/>
+    videoSetMode(MODE_5_2D | // Set the graphics mode to Mode 5
+<br/>
+                 DISPLAY_BG2_ACTIVE | // Enable BG2 for display
+<br/>
+                 DISPLAY_BG3_ACTIVE | // Enable BG3 for display
+<br/>
+                 DISPLAY_SPR_ACTIVE | // Enable sprites for display
+<br/>
+                 DISPLAY_SPR_1D       // Enable 1D tiled sprites
+<br/>
+                 );
+<br/>
+<br/>
+    /*  Set the video mode on the sub screen. */
+<br/>
+    videoSetModeSub(MODE_5_2D | // Set the graphics mode to Mode 5
+<br/>
+                    DISPLAY_BG3_ACTIVE); // Enable BG3 for display
+<br/>
+}
+<br/>
+<br/>
+void initBackgrounds() {
+<br/>
+    /*  Set up affine background 3 on main as a 16-bit color background */
+<br/>
+    BG3_CR = BG_BMP16_256x256 |
+<br/>
+             BG_BMP_BASE(0) | // The starting place in memory
+<br/>
+             BG_PRIORITY(3); // A low priority
+<br/>
+<br/>
+    /*  Set the affine transformation matrix for the main screen background 3
+<br/>
+     *  to be the identity matrix.
+<br/>
+     */
+<br/>
+    BG3_XDX = 1 &lt;&lt; 8;
+<br/>
+    BG3_XDY = 0;
+<br/>
+    BG3_YDX = 0;
+<br/>
+    BG3_YDY = 1 &lt;&lt; 8;
+<br/>
+<br/>
+    /*  Place main screen background 3 at the origin (upper left of the screen)
+<br/>
+     */
+<br/>
+    BG3_CX = 0;
+<br/>
+    BG3_CY = 0;
+<br/>
+<br/>
+    /*  Set up affine background 2 on main as a 16-bit color background */
+<br/>
+    BG2_CR = BG_BMP16_128x128 |
+<br/>
+             BG_BMP_BASE(8) | // The starting place in memory
+<br/>
+             BG_PRIORITY(2);  // A higher priority
+<br/>
+<br/>
+    /*  Set the affine transformation matrix for the main screen background 3
+<br/>
+     *  to be the identity matrix.
+<br/>
+     */
+<br/>
+    BG2_XDX = 1 &lt;&lt; 8;
+<br/>
+    BG2_XDY = 0;
+<br/>
+    BG2_YDX = 0;
+<br/>
+    BG2_YDY = 1 &lt;&lt; 8;
+<br/>
+<br/>
+    /*  Place main screen background 2 an interesting place. */
+<br/>
+    BG2_CX = -(SCREEN_WIDTH / 2 - 32) &lt;&lt; 8;
+<br/>
+    BG2_CY = -32 &lt;&lt; 8;
+<br/>
+<br/>
+    /*  Set up affine background 3 on the sub screen as a 16-bit color
+<br/>
+     *  background
+<br/>
+     */
+<br/>
+    SUB_BG3_CR = BG_BMP16_256x256 |
+<br/>
+                 BG_BMP_BASE(0) | // The starting place in memory
+<br/>
+                 BG_PRIORITY(3); // A low priority
+<br/>
+<br/>
+    /*  Set the affine transformation matrix for the sub screen background 3
+<br/>
+     *  to be the identity matrix.
+<br/>
+     */
+<br/>
+    SUB_BG3_XDX = 1 &lt;&lt; 8;
+<br/>
+    SUB_BG3_XDY = 0;
+<br/>
+    SUB_BG3_YDX = 0;
+<br/>
+    SUB_BG3_YDY = 1 &lt;&lt; 8;
+<br/>
+<br/>
+    /*
+<br/>
+     *  Place main screen background 3 at the origin (upper left of the screen)
+<br/>
+     */
+<br/>
+    SUB_BG3_CX = 0;
+<br/>
+    SUB_BG3_CY = 0;
+<br/>
+}
+<br/>
+<br/>
+SpriteEntry * addObject(
+<br/>
+   const unsigned short pal[],
+<br/>
+   const unsigned int tiles[],
+<br/>
+   uint32 palLen,
+<br/>
+   uint32 tilesLen,
+<br/>
+   u16 xpos, u16 ypos,
+<br/>
+   int width, int height,
+<br/>
+   int angle,
+<br/>
+   bool affine,
+<br/>
+   tObjColMode colmode,
+<br/>
+   tObjMode objmode = OBJMODE_NORMAL,
+<br/>
+   tObjPriority objpriority = OBJPRIORITY_0,
+<br/>
+   bool hflip = false,
+<br/>
+   bool vflip = false)
+<br/>
+{
+<br/>
+    assert(oamIdIterator &lt; SPRITE_COUNT);
+<br/>
+    SpriteInfo * info = &amp;spriteInfo[oamIdIterator];
+<br/>
+    SpriteEntry * obj = &amp;oam-&gt;spriteBuffer[oamIdIterator];
+<br/>
+   assert((height==64 || height==32 || height==16 || height==8) &amp;&amp; (width==64 || width==32 || width==16 || width==8));
+<br/>
+   // INFO
+<br/>
+   info-&gt;oamId = oamIdIterator;
+<br/>
+   info-&gt;width = width;
+<br/>
+    info-&gt;height = height;
+<br/>
+    info-&gt;angle = angle;
+<br/>
+    info-&gt;entry = obj;
+<br/>
+   // ATTRIBUTE 0
+<br/>
+   obj-&gt;posY = ypos;
+<br/>
+   obj-&gt;isHidden = false;
+<br/>
+   obj-&gt;isRotoscale = affine;
+<br/>
+    assert(!obj-&gt;isRotoscale || (info-&gt;oamId &lt; MATRIX_COUNT));
+<br/>
+    obj-&gt;rsDouble = false;
+<br/>
+    obj-&gt;objMode = objmode;
+<br/>
+   obj-&gt;isMosaic = false;
+<br/>
+    obj-&gt;colMode = colmode;
+<br/>
+   if (height == width)
+<br/>
+      obj-&gt;objShape = OBJSHAPE_SQUARE;
+<br/>
+   else if (height&gt;width)
+<br/>
+      obj-&gt;objShape = OBJSHAPE_TALL;
+<br/>
+   else if (height&lt;width)
+<br/>
+      obj-&gt;objShape = OBJSHAPE_WIDE;
+<br/>
+   else
+<br/>
+      obj-&gt;objShape = OBJSHAPE_FORBIDDEN;
+<br/>
+   // ATTRIBUTE 1
+<br/>
+   obj-&gt;posX = xpos;
+<br/>
+   if (affine == true)
+<br/>
+      obj-&gt;rsMatrixIdx = info-&gt;oamId;
+<br/>
+   else
+<br/>
+   {
+<br/>
+      obj-&gt;hFlip = hflip;
+<br/>
+      obj-&gt;vFlip = vflip;
+<br/>
+   }
+<br/>
+   switch (height &gt;= width ? height : width)
+<br/>
+   {
+<br/>
+      case 8:
+<br/>
+         obj-&gt;objSize = OBJSIZE_8;
+<br/>
+      break;
+<br/>
+      case 16:
+<br/>
+         obj-&gt;objSize = OBJSIZE_16;
+<br/>
+      break;
+<br/>
+      case 32:
+<br/>
+         obj-&gt;objSize = OBJSIZE_32;
+<br/>
+      break;
+<br/>
+      case 64:
+<br/>
+         obj-&gt;objSize = OBJSIZE_64;
+<br/>
+      break;
+<br/>
+   }
+<br/>
+   // ATTRIBUTE 2
+<br/>
+    obj-&gt;tileIdx = nextAvailableTileIdx;
+<br/>
+    nextAvailableTileIdx += tilesLen / BYTES_PER_16_COLOR_TILE;
+<br/>
+    obj-&gt;objPriority = objpriority;
+<br/>
+    obj-&gt;objPal = info-&gt;oamId;
+<br/>
+   // ROTATE
+<br/>
+   if (affine==true)
+<br/>
+      rotateSprite(&amp;oam-&gt;matrixBuffer[info-&gt;oamId],info-&gt;angle);
+<br/>
+    // COPY SPRITE PALLETTES
+<br/>
+   dmaCopyHalfWords(SPRITE_DMA_CHANNEL,
+<br/>
+                     pal,
+<br/>
+                     &amp;SPRITE_PALETTE[info-&gt;oamId * COLORS_PER_PALETTE],
+<br/>
+                     palLen);
+<br/>
+   // COPY SPRITE GRAPHICS
+<br/>
+    dmaCopyHalfWords(SPRITE_DMA_CHANNEL,
+<br/>
+                     tiles,
+<br/>
+                     &amp;SPRITE_GFX[obj-&gt;tileIdx * OFFSET_MULTIPLIER],
+<br/>
+                     tilesLen);
+<br/>
+   ++oamIdIterator;
+<br/>
+   return obj;
+<br/>
+}
+<br/>
+<br/>
+void displayStarField() {
+<br/>
+    dmaCopyHalfWords(DMA_CHANNEL,
+<br/>
+                     starFieldBitmap, /* This variable is generated for us by
+<br/>
+                                       * grit. */
+<br/>
+                     (uint16 *)BG_BMP_RAM(0), /* Our address for main
+<br/>
+                                               * background 3 */
+<br/>
+                     starFieldBitmapLen);
+<br/>
+}
+<br/>
+<br/>
+void displayPlanet() {
+<br/>
+    dmaCopyHalfWords(DMA_CHANNEL,
+<br/>
+                     planetBitmap, /* This variable is generated for us by
+<br/>
+                                    * grit. */
+<br/>
+                     (uint16 *)BG_BMP_RAM(8), /* Our address for main
+<br/>
+                                               * background 2 */
+<br/>
+                     planetBitmapLen);
+<br/>
+}
+<br/>
+<br/>
+void displaySplash() {
+<br/>
+    dmaCopyHalfWords(DMA_CHANNEL,
+<br/>
+                     splashBitmap, /* This variable is generated for us by
+<br/>
+                                    * grit. */
+<br/>
+                     (uint16 *)BG_BMP_RAM_SUB(0), /* Our address for sub
+<br/>
+                                                     background 3 */
+<br/>
+                     splashBitmapLen);
+<br/>
+}
+<br/>
+<br/>
+int main() {
+<br/>
+    /*  Turn on the 2D graphics core. */
+<br/>
+    powerON(POWER_ALL_2D);
+<br/>
+<br/>
+    /*
+<br/>
+     *  Set up interrupts.
+<br/>
+     *
+<br/>
+     *  We don't really get into what these do exactly at this point in the
+<br/>
+     *  manual, but we still need to do them for now.
+<br/>
+     */
+<br/>
+    irqInit();
+<br/>
+    irqSet(IRQ_VBLANK, 0);
+<br/>
+<br/>
+    /*
+<br/>
+     *  Configure the VRAM and background control registers.
+<br/>
+     *
+<br/>
+     *  Place the main screen on the bottom physical screen. Then arrange the
+<br/>
+     *  VRAM banks. Next, confiure the background control registers.
+<br/>
+     */
+<br/>
+    lcdMainOnBottom();
+<br/>
+    initVideo();
+<br/>
+    initBackgrounds();
+<br/>
+<br/>
+    /* Set up a few sprites. */
+<br/>
+   oam = new tOAM();
+<br/>
+   initOAM(oam);
+<br/>
+   //initSprites(oam,spriteInfo);
+<br/>
+   addObject(  orangeShuttlePal,
+<br/>
+            orangeShuttleTiles,
+<br/>
+            (uint32)orangeShuttlePalLen,
+<br/>
+            (uint32)orangeShuttleTilesLen,
+<br/>
+            (u16)100, (u16)100,
+<br/>
+            64, 64,
+<br/>
+            462,
+<br/>
+            true,
+<br/>
+            OBJCOLOR_16,
+<br/>
+            OBJMODE_NORMAL,
+<br/>
+            OBJPRIORITY_0,
+<br/>
+            false,
+<br/>
+            false);
+<br/>
+   addObject(  moonPal,
+<br/>
+            moonTiles,
+<br/>
+            (uint32)moonPalLen,
+<br/>
+            (uint32)moonTilesLen,
+<br/>
+            (u16)150, (u16)50,
+<br/>
+            32, 32,
+<br/>
+            0,
+<br/>
+            false,
+<br/>
+            OBJCOLOR_16,
+<br/>
+            OBJMODE_NORMAL,
+<br/>
+            OBJPRIORITY_2,
+<br/>
+            false,
+<br/>
+            false);
+<br/>
+    /* Display the backgrounds. */
+<br/>
+    displayStarField();
+<br/>
+    displayPlanet();
+<br/>
+    displaySplash();
+<br/>
+    /*
+<br/>
+     *  Update the OAM.
+<br/>
+     *
+<br/>
+     *  We have to copy our copy of OAM data into the actual
+<br/>
+     *  OAM during VBlank (writes to it are locked during
+<br/>
+     *  other times).
+<br/>
+     */
+<br/>
+   swiWaitForVBlank();
+<br/>
+   updateOAM(oam);
+<br/>
+    return 0;
+<br/>
+}</td> </tr></table><span class="postbody"></span><span class="gensmall"><br/><br/>Last edited by TheMagnitude on Thu Mar 27, 2008 8:46 pm; edited 1 time in total</span></div>    
+</div>
+<div class="post">
+    <h4>#153262 - TheMagnitude - Thu Mar 27, 2008 10:24 am</h4>
+    <div class="postbody"><span class="postbody">Actually none of the posX values seem to be working for the orange shuttle and the moon, they both appear as 0 on the DS.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#153267 - silent_code - Thu Mar 27, 2008 1:45 pm</h4>
+    <div class="postbody"><span class="postbody">did you test it with no$gba? try that.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#153271 - TheMagnitude - Thu Mar 27, 2008 2:59 pm</h4>
+    <div class="postbody"><span class="postbody">On no$gba everything looks fine. Also I forgot to mention that rotations were not working on the ds + DeSmuMe. But the rotations and palletes and coordinates seem to work on no$gba.
+<br/>
+<br/>
+So things not working on DS:
+<br/>
+&gt;Xpos initial calls (if i use my function to add a sprite, then set the xpos after the function that seems to work)
+<br/>
+&gt;Rotation
+<br/>
+&gt;Palletes
+<br/>
+<br/>
+This has been driving me daft for hours soon to be days. :(</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#153277 - SiW - Thu Mar 27, 2008 5:19 pm</h4>
+    <div class="postbody"><span class="postbody">For one thing, change
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">tOAM *oam = new tOAM(); </td> </tr></table><span class="postbody">
+<br/>
+<br/>
+to
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">tOAM *oam;</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+and then in your actual main function,  before the initOAM call, do
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">oam = new tOAM();</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#153286 - silent_code - Thu Mar 27, 2008 6:37 pm</h4>
+    <div class="postbody"><span class="postbody">change </span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">obj-&gt;rsMatrixIdx = ATTR1_ROTDATA(info-&gt;oamId);</td> </tr></table><span class="postbody">
+<br/>
+to </span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">obj-&gt;rsMatrixIdx = info-&gt;oamId;</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+another guy i helped had the exact same problem. that solved it. (i assume you have all the most recent tools, libs and emulators.)
+<br/>
+<br/>
+the first line of code is the old way of doing things. libnds has a really clever SpriteEntry structure now, that doesn't need all the shifting and logic ops in the c/c++ code any more.
+<br/>
+<br/>
+look at the struct, it reflects all possible usages and setups, as well as restrains of the hw objects very well.
+<br/>
+<br/>
+it looks like the tutorial is incompatible with the current libnds version.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#153290 - TheMagnitude - Thu Mar 27, 2008 8:44 pm</h4>
+    <div class="postbody"><span class="postbody">Doing both of those things didnt seem to have any effect :(
+<br/>
+<br/>
+The libnds version that I have is the version that comes with the latest release of devkitpro? Is that the latest version?
+<br/>
+<br/>
+Also what seems to be quite strange is that the original tutorial code works on the DS absolutely fine!
+<br/>
+<br/>
+EDIT: Ive updated the code for the first post as to not confuse things.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#153292 - silent_code - Thu Mar 27, 2008 9:54 pm</h4>
+    <div class="postbody"><span class="postbody">okay, send me the files and i'll fix it while i'm in the mood for it. ;^)
+<br/>
+you got 20 minutes from now to contact me via pm, then the offer expires. i'll pm you an email adress or better yet, send me link to a .rar or .zip or something in the first place.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#153295 - silent_code - Thu Mar 27, 2008 10:44 pm</h4>
+    <div class="postbody"><span class="postbody">time is over... contact me anyway. might take longer until i respond, though. it's 10:44 pm here.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#153355 - TheMagnitude - Sat Mar 29, 2008 12:04 am</h4>
+    <div class="postbody"><span class="postbody">SOLVED!!! ;)</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

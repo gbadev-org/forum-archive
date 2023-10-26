@@ -1,0 +1,274 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>ARM vs THUMB instructions - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>C/C++ > ARM vs THUMB instructions</h2>
+<div id="posts">
+<div class="post">
+    <h4>#7396 - Darkain - Tue Jun 17, 2003 12:09 am</h4>
+    <div class="postbody"><span class="postbody">im using DKA/GCC.  i was wondering how i specify if a section of code (ike a function, or maybe a specific section within a function) to be in THUMB mode or ARM mode, this way i can better optimize my code depending on what it may be doing.<br/>_________________<br/>-=- Darkain Dragoon -=-
+<br/>
+<a class="postlink" href="http://www.darkain.com" target="_blank">http://www.darkain.com</a>
+<br/>
+<a class="postlink" href="http://ds.darkain.com/hack" target="_blank">DarkStar</a> for <a class="postlink" href="http://ds.darkain.com" target="_blank">Nintendo DS</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7401 - tepples - Tue Jun 17, 2003 6:58 am</h4>
+    <div class="postbody"><span class="postbody">Put all your time-critical stuff that should be compiled as ARM code and placed in IWRAM in a separate file, tell GCC to compile it as ARM instead of Thumb, and give it a name that tells the link script to put it in IWRAM. Do something like this:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">gcc -Mthumb -Mthumb-interwork -O3 -o 1.o -c main.c
+<br/>
+gcc -Mthumb -Mthumb-interwork -O3 -o 2.o -c stuff.c
+<br/>
+gcc -Mthumb -Mthumb-interwork -O3 -o 3.o -c morestuff.c
+<br/>
+gcc -Marm -Mthumb-interwork -O3 -o 4.text.iwram.o -c timecriticalstuff.c
+<br/>
+gcc -Marm -Mthumb-interwork -O3 -o 5.o -c asmstuff.s
+<br/>
+gcc -Mthumb-interwork -o game.elf 1.o 2.o 3.o 4.text.iwram.o</td> </tr></table><span class="postbody"><br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7419 - Jason Wilkins - Tue Jun 17, 2003 4:45 pm</h4>
+    <div class="postbody"><span class="postbody">You forgot to mention that the code in ROM which calls functions defined in timecriticalstuff.c will need to be compiled with -mlong-calls or there will be linker errors.
+<br/>
+<br/>
+You don't have to worry about it if you are making multiboot images, apparently, EWRAM and IWRAM are close enough to each other (logically) that short calls will work.  This means that code in EWRAM which calls code in IWRAM does not need -mlong-calls, just code in ROM which calls code in RAM or visa versa.<br/>_________________<br/><a href="http://devkitadv.sourceforge.net" target="_blank">http://devkitadv.sourceforge.net</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7420 - Lupin - Tue Jun 17, 2003 5:04 pm</h4>
+    <div class="postbody"><span class="postbody">I *think* this will work too:
+<br/>
+<br/>
+extern __attribute__ ((long_call)) s32 MyFunc(s32 a, s32 b);</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7428 - Darkain - Tue Jun 17, 2003 7:43 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Lupin wrote:</b></span></td> </tr> <tr> <td class="quote">I *think* this will work too:
+<br/>
+<br/>
+extern __attribute__ ((long_call)) s32 MyFunc(s32 a, s32 b);</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+<br/>
+the long_call attribute as far as i know only lets you call functions between IWRAM, EWRAM, and ROM.  this will force it to use a 32-bit pointer, because normally i think it uses a 24-bit? pointer, to help load things faster.<br/>_________________<br/>-=- Darkain Dragoon -=-
+<br/>
+<a class="postlink" href="http://www.darkain.com" target="_blank">http://www.darkain.com</a>
+<br/>
+<a class="postlink" href="http://ds.darkain.com/hack" target="_blank">DarkStar</a> for <a class="postlink" href="http://ds.darkain.com" target="_blank">Nintendo DS</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7431 - Jason Wilkins - Tue Jun 17, 2003 9:13 pm</h4>
+    <div class="postbody"><span class="postbody">The long_call attribute effects only the functions which call the function with the attribute, not the function itself, so you use it with declarations that appear with functions which need to call that function long.
+<br/>
+<br/>
+Functions which do not need call the function long, such as other functions in the same memory, do not need the attribute, and will be faster without it.
+<br/>
+<br/>
+Also, if you put the long_call attribute on the declaration, you also need to add it to the definition or it will complain about the declaration and definition being different.  But, since a function doesn't need to call itself long, there is no need for the function definition to see the version of its declaration which has the attribute.
+<br/>
+<br/>
+This leads to a slightly annoying situation where some functions need to see the long_call version of the declaration, and some functions do not.  The way I handle this is to use a macro to declare the function in its header file.
+<br/>
+<br/>
+long-calls.h:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#ifdef WRAM_LOCAL_CALLS
+<br/>
+#define __WRAM_CALL_LENGTH
+<br/>
+#else
+<br/>
+#define __WRAM_CALL_LENGTH __attribute__ ((long_call))
+<br/>
+#endif
+<br/>
+<br/>
+#define IWRAM_FUN(decl) __WRAM_CALL_LENGTH __attribute__ (section(".iwram.text"))) decl
+<br/>
+#define EWRAM_FUN(decl) __WRAM_CALL_LENGTH __attribute__ (section(".ewram.text"))) decl
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+iwram-functions.h:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#include "long-calls.h"
+<br/>
+<br/>
+IWRAM_FUN(int my_iwram_fun(int, int, int));
+<br/>
+IWRAM_FUN(int my_iwram_fun2(int));
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+iwram-functions.c:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#define WRAM_LOCAL_CALLS
+<br/>
+#include "iwram-functions.h"
+<br/>
+<br/>
+int my_iwram_fun(int x, int y, int z)
+<br/>
+{
+<br/>
+   return x + y + z;
+<br/>
+}
+<br/>
+<br/>
+int my_iwram_fun2(int x)
+<br/>
+{
+<br/>
+   // because of the WRAM_LOCAL_CALLS define, this will be a short call
+<br/>
+   return my_iwram_fun(x, x, x);
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+main.c
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#include "iwram-functions.h"
+<br/>
+<br/>
+int main(void)
+<br/>
+{
+<br/>
+   // because of the lack of the WRAM_LOCAL_CALLS define, these functions will both be called long
+<br/>
+   return my_iwram_fun2(my_iwram_fun(1, 2, 3));
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody"><br/>_________________<br/><a href="http://devkitadv.sourceforge.net" target="_blank">http://devkitadv.sourceforge.net</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7554 - Lupin - Thu Jun 19, 2003 7:30 pm</h4>
+    <div class="postbody"><span class="postbody">For me it's hard to understand this stuff :(
+<br/>
+<br/>
+now, how do I have to call my functions in IWRAM? The functions are in math.text.iwram.s, how does the function prototype for the functions in my file have to look like (I'm calling from the normal memory (wherever this is :)))?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7558 - Jason Wilkins - Thu Jun 19, 2003 8:02 pm</h4>
+    <div class="postbody"><span class="postbody">The code example I provided is exactly what you need to do to call functions in IWRAM from a function in ROM.  What part do you not understand?<br/>_________________<br/><a href="http://devkitadv.sourceforge.net" target="_blank">http://devkitadv.sourceforge.net</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7560 - Lupin - Thu Jun 19, 2003 8:28 pm</h4>
+    <div class="postbody"><span class="postbody">now, do I still need __attribute__ ((long_call)) for my IWRAM-functions? why did you specifiy the section attribute? it also works without it i think</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7595 - Jason Wilkins - Fri Jun 20, 2003 3:19 pm</h4>
+    <div class="postbody"><span class="postbody">Originally, the feature of naming a file '*.iwram.o' in order to have it in iwram was, in my opinion (the opinion of the creator of the feature), for files which you did not have control of the source code but needed to force to be in a certain place.  Perhaps you just have an object file, or you do not want to edit a piece of source code you have found.
+<br/>
+<br/>
+Recently I have come to think of it as a trick or short cut, which beginners can use, but it is like a sledgehammer.  Using an __attribute__ to set a section is more surgical.
+<br/>
+<br/>
+In DevKit Advance R5, I have reigned in the feature to make it more predictable.  I have no idea precisely how it works in DKA4.  It was the first draft of a feature that I did not finish implementing.  It has no polish. The documentation, like Jeff's FAQ on devrs, is not completely correct about how it works.  That is my fault.  But in DKA5 I polished it up and made it more consistent.
+<br/>
+<br/>
+The presence of the variables __gba_multiboot and __gba_ewram_data are used to set the overall default location of variables and code for the whole final executable image.  __gba_multiboot does a lot more than that, but I'll save an explanation of all it does for another day.
+<br/>
+<br/>
+Naming an object file *.iwram.o, *.ewram.o, or *.cartrom.o will override the default set of the presence or absence of the __gba_* variables and place the functions, data, and constants into sections based on the file name.  This is a novel use of a linkscript feature which I have never seen anyone else use for a general toolchain like DKA.
+<br/>
+<br/>
+Using a section attribute overrides the above two methods and allows you to set the section on a function by function, variable by variable basis.
+<br/>
+<br/>
+You will need a long_call attribute on the prototype of the callee when calling a function in ram from rom or visa versa because the numerical distance between the addresses is too big for a normal (short) call.  iwram to ewram calls (and visa versa) seem to be fine because they are close enough to each other.
+<br/>
+<br/>
+However, you should not have a long_call attribute on the prototype seen by the file that contains the callee, because that wouldl require that you put the attribute on the function definition as well so that the type of the prototype and definition will match.  Putting the attribute on the function definition is ugly and totally unnecessary because a function does not need to call itself long (unless it was a VERY VERY BIG function) and rarely call themselves anyway.
+<br/>
+<br/>
+Another case where it is desirable to not have the long_call attribute is when compiling other functions, which call the function in ram, which are also located in ram.  These functions do not need to call each other with a long call because they are all close enough to each other.
+<br/>
+<br/>
+Because of these cases, and the number 1 software construction principle that you should only write something once, and have it in one place, (i.e., you shouldn't have two versions of the prototype) it is good to create the prototype in such a way that you can easily switch between the long and short call versions.  That is what my sample code above demonstrates using macros.
+<br/>
+<br/>
+The reason it also sets the section is that use of long_call and setting the section are intimately related.  long_call has no other use except to allow proper linking of functions between ram and rom, so a macro setting the long_call attribute would also naturally set the section.
+<br/>
+<br/>
+If you use the *.iwram.o/*.ewram.o method of placing stuff in ram, then the natural partner of that method is using -mlong-calls option when compiling the <span style="font-weight: bold">clients</span> of the functions in those files.  "Clients" means files which contain calls to the functions defined in the *.iwram.o/*.ewram.o files (except the *.iwram.o/*.ewram.o files themselves).  If the *.iwram.o/*.ewram.o files call functions in ROM, then they will need the -mlong-calls option as well.  Simply returning to ROM does not count, just if they make actual calls.  
+<br/>
+<br/>
+The -mlong-calls option is the sledgehammer counterpart to the *.iwram.o/*.ewram.o sledgehammer because it will make all function calls in the compiled file be long calls, even ones that do not need it.  The result is slower code because of the overhead of the unecessary long calls.
+<br/>
+<br/>
+Of course, you can mix the two options, but it may become more difficult to understand what is happening.
+<br/>
+<br/>
+I use the *.iwram.o/*.ewram.o feature when I do not want to edit the source code of the file I am compiling.  One example is when I compiled some benchmark code I didn't write.  I didn't want to go through the code and add a bunch of DKA5 specific stuff to it, so I just had the makefile give the file the name queens.iwram.o.  This had the intended effect of putting all the time critical code and data in the benchmark into iwram, and was very easy.  It is intended to be a quick and dirty solution, and there is nothing wrong with that, but if you have total control over your source, you should be more careful and use attributes.
+<br/>
+<br/>
+The __gba_* variables are for controlling the location of variables and code you have little control over, like the standard C library.  I am working on a way to more precisely control even where the standard library are located.  Stay tuned.
+<br/>
+<br/>
+I hope this is a thorough enough explanation, I will be using this as a rough draft for documenting this feature on the DKA web site.  What is needed is a couple of code samples and I'm set.<br/>_________________<br/><a href="http://devkitadv.sourceforge.net" target="_blank">http://devkitadv.sourceforge.net</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7619 - Lupin - Sat Jun 21, 2003 2:55 pm</h4>
+    <div class="postbody"><span class="postbody">hmm, thanks for your explanation about that, I think I have to get rid of this .iwram.o extension and somehow try to put the functions into iwram myself.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7631 - Drago - Sat Jun 21, 2003 6:52 pm</h4>
+    <div class="postbody"><span class="postbody">Until now I've been mixing the two methods, file naming to place functions into iwram and macros to specify the type of jump, and it has been working fine for both C and C++. After reading the posts I've tried to make use of the section attribute to place functions into iwram. C modules worked fine, but I'm having problems with C++. Are there any special considerations about placing class methods into iwram by using the section attribute instead of file naming?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7701 - Jason Wilkins - Mon Jun 23, 2003 6:32 am</h4>
+    <div class="postbody"><span class="postbody">I have never tried to use attributes with C++ methods, so I dunno.  I would assume that you CANNOT use the section attribute on member variables in the class declaration, but that you can use it on the member functions.   attribute long_call would seem to be useless for virtual functions because all virtual function calls are done through pointers and  thus are already long calls, but it should not give you an error.
+<br/>
+<br/>
+Could you explain your problems more?  Please provide a code sample of what you are trying to do and the errors you are getting.  Also, which version of DKA are you using?
+<br/>
+<br/>
+From you explaination, I do not even know if your problems are syntax errors, semantic errors, or linker errors.<br/>_________________<br/><a href="http://devkitadv.sourceforge.net" target="_blank">http://devkitadv.sourceforge.net</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7719 - Drago - Mon Jun 23, 2003 2:40 pm</h4>
+    <div class="postbody"><span class="postbody">Well, I gave no details because I wanted to know if I was missing something obvious before messing up with specific code.
+<br/>
+Now, while writing a simple example to post I found the source of the error, and it has to do with ARM/Thumb compilation, and not with ROM/IWRAM code placing. Thus, the section attribute is now working fine with C++.
+<br/>
+<br/>
+Anyway, I tried the section attribute method in order to avoid splitting my modules into three files, module.h, module.c/cpp and module.text.iwram.c/cpp. But I realized that I need to keep doing it because I want my IWRAM code to be ARM, and my ROM code to be Thumb.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

@@ -1,0 +1,147 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Framebuffer + 256 bmp on sub - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Framebuffer + 256 bmp on sub</h2>
+<div id="posts">
+<div class="post">
+    <h4>#47602 - tonysavon - Mon Jul 11, 2005 8:43 am</h4>
+    <div class="postbody"><span class="postbody">Hello,
+<br/>
+I'm trying to port my Gba Jpeg Viewer on the DS. I would like to use the top screen as a framebuffer to display the picture and the second screen as a 256 colors paletted bmp for the gui. I can succesfully write to the top framebuffer screen in 16 bit, but I cannot draw to to the second one, which is always black:-(
+<br/>
+Here is my code: 
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+int main(void)
+<br/>
+{   
+<br/>
+  powerON(POWER_ALL);
+<br/>
+  videoSetMode(MODE_FB0);
+<br/>
+  vramSetBankA(VRAM_A_LCD); //
+<br/>
+  
+<br/>
+  videoSetModeSub(MODE_5_2D | DISPLAY_BG3_ACTIVE);
+<br/>
+  vramSetBankC(VRAM_C_SUB_BG);
+<br/>
+  SUB_BG3_CR = BG_BMP8_256x256;
+<br/>
+  SUB_BG3_XDX = 1 &lt;&lt; 8;
+<br/>
+  SUB_BG3_XDY = 0;
+<br/>
+  SUB_BG3_YDX = 0;
+<br/>
+  SUB_BG3_YDY = 1 &lt;&lt; 8;
+<br/>
+  SUB_BG3_CX = 0;
+<br/>
+  SUB_BG3_CY = 0;
+<br/>
+<br/>
+  int z;
+<br/>
+  u16* palette=(u16*)BG_PALETTE_SUB;
+<br/>
+  u16*  screen=(u16*)BG_GFX_SUB;
+<br/>
+  
+<br/>
+  //grey palette, just for try
+<br/>
+  for (z=0;z&lt;256;z++) palette[z]=RGB(z&gt;&gt;3,z&gt;&gt;3,z&gt;&gt;3)|BIT(15); 
+<br/>
+  // try to write something
+<br/>
+  for (z=0;z&lt;256*128;z++) screen[z]=(u16)z;
+<br/>
+   // but nothing happens. 
+<br/>
+   //following is code to write in VRAM_A for top screen, which works.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+What am I doing wrong? Thanks!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#47630 - cory1492 - Mon Jul 11, 2005 4:20 pm</h4>
+    <div class="postbody"><span class="postbody">Have a look at subpixelfont, it is able to put stuff on either screen in frame mode. Wish I could be of more help, as it is Im trying to figure out how to simply change one pixel at a time inside vram....</span><span class="gensmall"><br/><br/>Last edited by cory1492 on Mon Jul 11, 2005 4:31 pm; edited 1 time in total</span></div>    
+</div>
+<div class="post">
+    <h4>#47633 - MrAdults - Mon Jul 11, 2005 4:28 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">u16*  screen=(u16*)BG_GFX_SUB; </td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Don't know if it's your only problem, but 256 color bitmap mode means 8-bit palette lookup values, so that should be a u8.
+<br/>
+<br/>
+-Rich</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#47635 - tonysavon - Mon Jul 11, 2005 5:00 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>MrAdults wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">u16*  screen=(u16*)BG_GFX_SUB; </td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Don't know if it's your only problem, but 256 color bitmap mode means 8-bit palette lookup values, so that should be a u8.
+<br/>
+<br/>
+-Rich</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I was writing data in 16 bits the old GBA style (where you only had 16bit access to vram if I remember correctly); anyway changing to u8* does not improve things. I always get black screen :-(
+<br/>
+Any other ideas? Thanks</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#47636 - MrAdults - Mon Jul 11, 2005 5:11 pm</h4>
+    <div class="postbody"><span class="postbody">It's also more appropriate to be writing to BG_BMP_RAM_SUB(0), but since BG_GFX_SUB and that will both result in a destination of 0x06200000, it isn't an issue.
+<br/>
+<br/>
+Your problem may also be the way you're writing into the buffer. Try creating a scratch buffer (global or malloc) and writing into that, and using a dmaCopy to move your data from that buffer into vram, and see if that helps your black screen problem.
+<br/>
+<br/>
+-Rich</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#47638 - tonysavon - Mon Jul 11, 2005 5:30 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>MrAdults wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+Your problem may also be the way you're writing into the buffer. Try creating a scratch buffer (global or malloc) and writing into that, and using a dmaCopy to move your data from that buffer into vram, and see if that helps your black screen problem.
+<br/>
+-Rich</td> </tr></table><span class="postbody">
+<br/>
+I've tryied this one too, with no luck. Thanks for your efforts though, I'm afraid I'll give up :-(</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#47640 - tonysavon - Mon Jul 11, 2005 6:09 pm</h4>
+    <div class="postbody"><span class="postbody">It looks like I've solved :-)
+<br/>
+Instead of writing to BG_GFX_SUB, i write directly to 0x6040000.
+<br/>
+I wish I could understand why it is working now! I guess I've to study better.
+<br/>
+Thanks to anyone who helped
+<br/>
+Tony</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

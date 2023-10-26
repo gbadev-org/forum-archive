@@ -1,0 +1,1105 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>A right use of variables - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > A right use of variables</h2>
+<div id="posts">
+<div class="post">
+    <h4>#11929 - RaBBi - Fri Oct 24, 2003 10:28 am</h4>
+    <div class="postbody"><span class="postbody">Hi,
+<br/>
+<br/>
+I'm programming on GBA since few months now, and I'm starting to do some harder stuff than juste display sprites and BGs.
+<br/>
+<br/>
+And my functions need more and more variables and to store many states (game, sprites, bgs...)
+<br/>
+<br/>
+So I think I'm not using well the different "types" of variables.
+<br/>
+Sometimes I'm confused in choosing between "static", "extern", local, global, "auto"...
+<br/>
+<br/>
+I wanted to know how to have a good use of variables,
+<br/>
+and how to limit the need of global variables.
+<br/>
+<br/>
+I talked with a 3D-application developper, and he told me that the variables declared in main function were actives during the whole program execution, and that could be "the" trick for me.
+<br/>
+<br/>
+Thank you ^^<br/>_________________<br/>Sorry for my poor english, but it would be worst for you to understand me if I speak in my native language, French ^^</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#11934 - Gopher - Fri Oct 24, 2003 3:27 pm</h4>
+    <div class="postbody"><span class="postbody">ok, first off, local vars are vars declared inside functions, and generally are only visible to that function. when you call a function, on entry the local variables are created, and on exit their memory is freed back up. You can make a local var in a function hold it's value between calls to the function by making it static. Example
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+int FuncA() {
+<br/>
+  int i=0;
+<br/>
+  return i++;
+<br/>
+}
+<br/>
+<br/>
+int FuncB() {
+<br/>
+  static int i=0;
+<br/>
+  return i++;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+the first function will always return 0, because whenever you call the function it creates the variable i, but when you return the value of the variable is thrown away. FuncB has a static local var, which means that it will get created once, and thereafter hold it's value throughout the program. So the first time you call FuncB it will return 0, the next time 1, ect.
+<br/>
+Static variables can be very useful, but remember that every static variable in your program will be using up memory throughout the run of your program just like a global variable declared in a file would. Use too many of them and you'll find yourself running out of IWRAM pretty quickly.
+<br/>
+<br/>
+Now a little about globals. Globals are also created when the program starts and don't let their memory go. A global variable is visible to any functions in the same .h/.c file.  Extern used in a declaration tells the compiler "Don't create this variable, it already exists in another file, just grab a reference to it when you're linking"  Externed global variables can be useful when you have a data structure or array of information that neeeds to be visible to multiple files in the program. You can't declare global variables in your .h files, as it would cause them to be created multiple times, so the compiler will balk. Instead you can create them in the .c file and extern them in the .h if they need to be visible to every file that includes the header. Now applied to a local variable, static works a bit differently. Declaring a global as static prevents that global from being accessed with extern from other files. Use it when you want 'private' global variables in your .c files. 
+<br/>
+<br/>
+Now there are a few other modifiers too. First off, you never need to specify auto, it is a default and the keyword only exists for completeness. There is also volatile, which tells the compiler that the value of the variable may changes without the compiler knowing it. This is fairly rare, in my experience, but can come up if you're writing multi-threaded apps where multiple threads access the same variables. On GBA, you will also want to use the volatile keyword in your defines to access some hardware registers, such as the interrupt flags, which can be changed by the hardware.
+<br/>
+<br/>
+and just one more. the keyword register tells the compiler to keep the variable in a register rather than on the heap/stack. Now, the first time I heard of the register keyword I thought "Gads! Why doesn't everybody use this, it seems like it would make your programs much faster!" The answer is because a modern optimizing compiler will make this kind of call for you. Someone correct me if I'm wrong, but I don't think specifying register even guarantees the variable will be treated that way.
+<br/>
+<br/>
+So, lets reduce it to general rules. Stick to local variables whenever possible, as they don't keep your memory tied up. when a function needs to be able to hold on to information in-between calls. 
+<br/>
+<br/>
+One use for static local variables is to break up a long process into multiple calls. For example, you might have a function that does some extremely slow and complicated computation across an array of data with a for() loop. By using a static index variable, you can make the function able to split this task up and execute it across multiple calls to the function. A simple non-specific example, in this case watching the vcount and returning when it reaches 120. For the record 120 is totally arbitrary, and you would have to pick something that makes sense in your situation. 
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+int ExpensiveArrayManipulator()
+<br/>
+{
+<br/>
+    static int i=0;
+<br/>
+<br/>
+    for ( ; i&lt;END_OF_ARRAY; ++i)
+<br/>
+    {
+<br/>
+        //time-out condition
+<br/>
+        if (REG_VCOUNT&gt;120)
+<br/>
+            return 1; //quit here.
+<br/>
+        
+<br/>
+        //do expensive stuff here.
+<br/>
+        //it's important to do the break-out test first and the
+<br/>
+        //computation second, or else the computation
+<br/>
+        //could be performed twice on the same index 'i'
+<br/>
+        ExpensiveOperation(&amp;Arrray[i]);
+<br/>
+    }
+<br/>
+<br/>
+    i=0; //we finished, reset our index for the next traversal of the array
+<br/>
+    //return 0 this time so the calling function can know that this time we're
+<br/>
+    //actually finished, not just returning because we're out of time
+<br/>
+    return 0;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+An example of something that might be effectively implemented this way would be a text engine for an RPG. It's not essential that the text come up the very next frame, so you might have a function like this that will only spend a fixed amount of time drawing characters to a sprite. This way you could still have effects going on, user input being processed, etc. while you are drawing the text. Not the bext example, but I can't think of a better one at the moment.
+<br/>
+<br/>
+That's enough for this impropmptu lesson. Hope it was helpful.
+<br/>
+<br/>
+[edit : corrected unmatched [code] block]<br/>_________________<br/>"Only two things are infinite: the universe, and human stupidity. The first is debatable." -Albert Einstein</span><span class="gensmall"><br/><br/>Last edited by Gopher on Fri Oct 24, 2003 7:11 pm; edited 1 time in total</span></div>    
+</div>
+<div class="post">
+    <h4>#11942 - tepples - Fri Oct 24, 2003 6:22 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Gopher wrote:</b></span></td> </tr> <tr> <td class="quote">There is also volatile, which tells the compiler that the value of the variable may changes without the compiler knowing it. This is fairly rare, in my experience, but can come up if you're writing multi-threaded apps where multiple threads access the same variables. On GBA, you will also want to use the volatile keyword in your defines to access some hardware registers, such as the interrupt flags, which can be changed by the hardware.</td> </tr></table><span class="postbody">
+<br/>
+To be safe, I declare all hardware registers as volatile.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">the keyword register tells the compiler to keep the variable in a register rather than on the heap/stack [...] a modern optimizing compiler will make this kind of call for you. Someone correct me if I'm wrong, but I don't think specifying register even guarantees the variable will be treated that way.</td> </tr></table><span class="postbody">
+<br/>
+It doesn't guarantee that your variable will be kept in a register (register and auto are just suggestions to a modern compiler), but sometimes GCC guesses wrong, and a hint speeds things up. The register keyword also allows the programmer to suggest <span style="font-style: italic">which</span> register to use, which can become important for getting GCC to generate 'ldmia' instructions to access arrays faster.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#11943 - sajiimori - Fri Oct 24, 2003 6:26 pm</h4>
+    <div class="postbody"><span class="postbody">Functions can be static, too.  If you have global variables or functions that don't need to be accessed by another module (.c file), make them static.  That way you can reuse their names elsewhere.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#11946 - Gopher - Fri Oct 24, 2003 7:18 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+ The register keyword also allows the programmer to suggest which register to use, which can become important for getting GCC to generate 'ldmia' instructions to access arrays faster.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Oh? Please explain, how do you specify which register to use? This is a language feature I was unfamiliar with. Is it a particurlar feature of GCC?<br/>_________________<br/>"Only two things are infinite: the universe, and human stupidity. The first is debatable." -Albert Einstein</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#11950 - tepples - Fri Oct 24, 2003 8:28 pm</h4>
+    <div class="postbody"><span class="postbody">It's a GCC extension to the C language: <a class="postlink" href="http://computing.ee.ethz.ch/sepp/gcc-3.2.3-mo/gcc_119.html#SEC119" target="_blank">Putting variables in specific registers</a>
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+register unsigned int baz asm("r9") = 0;
+<br/>
+</td> </tr></table><span class="postbody"><br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#11982 - RaBBi - Sat Oct 25, 2003 7:07 pm</h4>
+    <div class="postbody"><span class="postbody">Hi,
+<br/>
+<br/>
+I answer Gopher for writing a long post about use of variables, but in fact, I know all of this ^^
+<br/>
+<br/>
+But your end example is exactly what I mean to do.
+<br/>
+<br/>
+Text-engine for my game is the first functions that require use of frames counting.
+<br/>
+I use static in these functions to know what is the next caracter to write the next Xth frame.
+<br/>
+<br/>
+But If my first first first newbie's functions already use statics, I'm afraid about next functions that use frames-counting and states-storing I'll code...
+<br/>
+<br/>
+I don't know how to construct my functions, which need to store states, without using globals and static, cause everybody says that a good program doesn't use a lot of these.
+<br/>
+<br/>
+But what "a lot" means?
+<br/>
+What is an good amount of globals/static in a game? 
+<br/>
+<br/>
+That's was the real purpose of my first post. I'm sorry, I'd have to be more explicit.
+<br/>
+<br/>
+Thank you ^^<br/>_________________<br/>Sorry for my poor english, but it would be worst for you to understand me if I speak in my native language, French ^^</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#11985 - Gopher - Sat Oct 25, 2003 7:43 pm</h4>
+    <div class="postbody"><span class="postbody">Sorry if I started too basic for you; I try to err on the side of caution, and was not sure how much you knew/understood.
+<br/>
+<br/>
+As for what consistutes "too many", at the end of the day, if you haven't run out of IWRam, you don't have too many.
+<br/>
+As a general rule, if you're writing code you intend to reuse, you should try to make it use as little memory as you can. The more memory a reusable code module uses, the less memory is left for anything else. 
+<br/>
+Global variables are to be avoided where possible for 2 reasons, firstly that they take up memory all the time, and secondly because they clutter up the namespace. If you made a global variable "LoopCounter," for example, no other file could have a variable named LoopCounter. Making your globals static prevents this.
+<br/>
+<br/>
+If you came up with something very similar to the example at the end of the last post on your own, I would say that you have officially graduated past "newbie," in the area of C/C++ programming. If you can't think of a way to implement something without globals or statics, then it's probably fine to use them in that case. 
+<br/>
+<br/>
+The warning against statics and globals is really just to make you ask that question - "Can I do this some other way?" but sometimes the answer is no, so don't feel like you have to avoid using them completely.<br/>_________________<br/>"Only two things are infinite: the universe, and human stupidity. The first is debatable." -Albert Einstein</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#11987 - tepples - Sat Oct 25, 2003 8:00 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>RaBBi wrote:</b></span></td> </tr> <tr> <td class="quote">I don't know how to construct my functions, which need to store states, without using globals and static, cause everybody says that a good program doesn't use a lot of these.</td> </tr></table><span class="postbody">
+<br/>
+I like to make a struct for any set of related functions that needs to store a state. Do this, then put the struct in global memory. (Because of alignment oddities between the assembler and the linker, structs actually tend to take less space than their parts would as individual variables.) Then instead of using a lot of global variables, you can pass pointers to structs around. Congratulations; you've taken the first step toward the ++.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#11988 - RaBBi - Sat Oct 25, 2003 10:23 pm</h4>
+    <div class="postbody"><span class="postbody">Thank you , I did it! lol
+<br/>
+<br/>
+Okay, as you advice me, I already use structs, that I put in a struct array, that I declare as global, for my sprites for example.
+<br/>
+<br/>
+I found easier to pass an array index than a pointer to a struct stored in this array.
+<br/>
+Is this way proper?
+<br/>
+<br/>
+So using struct with many fields take less memory than declare the same account of global variables?<br/>_________________<br/>Sorry for my poor english, but it would be worst for you to understand me if I speak in my native language, French ^^</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#11990 - torne - Sat Oct 25, 2003 11:46 pm</h4>
+    <div class="postbody"><span class="postbody">It can be more memory efficient in certain circumstances; there are some slightly mysterious interactions between alignment as seen by the compiler vs the linker which sometimes cause globals in certain sections to all be aligned on 4-byte boundaries even if they are shorter.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12003 - RaBBi - Sun Oct 26, 2003 2:46 pm</h4>
+    <div class="postbody"><span class="postbody">I have a precise example of what I mean by "a lot" of global variables.
+<br/>
+<br/>
+I make a RPG (don't warn me, it's a very very mini project, just to approach some concepts of this game type ^^) and I need to store the dialogs which are a big part of game data.
+<br/>
+<br/>
+For the moment, I thought to use arrays of string pointers.
+<br/>
+Each sentence would be a array item.
+<br/>
+And a group of sentence made a "scene". 
+<br/>
+Each scene is stored in an array.
+<br/>
+(Then I link scenes to corresponding maps)
+<br/>
+<br/>
+<br/>
+The problem is : where and how to declare these arrays ?
+<br/>
+I declared them as global in a "scripts.c" file (a file which treating all the scripts actions and states).
+<br/>
+<br/>
+Would they all be in the RAM at the game initialization ?
+<br/>
+If yes, isn't it "a lot" of globals ?
+<br/>
+<br/>
+If no, where ?
+<br/>
+<br/>
+<span style="font-weight: bold">EDIT AFTER THINK MORE ABOUT IT:</span>
+<br/>
+And if I try to use a different function for each automatic scene in the game?
+<br/>
+<br/>
+By this way, I don't need to declare all my dialogs in game initialization, they're just putted in memory when the function scene_X() is called. (with a pointer on function for example)
+<br/>
+<br/>
+Do you think it's a better way to follow ?
+<br/>
+<br/>
+Thank you ^^<br/>_________________<br/>Sorry for my poor english, but it would be worst for you to understand me if I speak in my native language, French ^^</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12006 - Gopher - Sun Oct 26, 2003 5:37 pm</h4>
+    <div class="postbody"><span class="postbody">Ok, you definately wouldn't want to try to hold all the dialog and story strings for an RPG in IWRAM all the time.  You could use EWRAM instead, this thread talked about how do do that...
+<br/>
+<a class="postlink" href="http://forum.gbadev.org/viewtopic.php?t=2212" target="_blank">http://forum.gbadev.org/viewtopic.php?t=2212</a>
+<br/>
+<br/>
+as the thread describes, your large number of specific functions for each scene could also be stored in ewram.
+<br/>
+<br/>
+Glad we finally got to the heart of your question, heheh
+<br/>
+[edit: fixed link]<br/>_________________<br/>"Only two things are infinite: the universe, and human stupidity. The first is debatable." -Albert Einstein</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12008 - tom - Sun Oct 26, 2003 6:22 pm</h4>
+    <div class="postbody"><span class="postbody">why don't you keep your strings in rom ?
+<br/>
+declare them as const and devkitadv will throw them into rom.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12009 - Gopher - Sun Oct 26, 2003 6:27 pm</h4>
+    <div class="postbody"><span class="postbody">&lt;Gopher smacks himself in the forehead.&gt; 
+<br/>
+Tom's right, that's probably a much simpler solution to your problem, heh
+<br/>
+leave it to me to overcomplicate everything, heh<br/>_________________<br/>"Only two things are infinite: the universe, and human stupidity. The first is debatable." -Albert Einstein</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12012 - RaBBi - Sun Oct 26, 2003 8:54 pm</h4>
+    <div class="postbody"><span class="postbody">Ok, even if EWRAM is not the solution, I'll read the topic just to know what it talk about ^^
+<br/>
+<br/>
+I use Ham, no devkitadv.
+<br/>
+<br/>
+So Const are all stored in ROM ?
+<br/>
+<br/>
+And, strings apart, do you think my edit is good for automatic scene?<br/>_________________<br/>Sorry for my poor english, but it would be worst for you to understand me if I speak in my native language, French ^^</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12027 - tom - Mon Oct 27, 2003 12:03 pm</h4>
+    <div class="postbody"><span class="postbody">don't know ham (i don't need it, i couldn't afford it anyway,nor would i want to have the ham splash-screen in my software *), but i'm pretty sure it puts const data in rom aswell (would be downright silly if not=)
+<br/>
+<br/>
+sure your design works for automatic scenes, although i don't entirely understand what you exactly want to do.
+<br/>
+<br/>
+(* yes, i do know you can use ham without hamlib)</span><span class="gensmall"><br/><br/>Last edited by tom on Mon Oct 27, 2003 7:29 pm; edited 1 time in total</span></div>    
+</div>
+<div class="post">
+    <h4>#12029 - torne - Mon Oct 27, 2003 1:07 pm</h4>
+    <div class="postbody"><span class="postbody">HAM still uses GCC, just not exactly the same compile as DKA. GCC will always put const data in a read-only section, and ld will always leave read-only sections in rom unless you have a really, really silly link script =)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12032 - RaBBi - Mon Oct 27, 2003 7:15 pm</h4>
+    <div class="postbody"><span class="postbody">Ok, 
+<br/>
+<br/>
+I'm going to re-precise (cause I made it in an old topic) what I mean to do in automatic scenes, for tom ^^
+<br/>
+<br/>
+So the game goes on, I can move my hero sprite, on a loaded map, with others NPCs which live on their own.
+<br/>
+<br/>
+Suddenly, the hero approaches a point (flag in collision layer? ^^) that triggers an automatic scene.
+<br/>
+The player can't move hero.
+<br/>
+<br/>
+BG scrolls a few. We discover 2 others NPCs.
+<br/>
+So they start to talk.
+<br/>
+One sentence, in a dialog box.
+<br/>
+Dialog Box disappears.
+<br/>
+A sprite makes a move.
+<br/>
+Second sentence.
+<br/>
+Dialog Box disappears.
+<br/>
+Some wait...
+<br/>
+New sentence.
+<br/>
+Dialog Box disappears.
+<br/>
+Special effect.
+<br/>
+Hero's knocked.
+<br/>
+Two others sprites disappears.
+<br/>
+<br/>
+And the control returns to the player.
+<br/>
+<br/>
+You can see that the execution of this is different from the "main game loop" execution which do "all the time and repeatdly" the same things (check collision, check sprites, checks bgs, update everything...).
+<br/>
+<br/>
+So I though to execute a different function each time that there's an automatic scene.
+<br/>
+And after finish it, returns to the "main game execution".
+<br/>
+<br/>
+But, as my text function (for example), is based on the frame couting, I need to call the scene_X() function in the while(1) loop in the main function.
+<br/>
+So scene_X() will be called many time until completion.
+<br/>
+<br/>
+And in this case, I don't need to put my scripts/texts/dialogs (for automatic scenes) in const arrays, cause I just need to call text_function("this is my dialog").
+<br/>
+<br/>
+So do you think it's a good way to execute automatic scenes?
+<br/>
+That's why I wanted to know ^^
+<br/>
+<br/>
+tom: I hope you don't take bad my automatic scene description. I'd be very simple to be easy understandable ^^
+<br/>
+<br/>
+Thank you ^^<br/>_________________<br/>Sorry for my poor english, but it would be worst for you to understand me if I speak in my native language, French ^^</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12033 - Gopher - Mon Oct 27, 2003 8:11 pm</h4>
+    <div class="postbody"><span class="postbody">You may want to concider creating a simple scripting language to define these cut-scenes. This would allow you to write one function which, while more complicated, could be called for any cut scenes in the game. 
+<br/>
+<br/>
+If I were coding this kind of system, I would make a set of tools to compile all script events to some fixed size file. To give an small example, imagine this simple cut scene.
+<br/>
+<br/>
+Suppose the player walks into town and talks to a special character for the first time. The character introduces themselves, then asks the player to follow them to the town hall.
+<br/>
+<br/>
+The script file might be arranged like this
+<br/>
+lines starting with ; are comments
+<br/>
+<br/>
+event FirstEncounterMayorBill
+<br/>
+;message "blah" displays a message box containing "blah" until the user
+<br/>
+;presses a key
+<br/>
+message "Mayor Bill: So, you're the hero I've heard about."
+<br/>
+message "Mayor Bill: I'm the mayor of this town."
+<br/>
+message "Mayor Bill: Come with me, I have something to give you."
+<br/>
+;scrolls to coordx,coordy for 3 seconds
+<br/>
+;coordx,coordy would be map location of town hall
+<br/>
+ScrollView coordx, coordy, 3
+<br/>
+;tell the MayorBill actor to walk offscreen towards town hall
+<br/>
+Move MayorBill, coordx, coordy
+<br/>
+;this marks that the event is over, so control returns to player
+<br/>
+endevent
+<br/>
+<br/>
+<br/>
+<br/>
+You would also need some kind of file identifying all the actors, such as MayorBill. An entry in this file might be like this
+<br/>
+<br/>
+;character Mayor Bill of Billville
+<br/>
+character MayorBill
+<br/>
+;home town of character, where they live and
+<br/>
+;position on town map where they are encountered
+<br/>
+home Billville, coordx, coordy
+<br/>
+;this would identify which character animations to use
+<br/>
+;for this character
+<br/>
+Image Man4
+<br/>
+endchar
+<br/>
+<br/>
+<br/>
+You could store these scripts as strings in ROM, but they could also be 'compiled' into code references by an additional tool app.
+<br/>
+If you go the latter approach, I would recomend doing a fixed-size structure that can hold information on a set of items. I'd probably use a structure like this:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+typedef struct ScriptEvent_tag {
+<br/>
+    word EventType,
+<br/>
+            wParam;
+<br/>
+    hword hwParamA,
+<br/>
+              hwParamB;
+<br/>
+     ScriptEvent_tag *pNext;
+<br/>
+} ScriptEvent;
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+and your ExecuteScriptEvent() function could hold a static pointer to the current script event. The body of the function would be a switch() statement that acted based on the EventType.
+<br/>
+You might want to replace the ScriptEvent pNext pointer with an index, and depending on the eventTypes you implement you may want more or less parameters. You could also replace the defined params with a union of structures for each type of event with meaningful parameter names.
+<br/>
+<br/>
+In compiling the scripts, you would want to build a string table somewhere in ROM holding all the message strings from your scripts, and then replace those strings in the compiled script with their index in the string table. The same goes for replacing character actor names with some unique actor ID.
+<br/>
+<br/>
+I know this would be a lot of work, but it would give you a very flexable system. Once it was implemented, you would very easily be able to write scripts for cut-scenes.
+<br/>
+<br/>
+I hope this explanation was clear and not too complicated. If you like the idea but are unclear on how it could be implemented, feel free to ask either on the forum or by contacting me through email. 
+<br/>
+<br/>
+If you don't like the idea, well, never mind then. :)
+<br/>
+<br/>
+Wow, just finished proof-reading this and it turned into a long post even by my standards. heh. Oh well.<br/>_________________<br/>"Only two things are infinite: the universe, and human stupidity. The first is debatable." -Albert Einstein</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12034 - RaBBi - Mon Oct 27, 2003 8:47 pm</h4>
+    <div class="postbody"><span class="postbody">yeah!
+<br/>
+<br/>
+you're near the approach I had some days ago (before thinking about One function for One scene ^^).
+<br/>
+<br/>
+I wanted to store all my scripts in arrays/structs and being able, for a precise map, to trigg the good one.
+<br/>
+<br/>
+So I understand the way you advice me to follow, but there are some dark points for me.
+<br/>
+<br/>
+The structure you propose is for a windows application, isn't it?
+<br/>
+I don't know "word", "hword" in GBA programming.
+<br/>
+<br/>
+And, I don't understand what do you mean by "fixed-size file".
+<br/>
+I'm newbie in all domains : C coding, GBA programming, game programming.
+<br/>
+So I think I have a bad translation/vision of "file".
+<br/>
+Do you mean a .c file ?
+<br/>
+<br/>
+But I don't want you think about it at my place.
+<br/>
+So can you guide me to where to learn some concepts about these you could use in your explanation?
+<br/>
+<br/>
+I prefer posting for the moment, cause I think someones could be in the same case as me ^^
+<br/>
+<br/>
+You say it would be a hard job, and I know, cause I think about this "engine" for many weeks, to have a flexible one, and I'm walking around without find :)
+<br/>
+<br/>
+Thank you very much ^^<br/>_________________<br/>Sorry for my poor english, but it would be worst for you to understand me if I speak in my native language, French ^^</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12041 - Gopher - Mon Oct 27, 2003 11:10 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>RaBBi wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+The structure you propose is for a windows application, isn't it? 
+<br/>
+I don't know "word", "hword" in GBA programming. 
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Since GBA's ARM7 processor is 32-bit, it's 'word-size' is 32 bits
+<br/>
+hword is half-word, 16 bits. I use the following typedefs myself
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+typedef unsigned int word;
+<br/>
+typedef unsigned short int hword;
+<br/>
+typedef unsigned char byte;
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+ultimately what types you use is not that important, though, as the idea is just to reserve space in the structure for any parameters a particular script event type might need.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>RaBBi wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+ I don't understand what do you mean by "fixed-size file". 
+<br/>
+I'm newbie in all domains : C coding, GBA programming, game programming. 
+<br/>
+So I think I have a bad translation/vision of "file". 
+<br/>
+Do you mean a .c file ? 
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Actually, this is my fault, 'file' was a bad choice of words.
+<br/>
+What I really meant was a fixed-size structure. As my code example demonstrated, by this I meant to create one structure which could hold any kind of event, rather than separate structures for each. This way you can hold all events in a single array.
+<br/>
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>RaBBi wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+But I don't want you think about it at my place. 
+<br/>
+So can you guide me to where to learn some concepts about these you could use in your explanation? 
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+A commendable attitude, It's much more rewarding to figure out a solution than to just have one handed to you.  I'm not sure what links to give you, though. It's a complicated task with many parts. The most complicated part to code will probably be the script parser itself, but I don't have any sites/articles I could recommend offhand on the subject as it's something I've learned slowly over a long time. 
+<br/>
+<br/>
+If you can be more specific about what parts of the program you're most in the dark on, I will look up some appropriate links or references on the subject. 
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>RaBBi wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+Thank you very much ^^
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+No problem; If you haven't noticed, I'm enjoying the thread. Ultimately, applying knowledge is my favorite hobby. Teaching or explaining things is a fun way to apply what I know, just like programming is. 
+<br/>
+Of course, to be honest I also need the ego-boost I get feeling helpful lately. My full-time job hunt is leaving me mentally and emotionally exhausted.
+<br/>
+<br/>
+If we keep this topic going, we might want to start a new thread, as we've deviated quite a bit from "a good use of variables" heheh<br/>_________________<br/>"Only two things are infinite: the universe, and human stupidity. The first is debatable." -Albert Einstein</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12049 - yaustar - Tue Oct 28, 2003 3:55 am</h4>
+    <div class="postbody"><span class="postbody">Actually, it's a very good thread to 'watch' as well since I will be encountering this problem in due time  :p
+<br/>
+<br/>
+Always nice to get a few ideas going beforehand :)<br/>_________________<br/>[<a class="postlink" href="http://parabellumgames.no-ip.org" target="_blank">Blog</a>] [<a class="postlink" href="http://yaustar.no-ip.org" target="_blank">Portfolio</a>]</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12064 - RaBBi - Tue Oct 28, 2003 6:36 pm</h4>
+    <div class="postbody"><span class="postbody">Hmmm, as I consider you all as esperimented developpers, so I think I began with some hard things , don't you think? ^^
+<br/>
+<br/>
+I try to mix Gopher's ideas with mines, and some help from a friend, and we think about another way.
+<br/>
+<br/>
+A way based on an "event stack".
+<br/>
+<br/>
+By using a "chained list" (I don't know if it's the same in english and french), and remove "event" when it's finished, and insert one when it must be.
+<br/>
+(event will be identified with a number)
+<br/>
+<br/>
+This would be a sort of stack, but not in FIFO-like.
+<br/>
+<br/>
+I though about that while searching for "threads".
+<br/>
+Threads cannot be done like in computer programming ?
+<br/>
+<br/>
+But if I use this system, I may always have a function for each automatic scene.
+<br/>
+<br/>
+Do you think it can be a good way?
+<br/>
+<br/>
+Thank you ^^<br/>_________________<br/>Sorry for my poor english, but it would be worst for you to understand me if I speak in my native language, French ^^</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12066 - Gopher - Tue Oct 28, 2003 7:08 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>RaBBi wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+A way based on an "event stack". 
+<br/>
+<br/>
+By using a "chained list" (I don't know if it's the same in english and french), and remove "event" when it's finished, and insert one when it must be. 
+<br/>
+(event will be identified with a number) 
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+This is actually what I was imagining, in fact.
+<br/>
+I didn't describe it very clearly, but that was the purpose of the pNext member I included in my posted event structure. 
+<br/>
+<br/>
+However, rather than allocating many single event structures, I was suggesting compiling the list in advance so that there would be a single array of events, allowing indexed addressing of events, but also the linked list connections defining the sequence of the events.
+<br/>
+<br/>
+one large array will be easy and fast to access and manipulate in memory.
+<br/>
+If each node also has a pointer to another node in the array, then this single array can contain many "Chained Lists" (english is Linked List, but your meaning is clear)<br/>_________________<br/>"Only two things are infinite: the universe, and human stupidity. The first is debatable." -Albert Einstein</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12110 - yaustar - Wed Oct 29, 2003 11:42 pm</h4>
+    <div class="postbody"><span class="postbody">If the game can save, how would we save the state of the linked list of events? if saved the entire stack into memory, would it be extremely large considering the number of events that can take place in an RPG? Even just changing the changes, the list could still be quite large.
+<br/>
+<br/>
+Or am I being naive to the amount of data that can be stored in a save state?<br/>_________________<br/>[<a class="postlink" href="http://parabellumgames.no-ip.org" target="_blank">Blog</a>] [<a class="postlink" href="http://yaustar.no-ip.org" target="_blank">Portfolio</a>]</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12112 - Gopher - Thu Oct 30, 2003 12:52 am</h4>
+    <div class="postbody"><span class="postbody">Yaustar brings up a very valid point. This event stack would probably end up being read-only in an RPG with any depth and complecity, so we would have to find some better way to deal with changing the state of the game world than making modifications to this stack. 
+<br/>
+<br/>
+First, it's not nessicarily impossible to save the entire list. Because the strings and images are stored in seperate tables/resources, each event node might be as small as 16 bytes. If the average scripted scene in the game had 30 sub-events - text messages, camera movements, animations, etc - then a game with 200 such scenes would require 200 * 30 * 16-bytes, or a little less than 100k. This is a lot, but with an extremely simple custom compression algorithm, which stores only the parameters that are actually used for each event type, you should be able to reduce the overall size by at least 30%, possibly as much as 70%. Of course in the process you lose the ability to access events through an index into a single array.
+<br/>
+<br/>
+However, here's my thoughts on a better way.
+<br/>
+The events in the array don't need to be changed at all. What needs to be remembered is the state of the world. For example, some events will only happen once. The only information that changes and would need to be saved is information about where each character is, both literally their location in the world and the index of their next player-triggered event. Such a table of character statuses would be much smaller than the actual event array itself.<br/>_________________<br/>"Only two things are infinite: the universe, and human stupidity. The first is debatable." -Albert Einstein</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12113 - yaustar - Thu Oct 30, 2003 1:49 am</h4>
+    <div class="postbody"><span class="postbody">What happens if the game is non-linear? Although I supoose the events must have some form of sequence so multiple arrays called work.... one for each mini series of events (eg the exchange mini game in zelda: links awakening)
+<br/>
+<br/>
+*deep in thought*<br/>_________________<br/>[<a class="postlink" href="http://parabellumgames.no-ip.org" target="_blank">Blog</a>] [<a class="postlink" href="http://yaustar.no-ip.org" target="_blank">Portfolio</a>]</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12114 - Gopher - Thu Oct 30, 2003 1:54 am</h4>
+    <div class="postbody"><span class="postbody">non-linear storylines aren't a problem; the single array doesn't mean it's a single continuous linked list of events, just that the total collection of events are stored in a list. Think of it like a choose-your-own-adventure book; even tho there are many branching paths through the book, there's still a single sequential set of page numbers.
+<br/>
+<br/>
+To give an example, using Mayor Bill again, initially he might have the index of the complex meeting event I described earlier in the thread. After that encounter, his location changes to inside town hall, and his event changes to the MayorBillGivesYouTheWidget event. After that it might change to the generic "Please, hurry and save the princess!" event. All you need to save is the location and id of the first event in the scene to play out when an encounter occurs.<br/>_________________<br/>"Only two things are infinite: the universe, and human stupidity. The first is debatable." -Albert Einstein</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12116 - RaBBi - Thu Oct 30, 2003 8:44 am</h4>
+    <div class="postbody"><span class="postbody">And if the event can be non-sequential too ?
+<br/>
+<br/>
+Example :
+<br/>
+<br/>
+;Event Start
+<br/>
+Dialog Start
+<br/>
+------------------------------------------------- BG starts to scroll
+<br/>
+Dialog Next
+<br/>
+Sprite Action
+<br/>
+Dialog Next
+<br/>
+-------------------------------------------------- BG stops scrolling cause a value is reached
+<br/>
+Wait
+<br/>
+Dialog Next
+<br/>
+;End of Event
+<br/>
+<br/>
+The BGs stops when Dialog is still displayind, not AFTER displaying it.
+<br/>
+So the single action of the event are not only trigger sequentially.
+<br/>
+The action n+1 doesn't have to be triggered after completion of action n.
+<br/>
+<br/>
+<br/>
+<br/>
+I try something yesterday, using structures and array, but I always have a function for each automatic scene.
+<br/>
+<br/>
+In these function, that I call in main loop, before update world, I read the linked list and do actions when a flag (named "Active") of an link element is TRUE.
+<br/>
+<br/>
+But I can't figure out how to switch on/off these flags without using many "if" branchements in these functions.
+<br/>
+<br/>
+So I think I'm on a bad way.
+<br/>
+What I have for the moment is :
+<br/>
+<br/>
+- One function for each scene
+<br/>
+- Many "if" branchements to switch on/off the elements of the scene linked-list.<br/>_________________<br/>Sorry for my poor english, but it would be worst for you to understand me if I speak in my native language, French ^^</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12117 - Gopher - Thu Oct 30, 2003 10:14 am</h4>
+    <div class="postbody"><span class="postbody">Well, the main difference in having overlapping events like the one you describe (background scrolls while other things happen) would be in the function which runs the scripts
+<br/>
+<br/>
+The "ScrollBG" script event could set a state in the function, which will scroll a little bit every update while continuing to process new events off the stack. 
+<br/>
+<br/>
+You would probably also want to add an event type "WaitForScroll" that will cause the script execution to pause until any previous ScrollBG events were finished. The same thing could be done for moving characters as well.<br/>_________________<br/>"Only two things are infinite: the universe, and human stupidity. The first is debatable." -Albert Einstein</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12125 - RaBBi - Thu Oct 30, 2003 7:26 pm</h4>
+    <div class="postbody"><span class="postbody">I found these articles on how do design a (windows) game structure, on Gamedev.net :
+<br/>
+<br/>
+<a href="http://www.gamedev.net/reference/programming/features/gpgenesis7/page4.asp" target="_blank">http://www.gamedev.net/reference/programming/features/gpgenesis7/page4.asp</a>
+<br/>
+<br/>
+<a href="http://www.gamedev.net/reference/programming/features/gpgenesis7/page5.asp" target="_blank">http://www.gamedev.net/reference/programming/features/gpgenesis7/page5.asp</a>
+<br/>
+<br/>
+I think this could be a good approach to the way we try to find since many posts.
+<br/>
+<br/>
+What do you think ?
+<br/>
+<br/>
+The author seems to say that it's not very hard to code a script engine ^^<br/>_________________<br/>Sorry for my poor english, but it would be worst for you to understand me if I speak in my native language, French ^^</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12127 - Gopher - Thu Oct 30, 2003 9:52 pm</h4>
+    <div class="postbody"><span class="postbody">I had been concidering writing up a tutorial and some example code based on this thread, but it seems that Joseph Farrell has already written it.
+<br/>
+<br/>
+After reading over this tutorial, it seems to start from the same approach I had been thinking about/describing in this thread. The main difference seems to be that he maintains seperation of scripts in their own files, instead of putting all scripts into a single 'master list' as I had been picturing. This difference is largely due to the target platform - his implemetation is for Windows, while I've been describing one for GBA which has no built-in 'file system' to make handle this, and building one GBA would be more work than just merging all active scripts into one array. Plus, the multiple file approach would allow the game to be easily extensible, a major advantage for a PC title but relatively useless on GBA.
+<br/>
+<br/>
+His developed event system is a much more sophisticated system than I had pictured for dealing with events that are launched from scripts but then continue on their own. 
+<br/>
+<br/>
+Great articles, I've bookmarked them for next time this kind of thing comes up<br/>_________________<br/>"Only two things are infinite: the universe, and human stupidity. The first is debatable." -Albert Einstein</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12128 - RaBBi - Thu Oct 30, 2003 10:54 pm</h4>
+    <div class="postbody"><span class="postbody">happy that it could help you ^^
+<br/>
+<br/>
+(you helpedme , it's the minimum I can do :) even if I didn't expect it lol)
+<br/>
+<br/>
+I kept on my search for implement it, and I found some info about what we can call now, since we talk about that, "scripting engine".
+<br/>
+<br/>
+Cause I think that what I want to do can be considered as a script event, can't it?
+<br/>
+So I searched for details about it.
+<br/>
+<br/>
+And in many articles, authors mentionned the use of a scripting langage to do so.
+<br/>
+But every time, it was for other platform than GBA.
+<br/>
+<br/>
+So I wanted to create a topic on "Scripting on GBA", until I found a site which presents GBALua.
+<br/>
+I didn't read it for the moment (life takes too much time to live ^^) but it seems that this scripting langage (LUA) can be used on the GBA.
+<br/>
+<br/>
+Do you think it can be easier?<br/>_________________<br/>Sorry for my poor english, but it would be worst for you to understand me if I speak in my native language, French ^^</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12129 - poslundc - Fri Oct 31, 2003 1:36 am</h4>
+    <div class="postbody"><span class="postbody">Scripting languages usually need to be highly customized to the games they work in. This is because the actions being scripted usually involve customized data structures, and also because they require calculations that are specific to your game's particular implementation of an effect.
+<br/>
+<br/>
+You may be able to find a generic scripting library on the net, perhaps even one specifically for the GBA, but it is unlikely that it would work with your program without any customization.
+<br/>
+<br/>
+This is why most people write their own scripting engines. As has already been mentioned, they are not terribly difficult to write, and you will probably spend more time trying to adapt someone else's engine to your game than it would take to create your own engine.
+<br/>
+<br/>
+When it comes to visual effects, movements, transitions, etc., most things can be scripted just by knowing the following four things:
+<br/>
+<br/>
+- start value of the effect
+<br/>
+- end value of the effect
+<br/>
+- number of frames to get from start to end
+<br/>
+- the current frame
+<br/>
+<br/>
+Then an update function is called once per frame that calculates the current value for the effect:
+<br/>
+<br/>
+(current frame / number of frames) * (end value - start value) + start value
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12130 - tepples - Fri Oct 31, 2003 2:39 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Gopher wrote:</b></span></td> </tr> <tr> <td class="quote">I've been describing one for GBA which has no built-in 'file system' to make handle [multiple script files], and building one GBA would be more work than just merging all active scripts into one array.</td> </tr></table><span class="postbody">
+<br/>
+I've <a class="postlink" href="http://www.pineight.com/gba/#gbfs" target="_blank">already done</a> your "more work".
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Plus, the multiple file approach would allow the game to be easily extensible, a major advantage for a PC title but relatively useless on GBA.</td> </tr></table><span class="postbody">
+<br/>
+Useless? Making everything customizable would let your programmers work <span style="font-style: italic">once</span> and then let your artists and writers churn out sequels, perhaps even letting them put episodes on e-reader cards or available through transfer from a GameCube or PC game.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12138 - Gopher - Fri Oct 31, 2003 4:38 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>RaBBi wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+ kept on my search for implement it, and I found some info about what we can call now, since we talk about that, "scripting engine". 
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+heh, I feel like an ass. I've been describing one piecemeal when all it seems I needed to do was say "That's a Scripting Engine" and you would probably have done just fine on your own, finding articles and such. I looked back over the thread, tho, and I know I said it was a "scripting language" 
+<br/>
+<br/>
+I've worked with Lua on PC, poslundc is right that you'd have to customize it but Lua is very excellent in this regard, it is very easy to extend the language. That's exactly what it, like any good stand-alone scripting engine, is made for. It's interesting that someone's ported it to GB; I'm currious how much of the gba's memory the core library uses, though. I would guess it uses a rather large chunk.
+<br/>
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+I've already done your "more work". 
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+yes, I've noticed you plugging GBFS in quite a few threads. :)
+<br/>
+But myself, I always think in terms of doing things from scratch, unless I have some kind of schedule to keep. Since I'm doing GBA work mainly for the fun of it, I'm doing it in the way that maximizes my fun - I'm writing every line of everything I make.
+<br/>
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>poslundc wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+Useless? Making everything customizable would let your programmers work once and then let your artists and writers churn out sequels, perhaps even letting them put episodes on e-reader cards or available through transfer from a GameCube or PC game
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+If you are making an RPG engine you intend to reuse, then having an easily and fully customizable scripting system is an advantage to developers. The "/relative/ uselessness" I was refering to was the fact that, since it is for GBA, a distributed game would not, itself, be easily customizable by the end user. However, I was forgetting about the e-reader. Has Nintendo actually managed to push a lot of those? For the most part accessories have sold poorly, at least in the US, but Pokemon has sold accessories in the past for them.<br/>_________________<br/>"Only two things are infinite: the universe, and human stupidity. The first is debatable." -Albert Einstein</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12139 - RaBBi - Fri Oct 31, 2003 6:28 pm</h4>
+    <div class="postbody"><span class="postbody">Sorry Gopher, I didn't want you to "feel like an ass" in saying that.
+<br/>
+<br/>
+I was confused by using terms "script", cause sometimes it's for "text function" and other times it's for an application of what we talked about in this thread.
+<br/>
+Remember I'm French ^^
+<br/>
+And I discover every day what a particular technical term means in computer/game domain, and vice &amp; versa.
+<br/>
+<br/>
+Nevertheless, I'm like you, I prefer coding from scratch and I think I'll do soon.
+<br/>
+<br/>
+But do you really think Lua could be good to manage my ideas?
+<br/>
+Cause for now I don't see what is the "scripting for" aspect of this langage...<br/>_________________<br/>Sorry for my poor english, but it would be worst for you to understand me if I speak in my native language, French ^^</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12142 - Gopher - Fri Oct 31, 2003 7:53 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>RaBBi wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+Sorry Gopher, I didn't want you to "feel like an ass" in saying that. 
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+heh, it's ok, I've tried to remember the language barrier but I don't feel like I've done the best job being clear. I have a bad habit of finding the most complicated way possible to say a simple thing.
+<br/>
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>RaBBi wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+I was confused by using terms "script", cause sometimes it's for "text function" and other times it's for an application of what we talked about in this thread. 
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+They're really the same, though, as a script engine is the code that will run the scripts themselves, the "text functions"
+<br/>
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>RaBBi wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+But do you really think Lua could be good to manage my ideas? 
+<br/>
+Cause for now I don't see what is the "scripting for" aspect of this langage...
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Well, the simple answer is yes, you could adapt Lua to be exactly what you need. But based on what we've discussed in this thread, Lua would probably be overkill. I would bet Lua on GBA would use a lot of the gba's limited memory, as it is a very complex general-purpose scripting engine. I may be wrong, and if anyone knows how much memory it actually uses, please enlighten us :)<br/>_________________<br/>"Only two things are infinite: the universe, and human stupidity. The first is debatable." -Albert Einstein</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12145 - RaBBi - Fri Oct 31, 2003 8:44 pm</h4>
+    <div class="postbody"><span class="postbody">Oh no, don't think that ^^
+<br/>
+You bring me more info and more ideas than you think !
+<br/>
+<br/>
+and than LUA...
+<br/>
+<br/>
+I read the documentation and I don't figure out "why" it's a scripting langage and "how" it could be more right than you're ideas to do these events functions...
+<br/>
+<br/>
+I didn't find anything that show me clearly the scripting purpose of this langage.
+<br/>
+For me, it seems just like a langage.
+<br/>
+<br/>
+I must be wrong, I need examples I think.<br/>_________________<br/>Sorry for my poor english, but it would be worst for you to understand me if I speak in my native language, French ^^</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12168 - Gopher - Sat Nov 01, 2003 8:52 pm</h4>
+    <div class="postbody"><span class="postbody">well, there's a few main differences between scripting languages and other languages
+<br/>
+<br/>
+for one thing, scripting languages are usually designed to allow complex things to be done with simple instructions. For example, in the lua project I worked on, I wrote a GUI class hierarchy in C++. Then I wrote a Lua interface to it so you could design gui elements in Lua. A simple save game dialog, for example, ended up being only a dozen or so lines of Lua script.
+<br/>
+<br/>
+Another major difference is that scripting languages are usually distributed as text with an application, and are either interpreted or compiled by the game at run-time. This allows scriptable elements to be changed without lower-level programming in C/C++/etc
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+I read the documentation and I don't figure out "why" it's a scripting langage and "how" it could be more right than you're ideas to do these events functions... 
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Well, I DON'T think it would be 'more right' than what we've talked about here. I think it is far more complicated than scripting simple RPG cutscenes for a GBA game would need
+<br/>
+<br/>
+Because Lua has a full set of language features like conditional statements and functions, it could be used for more complex tasks like dialog trees and enemy AI.  Lua also has some nice script debugging features, too, which can be handy.
+<br/>
+<br/>
+In general, you would not use Lua without writing your own custom functions. These can be implemented in C/C++, and in my past project I almost exclusively called our custom functions in my lua scripts.<br/>_________________<br/>"Only two things are infinite: the universe, and human stupidity. The first is debatable." -Albert Einstein</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12271 - RaBBi - Wed Nov 05, 2003 11:18 pm</h4>
+    <div class="postbody"><span class="postbody">I just want to say that finally I got coded my own Event manager ^^
+<br/>
+<br/>
+And so I'd like to thank to Gopher for his very usefull theory, and dooggy for his clearly C courses ^^
+<br/>
+<br/>
+For that, I made a little rom that use this manager.
+<br/>
+For now, it just implements a graphical timer, some text dialog box, with time pause.
+<br/>
+<br/>
+(all the other stuff in this rom, like sprite animation only after events ending, or sprite speed on B button are old TODO pieces of my project ^^)
+<br/>
+<br/>
+You can find it here : <a href="http://www.yumeteam.net/gba/demo_cut_scenes.gba" target="_blank">http://www.yumeteam.net/gba/demo_cut_scenes.gba</a>
+<br/>
+<br/>
+Thank you guys !<br/>_________________<br/>Sorry for my poor english, but it would be worst for you to understand me if I speak in my native language, French ^^</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

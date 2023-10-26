@@ -1,0 +1,728 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>ndefined reference problem - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Beginners > ndefined reference problem</h2>
+<div id="posts">
+<div class="post">
+    <h4>#10377 - goro - Wed Sep 03, 2003 5:05 pm</h4>
+    <div class="postbody"><span class="postbody">Hi,
+<br/>
+<br/>
+I'm working on GBA Junkies tutorial 6 (maps) and when I try to compile I get :
+<br/>
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">--------------------Configuration: 2 - Win32 Debug--------------------
+<br/>
+Microsoft (R) Program Maintenance Utility   Version 6.00.8168.0
+<br/>
+Copyright (C) Microsoft Corp 1988-1998. All rights reserved.
+<br/>
+ c:\devkitadv\bin\ld -L c:\devkitadv\lib\gcc-lib\arm-agb-elf\3.0.2\interwork -L c:\devkitadv\arm-agb-elf\lib\interwork -T LinkScript -o 2.elf crt0.o        crtbegin.o    crtend.o      interupt.o    2.o -lstdc++ -lgcc -lc
+<br/>
+2.o: In function `main':
+<br/>
+C:/PROJECTS/GBA/2/2.cpp:90: undefined reference to `sin'
+<br/>
+C:/PROJECTS/GBA/2/2.cpp:91: undefined reference to `cos'
+<br/>
+C:/PROJECTS/GBA/2/2.cpp:109: undefined reference to `EnableBackground(Bg*)'
+<br/>
+C:/PROJECTS/GBA/2/2.cpp:128: undefined reference to `RotateBackground(Bg*, int, int, int, long)'
+<br/>
+C:/PROJECTS/GBA/2/2.cpp:130: undefined reference to `UpdateBackground(Bg*)'
+<br/>
+NMAKE : fatal error U1077: 'c:\devkitadv\bin\ld' : return code '0x1'
+<br/>
+Stop.
+<br/>
+Error executing NMAKE.
+<br/>
+<br/>
+2.exe - 1 error(s), 0 warning(s)
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I cut&amp;pasted it so it is exactly as he wrote it :-
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+//////////////////////////////////////////////////////////////////////////
+<br/>
+// File:    ch6a.cpp                                               //
+<br/>
+// Description: A program that displays a 128x128 background map   //
+<br/>
+// Author:   gbajunkie                     //
+<br/>
+// Date:    24th April 2002                                         //
+<br/>
+//////////////////////////////////////////////////////////////////////////
+<br/>
+#include&lt;math.h&gt;    //sign and cos stuff
+<br/>
+#include"gba.h"         //GBA register definitions
+<br/>
+#include"dispcnt.h"     //REG_DISPCNT register #defines
+<br/>
+#include"keypad.h"      //button registers
+<br/>
+#include"bg.h"          //background definitions
+<br/>
+<br/>
+//my graphics data produced by pcx2sprite program
+<br/>
+#include"exptiles.h"
+<br/>
+<br/>
+//data produced by map editor
+<br/>
+#include"128128map.c"
+<br/>
+<br/>
+//Rotation variables (don't worry about them here) done in later chapter
+<br/>
+/**********************************************************************************/
+<br/>
+FIXED angle = 0;
+<br/>
+FIXED zoom = 1&lt;&lt;8;  //zoom is a fixed point number
+<br/>
+<br/>
+FIXED SIN[360];       //Look-Up Tabless for sign and cosign
+<br/>
+FIXED COS[360];
+<br/>
+<br/>
+char RotIndexCounter = 0;  //global to keep track of rotation indexes used
+<br/>
+/**********************************************************************************/
+<br/>
+<br/>
+//declare an instance of the background structure
+<br/>
+Bg bg2;
+<br/>
+<br/>
+//wait for the screen to stop drawing
+<br/>
+void WaitForVsync()
+<br/>
+{
+<br/>
+   while((volatile u16)REG_VCOUNT != 160){}
+<br/>
+}
+<br/>
+<br/>
+///Test for key presses
+<br/>
+void GetInput()
+<br/>
+{
+<br/>
+   if(!(*KEYS &amp; KEY_UP))
+<br/>
+   {
+<br/>
+      bg2.y_scroll++;
+<br/>
+   }
+<br/>
+   if(!(*KEYS &amp; KEY_DOWN))
+<br/>
+   {
+<br/>
+      bg2.y_scroll--;
+<br/>
+   }
+<br/>
+   if(!(*KEYS &amp; KEY_LEFT))
+<br/>
+   {
+<br/>
+      bg2.x_scroll++;
+<br/>
+   }
+<br/>
+   if(!(*KEYS &amp; KEY_RIGHT))
+<br/>
+   {
+<br/>
+      bg2.x_scroll--;
+<br/>
+   }
+<br/>
+   if(!(*KEYS &amp; KEY_L))
+<br/>
+   {
+<br/>
+       angle--;
+<br/>
+      if(angle&lt;0)
+<br/>
+         angle = 359;
+<br/>
+   }
+<br/>
+   if(!(*KEYS &amp; KEY_R))
+<br/>
+   {
+<br/>
+       angle++;
+<br/>
+      if(angle &gt; 359)
+<br/>
+         angle = 0;
+<br/>
+   }
+<br/>
+   if(!(*KEYS &amp; KEY_A))
+<br/>
+   {
+<br/>
+       zoom--;
+<br/>
+   }
+<br/>
+   if(!(*KEYS &amp; KEY_B))
+<br/>
+   {
+<br/>
+       zoom++;
+<br/>
+   }
+<br/>
+}
+<br/>
+<br/>
+///main entry point from the boot.asm startup file
+<br/>
+int main()
+<br/>
+{
+<br/>
+   int index = 0;  //generic loop variables
+<br/>
+   u16 loop;
+<br/>
+   u16* temp;      //temporary storage pointer
+<br/>
+<br/>
+   //compute my Look up tables (Rotation stuff again)
+<br/>
+   for(loop = 0; loop &lt; 360; loop++)
+<br/>
+   {
+<br/>
+      SIN[loop] = (FIXED)(sin(RADIAN(loop)) * 256);  //sin and cos are computed and cast to fixed                     //fixed
+<br/>
+      COS[loop] = (FIXED)(cos(RADIAN(loop)) * 256);
+<br/>
+   }
+<br/>
+<br/>
+   //set mode 2 and enable sprites and 1d mapping
+<br/>
+   SetMode(MODE_1 | OBJ_ENABLE | OBJ_MAP_1D);
+<br/>
+<br/>
+   //Let us set up the backgroud two structure and enable the background
+<br/>
+<br/>
+   bg2.number = 2;            //background number 0-3
+<br/>
+   bg2.charBaseBlock = 0;                  //tile data position (right at the start of the available memory on 16Kb boundary)
+<br/>
+   bg2.screenBaseBlock = 28;      //map data position on 2Kb boundary
+<br/>
+   bg2.colorMode = BG_COLOR_256;           //256-colour background
+<br/>
+   bg2.size = ROTBG_SIZE_128x128;          //size of map
+<br/>
+   bg2.mosaic = 0;                         //not enabled
+<br/>
+   bg2.x_scroll = 120;         //scrolling variables
+<br/>
+   bg2.y_scroll = 80;
+<br/>
+<br/>
+   //Point to correct tile and map data, update the Background and Display registers accordingly
+<br/>
+        EnableBackground(&amp;bg2);
+<br/>
+<br/>
+<br/>
+<br/>
+   for(loop = 0; loop &lt; 256; loop++)
+<br/>
+      BGPaletteMem[loop] = exptilesPalette[loop];     //load the background palette into memory
+<br/>
+<br/>
+   for(loop = 0; loop &lt; exptiles_WIDTH * exptiles_HEIGHT /2; loop++)  //load tile image data
+<br/>
+      bg2.tileData[loop] = exptilesData[loop];
+<br/>
+<br/>
+   //load the map image data
+<br/>
+   temp = (u16*)map;
+<br/>
+   for(loop = 0; loop &lt; 16*16/2; loop++) //16x16 tiles /2 because 16 bit copy
+<br/>
+      bg2.mapData[loop] = temp[loop];
+<br/>
+<br/>
+   //Main Game loop
+<br/>
+   while(1)
+<br/>
+   {
+<br/>
+      GetInput();    //check for input
+<br/>
+      RotateBackground(&amp;bg2,angle,119,79,zoom);    //rotates background if required (don't worry about this)
+<br/>
+      WaitForVsync();               //waits for the screen to stop drawing
+<br/>
+      UpdateBackground(&amp;bg2); //make sure registers are updated if anything changes e.g. scrolling
+<br/>
+   }
+<br/>
+   return(0);
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Please help!!!!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10378 - tepples - Wed Sep 03, 2003 5:11 pm</h4>
+    <div class="postbody"><span class="postbody">"Undefined reference" errors returned by the linker usually mean you forgot to link in some object file or some library.
+<br/>
+<br/>
+sin() and cos() are in .../lib/libm.a, which you link in by inserting <span style="font-weight: bold">-lm</span> after all your object files in the linker command line.
+<br/>
+<br/>
+There are two main reasons why finding EnableBackground() and friends would fail:
+<br/>
+1. you're not linking in the object file that contains EnableBackground() and friends, or
+<br/>
+2. you're trying to call a C++ function from C or vice versa. If you want to include a header file containing prototypes of C functions in your C++ program, you should place extern "C" { ... } around the #include statement that brings in the header file.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10382 - goro - Wed Sep 03, 2003 7:21 pm</h4>
+    <div class="postbody"><span class="postbody">I think I have -lm in my makefile:-
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+path=C:\devkitadv\bin
+<br/>
+<br/>
+g++  -o ch6b.elf ch6b.cpp bg.cpp  -lstdc++ -lm -lgcc -lc -lgcc 
+<br/>
+<br/>
+objcopy -O binary ch6b.elf ch6b.bin
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+can you confirm that it's ok or do I also have to specify it somewhere else?
+<br/>
+<br/>
+Also enablebackground is in bg.h, which looks like this :-
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#ifndef BG_H
+<br/>
+#define BG_H
+<br/>
+<br/>
+<br/>
+///BGCNT defines ///
+<br/>
+#define BG_MOSAIC_ENABLE      0x40
+<br/>
+#define BG_COLOR_256         0x80
+<br/>
+#define BG_COLOR_16         0x0
+<br/>
+<br/>
+#define CharBaseBlock(n)      (((n)*0x4000)+0x6000000)
+<br/>
+#define ScreenBaseBlock(n)      (((n)*0x800)+0x6000000)
+<br/>
+<br/>
+#define CHAR_SHIFT         2
+<br/>
+#define SCREEN_SHIFT         8
+<br/>
+#define TEXTBG_SIZE_256x256      0x0
+<br/>
+#define TEXTBG_SIZE_256x512      0x8000
+<br/>
+#define TEXTBG_SIZE_512x256      0x4000
+<br/>
+#define TEXTBG_SIZE_512x512      0xC000
+<br/>
+<br/>
+#define ROTBG_SIZE_128x128      0x0
+<br/>
+#define ROTBG_SIZE_256x256      0x4000
+<br/>
+#define ROTBG_SIZE_512x512      0x8000
+<br/>
+#define ROTBG_SIZE_1024x1024      0xC000
+<br/>
+<br/>
+#define WRAPAROUND                 0x1
+<br/>
+<br/>
+typedef struct Bg
+<br/>
+{
+<br/>
+   u16* tileData;
+<br/>
+   u16* mapData;
+<br/>
+   u8 mosaic;
+<br/>
+   u8 colorMode;
+<br/>
+   u8 number;
+<br/>
+   u16 size;
+<br/>
+   u8 charBaseBlock;
+<br/>
+   u8 screenBaseBlock;
+<br/>
+   u8 wraparound;
+<br/>
+   s16 x_scroll,y_scroll;
+<br/>
+   s32 DX,DY;
+<br/>
+   s16 PA,PB,PC,PD;
+<br/>
+}Bg;
+<br/>
+<br/>
+#ifndef BG_C
+<br/>
+extern void EnableBackground(Bg* bg);
+<br/>
+extern void RotateBackground(Bg* bg, int angle, int center_x, int center_y, FIXED zoom);
+<br/>
+extern void UpdateBackground(Bg* bg);
+<br/>
+#endif
+<br/>
+#endif
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I have '#included' it, do I have to specify elsewhere?
+<br/>
+<br/>
+EDIT - I foung BG.cpp in the folder, how do I link this?
+<br/>
+it looks like this :-
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#define BG_C
+<br/>
+<br/>
+#include "gba.h"
+<br/>
+#include "bg.h"
+<br/>
+#include "dispcnt.h"
+<br/>
+<br/>
+extern FIXED COS[360];
+<br/>
+extern FIXED SIN[360];
+<br/>
+<br/>
+void EnableBackground(Bg* bg)
+<br/>
+{
+<br/>
+   u16 temp;
+<br/>
+<br/>
+   bg-&gt;tileData = (u16*)CharBaseBlock(bg-&gt;charBaseBlock);
+<br/>
+   bg-&gt;mapData = (u16*)ScreenBaseBlock(bg-&gt;screenBaseBlock);
+<br/>
+   temp = bg-&gt;size | (bg-&gt;charBaseBlock&lt;&lt;CHAR_SHIFT) | (bg-&gt;screenBaseBlock&lt;&lt;SCREEN_SHIFT)
+<br/>
+      | bg-&gt;colorMode | bg-&gt;mosaic | bg-&gt;wraparound;
+<br/>
+<br/>
+   switch(bg-&gt;number)
+<br/>
+   {
+<br/>
+   case 0:
+<br/>
+      {
+<br/>
+         REG_BG0CNT = temp;
+<br/>
+         REG_DISPCNT |= BG0_ENABLE;
+<br/>
+      }break;
+<br/>
+   case 1:
+<br/>
+      {
+<br/>
+         REG_BG1CNT = temp;
+<br/>
+         REG_DISPCNT |= BG1_ENABLE;
+<br/>
+      }break;
+<br/>
+   case 2:
+<br/>
+      {
+<br/>
+         REG_BG2CNT = temp;
+<br/>
+         REG_DISPCNT |= BG2_ENABLE;
+<br/>
+      }break;
+<br/>
+   case 3:
+<br/>
+      {
+<br/>
+         REG_BG3CNT = temp;
+<br/>
+         REG_DISPCNT |= BG3_ENABLE;
+<br/>
+      }break;
+<br/>
+<br/>
+   default:break;
+<br/>
+<br/>
+   }
+<br/>
+}
+<br/>
+<br/>
+void UpdateBackground(Bg* bg)
+<br/>
+{
+<br/>
+   switch(bg-&gt;number)
+<br/>
+   {
+<br/>
+   case 0:
+<br/>
+      REG_BG0HOFS = bg-&gt;x_scroll;
+<br/>
+      REG_BG0VOFS = bg-&gt;y_scroll;
+<br/>
+      break;
+<br/>
+   case 1:
+<br/>
+      REG_BG1HOFS = bg-&gt;x_scroll;
+<br/>
+      REG_BG1VOFS = bg-&gt;y_scroll;
+<br/>
+      break;
+<br/>
+   case 2:
+<br/>
+      if(!(REG_DISPCNT &amp; MODE_0))//it is a rot background
+<br/>
+      {
+<br/>
+         REG_BG2X = bg-&gt;DX;
+<br/>
+         REG_BG2Y = bg-&gt;DY;
+<br/>
+<br/>
+         REG_BG2PA = bg-&gt;PA;
+<br/>
+         REG_BG2PB = bg-&gt;PB;
+<br/>
+         REG_BG2PC = bg-&gt;PC;
+<br/>
+         REG_BG2PD = bg-&gt;PD;
+<br/>
+      }
+<br/>
+      else  //it is a text background
+<br/>
+      {
+<br/>
+         REG_BG2HOFS = bg-&gt;x_scroll;
+<br/>
+         REG_BG2VOFS = bg-&gt;y_scroll;
+<br/>
+      }
+<br/>
+      break;
+<br/>
+   case 3:
+<br/>
+      if(!(REG_DISPCNT &amp; MODE_0))//it is a rot background
+<br/>
+      {
+<br/>
+         REG_BG3X = bg-&gt;DX;
+<br/>
+         REG_BG3Y = bg-&gt;DY;
+<br/>
+<br/>
+         REG_BG3PA = bg-&gt;PA;
+<br/>
+         REG_BG3PB = bg-&gt;PB;
+<br/>
+         REG_BG3PC = bg-&gt;PC;
+<br/>
+         REG_BG3PD = bg-&gt;PD;
+<br/>
+      }
+<br/>
+      else //it is a text background
+<br/>
+      {
+<br/>
+         REG_BG3HOFS = bg-&gt;x_scroll;
+<br/>
+         REG_BG3VOFS = bg-&gt;y_scroll;
+<br/>
+      }
+<br/>
+      break;
+<br/>
+   default: break;
+<br/>
+   }
+<br/>
+}
+<br/>
+<br/>
+void RotateBackground(Bg* bg, int angle,int center_x, int center_y, FIXED zoom)
+<br/>
+{
+<br/>
+<br/>
+   center_y = (center_y * zoom)&gt;&gt;8;
+<br/>
+   center_x = (center_x * zoom)&gt;&gt;8;
+<br/>
+<br/>
+   bg-&gt;DX = ((bg-&gt;x_scroll&lt;&lt;8)-center_y*SIN[angle]-center_x*COS[angle]);
+<br/>
+   bg-&gt;DY = ((bg-&gt;y_scroll&lt;&lt;8)-center_y*COS[angle]+center_x*SIN[angle]);
+<br/>
+<br/>
+   bg-&gt;PA = (COS[angle]*zoom)&gt;&gt;8;  //cos&amp;sin are LUTs that are .8 fixed numbers
+<br/>
+   bg-&gt;PB = (SIN[angle]*zoom)&gt;&gt;8;  //zoom is also fixed
+<br/>
+   bg-&gt;PC = (-SIN[angle]*zoom)&gt;&gt;8;
+<br/>
+   bg-&gt;PD = (COS[angle]*zoom)&gt;&gt;8;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+How do I link it or make it work?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10386 - tepples - Wed Sep 03, 2003 7:48 pm</h4>
+    <div class="postbody"><span class="postbody">There are three function prototypes at the end of the header file. Please remove the line <span style="font-weight: bold">#ifndef BG_C</span> and <span style="font-style: italic">one</span> of the lines <span style="font-weight: bold">#endif</span> . If something is going wrong when compiling bg.cpp, such as a function signature mismatch (which I'll explain if you turn out to have one), then this may show better error messages.
+<br/>
+<br/>
+Another thing you should do is output a .gba file instead of a .bin file from objcopy. Many users have the .bin file extension associated to a Sega Genesis emulator rather than to a Game Boy Advance emulator. Do this by changing <span style="font-weight: bold">ch6b.bin</span> in your objcopy file to <span style="font-weight: bold">ch6b.gba</span> .<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10391 - yaustar - Thu Sep 04, 2003 12:58 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>goro wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+EDIT - I foung BG.cpp in the folder, how do I link this?
+<br/>
+it looks like this :-</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+You dont need to link it within the code...
+<br/>
+<br/>
+You include it in the make.bat file which you already have....
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+path=C:\devkitadv\bin
+<br/>
+<br/>
+g++  -o ch6b.elf ch6b.cpp bg.cpp  -lstdc++ -lm -lgcc -lc -lgcc
+<br/>
+<br/>
+objcopy -O binary ch6b.elf ch6b.bin 
+<br/>
+</td> </tr></table><span class="postbody"><br/>_________________<br/>[<a class="postlink" href="http://parabellumgames.no-ip.org" target="_blank">Blog</a>] [<a class="postlink" href="http://yaustar.no-ip.org" target="_blank">Portfolio</a>]</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10414 - goro - Thu Sep 04, 2003 11:36 am</h4>
+    <div class="postbody"><span class="postbody">Understood. Thanks for all the help you guys.
+<br/>
+<br/>
+I think I have to get used to editing the make.bat file manually instead of allowing  MS visual studio to do it for me.
+<br/>
+<br/>
+I also found a different way to it (add the files to my 'PROJECT' and use 'rebuild all' in MS Visual Studio)
+<br/>
+but I'm not sure if it adds -lm or any of the other required extra stuff.
+<br/>
+<br/>
+Thanks again for all of your help.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

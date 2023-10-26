@@ -1,0 +1,169 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>dswifi packet capture - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > dswifi packet capture</h2>
+<div id="posts">
+<div class="post">
+    <h4>#175690 - Wuschmaster - Mon Jan 17, 2011 4:10 pm</h4>
+    <div class="postbody"><span class="postbody">I'm trying to capture some frames and while it does work fine with broadcast frames (target ff:ff:ff:ff:ff:ff), it does not for any other frames. I simply don't receive anything else.
+<br/>
+<br/>
+This is how I initialize dswifi:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">   Wifi_EnableWifi();
+<br/>
+   Wifi_SetChannel(1);
+<br/>
+   Wifi_SetPromiscuousMode(1);
+<br/>
+   Wifi_RawSetPacketHandler(PacketCaptureHandler);</td> </tr></table><span class="postbody">
+<br/>
+From what I understand, Wifi_SetPromiscuousMode(1); should enable capturing even frames being sent to other devices, but it doesn't work.
+<br/>
+<br/>
+While searching through Google for a few hours, I noticed some other people stumbled upon the <a class="postlink" href="http://www.1emulation.com/forums/index.php?showtopic=22649" target="_blank">same problem</a>.
+<br/>
+I also <a class="postlink" href="http://forum.gbadev.org/viewtopic.php?t=11946" target="_blank">heard</a> that changing some register might help, like so: <span style="font-style: italic">WIFI_REG(0x80D0)=8095;</span>
+<br/>
+However, I have absolutely no idea how to do this from arm9 source...
+<br/>
+<br/>
+Can anyone please help me? My project is currently arm9 cpp only.
+<br/>
+Thanks!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#175691 - elhobbs - Mon Jan 17, 2011 6:18 pm</h4>
+    <div class="postbody"><span class="postbody">wifi registers cannot be set from arm9. there are currently no APIs in dswifi to set arbitrary wifi registers from the arm9. so this cannot be accomplished without arm7 code. one solution would be to create a custom fifo handler to send the register location and value from the arm9 to the arm7 where it can be set.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#175692 - Wuschmaster - Mon Jan 17, 2011 8:28 pm</h4>
+    <div class="postbody"><span class="postbody">Since I'm not really experienced with arm7/arm9 IPC yet, I tried putting them into arm7's VblankHandler() function:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#define WIFI_REG(ofs) (*((volatile u16 *)(0x04800000+(ofs))))</td> </tr></table><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void VblankHandler(void) {
+<br/>
+   Wifi_Update();
+<br/>
+   WIFI_REG(0x80d0)=8095;
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+But it doesn't seem to change anything. :(
+<br/>
+<br/>
+I also tried these which I found somewhere else:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">   WIFI_REG(0x80D0) = 8095; // filter nothing important... ?
+<br/>
+   WIFI_REG(0x8194) = 0x05; // true raw tx enable? (allows duration field on data packets to TX as specified)
+<br/>
+   WIFI_REG(0x81A0) = 0x91D; // makes DS actually receive stuff!
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Changing 0x81A0 to 0x91D results in receiving NO frames at all. The other two registers don't seem to change anything.
+<br/>
+And these:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">   WIFI_REG(0x8012)=0x703f;
+<br/>
+   WIFI_REG(0x81ae)=0x1fff;
+<br/>
+   WIFI_REG(0x80d0)=0x0301;
+<br/>
+   WIFI_REG(0x80e0)=0x000d;
+<br/>
+   WIFI_REG(0x8008)=0xe000;
+<br/>
+   WIFI_REG(0x8004)=0x0001;</td> </tr></table><span class="postbody">
+<br/>
+But nothing changed.
+<br/>
+<br/>
+Would this method of changing the registers (in VblankHandler) even work?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#175693 - Wuschmaster - Tue Jan 18, 2011 12:19 pm</h4>
+    <div class="postbody"><span class="postbody">I tried something else (waiting 120 frames and then change the registers in arm7), and it has the same effect (changing 0x81A0 to 0x91D resulting in receiving NO frames at all).
+<br/>
+So I'm positive I do change registers successfully.
+<br/>
+<br/>
+But this also means that this does not fix the issue at all.
+<br/>
+<br/>
+Does anyone know of another solution to receive ALL frames and not just broadcast ones? Any idea is much appreciated.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#175695 - elhobbs - Tue Jan 18, 2011 1:22 pm</h4>
+    <div class="postbody"><span class="postbody">80D0 and 80E0 are known to be receive related. But I am not sure anyone knows what 81A0 does. gbatek speculates that it is power related. Have you verified with a packet sniffer that there are packets to receive? Also one the articles points out that they could not get privacy enabled packets to be received without being connected to an AP. 
+<br/>
+<br/>
+Though to directly answer your question - no, I do not think anyone knows. The question has been asked quite a few times and no one has ever come up with a solution.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#175697 - ritz - Tue Jan 18, 2011 2:55 pm</h4>
+    <div class="postbody"><span class="postbody">I don't know anything about ds wifi stuff, but there's some new information about it in the newer gbatek (v2.6a). You can download it here: <a href="http://forum.gbadev.org/viewtopic.php?t=16867" target="_blank">http://forum.gbadev.org/viewtopic.php?t=16867</a>
+<br/>
+<br/>
+Here's some of the new/changed info:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">- nds/wifi/help: added port 24Ch/24Eh/250h, 264h/270h, 2A4h/2C4h, 2C8h/2CCh info
+<br/>
+- nds/wifi/help: added W_TX_HDR_CNT port 194h bit0,1,2 info (thanks Tim Seidel)
+<br/>
+- nds/wifi/help: added 1D0h..1DFh info, added notes on body[2] instead txhdr[2]
+<br/>
+- nds/wifi/help: confirmed 0B4h.Bit6, added 030h.Bit7, added info on 094h/098h
+<br/>
+- nds/wifi/help: removed incorrect/unconfirmed rxbuf_begin/end-latching-info
+<br/>
+- nds/wifi/help: added txhdr[2], port[0C0h], port[0C4h], renamed EXTRA to CMD
+<br/>
+- nds/wifi/help: renamed W_RXUNITS to W_RXTX_ADDR and moved it to status chapter
+<br/>
+- nds/wifi/help: added notes on registers affected by powerforce (and by irq13)
+<br/>
+- nds/wifi/help: added RF2958 (aka RF9008) datasheet info (thanks Tim Seidel)</td> </tr></table><span class="postbody">
+<br/>
+Hopefully it'll help.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#175699 - Wuschmaster - Tue Jan 18, 2011 4:00 pm</h4>
+    <div class="postbody"><span class="postbody">Ah, just found out something! For testing purposes, my arm9 code temporarily filtered to store only the 03:09:bf:00:00:10 frames. (The ones from DS Download Play transfers.)
+<br/>
+<br/>
+With "WIFI_REG(0x80d0) = 8095;", it DOES capture frames other than broadcast just fine, for example those targeted to 03:09:bf:00:00:00 and 03:09:bf:00:00:03 -- but for some reason not ones for 03:09:bf:00:00:10.
+<br/>
+<br/>
+Not sure why, but I can get at least everything else (I think). So thanks for your help and sorry for the stupid error on my side.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#175703 - elhobbs - Tue Jan 18, 2011 6:03 pm</h4>
+    <div class="postbody"><span class="postbody">I think the frame you are getting have the toDS bit set meaning they are meant for an AP. But if you are getting all you need then I guess it does not matter.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#175713 - wintermute - Thu Jan 20, 2011 1:07 pm</h4>
+    <div class="postbody"><span class="postbody">The DS wifi hardware is limited to 2mbit, anything transmitted faster than that will not be captured.<br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

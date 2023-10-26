@@ -1,0 +1,295 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Problem with interrupt processing - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Problem with interrupt processing</h2>
+<div id="posts">
+<div class="post">
+    <h4>#122713 - Phantaseur - Wed Mar 21, 2007 1:30 pm</h4>
+    <div class="postbody"><span class="postbody">I'm trying to catch a button pressing but for some reason irq processing function cannot be called.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#include &lt;nds.h&gt;
+<br/>
+#include &lt;stdio.h&gt;
+<br/>
+<br/>
+void on_irq();
+<br/>
+<br/>
+int main(void){
+<br/>
+videoSetMode(0);
+<br/>
+videoSetModeSub(MODE_0_2D | DISPLAY_BG0_ACTIVE);
+<br/>
+vramSetBankC(VRAM_C_SUB_BG);
+<br/>
+SUB_BG0_CR = BG_MAP_BASE(31);
+<br/>
+<br/>
+BG_PALETTE_SUB[255] = RGB15(31,31,31);
+<br/>
+<br/>
+consoleInitDefault((u16*)SCREEN_BASE_BLOCK_SUB(31), (u16*)CHAR_BASE_BLOCK_SUB(0), 16);
+<br/>
+<br/>
+printf("Waiting for keys\n");
+<br/>
+<br/>
+REG_IME = 0;
+<br/>
+IRQ_HANDLER = on_irq;
+<br/>
+REG_IE = IRQ_KEYS;
+<br/>
+REG_IF = ~0;
+<br/>
+REG_IME = 1;
+<br/>
+<br/>
+while(1);
+<br/>
+return(0);
+<br/>
+}
+<br/>
+<br/>
+void on_irq(){
+<br/>
+   if(REG_IF&amp;IRQ_KEYS){
+<br/>
+   printf("Key pressed\n");
+<br/>
+   VBLANK_INTR_WAIT_FLAGS |= IRQ_VBLANK;
+<br/>
+   REG_IF |= IRQ_VBLANK;
+<br/>
+   }
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+I think the label ,,Key pressed'' have to appear after I press any button but it never appears. What's wrong in this code?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#122716 - tepples - Wed Mar 21, 2007 1:42 pm</h4>
+    <div class="postbody"><span class="postbody">You need to turn on an interrupt at both the source and the REG_IE. Think of it as like hooking up two ends of a cable. In this case, you forgot to set up <a class="postlink" href="http://nocash.emubase.de/gbatek.htm#keypadinput" target="_blank">REG_KEYCNT</a>.
+<br/>
+<br/>
+Another thing: Don't use the |= operator with REG_IF. Instead, assign directly to it with the = operator.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#122721 - Phantaseur - Wed Mar 21, 2007 3:12 pm</h4>
+    <div class="postbody"><span class="postbody">I do not completely understand mechanism of interruptions; I didn't find any complete description of its working and I just copied code from some tutorial hoping that I'll understand it later. Now I just added REG_KEYCNT=~0, but I do not know what need I to do with REG_IE?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#122724 - Diddl - Wed Mar 21, 2007 3:21 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote">Another thing: Don't use the |= operator with REG_IF. Instead, assign directly to it with the = operator.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+<br/>
+why? whats the reason?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#122753 - tepples - Wed Mar 21, 2007 7:43 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Diddl wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote">Another thing: Don't use the |= operator with REG_IF. Instead, assign directly to it with the = operator.</td> </tr></table><span class="postbody">
+<br/>
+why? whats the reason?</span></td> </tr></table><span class="postbody">
+<br/>
+You should not use read-modify-write operators such as |= on REG_IF because it can cause you to <span style="font-weight: bold">miss other interrupts.</span> you should read REG_IF only once in the interrupt service routine. For each bit you set to 1 in REG_IF, you acknowledge a corresponding interrupt. The following code:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">REG_IF |= something;</td> </tr></table><span class="postbody">
+<br/>
+has identical meaning to the following code:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">{
+<br/>
+  int temp = REG_IF;
+<br/>
+  temp = temp | something;
+<br/>
+  REG_IF = temp;
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+That will read REG_IF an additional time, and the value written back will acknowledge <span style="font-style: italic">all</span> pending interrupts, including other interrupts that were asserted between when you first read REG_IF and when you re-read REG_IF.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#122755 - Diddl - Wed Mar 21, 2007 8:19 pm</h4>
+    <div class="postbody"><span class="postbody">ah, thanks.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#123272 - Phantaseur - Mon Mar 26, 2007 10:08 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote">You need to turn on an interrupt at both the source and the REG_IE. Think of it as like hooking up two ends of a cable. In this case, you forgot to set up <a class="postlink" href="http://nocash.emubase.de/gbatek.htm#keypadinput" target="_blank">REG_KEYCNT</a>.</td> </tr></table><span class="postbody">
+<br/>
+I do not understand what means ''turn on an interrupt at both the source and the REG_IE'', please, tell me what I have to do for getting result....</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#123274 - tepples - Mon Mar 26, 2007 10:32 pm</h4>
+    <div class="postbody"><span class="postbody">Every interrupt on the GBA or DS has a source and a destination. The source makes interrupts; the destination (REG_IE) receives them. Both must be turned on, or the interrupt will not fire. The source for vblank, hblank, and vcount interrupts is <a class="postlink" href="http://nocash.emubase.de/gbatek.htm#lcdiointerruptsandstatus" target="_blank">REG_DISPSTAT</a>. The source for timer interrupts is the timer registers. And the source for key interrupts is REG_KEYCNT.
+<br/>
+<br/>
+If you add the following line after your existing line "REG_IME = 0;", you set the key interrupt source to make an interrupt for every keypress:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">  REG_KEYCNT = KEY_A | KEY_B | KEY_SELECT | KEY_START
+<br/>
+               | KEY_RIGHT | KEY_LEFT | KEY_UP | KEY_DOWN
+<br/>
+               | KEY_R | KEY_L
+<br/>
+               | 0x4000;
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+You do get multiple interrupts when a button bounces. If this matters, set up your logic to take bouncing into account by filtering out presses of buttons that the main loop regards as already down.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#123721 - Phantaseur - Fri Mar 30, 2007 4:34 pm</h4>
+    <div class="postbody"><span class="postbody">How it have to look? Like this?
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#include &lt;nds.h&gt;
+<br/>
+#include &lt;stdio.h&gt;
+<br/>
+<br/>
+void on_irq();
+<br/>
+<br/>
+int main(void){
+<br/>
+videoSetMode(0);
+<br/>
+videoSetModeSub(MODE_0_2D | DISPLAY_BG0_ACTIVE);
+<br/>
+vramSetBankC(VRAM_C_SUB_BG);
+<br/>
+SUB_BG0_CR = BG_MAP_BASE(31);
+<br/>
+<br/>
+BG_PALETTE_SUB[255] = RGB15(31,31,31);
+<br/>
+<br/>
+consoleInitDefault((u16*)SCREEN_BASE_BLOCK_SUB(31), (u16*)CHAR_BASE_BLOCK_SUB(0), 16);
+<br/>
+<br/>
+printf("Waiting for keys\n");
+<br/>
+<br/>
+REG_IME = 0;
+<br/>
+REG_KEYCNT = KEY_A | KEY_B | KEY_SELECT | KEY_START\
+<br/>
+      | KEY_RIGHT | KEY_LEFT | KEY_UP | KEY_DOWN\
+<br/>
+      | KEY_R | KEY_L\
+<br/>
+      | 0x4000;
+<br/>
+IRQ_HANDLER = on_irq;
+<br/>
+REG_IE = IRQ_KEYS;
+<br/>
+REG_IF = ~0;
+<br/>
+REG_IME = 1;
+<br/>
+<br/>
+while(1);
+<br/>
+return(0);
+<br/>
+}
+<br/>
+<br/>
+void on_irq(){
+<br/>
+int temp;
+<br/>
+   if(REG_IF&amp;IRQ_KEYS){
+<br/>
+   printf("Key pressed\n");
+<br/>
+   VBLANK_INTR_WAIT_FLAGS |= IRQ_VBLANK;
+<br/>
+   temp = REG_IF; 
+<br/>
+   temp = temp | IRQ_VBLANK;
+<br/>
+   REG_IF = temp;
+<br/>
+   //REG_IF |=  IRQ_VBLANK;
+<br/>
+   }
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+It doesn't work...
+<br/>
+Something else missed?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#123940 - Phantaseur - Sun Apr 01, 2007 9:15 pm</h4>
+    <div class="postbody"><span class="postbody">I know that interraptions is most simple and basic idea, and without it I can create no serious programs. I know how I can use it but I cannot understand how to create proper code. Now I want working example of program which interrupts cycle ''while(1);'' when key pressed.
+<br/>
+Does anybody can show me such code which is suitable for last version of devkitpro?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#123942 - Lick - Sun Apr 01, 2007 10:04 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">int main() {
+<br/>
+  irqInit();
+<br/>
+  irqSet(IRQ_VBLANK, 0);
+<br/>
+  irqEnable(IRQ_VBLANK);
+<br/>
+<br/>
+  while(1) {
+<br/>
+    scanKeys();
+<br/>
+    if(keysHeld())
+<br/>
+      break;
+<br/>
+    swiWaitForVBlank();
+<br/>
+  }
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Why not simply use libnds' IRQ functions? They're A) more reliable, B) clean and easy.<br/>_________________<br/><a class="postlink" href="http://licklick.wordpress.com" target="_blank">http://licklick.wordpress.com</a></span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

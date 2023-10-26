@@ -1,0 +1,114 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Mixing sound: Swapping Buffers without distortion - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > Mixing sound: Swapping Buffers without distortion</h2>
+<div id="posts">
+<div class="post">
+    <h4>#20079 - jdxpolygon - Sat May 01, 2004 4:28 pm</h4>
+    <div class="postbody"><span class="postbody">Hi
+<br/>
+<br/>
+I wasn't sure how to word this question so I've decided to cut out most of the specific details of my problem. What I'd like to know is, for a sound mixing setup that uses two sound buffers that are swapped every frame, what would be the correct sequence of events to cleanly move playback from one buffer to the start of the alternate one? Presuming that direct sound is set up in the normal way, using DMAs to fill the buffer when it needs data, etc.
+<br/>
+<br/>
+I've written a program to do this (in assembly but that's mostly irrelevant because I just want to know the right steps), and it mixes the sound fine, but I can never get it to cleanly switch from one buffer to another - I can't remember every permutation I've tried, but I've recorded the output to a WAV file to analyse it, and I always seem to get either a pop (caused seemingly by zeroes) at the point where the buffers switch over, or some repetition of either what's about to play, or what has just played (I can't remember which, it's been a while since I had that situation), but both cause distortion to the sound output that is undesirable.
+<br/>
+<br/>
+I think it's probably because the only information I can find on the way things like the FIFO work are so vague or incomplete or conflicting, it's impossible to know. I'd appreciate if anyone that's created one before (or is sure that they know the answer) could tell me what the correct sequence of operations are to move the playback position, or suggest what else could be the problem (I'm 90% sure it's to do with working the FIFO right - what I find particularly confusing is information given on what happens when you actually write to the FIFO address manually, what happens when you reset it, and all that). For example, I read that 'powers of 2' sample rates would work best, which is why I chose 16384 Hz,  but I don't think the varying number of samples used per frame caused by this (I think it's 273 95% of the time,  274 the rest), but I've provided for this eventuality, and it's not overrunning the buffer that's causing the zeroes in the output. Could it be to do with the amount of data the DMA has to get each time? (I'm lead to believe it's probably about 16 bytes, half of the FIFO size, and that a sample buffer that's a multiple of 16 would work best, but I'm pretty sure I tried this too). Any help would be really appreciated, and obviously some people have managed to get it working very well.
+<br/>
+<br/>
+thanks for your time
+<br/>
+<br/>
+J</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#20080 - poslundc - Sat May 01, 2004 4:54 pm</h4>
+    <div class="postbody"><span class="postbody">Are you remembering to set the DMA control register to zero before swapping buffers? It's necessary to turn the DMA off before changing its source register.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#20084 - DekuTree64 - Sat May 01, 2004 6:26 pm</h4>
+    <div class="postbody"><span class="postbody">Yes, it's just a straight away set DMAxCNT to 0, set the new source pos, and enable it again. Do you mean you're trying to sync that to VBlank? If you want to swap on VBlank, use a factor of 280896 (the number of CPU cycles per frame) for your frequency and it times out nicely with no clicks. Here is a list of settings that work
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+//timer            CPU freq   mix freq   buf size
+<br/>
+//62610 = 65536 - (16777216 / 5734),     96
+<br/>
+//63408 = 65536 - (16777216 / 7884),     132
+<br/>
+//63940 = 65536 - (16777216 / 10512),    176
+<br/>
+//64282 = 65536 - (16777216 / 13379),    224
+<br/>
+//64472 = 65536 - (16777216 / 15768),    264
+<br/>
+//64612 = 65536 - (16777216 / 18157),    304
+<br/>
+//64738 = 65536 - (16777216 / 21024),    352
+<br/>
+//64909 = 65536 - (16777216 / 26758),    448
+<br/>
+//65004 = 65536 - (16777216 / 31536),    528
+<br/>
+//65073 = 65536 - (16777216 / 36314),    608
+<br/>
+//65118 = 65536 - (16777216 / 40137),    672
+<br/>
+//65137 = 65536 - (16777216 / 42048),    704
+<br/>
+//65154 = 65536 - (16777216 / 43959),    736
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+If you want to use a different frequency, use a timer interrupt to do the buffer swap. The only problem is if your mixer happens to hit right in the middle of VBlank and soaks up a lot of time so things that should happen during VBlank happen after the screen starts to draw. It shouldn't be too bad if you mix smaller batches at a time though.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#20089 - jdxpolygon - Sat May 01, 2004 9:03 pm</h4>
+    <div class="postbody"><span class="postbody">Hi
+<br/>
+<br/>
+Thanks for this information. I'm not sure if I was actually setting DMAxCNT to 0, I may only have been ANDing one of the bits out (I've been working on other aspects of my project for quite a long time, but the sound mixing problem has remained foremost in my mind). I think using a frequency from the list should help the problem - it was the bit of information about 'only using powers of two' for the frequency that put me off trying something that fitted the frame's duration a bit better, I think I'll now try rewriting to use 15768 or 18157 Hz.
+<br/>
+<br/>
+I'll post here again if I get it to work properly as a result of these changes.
+<br/>
+<br/>
+Thanks again
+<br/>
+<br/>
+J[/quote]</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#20100 - jdxpolygon - Sun May 02, 2004 12:36 am</h4>
+    <div class="postbody"><span class="postbody">Yes, that seems to have done the trick. I haven't tryed it yet with a mixing function as such (because I've made some silly changes to my original mixing code (that worked) in attempts to get rid of the original distortion), but what I have done is fill the buffers with an unchanging pattern of a triangle waveform (values going up in the first buffer, and going down in the second buffer), and I've got the buffers being swapped on the V-blank interrupt and producing a clean triangle noise (I've recorded it and analysed it, and there's no distortion). It seems this was indeed done by a combination of using a suitable frequency, and simply stopping DMA, repositioning, and then restarting it. Before I'd accumulated a lot of other stuff, like resetting the FIFO, trying to manually fill it with the first samples of the next buffer, stopping and restarting the timer, all of which was added when trying to fix the problem, but it's all fixed now. Thanks again for your help on the matter.
+<br/>
+<br/>
+J</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

@@ -1,0 +1,315 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Performance problems when drawing fullscreen - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Performance problems when drawing fullscreen</h2>
+<div id="posts">
+<div class="post">
+    <h4>#63580 - melw - Wed Dec 14, 2005 2:50 pm</h4>
+    <div class="postbody"><span class="postbody">I've been lately fiddling with some simple tile layout game tests and got everything otherwise working nicely but got some performance and flickering problems. More precicely here's what I have currently: 
+<br/>
+<br/>
+- Using VRAM_A with MODE_FB0 for main display, other one is blank / for console debug output only
+<br/>
+- in main() loop there's currently just scanKeys() ... not much anything done to key input
+<br/>
+- on IRQ_VBLANK the screen is drawn to framebuffer, first with 32x32 pixel tiles (8 by 6 tiles) as a background, then various sized game objects on top of it.
+<br/>
+<br/>
+Whereas the background looks solid all the time, the game objects are flickering - most at the top of the screen, least in the bottom of the screen. The screen refresh rate seems to be close to 30fps, so I believe this has something to do with drawing being just too slow / taking more time than it should.
+<br/>
+<br/>
+I take some kind of double buffering would be solve this - but taking a look at existing examples I couldn't quite figure out what's the optimal screen modes and method for doing this.
+<br/>
+<br/>
+Any ideas and guidance is appreciated. Thanks.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#63612 - cybereality - Thu Dec 15, 2005 12:33 am</h4>
+    <div class="postbody"><span class="postbody">It sounds like you need to use a double buffer. Basically you want to draw everything to the buffer first and then flip it to the screen. Drawing directly to the frame buffer is usually not a good idea (for games at least) when you are doing multiple render passes (once for the background + any character sprites). I have a double buffer demo on my site, its not for sprites, but it may help. Also, make sure you are using DMAcopy to blit the sprites cause it is a lot faster. There is also the chance that the graphics take longer to print to screen than the V_Blank period, in which case you want to make sure the frame rate is synced with the v_blank (sorry, I cant remember the syntax, but Im sure you can find the code with a little searching). Hope that helps.<br/>_________________<br/><a class="postlink" href="http://www.cybereality.com" target="_blank">// cybereality</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#63659 - melw - Thu Dec 15, 2005 10:43 am</h4>
+    <div class="postbody"><span class="postbody">Thanks for the tips. I took in fact already a look at DoubleC's tutorials on double buffering but didn't think it'd be usable as it is because I want to have my beautiful pixels and not to do any hardware scaling. :) But on a second thought I guess using BG_BMP16_256x256 and not scaling, just showing the uppermost 256x192 area on the screen should do the trick. 
+<br/>
+<br/>
+Let's see if I can get this one working...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#63692 - melw - Thu Dec 15, 2005 4:38 pm</h4>
+    <div class="postbody"><span class="postbody">Ok, I got bit further but there's still some issues I couldn't figure out easily. Now it works in DSEmu if I don't draw too much on the screen at once. On DS the bottom screen stays blank, but the upper screen with debug data keeps updating (I can see the timer value running). If I remove both the drawScene() and swiWaitForVBlank() from main loop then the DS does also the dmaCopy from back buffer to the screen - otherwise it never goes that far.
+<br/>
+<br/>
+Here's a stripped piece of code what I'm trying to do currently:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+void drawImage(int index, int x, int y)
+<br/>
+{
+<br/>
+   REG_IME = 0;
+<br/>
+   
+<br/>
+   int xsize=image_xsize[index];
+<br/>
+   int ysize=image_ysize[index];
+<br/>
+   
+<br/>
+   for(int yy=0;yy&lt;image_ysize[index];yy++)
+<br/>
+   {
+<br/>
+      for(int xx=0;xx&lt;image_xsize[index];xx++)
+<br/>
+      {
+<br/>
+         if((y+yy)&gt;=0&amp;&amp;(y+yy)&lt;Y_RES&amp;&amp;(x+xx)&gt;=0&amp;&amp;(x+xx)&lt;X_RES) // check clipping
+<br/>
+         {
+<br/>
+            uint32 iData = yy*image_xsize[index]+xx+image_offset[index];
+<br/>
+            if(binary_images[iData]!=0) // 0 is transparent
+<br/>
+            {
+<br/>
+               uint16 pData = palette_data[image_palindex[index]][binary_images[iData]];
+<br/>
+               backBuffer[(y+yy)*X_RES+x+xx] = RGB15((pData&gt;&gt;10)&amp;0x1f, (pData&gt;&gt;5)&amp;0x1f, (pData&gt;&gt;0)&amp;0x1f);
+<br/>
+            }
+<br/>
+         }
+<br/>
+      }
+<br/>
+   }
+<br/>
+   
+<br/>
+   REG_IME = 1;
+<br/>
+}
+<br/>
+<br/>
+void drawScene()
+<br/>
+{
+<br/>
+   int xi=0;
+<br/>
+   int yi=0;
+<br/>
+<br/>
+   // scrolling background
+<br/>
+   for(int y=0;y&lt;Y_RES;y+=TILE_YSIZE)
+<br/>
+   {
+<br/>
+      for(int x=0;x&lt;X_RES+TILE_XSIZE;x+=TILE_XSIZE)
+<br/>
+      {
+<br/>
+         drawImage(tile1_index+tilemap[yi*MAP_Y_RES+xi+((timer&gt;&gt;3)%130)], (x-((timer&lt;&lt;2)%TILE_XSIZE)), y);
+<br/>
+         xi++;
+<br/>
+      }
+<br/>
+      yi++;
+<br/>
+      xi=0;
+<br/>
+   }
+<br/>
+   
+<br/>
+   int frame=((timer&gt;&gt;1)%7);
+<br/>
+   
+<br/>
+   drawImage(character_index+frame,char_x,char_y);
+<br/>
+}
+<br/>
+<br/>
+void on_irq()
+<br/>
+{
+<br/>
+   if(REG_IF &amp; IRQ_VBLANK)
+<br/>
+   {
+<br/>
+      printf("timer: %04d\n", timer);
+<br/>
+      VBLANK_INTR_WAIT_FLAGS |= IRQ_VBLANK;  
+<br/>
+      REG_IF |= IRQ_VBLANK;
+<br/>
+      
+<br/>
+      timer++;
+<br/>
+   }
+<br/>
+}
+<br/>
+<br/>
+main()
+<br/>
+{
+<br/>
+   powerON(POWER_ALL);
+<br/>
+<br/>
+   // init video modes
+<br/>
+   videoSetMode(MODE_5_2D | DISPLAY_BG2_ACTIVE);
+<br/>
+   vramSetBankA(VRAM_A_MAIN_BG_0x6000000);
+<br/>
+   vramSetBankB(VRAM_B_MAIN_BG_0x6020000);
+<br/>
+   BG2_CR = BG_BMP16_256x256;
+<br/>
+   
+<br/>
+   // Set translations
+<br/>
+   BG2_XDX = 1 &lt;&lt; 8;
+<br/>
+   BG2_XDY = 0;
+<br/>
+   BG2_YDX = 0;
+<br/>
+   BG2_YDY = 1 &lt;&lt; 8;
+<br/>
+   BG2_CY = 0;
+<br/>
+   BG2_CX = 0;
+<br/>
+   
+<br/>
+   // console screen
+<br/>
+   videoSetModeSub(MODE_0_2D | DISPLAY_BG0_ACTIVE);
+<br/>
+   vramSetBankC(VRAM_C_SUB_BG_0x6200000);
+<br/>
+   // console text output on bg0
+<br/>
+   SUB_BG0_CR = BG_MAP_BASE(31);
+<br/>
+   BG_PALETTE_SUB[255] = RGB15(31,31,31);
+<br/>
+   consoleInitDefault((u16*)SCREEN_BASE_BLOCK_SUB(31), (u16*)CHAR_BASE_BLOCK_SUB(0), 16);
+<br/>
+   
+<br/>
+   // set the screen buffers
+<br/>
+   frontBuffer = (u16*)(0x06000000);
+<br/>
+   backBuffer =  (u16*)(0x06000000 + 256 * 256 * 2);
+<br/>
+   
+<br/>
+   // Set up the interrupt handler
+<br/>
+   REG_IME = 0;
+<br/>
+   IRQ_HANDLER = on_irq;
+<br/>
+   REG_IE = IRQ_VBLANK | IRQ_KEYS;
+<br/>
+   REG_IF = ~0;
+<br/>
+   DISP_SR = DISP_VBLANK_IRQ;
+<br/>
+   REG_IME = 1;
+<br/>
+   
+<br/>
+   while(1)
+<br/>
+   {
+<br/>
+      scanKeys();
+<br/>
+      drawScene();
+<br/>
+   
+<br/>
+      // sync to framerate
+<br/>
+      swiWaitForVBlank();
+<br/>
+         
+<br/>
+      dmaCopy(backBuffer, frontBuffer, 256*256*2);
+<br/>
+   }
+<br/>
+   
+<br/>
+   return 0;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#63821 - melw - Fri Dec 16, 2005 4:54 pm</h4>
+    <div class="postbody"><span class="postbody">Ok, solved the issues myself. In case anyone runs into similar problems - here's how I got it working on both real device and emulator:
+<br/>
+<br/>
+Using framebuffer, backBuffer as VRAM_A, frontBuffer as VRAM_B and then switch always after drawing between the buffers - for some reason it was the dmaCopy(backBuffer, frontBuffer) that hanged on the DS - but the following works:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+if(screen) {
+<br/>
+   videoSetMode(MODE_FB1);
+<br/>
+   frontBuffer = VRAM_B;
+<br/>
+   backBuffer = VRAM_A;
+<br/>
+   screen = 0;
+<br/>
+} else {
+<br/>
+   videoSetMode(MODE_FB0);   
+<br/>
+   frontBuffer = VRAM_A;
+<br/>
+   backBuffer = VRAM_B;
+<br/>
+   screen = 1;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

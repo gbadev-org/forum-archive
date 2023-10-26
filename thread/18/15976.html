@@ -1,0 +1,367 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Converting Code From Using Float to Using Fixed Point Issues - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Converting Code From Using Float to Using Fixed Point Issues</h2>
+<div id="posts">
+<div class="post">
+    <h4>#162152 - thesean - Tue Aug 26, 2008 11:46 pm</h4>
+    <div class="postbody"><span class="postbody">So I've read several tutorials and just about every other type of information I can find for fixed point, but I still have some trouble visualizing some concepts with using it in my program.
+<br/>
+<br/>
+Most information out there describes what fixed point is, why using it can be beneficial, and how to perform operations like multiplying, dividing, etc etc.  What I'm still wondering is how to actually make use of fixed point.
+<br/>
+<br/>
+My situation is that I have a game that uses float data types to control various aspects such as the player's global position, his velocity, things like that.
+<br/>
+<br/>
+For screen position, I take the global position mod screen_width, so for x it would be something like: <span style="color: olive">screen_pos.x = player_pos.x % 256</span>
+<br/>
+<br/>
+What I'm having trouble with is how I would do this using fixed point.  Do I just do the same operations basically, but multiply everything by a scale factor?  For example, when the user presses the "jump" key, I give the player a y velocity of -7.5, this effectively moves the player 7.5 units up on the next update (that is if there are no other forces such as gravity).  If I change this to fixed point, would I just try something like: <span style="color: olive">player_velocity.y = -75 &lt;&lt; 16;</span>
+<br/>
+and then multiply that number by another fixed point number to get it to screen coordinates?
+<br/>
+<br/>
+I hope this makes sense, what I'm getting at is that I believe I understand the concept behind and how to implement fixed point into my code, but I don't quite understand how to apply it for my needs.
+<br/>
+<br/>
+Any help greatly appreciated!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#162158 - DiscoStew - Wed Aug 27, 2008 1:56 am</h4>
+    <div class="postbody"><span class="postbody">A fixed-point value acts like a lower-precision float value, imo. However, there is more to using it than floats from the user perspective.
+<br/>
+<br/>
+With fixed-point, you need to know what format you are using, and what format the values represent. A format like 1:19:12 is widely used. If you don't know what these numbers represent, then you better hit the books again.
+<br/>
+<br/>
+When converting to fixed-point from float, you left-shift the value by however many decimal bits you plan to use. To convert back, you right-shift by that many.
+<br/>
+<br/>
+(float) &lt;&lt; 12 = fixed-point with 12 decimal bits (:12)
+<br/>
+<br/>
+(:12) &gt;&gt; 12 = float value
+<br/>
+<br/>
+**Make sure to cast the fixed-point value to float prior to shifting to retain the decimal.**
+<br/>
+<br/>
+<br/>
+Addition and subtraction require that the format for each side of the operator be the same in order for the result to be correct, in that it's format is the same as the 2 values used.
+<br/>
+<br/>
+(1:19:12) + (1:19:12) = (1:19:12)
+<br/>
+<br/>
+Multiplication and division require that you know the formats being used to know what the resulting format should be. They don't have to be the same format, but we won't get into that. When multiplying 2 values of the same format, the result ends up as such...
+<br/>
+<br/>
+(:12) * (:12) = (:24)
+<br/>
+<br/>
+The reason behind this is because unlike multiplying 2 numbers by a base value of 1 (1 * 1 = 1), you are multiplying by the base decimal value representing 1, where in the case of 12 decimal bits would be 4096, and what is multiplying that base value result in?
+<br/>
+<br/>
+4096 * 4096 =  16777216 != 4096
+<br/>
+<br/>
+So where did this number come from? It's the 24 bit decimal value representation of 1 in :24 fixed point (1 &lt;&lt; 24).
+<br/>
+<br/>
+How do you correct this? It's simple. You can correct this by shifting the resulting value by the number of decimal bits the other 2 values use.
+<br/>
+<br/>
+(4096 * 4096) &gt;&gt; 12 = 4096
+<br/>
+(x * y) &gt;&gt; 12 = z
+<br/>
+<br/>
+For division, you in a sense go the other direction. Let's use this last line as an example, and using fundamental knowledge of algebra to break down the line, and turn it into a division function.
+<br/>
+<br/>
+(x * y) &gt;&gt; 12 = z
+<br/>
+z = (x * y) &gt;&gt; 12
+<br/>
+(z &lt;&lt; 12) = (x * y)
+<br/>
+(z &lt;&lt; 12) / y = x
+<br/>
+<br/>
+--or--
+<br/>
+<br/>
+(z &lt;&lt; 12) / x = y
+<br/>
+<br/>
+That is just for those kinds of operators. For other things, like 'mod', you need to understand what your fixed-point value's " decimal equivalent to 1" value is, like for :12, which is 4096.
+<br/>
+<br/>
+Hope that helps. I'm terrible at explaining things.<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#162176 - Cearn - Wed Aug 27, 2008 10:15 am</h4>
+    <div class="postbody"><span class="postbody">First and foremost, fixed-point numbers are still normal integers; they're just used in a special way. Contrary to what certain notations would have you believe, there's no separate sign-bit; it's just plain ol' twos-complement ints.
+<br/>
+<br/>
+Working in fixed point is close to working conversion factors in the metric system. The 'normal' integer form corresponds to the standard unit (say, metre (m)), with a fixed-point value would be a smaller unit, like millimetre (mm). The conversion in this case would be a scaling of 1000. Just like you can't really add a quantity in cm to one in mm, you need to convert one so that both use the same units before you can add them. Similar conversion problems exist for multiplication and division.
+<br/>
+<br/>
+The screen position is in metres, but for measurements in the game-world you'd use the position would use centimetres or millimetres for greater above-decimal accuracy. You do all the calculations in those units and then convert to the screen-units when the time is right.
+<br/>
+<br/>
+Note that all the variables that would benefit from fixed-point actually do have units attached, but they're usually ignored because it's assumed you know what's what instinctively. Errors when dealing with fixed-point often comes from this issue. That and using unsigned integers, rather than signed ones.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>thesean wrote:</b></span></td> </tr> <tr> <td class="quote">What I'm having trouble with is how I would do this using fixed point. Do I just do the same operations basically, but multiply everything by a scale factor? For example, when the user presses the "jump" key, I give the player a y velocity of -7.5, this effectively moves the player 7.5 units up on the next update (that is if there are no other forces such as gravity). If I change this to fixed point, would I just try something like: player_velocity.y = -75 &lt;&lt; 16;
+<br/>
+and then multiply that number by another fixed point number to get it to screen coordinates? </td> </tr></table><span class="postbody">
+<br/>
+That's basically correct, but because the scaling factors use <span style="font-weight: bold">hexa</span>decimal, scaling the decimal values won't work. 7.5 = 7+½, which would convert to (7+½)*16 = 0x78, not 75. or you can use some macros to do the float-fixed conversions. nds/arm9/math.h already has a few of these for 20:12 fixed-point values.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#162182 - sgeos - Wed Aug 27, 2008 4:33 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Cearn wrote:</b></span></td> </tr> <tr> <td class="quote">or you can use some macros to do the float-fixed conversions. nds/arm9/math.h already has a few of these for 20:12 fixed-point values.</td> </tr></table><span class="postbody">
+<br/>
+You could use macros like these for general float-&gt;fixed-&gt;int conversions:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">// v = value
+<br/>
+// f = fractional bits
+<br/>
+#define FLOAT2FIXED(v,f) ((int)((v)*(1&lt;&lt;(f))))
+<br/>
+#define FIXED2INT(v,f) ((v)&gt;&gt;(f))</td> </tr></table><span class="postbody">
+<br/>
+I was not in a position to test those macros, so they are probably broken.
+<br/>
+<br/>
+-Brendan</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#162221 - thesean - Thu Aug 28, 2008 5:40 am</h4>
+    <div class="postbody"><span class="postbody">Wow thanks for all the help everyone!
+<br/>
+<br/>
+So I think the MAJOR thing that I was missing (and probably the source of all my confusion) was that it's okay to declare float types in the program, but not do math on them.  What I should do is if I have a float that I want to perform some math on, convert it to fixed point, do the math, then convert it back?
+<br/>
+<br/>
+Or maybe I should just convert it to fixed and do the math, and then scale that value instead of converting it back to float?
+<br/>
+<br/>
+Thanks for the macros Brendan, I may try them but I'm more inclined to use the ones in math.h, I've checked those ones out before too.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#162222 - TwentySeven - Thu Aug 28, 2008 5:53 am</h4>
+    <div class="postbody"><span class="postbody">Anything you do with floats will be emulated, and therefore slow.  This includes reading it from a variable and converting it to an int.
+<br/>
+<br/>
+So typically, if I have something that needs floating point, I prototype it out using floats, and then convert it carefully into fixed point, after its working - it's an optimization and treated as one :)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#162224 - thesean - Thu Aug 28, 2008 7:42 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>TwentySeven wrote:</b></span></td> </tr> <tr> <td class="quote">Anything you do with floats will be emulated, and therefore slow.  This includes reading it from a variable and converting it to an int.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I know the DS has no FPU and thus all operations on floats are emulated, but are you sure that even reading them is emulated as well?  If that's true, then I'm afraid I have to say I'm confused again... then that means it is always bad to use floating point types at all?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#162227 - DiscoStew - Thu Aug 28, 2008 8:26 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>thesean wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>TwentySeven wrote:</b></span></td> </tr> <tr> <td class="quote">Anything you do with floats will be emulated, and therefore slow.  This includes reading it from a variable and converting it to an int.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I know the DS has no FPU and thus all operations on floats are emulated, but are you sure that even reading them is emulated as well?  If that's true, then I'm afraid I have to say I'm confused again... then that means it is always bad to use floating point types at all?</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+This is just my guess, but floats are structured differently from your average type like int and short, and therefore require interpretation for conversion from that type to another. Because of no FPU, that interpretation is emulated.<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#162241 - Miked0801 - Thu Aug 28, 2008 4:54 pm</h4>
+    <div class="postbody"><span class="postbody">As long as you place your decimal numbers within a Fixed declaration, the compiler will handle the conversion for you without the nasty lib overhead.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#162245 - sgeos - Thu Aug 28, 2008 5:10 pm</h4>
+    <div class="postbody"><span class="postbody">FWIW, my macros are probably broken.  I didn't test them so I probably botched something somewhere with all the ().
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Miked0801 wrote:</b></span></td> </tr> <tr> <td class="quote">As long as you place your decimal numbers within a Fixed declaration, the compiler will handle the conversion for you without the nasty lib overhead.</td> </tr></table><span class="postbody">
+<br/>
+By this, I assume you mean something like this will avoid lib overhead:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">FIXED pi = FLOAT2FIXED(3.14159, 12);</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+While this will not:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">float rawUserValue;
+<br/>
+FIXED userValue;
+<br/>
+// ...
+<br/>
+rawUserValue = getUserValue();
+<br/>
+userValue = FLOAT2FIXED(rawUserValue,8);</td> </tr></table><span class="postbody">
+<br/>
+-Brendan</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#162274 - sgeos - Fri Aug 29, 2008 7:27 am</h4>
+    <div class="postbody"><span class="postbody">These are the macros you want:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">// v = value
+<br/>
+// f = fractional bits
+<br/>
+#define FLOAT2FIXED(v,f) ((int)((v)*(1&lt;&lt;(f))))
+<br/>
+#define FIXED2FLOAT(v,f) ((float)(v)/(1&lt;&lt;(f)))
+<br/>
+#define FIXED2INT(v,f) ((v)&gt;&gt;(f))</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+This is the output of my testing program.
+<br/>
+It may give you some insight into how fixed point numbers work.
+<br/>
+If you look at the hex, notice how the 3 shifts to the left when the fractional component is a multiple of 4:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">--- Diagnostic Information ---
+<br/>
+sizeof( 0x7FFFFFFF ) * 8        ==         32   == 0x00000020
+<br/>
+FLOAT2FIXED( 0x7FFFFFFF, 0)     == 2147483647   == 0x7FFFFFFF
+<br/>
+<br/>
+--- Fixed Point Pi ---
+<br/>
+FLOAT2FIXED( 3.14159, 0)        ==          3   == 0x00000003
+<br/>
+FLOAT2FIXED( 3.14159, 8)        ==        804   == 0x00000324
+<br/>
+FLOAT2FIXED( 3.14159,12)        ==      12867   == 0x00003243
+<br/>
+FLOAT2FIXED( 3.14159,21)        ==    6588391   == 0x006487E7
+<br/>
+<br/>
+--- Fixed To Int (Should be 3) ---
+<br/>
+FIXED2INT(0x00000003, 0)        ==          3   == 0x00000003
+<br/>
+FIXED2INT(0x00000324, 8)        ==          3   == 0x00000003
+<br/>
+FIXED2INT(0x00003243,12)        ==          3   == 0x00000003
+<br/>
+FIXED2INT(0x006487E7,21)        ==          3   == 0x00000003
+<br/>
+<br/>
+--- Fixed To Float (Should be close to Pi) ---
+<br/>
+FIXED2FLOAT(0x00000003, 0)      == 3.00000000
+<br/>
+FIXED2FLOAT(0x00000324, 8)      == 3.14062500
+<br/>
+FIXED2FLOAT(0x00003243,12)      == 3.14135742
+<br/>
+FIXED2FLOAT(0x006487E7,21)      == 3.14158964</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Here is the source, if you care to play around with it:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#include &lt;stdio.h&gt;
+<br/>
+<br/>
+#define MES(m) printf("\n--- %s ---\n", #m)
+<br/>
+#define PRINT_VALUE_INT(v) printf("%s\t== %10d\t== 0x%08X\n", \
+<br/>
+        (#v), ((int)v), ((int)v))
+<br/>
+#define PRINT_VALUE_FLOAT(v) printf("%s\t== %10.8f\n", (#v), ((float)v))
+<br/>
+<br/>
+// v = value
+<br/>
+// f = fractional bits
+<br/>
+#define FLOAT2FIXED(v,f) ((int)((v)*(1&lt;&lt;(f))))
+<br/>
+#define FIXED2FLOAT(v,f) ((float)(v)/(1&lt;&lt;(f)))
+<br/>
+#define FIXED2INT(v,f) ((v)&gt;&gt;(f))
+<br/>
+<br/>
+int main(void)
+<br/>
+{
+<br/>
+        MES( Diagnostic Information );
+<br/>
+        PRINT_VALUE_INT( sizeof( 0x7FFFFFFF ) * 8 );
+<br/>
+        PRINT_VALUE_INT( FLOAT2FIXED( 0x7FFFFFFF, 0) );
+<br/>
+<br/>
+        MES( Fixed Point Pi );
+<br/>
+        PRINT_VALUE_INT( FLOAT2FIXED( 3.14159, 0) );
+<br/>
+        PRINT_VALUE_INT( FLOAT2FIXED( 3.14159, 8) );
+<br/>
+        PRINT_VALUE_INT( FLOAT2FIXED( 3.14159,12) );
+<br/>
+        PRINT_VALUE_INT( FLOAT2FIXED( 3.14159,21) );
+<br/>
+<br/>
+        MES( Fixed To Int (Should be 3) );
+<br/>
+        PRINT_VALUE_INT( FIXED2INT(0x00000003, 0) );
+<br/>
+        PRINT_VALUE_INT( FIXED2INT(0x00000324, 8) );
+<br/>
+        PRINT_VALUE_INT( FIXED2INT(0x00003243,12) );
+<br/>
+        PRINT_VALUE_INT( FIXED2INT(0x006487E7,21) );
+<br/>
+<br/>
+        MES( Fixed To Float (Should be close to Pi) );
+<br/>
+        PRINT_VALUE_FLOAT( FIXED2FLOAT(0x00000003, 0) );
+<br/>
+        PRINT_VALUE_FLOAT( FIXED2FLOAT(0x00000324, 8) );
+<br/>
+        PRINT_VALUE_FLOAT( FIXED2FLOAT(0x00003243,12) );
+<br/>
+        PRINT_VALUE_FLOAT( FIXED2FLOAT(0x006487E7,21) );
+<br/>
+<br/>
+        return 0;
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+-Brendan</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#162303 - thesean - Sat Aug 30, 2008 7:37 pm</h4>
+    <div class="postbody"><span class="postbody">Thanks a lot for that code, that's very helpful.  I think I'll use some of that to make a small fixed class, I'll post it up when I finish it.
+<br/>
+<br/>
+Thanks again everyone.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

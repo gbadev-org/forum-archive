@@ -1,0 +1,121 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>GFX_POS_TEST oddity - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > GFX_POS_TEST oddity</h2>
+<div id="posts">
+<div class="post">
+    <h4>#149032 - DiscoStew - Sun Jan 13, 2008 9:59 pm</h4>
+    <div class="postbody"><span class="postbody">So, I began working on a new structure for a new model exporter (yes, different than my last one that I put on hiatus for now), and the meat of it involves directly editing a pre-made display list, so that it will work as a rigid-skinned model. The problem I've come up against is the testing phase for the structure in the program itself.
+<br/>
+<br/>
+What it involves is Position Test, but the results I'm getting are somewhat off of what they should be. So I trimmed down everything just to see if what I put in coems out the same when used on an Identity matrix, and when I did, I did not get the same values as I put in.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+glPushMatrix();
+<br/>
+glLoadIdentity();
+<br/>
+while(GFX_BUSY);
+<br/>
+GFX_POS_TEST = 0 | (4096 &lt;&lt; 16); // A simple test for putting in (0, 1, 0)
+<br/>
+GFX_POS_TEST = 0;
+<br/>
+while(GFX_STATUS &amp; BIT(0));
+<br/>
+iprintf("%04X, %04X\n", GFX_POS_RESULT[0], GFX_POS_RESULT[1]);
+<br/>
+iprintf("%04X, %04X\n", GFX_POS_RESULT[2], GFX_POS_RESULT[3]);
+<br/>
+glPopMatrix(1);
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+My results turned up...
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">0000, 175F
+<br/>
+FFFFFCCE, 0000</td> </tr></table><span class="postbody">
+<br/>
+Which is obviously not 0, 1000, 0, 0. When I put all 0s, I got...
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">0000, 0000
+<br/>
+FFFFFCCE, 0000</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Anyone know what I could be doing wrong? My "initial" set up of the 3D engine is the same as all my other projects, yet they've got no problem. I'm afraid it may be some silly oversight too.<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#149056 - a128 - Mon Jan 14, 2008 9:49 am</h4>
+    <div class="postbody"><span class="postbody">What do you want to achive with your Postest?
+<br/>
+<br/>
+For getting the distance to your camera do
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+    glPushMatrix();
+<br/>
+    //1)  translate to position
+<br/>
+    MATRIX_TRANSLATE = pos.X();
+<br/>
+    MATRIX_TRANSLATE = pos.Y();
+<br/>
+    MATRIX_TRANSLATE = pos.Z();
+<br/>
+<br/>
+    //2) test against pos now at origin
+<br/>
+    PosTest(0, 0, 0); 
+<br/>
+<br/>
+    Fixed  distanceZ = _FixedNum(PosTestZresult());
+<br/>
+    glPopMatrix(1);
+<br/>
+ 
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#149072 - DiscoStew - Mon Jan 14, 2008 6:50 pm</h4>
+    <div class="postbody"><span class="postbody">What I'm trying to achieve is direct editing to a display list, mainly so it will be able to act like a rigid-skinned model, except contain only as many glMatrixRestore commands as there are bones.
+<br/>
+<br/>
+As you see in the little bit of code, I am practically starting with an Identity matrix, so that whatever I put in to the Position Test, I should receive back the same value. That isn't the case here though.
+<br/>
+<br/>
+Looking at your code, it's basically what I'm doing in the example code I have, except you are translating prior to doing the Position Test. Testing it just for kicks, I am still getting values that are not the original.
+<br/>
+<br/>
+<br/>
+EDIT:
+<br/>
+<br/>
+And I think I found the culprit. Even if I start with the Identity Matrix in Modelview mode, unless I start with an Identity matrix in the Projection mode too, I won't get correct results. Still a little confused as to why my prior project wasn't having this same problem.
+<br/>
+<br/>
+Considering I plan to wrap this up into a library, and that the Projection matrix only has 2 stacks for storing matrices, guess I'll have to make a copy of the current matrix, then do my editing, reload the matrix, and then let the display list do it's job. Don't want to do a Push/Pop on the Projection matrix, since people may be using that, and as said before, it only has 2 stacks.<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

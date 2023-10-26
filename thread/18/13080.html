@@ -1,0 +1,1771 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Filesystem idea - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Filesystem idea</h2>
+<div id="posts">
+<div class="post">
+    <h4>#126652 - Noda - Wed Apr 25, 2007 5:31 pm</h4>
+    <div class="postbody"><span class="postbody">Hi,
+<br/>
+<br/>
+I have an idea for an embedded filesystem that looks like GBFS in the basics, but works on slot-1 &amp; 2 cards supporting DLDI (as it will rely on FAT for reading).
+<br/>
+<br/>
+Having lots of external files and folder is quite messy when you have loads of data, and moreover when you have to force the usage of an absolute path.
+<br/>
+<br/>
+The actual problem with fatlib is than you can't actually know the current working directory (directory of where the homebrew was launched).
+<br/>
+<br/>
+So my idea is to leave an empty space in the homebrew (like for DLDI driver).
+<br/>
+In a first part of this empty space, will be stored the seek offset of the appended filesystem.
+<br/>
+<br/>
+The first time the homebrew is launched, the init() function of the driver will check the second part of this space:
+<br/>
+<br/>
+- if it's empty, it will search in the whole media card/memory of the cart for the nds file. The file will be recongnized for example by checking filesize first, and if filesize match, calculate checksum for the header and compare with the one of the loaded binary.
+<br/>
+I know this can take some time, but it will be done once so it can be bearable I think.
+<br/>
+<br/>
+Then when the file is found on the card, the absolute path will be stored in the empty space reserved for that.
+<br/>
+<br/>
+- so the second case if when this empty space is already filled, check if the file exists and if it is the case, check if it's the good one by for example calculating the checksum for the header like explained previously.
+<br/>
+If it's the good file, then we can directly go to appended filesystem (offset is know in the first part of the empty space) and read/write (yes write would be possible and also interesting, as no external .sav or .ini would be required for storing info, juste leave an empty config.ini filled with 8k of zero for example) is made possible using custom functions parsing the filesystem.
+<br/>
+<br/>
+I would like to know your opinion on this, if you think it's a good idea or not, and what could be improved.
+<br/>
+<br/>
+Note: The detection method given (header checksum) is just one random idea, it may be anything else as loaders on flashcart may modify the header. Another idea would be to generate a random number when appending the embedded filesystem and storing it in another part of the empty space, and this number along with the filesize of the binary should make it almost unique in a term of probability, so easy to recognize (and surely faster than calculating the header checksum).
+<br/>
+<br/>
+<br/>
+It would be nice to have an homebrew equivalent for the NitroFS, and the aim of my idea is to make something alike ;)
+<br/>
+<br/>
+--
+<br/>
+Noda</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#126680 - Dood77 - Wed Apr 25, 2007 10:56 pm</h4>
+    <div class="postbody"><span class="postbody">Are you talking like two different partitions on your card?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#126681 - tondopie - Wed Apr 25, 2007 10:58 pm</h4>
+    <div class="postbody"><span class="postbody">interesting idea... if the data is embeded, then why would you need FAT access? Im kinda confused with this Idea...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#126691 - HyperHacker - Thu Apr 26, 2007 12:33 am</h4>
+    <div class="postbody"><span class="postbody">So basically you're proposing self-modifying executables that contain a filesystem within the .nds file? An interesting idea. It really bugs me that we can't get the current path; why aren't the arguments to main() used? Don't homebrew loaders have to call that?<br/>_________________<br/>I'm a PSP hacker now, but I still &lt;3 DS.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#126719 - Cydrak - Thu Apr 26, 2007 2:30 am</h4>
+    <div class="postbody"><span class="postbody">Nah, loaders would use the NDS header, just like the BIOS. If you run ndstool -i, you'll see the ARM7/9 entry address in the header, and it points to the beginning of the each binary. If you objdump -d *.arm7/9.elf, "_start" is the very first function there.
+<br/>
+<br/>
+_start does a bunch of fancypants stuff to set up the stack, cache, TCM, protection unit, clear RAM and set up your globals. Finally, it calls main(argc = 0, argv = NULL), and falls into a loop, should main() ever return. _start is part of the crt0, and I think there's a way to override it, but to do so for everybody would prolly require another build of devkitPro. As you can see, at present the argv functionality just isn't there. :/
+<br/>
+<br/>
+I'm sure there are all sorts of hackish ways around that too. But it would need to be standardized, and there's always that pesky impetus to do it "right"...
+<br/>
+<br/>
+Embedded files would be convenient, I agree... For resource heavy games it just doesn't make sense to load everything in RAM, and it's less confusing for the users. I would really prefer a "development mode" though, where the files can reside in a real folder too (say MyApp.nds and MyApp.contents/); since while devving, I'd be updating code much more often than the data files, or sometimes vice versa.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#126744 - OOPMan - Thu Apr 26, 2007 7:48 am</h4>
+    <div class="postbody"><span class="postbody">It might just be simpler and cleaner and involve less hassling with the DLDI code to implement a system that allows access to data within an uncompressed or partially compressed archive file.
+<br/>
+<br/>
+This is a common feature in lots of archiving libraries and so forth and seems more useful than mucking about with padded space and filling it in.
+<br/>
+<br/>
+In other words, you store all your program data in a single file (fat:/data/myfile.tar) and simply code a system that allows access to the file structure within said archive simply and easily. 
+<br/>
+<br/>
+In other words, you use the contents of an archvie file as a "virtual" filesystem.
+<br/>
+<br/>
+Seems less hassle than what is proposed by Noad...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#126751 - Diddl - Thu Apr 26, 2007 8:35 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>OOPMan wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+In other words, you use the contents of an archvie file as a "virtual" filesystem.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+you can do this very simple you only need a io-driver which calculates a fileoffset for a block address.
+<br/>
+<br/>
+the only problem would be, you need to access two io-driver at same time cause you have to access real fat system (to access the file) and the virtual system.
+<br/>
+but you can do it with a trick, libfat allows access slot 1 and slot 2 at same time. if you use a file at slot1 as virtual file system, you can map the virtual system (virtually) to slot2. libfat thinks it is a slot 2 cartridge but in real it is a io-driver which access a file at slot 1.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#126754 - OOPMan - Thu Apr 26, 2007 9:46 am</h4>
+    <div class="postbody"><span class="postbody">Yeah, pretty much, it can be done using libfat as is, by using some tricksy business as Didly said.
+<br/>
+<br/>
+However, if libfat + DKP has the problem of directory seek and location, etc, then writing the VFS as a system external to libfat might be more appropriate, or at least allow for flexibility...
+<br/>
+<br/>
+<a class="postlink" href="http://www.flipcode.com/articles/article_vfs01.shtml" target="_blank">This</a> might prove useful...
+<br/>
+<br/>
+Also, a quick google for MicroVFS or AVFS reveals some useful starting points :-)<br/>_________________<br/>"My boot, your face..." - Attributed to OOPMan, Emperor of Eroticon VI
+<br/>
+<br/>
+You can find my NDS homebrew projects <a class="postlink" href="http://blog.dev-scene.com/oopman/" target="_blank">here...</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#126768 - tepples - Thu Apr 26, 2007 1:18 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>OOPMan wrote:</b></span></td> </tr> <tr> <td class="quote">However, if libfat + DKP has the problem of directory seek and location, etc, then writing the VFS as a system external to libfat might be more appropriate, or at least allow for flexibility...</td> </tr></table><span class="postbody">
+<br/>
+The VFS of devkitARM is called devoptab. It is already external to libfat, but file systems need to be linked statically. The function fatInitDefault() just installs libfat into the VFS.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#126769 - Lick - Thu Apr 26, 2007 1:19 pm</h4>
+    <div class="postbody"><span class="postbody">In my humble opinion, you guys are over-complicating the situation!<br/>_________________<br/><a class="postlink" href="http://licklick.wordpress.com" target="_blank">http://licklick.wordpress.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#126776 - Lynx - Thu Apr 26, 2007 2:01 pm</h4>
+    <div class="postbody"><span class="postbody">I know this was discussed a super long time ago... but could someone refresh my memory as to why we don't just use the official NDS filesystem?<br/>_________________<br/><a class="postlink" href="http://www.ndshb.com" target="_blank">NDS Homebrew Roms &amp; Reviews</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#126777 - tepples - Thu Apr 26, 2007 2:18 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Lynx wrote:</b></span></td> </tr> <tr> <td class="quote">I know this was discussed a super long time ago... but could someone refresh my memory as to why we don't just use the official NDS filesystem?</td> </tr></table><span class="postbody">
+<br/>
+If you mean using the official file system on a DS card in SLOT-1, we do not use this because SLOT-2 devices are still popular, and because SLOT-1 devices still do not completely emulate an official DS card, and because anything that allows homebrew to read a DS card can be exploited by pirates (which is why Nitro Hax is proprietary).
+<br/>
+<br/>
+If you mean using the official file system in a file, we do not use this because a running homebrew program does not know the name of the .nds file that it was loaded from.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#126778 - OOPMan - Thu Apr 26, 2007 2:25 pm</h4>
+    <div class="postbody"><span class="postbody">I don't know about over-complicating things...
+<br/>
+<br/>
+What I do know is that many many games out there tend to store their files in a collected archived form (Quake's PAK files, etc...)...
+<br/>
+<br/>
+Given this fact, it's a little surprising that no one has created a general-purprose archive-as-an-FS-type library for DS homebrew yet.
+<br/>
+<br/>
+Hell, we could just ask simonjhall to rip the PAK code of his Quake port and package it up as a library for general purpose usage.
+<br/>
+<br/>
+:-)<br/>_________________<br/>"My boot, your face..." - Attributed to OOPMan, Emperor of Eroticon VI
+<br/>
+<br/>
+You can find my NDS homebrew projects <a class="postlink" href="http://blog.dev-scene.com/oopman/" target="_blank">here...</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#126779 - tepples - Thu Apr 26, 2007 2:27 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>OOPMan wrote:</b></span></td> </tr> <tr> <td class="quote">Given this fact, it's a little surprising that no one has created a general-purprose archive-as-an-FS-type library for DS homebrew yet.</td> </tr></table><span class="postbody">
+<br/>
+Is there a guide to writing devoptab drivers, or is "read the libfat CVS source code" all we have to go on?<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#126780 - Lazy1 - Thu Apr 26, 2007 3:10 pm</h4>
+    <div class="postbody"><span class="postbody">I haven't looked at it in a while, but you could use romfs to do exactly what you're looking for.
+<br/>
+<br/>
+Load the romdisk into memory, and pass it's address to romfsInit().
+<br/>
+That should work, then you can use (most) of the standard C file I/O library.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#126781 - Lick - Thu Apr 26, 2007 3:24 pm</h4>
+    <div class="postbody"><span class="postbody">OOPMan: PAK is just zip. Zip libraries are all over the 'net.<br/>_________________<br/><a class="postlink" href="http://licklick.wordpress.com" target="_blank">http://licklick.wordpress.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#126782 - kusma - Thu Apr 26, 2007 3:31 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Lick wrote:</b></span></td> </tr> <tr> <td class="quote">OOPMan: PAK is just zip. Zip libraries are all over the 'net.</td> </tr></table><span class="postbody">Nope, PAK is not ZIP. It's a very simple format without compression, a bit like TAR.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#126783 - tepples - Thu Apr 26, 2007 3:33 pm</h4>
+    <div class="postbody"><span class="postbody">Sure, we can use <a class="postlink" href="http://www.info-zip.org/UnZip.html" target="_blank">Info-ZIP UnZip</a> (under the Info-ZIP variant of the zlib license) as a base for a library that reads the PKZIP format, but we still need to 1. make a way for a running program to find its zip file, and 2. allow code to "mount" a zip file as a read-only volume in devoptab.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#126791 - Tantrum - Thu Apr 26, 2007 5:56 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote">1. make a way for a running program to find its zip file,</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Why not delegate responsibility to the launcher?  The launcher could be expected to write to a file like fat0:/env/launchpath containing the full path of the file it is about to launch.  In fact it could write a whole bunch of ENV vars there as files for other purposes too (like lang selection, etc).  If in your app you cannot find those files then just fall back to hardcoded paths/values.
+<br/>
+<br/>
+This way, if you have an appended filesystem and a launcher that supports it then you're golden, but if you don't then you're no worse off than before.
+<br/>
+<br/>
+The hard part is convincing manufacturers of cards to support this launch method in their launchers.  For homebrew launchers it should be an easy sell, but for the companies, I'm not so sure...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#126793 - Noda - Thu Apr 26, 2007 7:45 pm</h4>
+    <div class="postbody"><span class="postbody">Actually, I'm discussing about this with some others french developers like Alekmaul which has done a system like this based on ndstool and NitroFS. There's some issues currently, as in its system the files are added at compilation time using ndstool, and it searches the NDS on the whole card using a hardcoded filename at launch every time.
+<br/>
+<br/>
+My idea is really to provide a FS API that could be easy for users (no begging from users who don't read readme file and ask then why it doesn't find file "x" etc and users who don't like having lots of files everywhere in their card) and useful for developers as loading from an external FS (not loaded in ram) provides flexibility and simplicity.
+<br/>
+<br/>
+The idea behind my system is to solve all the current issues of actual FS:
+<br/>
+- launching path: searched once then stored in a part of the NDS (a bit like DLDI and its patches)
+<br/>
+- works with slot 1 &amp; 2 by the use of libfat
+<br/>
+- support reading &amp; writing, so no need for external .ini or .sav (just leave an empty 8k file for your config in the FS for example)
+<br/>
+- FS could be appended after compilation (like GBFS), so testing for developers is made easy (no need to recompile the NDS)
+<br/>
+- still compatible with standard C I/O function, the virtual FS would just provide the FILE* pointers and some needed function (like a specific eof())
+<br/>
+- if the FS is based on an already existing FS (let's just say GBFS) we can easily make a simple define like __EFS_EMULATOR_MODE__ which when it's set, wrap all functions of the lib to use the actual GBFS ones, so the NDS can be ran in emus without hassling, very useful
+<br/>
+- finally try to make an API than everybody likes and use, so NDS homebrews will have a sort of standard way for managing external files, instead of 1 system / homebrew.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#126914 - HyperHacker - Sat Apr 28, 2007 12:45 am</h4>
+    <div class="postbody"><span class="postbody">Tantrum has the right idea, but I'd just leave the data in memory instead of writing it to a file. VRAM seems like a nice candidate for this, as most programs initialize VRAM right at startup and hence won't be bothered by it being left in a certain state.
+<br/>
+<br/>
+Finding the .nds file on the card will fail if there are multiple copies, and patching it with the path will fail if it gets moved or renamed.<br/>_________________<br/>I'm a PSP hacker now, but I still &lt;3 DS.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#126920 - tepples - Sat Apr 28, 2007 1:03 am</h4>
+    <div class="postbody"><span class="postbody">First we need to establish a way for a program to know whether it was launched with an argv-capable launcher.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#define DS_ARGV_SIG (('a'&lt;&lt;0)|('r'&lt;&lt;8)|('g'&lt;&lt;16)|('v'&lt;&lt;24))
+<br/>
+<br/>
+typedef struct DS_ARGV {
+<br/>
+  u32 sig;  // must match DS_ARGV_SIG
+<br/>
+  u32 argc;  // number of arguments
+<br/>
+  char **argv;  // argv[0] = path to program, etc.
+<br/>
+  char *cwd;  // working directory
+<br/>
+} DS_ARGV;</td> </tr></table><span class="postbody">
+<br/>
+Code would look for a DS_ARGV struct at a pre-specified place in VRAM. If the signature matches, it's valid.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#126922 - Lick - Sat Apr 28, 2007 1:35 am</h4>
+    <div class="postbody"><span class="postbody">If someone finalizes this idea, I could implement it in the next release of rebootlib. =)<br/>_________________<br/><a class="postlink" href="http://licklick.wordpress.com" target="_blank">http://licklick.wordpress.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#126927 - HyperHacker - Sat Apr 28, 2007 2:23 am</h4>
+    <div class="postbody"><span class="postbody">Nice to see some progress on this idea. I'm just wondering if we should add any more information, but I can't think of anything in particular if we use full paths (e.g. fat0:/foo/bar.nds, not just foo/bar.nds).
+<br/>
+<br/>
+Before we decide on a location we should test it with various existing apps to make sure they don't freak out.<br/>_________________<br/>I'm a PSP hacker now, but I still &lt;3 DS.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#126931 - punto - Sat Apr 28, 2007 3:10 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+If you mean using the official file system in a file, we do not use this because a running homebrew program does not know the name of the .nds file that it was loaded from.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+why can't homebrew programs find out where their appended filesystem is the same way the official roms do? they both run on the same device, and it's not like official roms have special support for hombrew devices.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#126938 - Dood77 - Sat Apr 28, 2007 7:05 am</h4>
+    <div class="postbody"><span class="postbody">Because we don't know exactly how official games do it... right?<br/>_________________<br/>If I use a term wrong or something then feel free to correct, I?m not much of a programmer.
+<br/>
+<span style="font-size: 9px; line-height: normal">
+<br/>
+Original DS Phat obtained on day of release + flashme v7
+<br/>
+Supercard: miniSD, Kingston 1GB, Kingston 2GB
+<br/>
+Ralink chipset PCI NIC
+<br/>
+</span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#126959 - tepples - Sat Apr 28, 2007 1:59 pm</h4>
+    <div class="postbody"><span class="postbody">The pirate patchers probably use some sort of argv[0] passed by the firmware, which is different for each make and model of card.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#126966 - chishm - Sat Apr 28, 2007 3:31 pm</h4>
+    <div class="postbody"><span class="postbody">Or they could just store a table of sector addresses for the file.<br/>_________________<br/><a class="postlink" href="http://chishm.drunkencoders.com" target="_blank">http://chishm.drunkencoders.com</a>
+<br/>
+<a class="postlink" href="http://dldi.drunkencoders.com" target="_blank">http://dldi.drunkencoders.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127003 - wintermute - Sun Apr 29, 2007 3:09 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Lick wrote:</b></span></td> </tr> <tr> <td class="quote">If someone finalizes this idea, I could implement it in the next release of rebootlib. =)</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Except such a system quite plainly belongs in the toolchain not in some random external library.
+<br/>
+<br/>
+I've had several discussions about this over the last few months. Given that libfat &amp; the dldi system have proven successful then argv support seems like a logical next step.
+<br/>
+<br/>
+The primary problem lies in having a launcher which will pass the necessary pointers to the nds application. Most of the devices have their own menu systems and it's quite plainly not possible to support them all. The only thing we can do is implement a standard and hope they follow.
+<br/>
+<br/>
+I will have such a standard in devkitARM release 21.<br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127004 - wintermute - Sun Apr 29, 2007 3:11 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote">First we need to establish a way for a program to know whether it was launched with an argv-capable launcher.
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#define DS_ARGV_SIG (('a'&lt;&lt;0)|('r'&lt;&lt;8)|('g'&lt;&lt;16)|('v'&lt;&lt;24))
+<br/>
+<br/>
+typedef struct DS_ARGV {
+<br/>
+  u32 sig;  // must match DS_ARGV_SIG
+<br/>
+  u32 argc;  // number of arguments
+<br/>
+  char **argv;  // argv[0] = path to program, etc.
+<br/>
+  char *cwd;  // working directory
+<br/>
+} DS_ARGV;</td> </tr></table><span class="postbody">
+<br/>
+Code would look for a DS_ARGV struct at a pre-specified place in VRAM. If the signature matches, it's valid.</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Overcomplicated and unnecessary.
+<br/>
+<br/>
+Does CWD make any sense for us? I'm not convinced.<br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127017 - Lick - Sun Apr 29, 2007 8:52 am</h4>
+    <div class="postbody"><span class="postbody">Will there be a loader in the toolchain? What's the ETA of the next DKA release? Also, will the toolchain provide access to external RAM? (If not, why?)
+<br/>
+<br/>
+Isn't CWD part of the OS' job? And considering we don't have an OS... =)<br/>_________________<br/><a class="postlink" href="http://licklick.wordpress.com" target="_blank">http://licklick.wordpress.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127023 - alekmaul - Sun Apr 29, 2007 9:40 am</h4>
+    <div class="postbody"><span class="postbody">getcwd() works fine on DS, I use it in marcaDS to have the current directory for my nds file.
+<br/>
+exemple : you have a MARCADS directory with your nds file in it,
+<br/>
+getcwd will tell you : FAT:/MARCADS/</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127058 - wintermute - Sun Apr 29, 2007 6:06 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Lick wrote:</b></span></td> </tr> <tr> <td class="quote">Will there be a loader in the toolchain? 
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+No, this is not the domain of the toolchain.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+What's the ETA of the next DKA release?
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+When it's done.
+<br/>
+<br/>
+This can be improved by use of the following link
+<br/>
+<br/>
+<a href="http://www.devkitpro.org/why-donate.shtml" target="_blank">http://www.devkitpro.org/why-donate.shtml</a>
+<br/>
+<br/>
+As it happens I've just had my debian box fail and it needs replacing so all donations are even more appreciated than usual.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+ Also, will the toolchain provide access to external RAM? (If not, why?)
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+No, this is not the domain of the toolchain.
+<br/>
+<br/>
+External RAM is not a common feature of current DS homebrew solutions and requires very specific handling to be useful.
+<br/>
+<br/>
+Personally I believe use of external RAM should be avoided unless absolutely necessary.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+Isn't CWD part of the OS' job? And considering we don't have an OS... =)</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Considering we don't have an OS on the DS, discussing what it's job might be is incredibly counter productive.
+<br/>
+<br/>
+The question might be better phrased as "is there any reason why CWD would be anything other than the path contained in argv[0] on startup?".<br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127069 - Lynx - Sun Apr 29, 2007 8:04 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">As it happens I've just had my debian box fail and it needs replacing so all donations are even more appreciated than usual.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Any specific specifications you are looking for in the replacement box?<br/>_________________<br/><a class="postlink" href="http://www.ndshb.com" target="_blank">NDS Homebrew Roms &amp; Reviews</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127079 - HyperHacker - Sun Apr 29, 2007 10:39 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>wintermute wrote:</b></span></td> </tr> <tr> <td class="quote">The question might be better phrased as "is there any reason why CWD would be anything other than the path contained in argv[0] on startup?".</td> </tr></table><span class="postbody">You have a .nds that just processes files in a given directory, and want to be able to run it on a directory other than the one it's located in without having to prompt for it every time, e.g. for scripting?<br/>_________________<br/>I'm a PSP hacker now, but I still &lt;3 DS.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127083 - tepples - Sun Apr 29, 2007 10:58 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>wintermute wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Lick wrote:</b></span></td> </tr> <tr> <td class="quote">Will there be a loader in the toolchain?</td> </tr></table><span class="postbody">
+<br/>
+No, this is not the domain of the toolchain.</span></td> </tr></table><span class="postbody">
+<br/>
+Why isn't implementing exec() or spawn() the domain of the C library?
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote"> Also, will the toolchain provide access to external RAM? (If not, why?)</td> </tr></table><span class="postbody">
+<br/>
+No, this is not the domain of the toolchain.</span></td> </tr></table><span class="postbody">
+<br/>
+Why isn't implementing sbrk() the domain of the C library?
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Considering we don't have an OS on the DS, discussing what it's job might be is incredibly counter productive.</td> </tr></table><span class="postbody">
+<br/>
+MS-DOS isn't much of an OS either, apart from conventional memory allocation, file system functions, and spawn(). Xbox has an OS, but IIRC it is statically linked into each XBE.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">The question might be better phrased as "is there any reason why CWD would be anything other than the path contained in argv[0] on startup?".</td> </tr></table><span class="postbody">
+<br/>
+I guess you're right. I was thinking of the case where applications put files associated with a document in the same folder as the document. But given the presence of argv[0], argv[1], and fat:/data, I guess cwd isn't necessary.
+<br/>
+<br/>
+HyperHacker: If you want to pass a folder's path to a program, you can pass it in argv[1].<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127084 - wintermute - Sun Apr 29, 2007 10:59 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>HyperHacker wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>wintermute wrote:</b></span></td> </tr> <tr> <td class="quote">The question might be better phrased as "is there any reason why CWD would be anything other than the path contained in argv[0] on startup?".</td> </tr></table><span class="postbody">You have a .nds that just processes files in a given directory, and want to be able to run it on a directory other than the one it's located in without having to prompt for it every time, e.g. for scripting?</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Is there some aspect of argv/argc and the ability to pass parameters that I'm missing?
+<br/>
+<br/>
+I don't really see the advantage of having a complicated protocol to handle something that could be better handled by the atgc/argv protocol itself.
+<br/>
+<br/>
+I understand that a lot of the work I've done makes it appear as if a standalone nds file is running on an OS. but it still isn't. If you want an actual OS then use dslinux.<br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127087 - wintermute - Sun Apr 29, 2007 11:04 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Lynx wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">As it happens I've just had my debian box fail and it needs replacing so all donations are even more appreciated than usual.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Any specific specifications you are looking for in the replacement box?</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I haven't really thought that far atm being honest, the box finally died yesterday. It was a PIII 450 with 384meg of RAM so any cheap basic modern system would probably blow it away.
+<br/>
+<br/>
+It was mainly used as a router/firewall and build box for the linux toolchains so it doesn't need to be anything spectacular.<br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127089 - wintermute - Sun Apr 29, 2007 11:20 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>wintermute wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Lick wrote:</b></span></td> </tr> <tr> <td class="quote">Will there be a loader in the toolchain?</td> </tr></table><span class="postbody">
+<br/>
+No, this is not the domain of the toolchain.</span></td> </tr></table><span class="postbody">
+<br/>
+Why isn't implementing exec() or spawn() the domain of the C library?
+<br/>
+</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+No matter what way you paint this, devkitARM does not provide an OS. The toolchain is designed to build standalone executables on  a bare metal system not provide all the bells and whistles of an actual OS.
+<br/>
+<br/>
+A loader is best left to the boot menu of the specific device. 
+<br/>
+<br/>
+It would be cool if there was a homebrew boot loader capable of running from/on the most popular devices though. There are things that can be done with libnds/devkitARM to make that task slightly easier.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote"> Also, will the toolchain provide access to external RAM? (If not, why?)</td> </tr></table><span class="postbody">
+<br/>
+No, this is not the domain of the toolchain.</span></td> </tr></table><span class="postbody">
+<br/>
+Why isn't implementing sbrk() the domain of the C library?
+<br/>
+</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+External RAM is not a standard feature of the target device and in any case is not actually suitable for use as general RAM.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Considering we don't have an OS on the DS, discussing what it's job might be is incredibly counter productive.</td> </tr></table><span class="postbody">
+<br/>
+MS-DOS isn't much of an OS either, apart from conventional memory allocation, file system functions, and spawn().
+<br/>
+</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+However MS-DOS actually *is* an OS and provides many more functions than a C library designed for embedded devices. 
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+ Xbox has an OS, but IIRC it is statically linked into each XBE.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+<br/>
+An Xbox has many more resources than a DS.
+<br/>
+<br/>
+Microsoft has many more programmers than devkitPro.
+<br/>
+<br/>
+In any case the "OS" statically linked into the XBE is a support library, not a toolchain.<br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"><br/><br/>Last edited by wintermute on Mon Apr 30, 2007 12:44 am; edited 1 time in total</span></div>    
+</div>
+<div class="post">
+    <h4>#127102 - Lick - Mon Apr 30, 2007 12:29 am</h4>
+    <div class="postbody"><span class="postbody">WinterMute: what would be your ideal solution? It seems like you're bashing our ideas (for good reasons perhaps) without really mentioning how you like to see it.<br/>_________________<br/><a class="postlink" href="http://licklick.wordpress.com" target="_blank">http://licklick.wordpress.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127105 - kusma - Mon Apr 30, 2007 12:36 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Lick wrote:</b></span></td> </tr> <tr> <td class="quote">It seems like you're bashing our ideas</td> </tr></table><span class="postbody">
+<br/>
+Actually, I think he's just making sense...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127136 - OOPMan - Mon Apr 30, 2007 9:29 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote">Sure, we can use <a class="postlink" href="http://www.info-zip.org/UnZip.html" target="_blank">Info-ZIP UnZip</a> (under the Info-ZIP variant of the zlib license) as a base for a library that reads the PKZIP format, but we still need to 1. make a way for a running program to find its zip file, and 2. allow code to "mount" a zip file as a read-only volume in devoptab.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Well, alekmaul has stated that getcwd() works fine on the DS. Assuming this is true, and I see no reason for alek to fub, point 1 is pretty much solved.
+<br/>
+<br/>
+One can quite easily use the location of one's NDS file as a root for locating one's data files, assuming one's data files are located sanely. This is pretty logical and allows for a good degree of organisation.
+<br/>
+<br/>
+Hence, all that remains is to implement point 2.
+<br/>
+<br/>
+I myself am not particularly keen on having an actual appended filesystem. An external archive is easier to update and also would probably allow for easy writing in addition to reading of the archive.
+<br/>
+<br/>
+A GBFS style appended filesystem for NDS roms seems like a rather antiquated style of doing things to me...
+<br/>
+<br/>
+So, in other words...
+<br/>
+<br/>
+We have getcwd()...
+<br/>
+<br/>
+No all we need is the archive-to-FAT-mount system...<br/>_________________<br/>"My boot, your face..." - Attributed to OOPMan, Emperor of Eroticon VI
+<br/>
+<br/>
+You can find my NDS homebrew projects <a class="postlink" href="http://blog.dev-scene.com/oopman/" target="_blank">here...</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127149 - wintermute - Mon Apr 30, 2007 12:37 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>OOPMan wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote">Sure, we can use <a class="postlink" href="http://www.info-zip.org/UnZip.html" target="_blank">Info-ZIP UnZip</a> (under the Info-ZIP variant of the zlib license) as a base for a library that reads the PKZIP format, but we still need to 1. make a way for a running program to find its zip file, and 2. allow code to "mount" a zip file as a read-only volume in devoptab.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Well, alekmaul has stated that getcwd() works fine on the DS. Assuming this is true, and I see no reason for alek to fub, point 1 is pretty much solved.
+<br/>
+</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Except for the small point that getcwd returns / on startup so you're back to square one again.
+<br/>
+<br/>
+Please exercise some patience, the last thing we need is another dozen conflicting "standards"<br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127153 - OOPMan - Mon Apr 30, 2007 1:12 pm</h4>
+    <div class="postbody"><span class="postbody">Oh dear? So why does alekmaul say it works then?
+<br/>
+<br/>
+:-(<br/>_________________<br/>"My boot, your face..." - Attributed to OOPMan, Emperor of Eroticon VI
+<br/>
+<br/>
+You can find my NDS homebrew projects <a class="postlink" href="http://blog.dev-scene.com/oopman/" target="_blank">here...</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127165 - Noda - Mon Apr 30, 2007 3:36 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>HyperHacker wrote:</b></span></td> </tr> <tr> <td class="quote">Finding the .nds file on the card will fail if there are multiple copies, and patching it with the path will fail if it gets moved or renamed.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+no problem with multiple copies as the patcher give the .nbds a unique id using a random number + filesize. To have another usable copy on the same card, just run it trough the patcher again.
+<br/>
+<br/>
+And if the rom is already patcherd by the file moved or renamed, it's just searched again.
+<br/>
+<br/>
+By the way, based on Alekmaul's work I'm currently coding this lib using ndstool and NitroFS for the embedded file system.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127184 - tepples - Mon Apr 30, 2007 7:08 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>OOPMan wrote:</b></span></td> </tr> <tr> <td class="quote">Oh dear? So why does alekmaul say it works then?</td> </tr></table><span class="postbody">
+<br/>
+getcwd() works after the program has called chdir().<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127212 - Lick - Mon Apr 30, 2007 10:50 pm</h4>
+    <div class="postbody"><span class="postbody">chdir(getcwd()); Ha! Useless!<br/>_________________<br/><a class="postlink" href="http://licklick.wordpress.com" target="_blank">http://licklick.wordpress.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127216 - Sweater Fish Deluxe - Mon Apr 30, 2007 11:34 pm</h4>
+    <div class="postbody"><span class="postbody">Why exactly is it such a problem if homebrew just uses an absolute path based on the root instead of a relative path?  In the end it seems like very little difference to me.
+<br/>
+<br/>
+<br/>
+...word is bondage...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127222 - Lazy1 - Mon Apr 30, 2007 11:51 pm</h4>
+    <div class="postbody"><span class="postbody">Well, it's better for organization.
+<br/>
+For example, you could keep your root dir clean by moving games into a games folder and expect them to work within that directory.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127224 - Dood77 - Tue May 01, 2007 12:25 am</h4>
+    <div class="postbody"><span class="postbody">What would be good for this filesystem is to have the directory be a user set variable in the library. Like the user 'installs' it in whatever directory they want.<br/>_________________<br/>If I use a term wrong or something then feel free to correct, I?m not much of a programmer.
+<br/>
+<span style="font-size: 9px; line-height: normal">
+<br/>
+Original DS Phat obtained on day of release + flashme v7
+<br/>
+Supercard: miniSD, Kingston 1GB, Kingston 2GB
+<br/>
+Ralink chipset PCI NIC
+<br/>
+</span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127255 - HyperHacker - Tue May 01, 2007 6:30 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Sweater Fish Deluxe wrote:</b></span></td> </tr> <tr> <td class="quote">Why exactly is it such a problem if homebrew just uses an absolute path based on the root instead of a relative path?  In the end it seems like very little difference to me.
+<br/>
+<br/>
+<br/>
+...word is bondage...</td> </tr></table><span class="postbody">This is good if they all us the same directory (/DATA/uniquename). When every program needs its own stuff in the root directory, the root gets crowded and messy very quickly, and a lot of people hate that.<br/>_________________<br/>I'm a PSP hacker now, but I still &lt;3 DS.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127257 - alekmaul - Tue May 01, 2007 6:43 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote">getcwd() works after the program has called chdir().</td> </tr></table><span class="postbody">
+<br/>
+Yes, that's right, excuse me, i forgot this point . I use it to retreive the location of the zip/rom files and it also works for my nds file (I know it is in the MARCADS directory) because the chdir was done also for it  ...
+<br/>
+Also, i didn't test it if the init. of the libfat is not done, but it isn't the purpose because we are going to use the libfat to search for files in the NDS file. I have tested it on a real DS with a NinjaDS linker, i don't know if it works with anothers.
+<br/>
+<br/>
+My only problem is to inject files AFTER using ndstools. I can't find a way to do that with ndstools (the -d option works only if with have arm7, arm9, ... separates files). I will be a great improvement , for emulators, for example, if we have only a nds file and not all the .zip/rom files for games.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127303 - Lynx - Tue May 01, 2007 3:00 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Dood77 wrote:</b></span></td> </tr> <tr> <td class="quote">What would be good for this filesystem is to have the directory be a user set variable in the library. Like the user 'installs' it in whatever directory they want.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Yeah, but some people like to be able to move the .nds files around without having to "install" them again.  I personally like to even boot into DSLinux and move/delete files.<br/>_________________<br/><a class="postlink" href="http://www.ndshb.com" target="_blank">NDS Homebrew Roms &amp; Reviews</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127340 - Sweater Fish Deluxe - Tue May 01, 2007 7:55 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Lazy1 wrote:</b></span></td> </tr> <tr> <td class="quote">Well, it's better for organization.
+<br/>
+For example, you could keep your root dir clean by moving games into a games folder and expect them to work within that directory.</td> </tr></table><span class="postbody">
+<br/>
+Of course, then your GAMES folder would just get all filled up with the same junk you're complaining about in the root.  Actually, there seems to be some advantage to the way it works now because I do in fact have all my homebrew in a folder called HOMEBREW (and emulators in EMULATION, etc.) and currently I don't ever have to see all the FAT folders and files those homebrews access, if the standard switched to relative paths then there would be no way to keep the NDS files cleanly separated from their external files and folders like that.
+<br/>
+<br/>
+And of course, since there's a current standard that would have to be changed if we go to relative paths, there would always be some homebrew stuff that still used absolute paths and cluttered up the root while others used relative paths and cluttered up whatever directory you keep your homebrew in.  So no one would be happy.
+<br/>
+<br/>
+<br/>
+...word is bondage...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127341 - tepples - Tue May 01, 2007 8:00 pm</h4>
+    <div class="postbody"><span class="postbody">I think the idea here is to make an archive of assets (e.g. in GBFS or ZIP format) and append it to the .nds file, and then have the running program read the archive from within the .nds file. The one problem here is for the running program to find the .nds file.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127376 - HyperHacker - Wed May 02, 2007 12:47 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Sweater Fish Deluxe wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Lazy1 wrote:</b></span></td> </tr> <tr> <td class="quote">Well, it's better for organization.
+<br/>
+For example, you could keep your root dir clean by moving games into a games folder and expect them to work within that directory.</td> </tr></table><span class="postbody">
+<br/>
+Of course, then your GAMES folder would just get all filled up with the same junk you're complaining about in the root.</span></td> </tr></table><span class="postbody">There's 2 reasons this is still better than clogging up the root:
+<br/>
+1) You can give each app its own directory. This way when using your favourite file browser to start an app, you don't have to skip past a dozen data files, and things don't look so cluttered. If the apps already put all their data files in a subdirectory, instead of the same place as the app itself, you could even put all of the apps and their directories in one place. Then you'd still have like 20 directories to skip by before the actual file listing, but this is better than having the data files scattered amongst the programs in the list.
+<br/>
+Hm, or someone could write a file browser that sorts by extension...
+<br/>
+<br/>
+2) Some people use FAT16 for one reason or another (default and they don't know any better, card won't work with FAT32, etc), and this has a limit of 255 filename entries in the root directory. Long file names (more than 8.3) use up multiple entries so this can be much less than 255 files (directories are included as well).
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">...word is bondage...</td> </tr></table><span class="postbody">Why not put this in your sig? Then you wouldn't have to type it all the time.<br/>_________________<br/>I'm a PSP hacker now, but I still &lt;3 DS.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127391 - Lazy1 - Wed May 02, 2007 4:43 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Sweater Fish Deluxe wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Lazy1 wrote:</b></span></td> </tr> <tr> <td class="quote">Well, it's better for organization.
+<br/>
+For example, you could keep your root dir clean by moving games into a games folder and expect them to work within that directory.</td> </tr></table><span class="postbody">
+<br/>
+Of course, then your GAMES folder would just get all filled up with the same junk you're complaining about in the root.  Actually, there seems to be some advantage to the way it works now because I do in fact have all my homebrew in a folder called HOMEBREW (and emulators in EMULATION, etc.) and currently I don't ever have to see all the FAT folders and files those homebrews access, if the standard switched to relative paths then there would be no way to keep the NDS files cleanly separated from their external files and folders like that.
+<br/>
+<br/>
+And of course, since there's a current standard that would have to be changed if we go to relative paths, there would always be some homebrew stuff that still used absolute paths and cluttered up the root while others used relative paths and cluttered up whatever directory you keep your homebrew in.  So no one would be happy.
+<br/>
+<br/>
+<br/>
+...word is bondage...</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Hard coded paths are why my port of sopwith does not save it's configuration.
+<br/>
+It's just one file, no external resources so why should it get it's own directory in the root?
+<br/>
+<br/>
+Wolfenstein 3D for example can be modded, with hard coded paths you would only be allowed one mod per disk.
+<br/>
+Sure I could add a mod selector, but why should I when it can all just go in a separate directory?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127399 - Dood77 - Wed May 02, 2007 6:44 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>HyperHacker wrote:</b></span></td> </tr> <tr> <td class="quote">and this has a limit of 255 filename entries in the root directory.</td> </tr></table><span class="postbody">
+<br/>
+0.o maybe thats why DSO crashes every time I try to open this one folder... Wait you said only in the root? To Wikipedia!
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>HyperHacker wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">...word is bondage...</td> </tr></table><span class="postbody">Why not put this in your sig? Then you wouldn't have to type it all the time.</span></td> </tr></table><span class="postbody">
+<br/>
+I've always wondered this too, maybe hes got PHPbb hax!!1 (or just a greasemonkey script?)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127408 - OOPMan - Wed May 02, 2007 7:55 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote">I think the idea here is to make an archive of assets (e.g. in GBFS or ZIP format) and append it to the .nds file, and then have the running program read the archive from within the .nds file. The one problem here is for the running program to find the .nds file.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Except some of us don't agree that the archive should be appended to the NDS file...
+<br/>
+<br/>
+Doing so makes it more difficult to update the contents of said archive and just seems a little retrograde to me...
+<br/>
+<br/>
+It would be nicer if we just had a worked getpwd() function and could use that to locate data files.<br/>_________________<br/>"My boot, your face..." - Attributed to OOPMan, Emperor of Eroticon VI
+<br/>
+<br/>
+You can find my NDS homebrew projects <a class="postlink" href="http://blog.dev-scene.com/oopman/" target="_blank">here...</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127420 - alekmaul - Wed May 02, 2007 10:37 am</h4>
+    <div class="postbody"><span class="postbody">Here is my first try to do my own getcwd() , with the pb of unique file search in the card.
+<br/>
+But as noda said, it can be improve with search of an unique ID + filesize.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+bool mygetcwd(char *szDir,char *szName) {
+<br/>
+  DIR_ITER *dir;
+<br/>
+  bool bOK=false;
+<br/>
+  char szFile[256];
+<br/>
+   struct stat st;  
+<br/>
+  
+<br/>
+  dir = diropen(".");
+<br/>
+  while ( ( dirnext(dir, szFile, &amp;st) == 0 ) &amp;&amp; (!bOK)) {
+<br/>
+    if (st.st_mode &amp; S_IFDIR) {
+<br/>
+      if ( ( (strlen(szFile) == 1) &amp;&amp; (szFile[0]!= '.') ) ||
+<br/>
+           ( (strlen(szFile) == 2) &amp;&amp; (strcasecmp(szFile,"..") ) )  ||
+<br/>
+           (strlen(szFile) &gt; 2) )
+<br/>
+      {
+<br/>
+        chdir(szFile);
+<br/>
+        getcwd(szDir,255);
+<br/>
+        bOK = mygetcwd(szDir,szName);
+<br/>
+        chdir("..");
+<br/>
+      }
+<br/>
+    }
+<br/>
+    else {
+<br/>
+      if ( (!strcasecmp(szFile, szName)) ) {
+<br/>
+        bOK = true;
+<br/>
+      }
+<br/>
+    }
+<br/>
+  }
+<br/>
+  dirclose(dir);
+<br/>
+  return bOK;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+and, for example, here is a call to this function :
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+  chdir("/");
+<br/>
+  strcpy(NDSTDirApp,"/");
+<br/>
+  mygetcwd(NDSTDirApp,"MarcaDS.nds");
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+NDSTDirApp will have the directory where MarcaDS.nds is.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127446 - Noda - Wed May 02, 2007 3:23 pm</h4>
+    <div class="postbody"><span class="postbody">I just finished coding the first prototype of the FS idea I said (based on Alekmaul's work), I just need to code the ID patcher (will not take too long, it's just a simple modification of dlditool) and do some tests.. stay tuned ;)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127465 - tepples - Wed May 02, 2007 6:45 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>OOPMan wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote">I think the idea here is to make an archive of assets (e.g. in GBFS or ZIP format) and append it to the .nds file</td> </tr></table><span class="postbody">
+<br/>
+Except some of us don't agree that the archive should be appended to the NDS file...
+<br/>
+<br/>
+Doing so makes it more difficult to update the contents of said archive and just seems a little retrograde to me...</span></td> </tr></table><span class="postbody">
+<br/>
+Official games work this way. If we want homebrew to become as easy as piracy, we will have to make the user experience just as easy for programs that don't use user-created mods.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127478 - Sweater Fish Deluxe - Wed May 02, 2007 9:15 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>HyperHacker wrote:</b></span></td> </tr> <tr> <td class="quote">1) You can give each app its own directory. This way when using your favourite file browser to start an app, you don't have to skip past a dozen data files, and things don't look so cluttered. If the apps already put all their data files in a subdirectory, instead of the same place as the app itself, you could even put all of the apps and their directories in one place. Then you'd still have like 20 directories to skip by before the actual file listing, but this is better than having the data files scattered amongst the programs in the list.
+<br/>
+Hm, or someone could write a file browser that sorts by extension...
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Well, apparently it's just a matter of personal preference then because neither of those options sound easier or neater to me than being able to separate just the NDS files into folders of their own (which can be named !apps, !games, !emulators, etc. so that they'll show up first on the list) and leaving the external files pretty much out of the picture altogether.  Most people in this thread at least apparently would prefer it one of the ways you suggested, though, so I guess I'm in the minority.  Not a big deal for me either way since I mostly use my flash cart for homebrew games rather than apps and not as many of those seem to use the FAT system.  I've only got about 7 or 8 extra folders in the root of my card and 3 or 4 loose files, nowhere near the FAT16 limit you mentioned.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">...word is bondage...</td> </tr></table><span class="postbody">Why not put this in your sig? Then you wouldn't have to type it all the time.</span></td> </tr></table><span class="postbody">
+<br/>
+But then I wouldn't get to type it all the time.
+<br/>
+<br/>
+<br/>
+...word is bondage...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127487 - Arialia - Wed May 02, 2007 11:08 pm</h4>
+    <div class="postbody"><span class="postbody">Wait a minute please ...
+<br/>
+<br/>
+i think homebrews needs two differents way to access files :
+<br/>
+<br/>
+1) files using internally by homebrew with a filesystem like NitroFS, FSCR ...
+<br/>
+     idea of NODA is good for this ...
+<br/>
+<br/>
+2) files configuration of users using FAT system
+<br/>
+<br/>
+for 2) we need a norme. I think it is a good things puts this files on folder DATA or other, but some of us begin to use /data so we can continue ...
+<br/>
+<br/>
+here an example of card
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code"> 
+<br/>
+/
+<br/>
+|-data
+<br/>
+|    |---- Phidias
+<br/>
+|    |        |-----brushes
+<br/>
+|    |---- beup
+<br/>
+|            |-----avatars
+<br/>
+|            |-----emoticons
+<br/>
+ .... 
+<br/>
+ </td> </tr></table><span class="postbody">
+<br/>
+<br/>
+like folder DCIM for digital camera ;)
+<br/>
+for me i hate have my data in folder of application ....
+<br/>
+look my card 
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+G:.
+<br/>
+├───phidias
+<br/>
+│   └───BRUSHES
+<br/>
+├───SAV
+<br/>
+├───NINJADS
+<br/>
+│   ├───backgrounds
+<br/>
+│   └───CHEATS
+<br/>
+├───jeux
+<br/>
+├───utile
+<br/>
+├───dev
+<br/>
+├───video
+<br/>
+├───moonshl
+<br/>
+│   ├───plugin
+<br/>
+│   ├───skin
+<br/>
+│   └───custom
+<br/>
+│       ├───lang0
+<br/>
+│       └───lang1
+<br/>
+├───DCIM
+<br/>
+│   ├───101K4200
+<br/>
+│   └───101MEDIA
+<br/>
+├───MISC
+<br/>
+└───SYSTEM
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+i prefer this 
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+G:.
+<br/>
+├───data
+<br/>
+|        ├───phidias
+<br/>
+│        |        └───BRUSHES
+<br/>
+|        └───moonshl
+<br/>
+│                ├───plugin
+<br/>
+│                ├───skin
+<br/>
+│                └───custom
+<br/>
+│                           ├───lang0
+<br/>
+│                           └───lang1
+<br/>
+├───SAV
+<br/>
+├───NINJADS
+<br/>
+│   ├───backgrounds
+<br/>
+│   └───CHEATS
+<br/>
+├───jeux
+<br/>
+├───utile
+<br/>
+├───dev
+<br/>
+├───video
+<br/>
+├───DCIM
+<br/>
+│   ├───101K4200
+<br/>
+│   └───101MEDIA
+<br/>
+├───MISC
+<br/>
+└───SYSTEM
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127496 - wintermute - Thu May 03, 2007 12:29 am</h4>
+    <div class="postbody"><span class="postbody">I don't see why any of this will be necessary when I implement argc/argv<br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127499 - Lick - Thu May 03, 2007 12:35 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>wintermute wrote:</b></span></td> </tr> <tr> <td class="quote">I don't see why any of this will be necessary when I implement argc/argv</td> </tr></table><span class="postbody">
+<br/>
+How are you going to implement it?<br/>_________________<br/><a class="postlink" href="http://licklick.wordpress.com" target="_blank">http://licklick.wordpress.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127512 - wintermute - Thu May 03, 2007 1:08 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Lick wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>wintermute wrote:</b></span></td> </tr> <tr> <td class="quote">I don't see why any of this will be necessary when I implement argc/argv</td> </tr></table><span class="postbody">
+<br/>
+How are you going to implement it?</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+You'll find out when devkitARM r21 is released.<br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127516 - HyperHacker - Thu May 03, 2007 1:27 am</h4>
+    <div class="postbody"><span class="postbody">When will that be? &gt;_&gt;
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Dood77 wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>HyperHacker wrote:</b></span></td> </tr> <tr> <td class="quote">and this has a limit of 255 filename entries in the root directory.</td> </tr></table><span class="postbody">
+<br/>
+0.o maybe thats why DSO crashes every time I try to open this one folder... Wait you said only in the root? To Wikipedia!</span></td> </tr></table><span class="postbody">Some programs might have a hardcoded limit of 255 per directory even though the filesystem allows more. In DSO's case, I know it can open a directory with 273 files, but it's quite slow to do so. Maybe you're not waiting long enough?<br/>_________________<br/>I'm a PSP hacker now, but I still &lt;3 DS.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127528 - wintermute - Thu May 03, 2007 2:28 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>HyperHacker wrote:</b></span></td> </tr> <tr> <td class="quote">When will that be? &gt;_&gt;</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+<a href="http://forum.gbadev.org/viewtopic.php?p=127058#127058" target="_blank">http://forum.gbadev.org/viewtopic.php?p=127058#127058</a><br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127551 - HyperHacker - Thu May 03, 2007 6:08 am</h4>
+    <div class="postbody"><span class="postbody">That doesn't really tell me much...<br/>_________________<br/>I'm a PSP hacker now, but I still &lt;3 DS.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127562 - OOPMan - Thu May 03, 2007 8:22 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>OOPMan wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote">I think the idea here is to make an archive of assets (e.g. in GBFS or ZIP format) and append it to the .nds file</td> </tr></table><span class="postbody">
+<br/>
+Except some of us don't agree that the archive should be appended to the NDS file...
+<br/>
+<br/>
+Doing so makes it more difficult to update the contents of said archive and just seems a little retrograde to me...</span></td> </tr></table><span class="postbody">
+<br/>
+Official games work this way. If we want homebrew to become as easy as piracy, we will have to make the user experience just as easy for programs that don't use user-created mods.</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Official games lack the scope of Homebrew applications. They are pretty much "deployed" once and that's that. No patches, no updates, no real new content. 
+<br/>
+<br/>
+I somehow doubt Homebrew will ever become as easy as piracy on the DS, but that's just me.
+<br/>
+<br/>
+I do not see why we have to confine ourselves to the kind of restrictive scope that is implied in the "This is how it's done officially, so we should tend towards this way..." attitude.
+<br/>
+<br/>
+DS homebrew is not official and is unlikely to ever be as easy as official software. It's also unlikely to ever be as easy as piracy. This might be because the "homebrew" devices we use are, for the most part, designed with piracy in mind. Homebrew is just a tasty treat that we get along with the package.
+<br/>
+<br/>
+But I do get what you're saying...
+<br/>
+<br/>
+Which is why, in my ideal world, every piece of NDS homebrew would consist of only two files...
+<br/>
+<br/>
+MyApp.NDS &lt;- Program Binary
+<br/>
+MyApp.NDZ &lt;- Program Filesystem Archive
+<br/>
+<br/>
+<ul>
+<br/>
+<li>Binaries are in the NDS. 
+<br/>
+</li><li>Data files are in the the NDZ.
+<br/>
+</li><li>The NDZ is some arbitrary simple open archive format.
+<br/>
+</li><li>The NDZ may or may not be compressed. 
+<br/>
+</li><li>The NDZ is automatically made available on program bootup
+<br/>
+</li><li>The NDZ supports all standard directory and file operations, both read and write mode
+<br/>
+</li></ul>
+<br/>
+<br/>
+It seems like a pretty simple list to me, really. 
+<br/>
+<br/>
+There are only a few apps I can think of that would need to move beyond the scope of this style. DSOrganize and Moonshell are two of them, although even those could work within said framework (A Music.NDZ anyone?)
+<br/>
+<br/>
+Obviously, there is one con. This requires a support tool (Windows and *nix of course) to access the NDZs. Said support tool does impose an extra layer between the user and the device. This can be both good and bad, obviously. However, I think that with a well designed tool it would not be a major hurdle.
+<br/>
+<br/>
+The final result: Concise file management.<br/>_________________<br/>"My boot, your face..." - Attributed to OOPMan, Emperor of Eroticon VI
+<br/>
+<br/>
+You can find my NDS homebrew projects <a class="postlink" href="http://blog.dev-scene.com/oopman/" target="_blank">here...</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127574 - Lick - Thu May 03, 2007 11:26 am</h4>
+    <div class="postbody"><span class="postbody">Why put everything in an archive when you can also use regular file access?<br/>_________________<br/><a class="postlink" href="http://licklick.wordpress.com" target="_blank">http://licklick.wordpress.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127578 - OOPMan - Thu May 03, 2007 11:55 am</h4>
+    <div class="postbody"><span class="postbody">Regular file access is messy
+<br/>
+Regular file access wastes space
+<br/>
+Regular file access tends to fragment more as well, I think...
+<br/>
+<br/>
+There are other reasons as well, no doubt.
+<br/>
+<br/>
+But I, for one, would rather see less extraneous files and directories on my SD card, rather than more.<br/>_________________<br/>"My boot, your face..." - Attributed to OOPMan, Emperor of Eroticon VI
+<br/>
+<br/>
+You can find my NDS homebrew projects <a class="postlink" href="http://blog.dev-scene.com/oopman/" target="_blank">here...</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127582 - kusma - Thu May 03, 2007 12:30 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>OOPMan wrote:</b></span></td> </tr> <tr> <td class="quote">Regular file access is messy
+<br/>
+Regular file access wastes space
+<br/>
+Regular file access tends to fragment more as well, I think...
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+...What? Re-inventing the wheel by implementing a file-system on top of a file-system is just plain silly if it doesn't solve any practical problems.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127583 - Arialia - Thu May 03, 2007 12:32 pm</h4>
+    <div class="postbody"><span class="postbody">oopman: yes you are right for waste space
+<br/>
+ on fat a little file take at least 16k even it has size of 30 bytes !
+<br/>
+<br/>
+but it is so easy to access for end user ...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127584 - Diddl - Thu May 03, 2007 12:41 pm</h4>
+    <div class="postbody"><span class="postbody">to implement a file system as one file xxxxx.ndz would be very simple, it is only a simple io-driver. 
+<br/>
+<br/>
+but how to initialize (format) a new filesystem? for the beginning it would run to copy a small SD (256KB) into a single file block by block.
+<br/>
+<br/>
+compressing thw whole thing is much more difficult. stream read and write would be no problem but fseek() ...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127589 - OOPMan - Thu May 03, 2007 1:27 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>kusma wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>OOPMan wrote:</b></span></td> </tr> <tr> <td class="quote">Regular file access is messy
+<br/>
+Regular file access wastes space
+<br/>
+Regular file access tends to fragment more as well, I think...
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+...What? Re-inventing the wheel by implementing a file-system on top of a file-system is just plain silly if it doesn't solve any practical problems.</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+For craps sakes, implementing an archive-file-as-an-FS is NOT re-inventing the wheel. Do you really, honestly think that all those games out there that use archives to store their game data are re-inventing the wheel?<br/>_________________<br/>"My boot, your face..." - Attributed to OOPMan, Emperor of Eroticon VI
+<br/>
+<br/>
+You can find my NDS homebrew projects <a class="postlink" href="http://blog.dev-scene.com/oopman/" target="_blank">here...</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127596 - tepples - Thu May 03, 2007 2:03 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>OOPMan wrote:</b></span></td> </tr> <tr> <td class="quote">Obviously, there is one con. This requires a support tool (Windows and *nix of course) to access the NDZs.</td> </tr></table><span class="postbody">
+<br/>
+If the NDZ is in a popular format (e.g. PKZIP, as with ScummVM, Quake 3, StepMania, and the Java platform), this shouldn't be much of a problem.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127597 - kusma - Thu May 03, 2007 2:04 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>OOPMan wrote:</b></span></td> </tr> <tr> <td class="quote">For craps sakes, implementing an archive-file-as-an-FS is NOT re-inventing the wheel. Do you really, honestly think that all those games out there that use archives to store their game data are re-inventing the wheel?</td> </tr></table><span class="postbody">
+<br/>
+Some of them are, while some of them are solving practical issues (like asset-protection). For homebrew, I can't see a very good reason to do this, and it greatly complicate the process of reading / writing files, as you need custom tools to access the file-system. So yes, in this case it's absolutely wheel-reinvention IMO. A square wheel even.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127600 - tepples - Thu May 03, 2007 2:19 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>kusma wrote:</b></span></td> </tr> <tr> <td class="quote">For homebrew, I can't see a very good reason to do this, and it greatly complicate the process of reading / writing files, as you need custom tools to access the file-system.</td> </tr></table><span class="postbody">
+<br/>
+I have a 1 GB microSD card in my R4 and a 1 GB CF card in my GBAMP. Why would I want to waste a whole 16 KiB cluster on a character's 2 KiB sprite sheet? The advantage of an archive file is that the cluster size is smaller, resulting in an order of magnitude less space lost to <a class="postlink" href="http://en.wikipedia.org/wiki/Fragmentation_%28computer%29#Internal_fragmentation" target="_blank">internal fragmentation</a>.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127602 - kusma - Thu May 03, 2007 2:33 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>kusma wrote:</b></span></td> </tr> <tr> <td class="quote">For homebrew, I can't see a very good reason to do this, and it greatly complicate the process of reading / writing files, as you need custom tools to access the file-system.</td> </tr></table><span class="postbody">
+<br/>
+I have a 1 GB microSD card in my R4 and a 1 GB CF card in my GBAMP. Why would I want to waste a whole 16 KiB cluster on a character's 2 KiB sprite sheet? The advantage of an archive file is that the cluster size is smaller, resulting in an order of magnitude less space lost to <a class="postlink" href="http://en.wikipedia.org/wiki/Fragmentation_%28computer%29#Internal_fragmentation" target="_blank">internal fragmentation</a>.</span></td> </tr></table><span class="postbody">
+<br/>
+There's an easier solution to that problem: Don't have many small files. If you have so many files that wasting 16KiB on each file is a serious problem, then your're going to loose track of all your files anyway. Replacing the file  system with another one is an overly complex solution to a simple problem.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127604 - tepples - Thu May 03, 2007 2:39 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>kusma wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote">Why would I want to waste a whole 16 KiB cluster on a character's 2 KiB sprite sheet?</td> </tr></table><span class="postbody">
+<br/>
+There's an easier solution to that problem: Don't have many small files. If you have so many files that wasting 16KiB on each file is a serious problem, then your're going to loose track of all your files anyway. Replacing the file  system with another one is an overly complex solution to a simple problem.</span></td> </tr></table><span class="postbody">
+<br/>
+If you have small objects, and you want to put them in big files, what solution is there other than wrapping them in something isomorphic to a file system?<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127605 - kusma - Thu May 03, 2007 2:42 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>kusma wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote">Why would I want to waste a whole 16 KiB cluster on a character's 2 KiB sprite sheet?</td> </tr></table><span class="postbody">
+<br/>
+There's an easier solution to that problem: Don't have many small files. If you have so many files that wasting 16KiB on each file is a serious problem, then your're going to loose track of all your files anyway. Replacing the file  system with another one is an overly complex solution to a simple problem.</span></td> </tr></table><span class="postbody">
+<br/>
+If you have small objects, and you want to put them in big files, what solution is there other than wrapping them in something isomorphic to a file system?</span></td> </tr></table><span class="postbody">
+<br/>
+If you're having size-issues, you want to compress your data-files anyway. Once we get to that, taring them together makes a lot more sense. I still feel that this is a pretty much invented problem though, storage is cheap.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127606 - wintermute - Thu May 03, 2007 3:05 pm</h4>
+    <div class="postbody"><span class="postbody">Restating a symptom and your chosen means to alleviate that symptom doesn't necessarily show a problem and it's solution.
+<br/>
+<br/>
+You say the clusters are too big, I say the granuarity of your data might be too fine. Where does the problem really begin?
+<br/>
+<br/>
+Does your "sprite sheet" really need to be 2k?
+<br/>
+<br/>
+Is wasting 14k of a 1GB storage device really such a bad thing? Even 100 such files will lose you a whole 140k - that's 0.014% of your capacity or, in engineering terms, SFA.
+<br/>
+<br/>
+Could your time be spent more productively on some other aspect of your project?<br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127608 - chishm - Thu May 03, 2007 3:06 pm</h4>
+    <div class="postbody"><span class="postbody">Honestly, how many really small files are you going to have? If you really want to combine them into a virtual filesystem then I'm not going to stop you. Just remember that you'll need to implement all the functionality you need for at least read access. Is space really so important that it is worth wasting several dozen hours to code the supporting driver? 
+<br/>
+<br/>
+If you really want to do this, I suggest you use the Nitro FS file system, as a builder is already available (ndstool) and the NDS file format has native support for appended Nitro FS file systems.
+<br/>
+<br/>
+Instead of wrapping small files in a file system, perhaps you should organize them into groups. For instance, instead of having each sprite used by a game in a separate file, make a single file containing all the sprites. Put a header on the file with a table of offsets to each sprite. Now instead of having the overhead of openning each file, you can index into a table to load the necessary data (assuming you loaded the file already).<br/>_________________<br/><a class="postlink" href="http://chishm.drunkencoders.com" target="_blank">http://chishm.drunkencoders.com</a>
+<br/>
+<a class="postlink" href="http://dldi.drunkencoders.com" target="_blank">http://dldi.drunkencoders.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127611 - tepples - Thu May 03, 2007 3:50 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>wintermute wrote:</b></span></td> </tr> <tr> <td class="quote">I say the granuarity of your data might be too fine.</td> </tr></table><span class="postbody">
+<br/>
+File systems were invented because the granuarity of data in general is too fine to use a separate disk for each file.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>wintermute wrote:</b></span></td> </tr> <tr> <td class="quote">Where does the problem really begin?
+<br/>
+<br/>
+Does your "sprite sheet" really need to be 2k?</td> </tr></table><span class="postbody">
+<br/>
+For an object with only 16 frames of animation, each of 128 bytes (16x16 pixels and 16 colors), yes.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>wintermute wrote:</b></span></td> </tr> <tr> <td class="quote">Is wasting 14k of a 1GB storage device really such a bad thing?</td> </tr></table><span class="postbody">
+<br/>
+If I have a whole bunch of object types, yes.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>wintermute wrote:</b></span></td> </tr> <tr> <td class="quote">Even 100 such files will lose you a whole 140k - that's 0.014% of your capacity</td> </tr></table><span class="postbody">
+<br/>
+Unless I'm keeping a lot of games on a single memory card. It's disconcerting for me to look at the source code for LOCKJAW and see
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Windows wrote:</b></span></td> </tr> <tr> <td class="quote">Size: 303 KB (310,668 bytes)
+<br/>
+Size on disk: 752 KB (770,048 bytes)</td> </tr></table><span class="postbody">
+<br/>
+Another issue: Due to limitations of Windows, it also takes longer to copy a bunch of small files onto a memory card than to copy a single large file.
+<br/>
+<br/>
+Another thing that archive files add is loading an entire archive into RAM at once. This replaces several linear (!) searches through FAT's unsorted directory sectors and several seeks and reads from the file system with one big block transfer. GBFS allows code like this, which might be useful for loading all the assets specific to one level at one time:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">/**
+<br/>
+ * Loads a file from the file system, allocating space for it
+<br/>
+ * using malloc(). (Implementation is not quoted in this post.)
+<br/>
+ */
+<br/>
+void *loadFile(const char *filename);
+<br/>
+<br/>
+GBFS_FILE *levelAssets;
+<br/>
+<br/>
+int foo() {
+<br/>
+  levelAssets = loadFile("e1m1.gbfs");
+<br/>
+<br/>
+  unsigned int size;
+<br/>
+  gbfs_get_obj(levelAssets, "map.bin", &amp;size);
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>wintermute wrote:</b></span></td> </tr> <tr> <td class="quote">Could your time be spent more productively on some other aspect of your project?</td> </tr></table><span class="postbody">
+<br/>
+I made GBFS as part of the project to port TOD from PC to GBA. A lot of projects, especially in the GBA era, used it. Therefore, I found my time in creating a reusable library productive for the community.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>chishm wrote:</b></span></td> </tr> <tr> <td class="quote">Instead of wrapping small files in a file system, perhaps you should organize them into groups. For instance, instead of having each sprite used by a game in a separate file, make a single file containing all the sprites.</td> </tr></table><span class="postbody">
+<br/>
+Then what's the difference between a "group" and a "file system"?
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>chishm wrote:</b></span></td> </tr> <tr> <td class="quote">Put a header on the file with a table of offsets to each sprite.</td> </tr></table><span class="postbody">
+<br/>
+What's the difference between a "table of offsets" and a "directory"?
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>chishm wrote:</b></span></td> </tr> <tr> <td class="quote">Now instead of having the overhead of openning each file, you can index into a table to load the necessary data (assuming you loaded the file already).</td> </tr></table><span class="postbody">
+<br/>
+I've done this work, and it is called GBFS.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127612 - OOPMan - Thu May 03, 2007 4:03 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>chishm wrote:</b></span></td> </tr> <tr> <td class="quote">Honestly, how many really small files are you going to have? If you really want to combine them into a virtual filesystem then I'm not going to stop you. Just remember that you'll need to implement all the functionality you need for at least read access. Is space really so important that it is worth wasting several dozen hours to code the supporting driver? </td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Why waste the time?
+<br/>
+<br/>
+Because it might actually end up being used...
+<br/>
+<br/>
+Now, just imagine if DSOrganize and Moonshell stored their own data in a central archive?
+<br/>
+<br/>
+Bam, there's two directories that have been cleaned into a nice little central holding cell...
+<br/>
+<br/>
+Imagine if DSLinux actually used this, although I imagine that's less likely to occur. The ugly, messy, crap-pile of files it carries with it would be held in a nice, tidy little central repository...
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">If you really want to do this, I suggest you use the Nitro FS file system, as a builder is already available (ndstool) and the NDS file format has native support for appended Nitro FS file systems.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Question: Does NitroFS support read and write? If the answer is no, then I'm not that interested in appropriating it for my own purposes...
+<br/>
+<br/>
+Right now, the root folder of my SC:miniSD and my R4 both have masses of little .ini and .sav and .xyz files created by various bits of homebrew over the months...
+<br/>
+<br/>
+If those bits of homebrew kept their own files in a single storage archive, I wouldn't have to worry about said files. 
+<br/>
+<br/>
+Similarly, if all homebrew relied on this kind of file storage system there shouldn't be any need to worry about finding ones files, as they'd simply be in the NDZ in the same directory as the NDS.
+<br/>
+<br/>
+Unfortunately, if I recall, getpwd() doesn't quite work right, so the NDZ idea doesn't solve the problem of locating ones own NDZ file :-(
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Instead of wrapping small files in a file system, perhaps you should organize them into groups. For instance, instead of having each sprite used by a game in a separate file, make a single file containing all the sprites. Put a header on the file with a table of offsets to each sprite. Now instead of having the overhead of openning each file, you can index into a table to load the necessary data (assuming you loaded the file already).</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+So, you're suggesting we use archives, basically? That's what we're suggesting as well :-)
+<br/>
+<br/>
+Look, my own angle is this...
+<br/>
+<br/>
+I want a clean device. I don't want directory clutter. I don't want to have to worry about whether data folders are children of the root folder. It's a pain.
+<br/>
+<br/>
+Ah well, anyway :-)
+<br/>
+<br/>
+Seems like differences of opinion reign supreme :-)<br/>_________________<br/>"My boot, your face..." - Attributed to OOPMan, Emperor of Eroticon VI
+<br/>
+<br/>
+You can find my NDS homebrew projects <a class="postlink" href="http://blog.dev-scene.com/oopman/" target="_blank">here...</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127615 - Lick - Thu May 03, 2007 4:21 pm</h4>
+    <div class="postbody"><span class="postbody">I don't think GBFS can be compared to this NDZ, because the latter wants to provide write access. That difference is probably worth hours of coding and it will be so full of stdio that using FAT is a much better solution.
+<br/>
+<br/>
+I'm not against using archives (given you only read and not write), but I wouldn't say that it could possibly replace the FAT.<br/>_________________<br/><a class="postlink" href="http://licklick.wordpress.com" target="_blank">http://licklick.wordpress.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127616 - kusma - Thu May 03, 2007 4:22 pm</h4>
+    <div class="postbody"><span class="postbody">OOPMan: Do you clean your floor by sweeping dirt under the carpet as well?
+<br/>
+<br/>
+Lick: Exactly. Writing a -simple- virtual filesystems (say, read-only, without support for directories) is possible to do more or less within ten minutes, while write support and directory searches and the lot brings little to the table in most practical cases, and quickly becomes a tedious job. And we already have libfat for that.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127619 - OOPMan - Thu May 03, 2007 4:32 pm</h4>
+    <div class="postbody"><span class="postbody">Yeah, totally kusma :-)
+<br/>
+<br/>
+My basic, original idea was just to be able to mount an archive and access it's contents.
+<br/>
+<br/>
+I never said anything about directory searching.
+<br/>
+<br/>
+However, I do think write access is important, because we are not working in a read-only environment...<br/>_________________<br/>"My boot, your face..." - Attributed to OOPMan, Emperor of Eroticon VI
+<br/>
+<br/>
+You can find my NDS homebrew projects <a class="postlink" href="http://blog.dev-scene.com/oopman/" target="_blank">here...</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127621 - Lick - Thu May 03, 2007 4:43 pm</h4>
+    <div class="postbody"><span class="postbody">My personal ideal situation would be if homebrew could live in their own directory. That would not produce so many bullshit files everywhere, and it gives everyone the freedom to organize their directory structure in the way they want.
+<br/>
+<br/>
+I think that's a *real* solution to the chaos, while archives are just a misapplied work-around. Archives rule, but not in this case.<br/>_________________<br/><a class="postlink" href="http://licklick.wordpress.com" target="_blank">http://licklick.wordpress.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127629 - Noda - Thu May 03, 2007 6:01 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>chishm wrote:</b></span></td> </tr> <tr> <td class="quote">Honestly, how many really small files are you going to have? If you really want to combine them into a virtual filesystem then I'm not going to stop you. Just remember that you'll need to implement all the functionality you need for at least read access. Is space really so important that it is worth wasting several dozen hours to code the supporting driver? 
+<br/>
+<br/>
+If you really want to do this, I suggest you use the Nitro FS file system, as a builder is already available (ndstool) and the NDS file format has native support for appended Nitro FS file systems.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Actually, the EFS system I'm making is using ndstool and NitroFS, but the access is made using FAT driver on the NDS.
+<br/>
+If a way is known to access the appended Nitro FS without using FAT, I would like to know it as it could simplify things a lot and could be way better than using FAT (but write possibility become impossible as a result).
+<br/>
+<br/>
+If you know a way to do it, please direct me to docs or examples on how to do it.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127681 - Dood77 - Fri May 04, 2007 1:03 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>kusma wrote:</b></span></td> </tr> <tr> <td class="quote">OOPMan: Do you clean your floor by sweeping dirt under the carpet as well?</td> </tr></table><span class="postbody">
+<br/>
+But in this case, we want to keep the dust, not throw it away.
+<br/>
+If you dropped a bunch of nuts and bolts on the floor, would you want to leave them there and grab them when you need them?
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>chishm wrote:</b></span></td> </tr> <tr> <td class="quote">Instead of wrapping small files in a file system, perhaps you should organize them into groups. For instance, instead of having each sprite used by a game in a separate file, make a single file containing all the sprites.</td> </tr></table><span class="postbody">
+<br/>
+This makes it a lot harder to edit one sprite at a time during development. Unless you make something that would append each file end on end, then making a table at the beginning of the file telling the locations of each file. Then run this program during compilation. Oh wait, now we're back to an archive.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127688 - kusma - Fri May 04, 2007 1:41 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Dood77 wrote:</b></span></td> </tr> <tr> <td class="quote">But in this case, we want to keep the dust, not throw it away.
+<br/>
+If you dropped a bunch of nuts and bolts on the floor, would you want to leave them there and grab them when you need them?
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+My point was that it's better to clean up your mess than to try to hide it.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127713 - OOPMan - Fri May 04, 2007 7:48 am</h4>
+    <div class="postbody"><span class="postbody">Alas, I can not clean up someone else's mess. I'm not a project dev for DSLinux, DSO or Moonshell :-(
+<br/>
+<br/>
+Perhaps a useful middle ground might be the following...
+<br/>
+<br/>
+An .NDS for the binaries
+<br/>
+An .NDZ for the read-only data
+<br/>
+An .NDW for the read/write data
+<br/>
+<br/>
+Hehehe...
+<br/>
+<br/>
+And maybe, later, we could add an .NDA (Yes, I know, that was a terrible joke, but what the hell :-)
+<br/>
+<br/>
+Look, I'd love to be able to clean up the mess in my root folder, but I can't. If I do, various imoportant homebrew apps just won't work. Which sucks. 
+<br/>
+<br/>
+Which would appear to illustrate that we do, in fact, have a problem. The problem being that there is no "standard" way for homebrew to really organize it's file other than the stuff-it-all-in-root method, which has it's problems.<br/>_________________<br/>"My boot, your face..." - Attributed to OOPMan, Emperor of Eroticon VI
+<br/>
+<br/>
+You can find my NDS homebrew projects <a class="postlink" href="http://blog.dev-scene.com/oopman/" target="_blank">here...</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127720 - kusma - Fri May 04, 2007 8:55 am</h4>
+    <div class="postbody"><span class="postbody">Look, you're not going to get this standardized across a wide array of home brew, since the win is so small compared to the existing solutions. So there's no point in trying to make a common set of filenames etc. It doesn't solve any problems.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Alas, I can not clean up someone else's mess. I'm not a project dev for DSLinux, DSO or Moonshell :-( 
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+...And you can't hide their mess either, for the exact same reason. I'm of course talking about your own projects. Other people's projects are other people's business.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127730 - chishm - Fri May 04, 2007 10:25 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>chishm wrote:</b></span></td> </tr> <tr> <td class="quote">Instead of wrapping small files in a file system, perhaps you should organize them into groups. For instance, instead of having each sprite used by a game in a separate file, make a single file containing all the sprites.</td> </tr></table><span class="postbody">
+<br/>
+Then what's the difference between a "group" and a "file system"?
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>chishm wrote:</b></span></td> </tr> <tr> <td class="quote">Put a header on the file with a table of offsets to each sprite.</td> </tr></table><span class="postbody">
+<br/>
+What's the difference between a "table of offsets" and a "directory"?
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>chishm wrote:</b></span></td> </tr> <tr> <td class="quote">Now instead of having the overhead of openning each file, you can index into a table to load the necessary data (assuming you loaded the file already).</td> </tr></table><span class="postbody">
+<br/>
+I've done this work, and it is called GBFS.</span></td> </tr></table><span class="postbody">
+<br/>
+GBFS is a good way to do it, and already puts these ideas into practice. My response was more for the people wanting a fully featured file system, like OOPMan seems to. 
+<br/>
+<br/>
+For write support, you'll face some trade-offs: Using a tree or table to keep track of file fragments or having to rewrite the entire file system to increase the size of a file or have a pre-allocated size for each file that it can't grow past. If you use file fragments, you'll reach the same complexity as FAT. If you have to rewrite the file system you'll face major slow downs. If you pre-allocate space, then you've just negated the benefits of archiving the files together. 
+<br/>
+<br/>
+The best option, IMO, is to use an archive format to group bunches of small files together (a simple header + offset table should do), and then keep all of an application's files in a data directory (and possibly subdirectories). Use a separate file for saving, rather than creating overheads in the archive format.
+<br/>
+<br/>
+For what it's worth, official games place smaller files into archives (.narc) and compressed archives (.carc) within Nitro FS, to reduce wastage and simplify the organisation of files. However, even they still keep a separate writeable medium, rather than having further overheads on the Nitro FS.<br/>_________________<br/><a class="postlink" href="http://chishm.drunkencoders.com" target="_blank">http://chishm.drunkencoders.com</a>
+<br/>
+<a class="postlink" href="http://dldi.drunkencoders.com" target="_blank">http://dldi.drunkencoders.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127736 - OOPMan - Fri May 04, 2007 11:12 am</h4>
+    <div class="postbody"><span class="postbody">Hey, I'd just be happy if there was a nice simple little libDSZip out there for people to use.
+<br/>
+<br/>
+Something nice and easy that comes with it's own open_stream() type function to access data stored in a zip file :-)<br/>_________________<br/>"My boot, your face..." - Attributed to OOPMan, Emperor of Eroticon VI
+<br/>
+<br/>
+You can find my NDS homebrew projects <a class="postlink" href="http://blog.dev-scene.com/oopman/" target="_blank">here...</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127747 - wintermute - Fri May 04, 2007 1:31 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>chishm wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+For write support, you'll face some trade-offs: Using a tree or table to keep track of file fragments or having to rewrite the entire file system to increase the size of a file or have a pre-allocated size for each file that it can't grow past. If you use file fragments, you'll reach the same complexity as FAT. If you have to rewrite the file system you'll face major slow downs. If you pre-allocate space, then you've just negated the benefits of archiving the files together. 
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+The other option is just to tack written files on the end of the archive/wad/pak whatever you want to call it and mark the old file as dead space. You can defrag occasionally by shuffling all the files down into the holes left this way.
+<br/>
+<br/>
+Still not convinced.<br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#128538 - Noda - Sat May 12, 2007 3:14 pm</h4>
+    <div class="postbody"><span class="postbody">Just in case there's still some people interested in my original idea, the EFS system based on it is ready and working.
+<br/>
+<br/>
+Features:
+<br/>
+- use NitroFS via ndstool
+<br/>
+- works on slot-1 &amp; 2, via DLDI patch
+<br/>
+- autodetection of the NDS file in the card, using unique ID
+<br/>
+- autosaving of the NDS file path in the card inside the NDS file. If the file has moved, then it's searched again
+<br/>
+- read/write file support (for writing, space must be already allocated)
+<br/>
+- multiple files can be opened at the same time
+<br/>
+- directory listing
+<br/>
+- can use real FAT instead of EFS with a simple define (useful for debugging, when you need to change files without changing the code)
+<br/>
+<br/>
+I'll post the sources &amp; binaries after I get feedback of some testers.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#128562 - Diddl - Sat May 12, 2007 6:47 pm</h4>
+    <div class="postbody"><span class="postbody">cool, I enjoy to test it!</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

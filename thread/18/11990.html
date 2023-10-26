@@ -1,0 +1,117 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Desmume source maintainer - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Desmume source maintainer</h2>
+<div id="posts">
+<div class="post">
+    <h4>#112823 - Mighty Max - Wed Dec 20, 2006 3:45 pm</h4>
+    <div class="postbody"><span class="postbody">Heya,
+<br/>
+<br/>
+ive searched the web for the current desmume maintainer, and failed.
+<br/>
+<br/>
+What ive found so far, is a defect source for 0.4.0 (by "NDS") and a working source from 0.3.3 (sourceforge.net)
+<br/>
+<br/>
+Is there someone who keeps the sources together right now? I got a fix for a bug it has (better: missing feature)  and it would be a waste if i were the only one who is able to use the fixed version.<br/>_________________<br/><a class="postlink" href="http://mightymax.org/gbamp_multiboot.html" target="_blank">GBAMP Multiboot</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#112824 - Sausage Boy - Wed Dec 20, 2006 3:51 pm</h4>
+    <div class="postbody"><span class="postbody">The sourceforge guys sound a lot more credible. If I remember correctly, that was where simon sent his debugging stuff.<br/>_________________<br/>"no offense, but this is the gayest game ever"</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#112828 - Mighty Max - Wed Dec 20, 2006 4:59 pm</h4>
+    <div class="postbody"><span class="postbody">Sent that to them now, gonna look what happens.
+<br/>
+<br/>
+virtual16 should be able to run on desmume with the patch implemented :)<br/>_________________<br/><a class="postlink" href="http://mightymax.org/gbamp_multiboot.html" target="_blank">GBAMP Multiboot</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#112829 - Sausage Boy - Wed Dec 20, 2006 5:00 pm</h4>
+    <div class="postbody"><span class="postbody">Good job!<br/>_________________<br/>"no offense, but this is the gayest game ever"</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#112884 - Normmatt - Thu Dec 21, 2006 3:45 am</h4>
+    <div class="postbody"><span class="postbody">So what exactly does this fix/add?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#112896 - OOPMan - Thu Dec 21, 2006 8:49 am</h4>
+    <div class="postbody"><span class="postbody">Check the thread on "Dynamically Loading &amp; Executing Code" for details Normmatt...<br/>_________________<br/>"My boot, your face..." - Attributed to OOPMan, Emperor of Eroticon VI
+<br/>
+<br/>
+You can find my NDS homebrew projects <a class="postlink" href="http://blog.dev-scene.com/oopman/" target="_blank">here...</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#112901 - Mighty Max - Thu Dec 21, 2006 11:20 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Normmatt wrote:</b></span></td> </tr> <tr> <td class="quote">So what exactly does this fix/add?</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+The handling of SWI.
+<br/>
+<br/>
+Desmume uses internal function to emulate the bios. Thats a good solution, but it fails when the bios vector was changed by the cp15. The lil patch detects such relocated vectors and jumps to the new biosrange instead of using the internal functions.
+<br/>
+<br/>
+:edit: Its GPLed anyways, the patch (arm swi &amp; thumb changes the same)
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+//--------------SWI-------------------------------
+<br/>
+static u32 FASTCALL  OP_SWI(armcpu_t *cpu)
+<br/>
+{
+<br/>
+     int translated = (cpu-&gt;intVector != 0) ^ (cpu-&gt;proc_ID == 0) ;
+<br/>
+     if (translated) {
+<br/>
+              /* we use an irq thats not in the irq tab, as it was replaced duie to a changed intVector */       
+<br/>
+            Status_Reg tmp = cpu-&gt;CPSR;
+<br/>
+            armcpu_switchMode(cpu, SVC);
+<br/>
+            cpu-&gt;R[14] = cpu-&gt;R[15] - 4 ;           /* jump to swi Vector */
+<br/>
+            cpu-&gt;SPSR = tmp;                        /* save old CPSR as new SPSR */
+<br/>
+            cpu-&gt;CPSR.bits.T = 0;                   /* handle as ARM32 code */
+<br/>
+            cpu-&gt;CPSR.bits.I = cpu-&gt;SPSR.bits.I ;   /* keep int disable flag */
+<br/>
+            cpu-&gt;R[15] = cpu-&gt;intVector + 0x08;
+<br/>
+            cpu-&gt;next_instruction = cpu-&gt;R[15] ;
+<br/>
+             return 4;
+<br/>
+     } else {
+<br/>
+          unsigned long swinum = (cpu-&gt;instruction&gt;&gt;16)&amp;0x1F;
+<br/>
+          return cpu-&gt;swi_tab[swinum](cpu) + 3;  
+<br/>
+     }
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody"><br/>_________________<br/><a class="postlink" href="http://mightymax.org/gbamp_multiboot.html" target="_blank">GBAMP Multiboot</a></span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

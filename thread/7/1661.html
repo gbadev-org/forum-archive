@@ -1,0 +1,123 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Allocating Memory at a Well-Known Address - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>C/C++ > Allocating Memory at a Well-Known Address</h2>
+<div id="posts">
+<div class="post">
+    <h4>#8443 - dchartier - Thu Jul 10, 2003 8:40 pm</h4>
+    <div class="postbody"><span class="postbody">I would like to allocate a static-size buffer into which I can write log messages, debugging info, etc.  If possible, I would like to set the exact location of this buffer.  My reason is that I would like to be able to check the contents of this buffer with any build without having to peruse map files to determine where the address-du-jour is.  
+<br/>
+<br/>
+As far as I can tell, a static array such as the following would not work because the linker could move the array elsewhere as my program evolves:
+<br/>
+<ul>unsigned char debugBuf[BUF_SIZE];</ul>
+<br/>
+I have the following questions:
+<br/>
+<ul>
+<br/>
+     1. Can I do what I described?  If so, how?
+<br/>
+     2. Do I need to "inform" malloc of this buffer to ensure that it doesn't allocate memory within it?
+<br/>
+     3. Where is the best place to put the array?  I figure that on-board WRAM would be best because access to the buffer is not very time-critical, and I'd like to save as much internal WRAM for my game as possible.
+<br/>
+     4. Should I worry about the stack overflowing into my buffer?
+<br/>
+</ul>
+<br/>
+<br/>
+Thanks for your help!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#8462 - Quirky - Fri Jul 11, 2003 7:44 am</h4>
+    <div class="postbody"><span class="postbody">A silly question.. but why not use VBA's debugging output? If you use the SDL version, you can dump text to the console easily. And in the Windows version the output goes to the logging window. This buffer approach seems a bit too cumbersome to me.
+<br/>
+<br/>
+Anyway, to do what you've described, I would place the array at a fixed address (something like u8 * debug = (u8*)0x0x2030000) then tell the  linkscript that EWRAM is smaller than it really is - i.e. that it ends at the start of your array. That way malloc will still work as expected. You could do that by editting Jeff Frohwein's lnkscript file and setting __eheap_end = 0x2030000; That would give you a debug area of 0x10000 bytes (64kb).
+<br/>
+<br/>
+If you never use malloc though, you can forget about the link script changes. Oh and don't worry about the stack if you place the array in ewram - the stack is handled in iwram.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#8463 - dchartier - Fri Jul 11, 2003 8:09 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quirky wrote:</b></span></td> </tr> <tr> <td class="quote">A silly question.. but why not use VBA's debugging output? If you use the SDL version, you can dump text to the console easily. And in the Windows version the output goes to the logging window. This buffer approach seems a bit too cumbersome to me.
+<br/>
+<br/>
+Anyway, to do what you've described, I would place the array at a fixed address (something like u8 * debug = (u8*)0x0x2030000) then tell the  linkscript that EWRAM is smaller than it really is - i.e. that it ends at the start of your array. That way malloc will still work as expected. You could do that by editting Jeff Frohwein's lnkscript file and setting __eheap_end = 0x2030000; That would give you a debug area of 0x10000 bytes (64kb).
+<br/>
+<br/>
+If you never use malloc though, you can forget about the link script changes. Oh and don't worry about the stack if you place the array in ewram - the stack is handled in iwram.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I want a buffer so that I can obtain debugging information regardless of the emulator I use.  Thanks for the suggestions.
+<br/>
+<br/>
+I wasn't aware that one of the emulators provided a console window for output; that would definitely make things simpler.  Is VBA the "VisualBoyAdvance 1.5a" emulator at <a class="postlink" href="http://www.gbadev.org/tools.php?section=emulator" target="_blank">http://www.gbadev.org/tools.php?section=emulator</a>?  How can my program send strings to the console?  Feel free to point me to the appropriate documentation.
+<br/>
+<br/>
+Thanks!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#8603 - djei-dot - Wed Jul 16, 2003 12:03 pm</h4>
+    <div class="postbody"><span class="postbody">Didn't know that also... I browsed the vba site (vboy.emuhq.com) and found out a download for libvba - it's some kind of library that lets you write to the logging window.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#8608 - hnager - Wed Jul 16, 2003 12:47 pm</h4>
+    <div class="postbody"><span class="postbody">This is what I use (works in vba aswell as mappy):
+<br/>
+<br/>
+inline void do_mappy_dprint(char* msg){
+<br/>
+	int loc = 0xc0ded00d;
+<br/>
+	asm volatile(
+<br/>
+	"mov r2, %0 \n"
+<br/>
+	"ldr r0, %1 \n"
+<br/>
+	"mov r1, #0 \n"
+<br/>
+	"and r0, r0, r0 \n"
+<br/>
+	:
+<br/>
+	: // No output
+<br/>
+	"r" (msg), "m" (loc) :
+<br/>
+	"r0", "r1", "r2");
+<br/>
+}
+<br/>
+<br/>
+<br/>
+usage:
+<br/>
+<br/>
+do_mappy_dprint("TESTING1");
+<br/>
+<br/>
+or you can pass in a char buffer.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#8611 - ampz - Wed Jul 16, 2003 3:15 pm</h4>
+    <div class="postbody"><span class="postbody">Or, you simply tell the linker not to use a part of the RAM, and then set up a pointer to that area.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

@@ -1,0 +1,248 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>SWI 4 - IntrWait - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > SWI 4 - IntrWait</h2>
+<div id="posts">
+<div class="post">
+    <h4>#10503 - sgeos - Sat Sep 06, 2003 6:02 pm</h4>
+    <div class="postbody"><span class="postbody">Do interrupts have to be enabled to take advantage of SWI 4 (IntrWait)?
+<br/>
+<br/>
+Does the v-blank interrupt need to be enabled to take advantage of SWI 5 (VBlankIntrWait)?
+<br/>
+<br/>
+-Brendan Sechter</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10504 - sajiimori - Sat Sep 06, 2003 6:47 pm</h4>
+    <div class="postbody"><span class="postbody">Yes on both counts.  Make sure you acknowledge the vblank interrupt to the BIOS when using SWI 5, or it will lock up.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10505 - sgeos - Sat Sep 06, 2003 7:19 pm</h4>
+    <div class="postbody"><span class="postbody">Something like this?
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">(unsigned short *)0x04000202 |= VAULE;  /* IF */
+<br/>
+(unsigned short *)0x03007FF8 |= VALUE;  /* Bios */</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+-Brendan Sechter</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10507 - tepples - Sat Sep 06, 2003 7:32 pm</h4>
+    <div class="postbody"><span class="postbody">Strictly, when you write back to IF it should be | (because it's a register with, essentially, OR logic), and when you write back to BIOS's mirror of IF it should be |= (because it's plain memory, which has REPLACE logic).<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10509 - sgeos - Sat Sep 06, 2003 7:45 pm</h4>
+    <div class="postbody"><span class="postbody">Do I want to do this instead?
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">(unsigned short *)0x04000202 |  VAULE;  /* IF */ 
+<br/>
+(unsigned short *)0x03007FF8 |= VALUE;  /* Bios */</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+-Brendan Sechter</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10514 - tepples - Sat Sep 06, 2003 9:53 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sgeos wrote:</b></span></td> </tr> <tr> <td class="quote">Do I want to do this instead?
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">(unsigned short *)0x04000202 |  VAULE;  /* IF */ </td> </tr></table><span class="postbody"></span></td> </tr></table><span class="postbody">
+<br/>
+Right idea, but you made three little typos, corrected as follows:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">(volatile unsigned short *)0x04000202  = VALUE;  /* IF */</td> </tr></table><span class="postbody">
+<br/>
+1. You confused which operator of the pair does the ORing and which does the assigning.
+<br/>
+2. You misspelled "VALUE".
+<br/>
+3. You forgot to mark a memory-mapped register as volatile.
+<br/>
+<br/>
+And I'd define register names rather than scattering "magic numbers" throughout the code:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#define REG_IF ((volatile unsigned short *)0x04000202)
+<br/>
+#define BIOS_IF ((volatile unsigned short *)0x03fffff8)
+<br/>
+#define ACK_INTS(ints) (BIOS_IF |= ints, REG_IF = ints)
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Then you can ACK_INTS(saved_if_value) at the end.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10516 - sgeos - Sat Sep 06, 2003 10:25 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sgeos wrote:</b></span></td> </tr> <tr> <td class="quote">Do I want to do this instead?
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">(unsigned short *)0x04000202 |  VAULE;  /* IF */ </td> </tr></table><span class="postbody"></span></td> </tr></table><span class="postbody">
+<br/>
+Right idea, but you made three little typos, corrected as follows:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">(volatile unsigned short *)0x04000202  = VALUE;  /* IF */</td> </tr></table><span class="postbody">
+<br/>
+1. You confused which operator of the pair does the ORing and which does the assigning.</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I'll amit that an | with no = looked odd.  I don't think that would compile.  I'll also admit that did not know that = ORed a register.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">2. You misspelled "VALUE".</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Excellent.  (I guess I did not copy paste...)
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">3. You forgot to mark a memory-mapped register as volatile.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Should all memory-mapped registers be declared volatile?  I did overlook REG_IF.  Hardware does change the value of that location.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">And I'd define register names rather than scattering "magic numbers" throughout the code:</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Are there standard names or headers that I should be using?  Registers, I'm assuming, REG_ followed by whatever is listed in GBAtek.  What about the bits set in the registers?
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#define REG_IF ((volatile unsigned short *)0x04000202)
+<br/>
+#define BIOS_IF ((volatile unsigned short *)0x03fffff8)
+<br/>
+#define ACK_INTS(ints) (BIOS_IF |= ints, REG_IF = ints)
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Then you can ACK_INTS(saved_if_value) at the end.</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Why ACK_INTS?  Oh, acknowldege interrupts.
+<br/>
+<br/>
+-Brendan Sechter</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10518 - tepples - Sat Sep 06, 2003 10:57 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sgeos wrote:</b></span></td> </tr> <tr> <td class="quote">I'll amit that an | with no = looked odd.  I don't think that would compile.  I'll also admit that did not know that = ORed a register.</td> </tr></table><span class="postbody">
+<br/>
+It would compile, but you'd probably get a warning about a 'statement with no effect'. And strictly, the = operator doesn't OR a register in the general case, but acknowledge-interrupt registers on most architectures (including the GBA) typically have logic built into them that looks quite like OR.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Should all memory-mapped registers be declared volatile?</td> </tr></table><span class="postbody">
+<br/>
+Always.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Are there standard names or headers that I should be using?  Registers, I'm assuming, REG_ followed by whatever is listed in GBAtek.</td> </tr></table><span class="postbody">
+<br/>
+That's what I've seen most people using, but I use a completely different set of names that 1. have no chance of matching a Nintendo trade secret and 2. make more sense to me.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">What about the bits set in the registers?</td> </tr></table><span class="postbody">
+<br/>
+Name those however you want, but please be consistent.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10520 - sgeos - Sat Sep 06, 2003 11:12 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sgeos wrote:</b></span></td> </tr> <tr> <td class="quote">I'll amit that an | with no = looked odd.  I don't think that would compile.  I'll also admit that did not know that = ORed a register.</td> </tr></table><span class="postbody">
+<br/>
+It would compile, but you'd probably get a warning about a 'statement with no effect'. And strictly, the = operator doesn't OR a register in the general case, but acknowledge-interrupt registers on most architectures (including the GBA) typically have logic built into them that looks quite like OR.</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+What other registers on the GBA operate like this?
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Should all memory-mapped registers be declared volatile?</td> </tr></table><span class="postbody">
+<br/>
+Always.</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Specifically what is a memory-mapped register?  Why should it always be declared volatile?
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">What about the bits set in the registers?</td> </tr></table><span class="postbody">
+<br/>
+Name those however you want, but please be consistent.</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Fair enough.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Are there standard names or headers that I should be using?  Registers, I'm assuming, REG_ followed by whatever is listed in GBAtek.</td> </tr></table><span class="postbody">
+<br/>
+That's what I've seen most people using, but I use a completely different set of names that 1. have no chance of matching a Nintendo trade secret and 2. make more sense to me.</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+In your opinion, would it be appropriate to also name other things whatever one wants as long as one is consistent?
+<br/>
+<br/>
+How badly ought one want to avoid matching a Nintendo trade secret?
+<br/>
+<br/>
+-Brendan Sechter</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10523 - tepples - Sun Sep 07, 2003 4:07 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sgeos wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote">acknowledge-interrupt registers on most architectures (including the GBA) typically have logic built into them that looks quite like OR.</td> </tr></table><span class="postbody">
+<br/>
+What other registers on the GBA operate like this?</span></td> </tr></table><span class="postbody">
+<br/>
+I can think of no others right now. There may be some in serial communication, but I haven't ventured far into that realm.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Specifically what is a memory-mapped register?</td> </tr></table><span class="postbody">
+<br/>
+A memory-mapped register is an I/O port mapped into a processor's memory address space rather than into a separate I/O address space a la x86. On the GBA, these ports are mapped into address range 0x04000000-0x040003ff.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">In your opinion, would it be appropriate to also name other things whatever one wants as long as one is consistent?</td> </tr></table><span class="postbody">
+<br/>
+Correct. A main reason for writing business logic in C or in C++ instead of in assembly language is to keep the code easily readable by a trained human being, because human beings will ultimately have to find defects and correct them. Picking register names that make sense (e.g. I use INTACK instead of IF, INTMASK instead of IE, and INTENABLE instead of IME) helps readability in the same way.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">How badly ought one want to avoid matching a Nintendo trade secret?</td> </tr></table><span class="postbody">
+<br/>
+Depends on how much money you have for a legal defense.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

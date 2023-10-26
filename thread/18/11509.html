@@ -1,0 +1,581 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>FIFO troubles of some sort - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > FIFO troubles of some sort</h2>
+<div id="posts">
+<div class="post">
+    <h4>#106751 - HyperHacker - Mon Oct 23, 2006 5:15 am</h4>
+    <div class="postbody"><span class="postbody">I've been trying to use the hardware FIFO, but I ran into an odd problem. I can send however much I want to ARM7, but only the first thing sent to ARM9 is ever received.
+<br/>
+<br/>
+Relevant code:
+<br/>
+ARM7:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">//Graphics Test ARM7 Code
+<br/>
+#include "main.h"
+<br/>
+<br/>
+/*
+<br/>
+Entry Point
+<br/>
+CPU: ARM7
+<br/>
+Inputs:
+<br/>
+   -argc: Number of arguments
+<br/>
+   -argv: Pointer to arguments
+<br/>
+Returns: Program return code
+<br/>
+*/
+<br/>
+int main(int argc, char** argv)
+<br/>
+{
+<br/>
+   //Blank out IPC
+<br/>
+   memzero((u8*)IPC,sizeof(IPC));
+<br/>
+<br/>
+<br/>
+   //Init interrupts
+<br/>
+   REG_IME = 0; //Disable interrupts while changing them
+<br/>
+   IRQ_HANDLER = Interrupt; //Set handler callback
+<br/>
+   REG_IE = IRQ_VBLANK | IRQ_TIMER3 | IRQ_IPC_SYNC | IRQ_FIFO_NOT_EMPTY;
+<br/>
+   REG_IF = ~0;
+<br/>
+   DISP_SR = DISP_VBLANK_IRQ;
+<br/>
+   REG_IME = 1; //Enable interrupts
+<br/>
+<br/>
+<br/>
+   //Init IPC
+<br/>
+   REG_IPC_SYNC = IPC_SYNC_IRQ_ENABLE; //Enable IRQs from ARM9
+<br/>
+   REG_IPC_FIFO_CR = IPC_FIFO_SEND_IRQ | IPC_FIFO_RECV_IRQ | IPC_FIFO_ENABLE; //Enable FIFO and interrupt on send FIFO empty/receive FIFO not empty
+<br/>
+   REG_IPC_FIFO_TX = 420;
+<br/>
+<br/>
+   //Init reload ability
+<br/>
+   //LOADNDS-&gt;PATH = 0;
+<br/>
+<br/>
+<br/>
+   //Init timers
+<br/>
+   TIMER3_DATA = 65535 - 34318; //should be one interrupt every ~1ms
+<br/>
+   TIMER3_CR = TIMER_ENABLE | TIMER_IRQ_REQ;
+<br/>
+<br/>
+   swiWaitForVBlank();
+<br/>
+   swiWaitForVBlank();
+<br/>
+   swiWaitForVBlank();
+<br/>
+   REG_IPC_FIFO_TX = 1234;
+<br/>
+<br/>
+   while(true)
+<br/>
+   {
+<br/>
+      IPC-&gt;keys = REG_KEYXY;
+<br/>
+      //if((~REG_KEYXY) &amp; 1) REG_IPC_FIFO_TX = 69;
+<br/>
+      swiWaitForVBlank();
+<br/>
+   }
+<br/>
+   return 0;
+<br/>
+}
+<br/>
+<br/>
+<br/>
+/*
+<br/>
+Interrupt handler
+<br/>
+CPU: ARM7
+<br/>
+*/
+<br/>
+void Interrupt()
+<br/>
+{
+<br/>
+   if(REG_IF &amp; IRQ_VBLANK)
+<br/>
+   {
+<br/>
+      //if (LOADNDS-&gt;PATH != 0) LOADNDS-&gt;ARM7FUNC(LOADNDS-&gt;PATH); //Reload when singalled
+<br/>
+<br/>
+      VBLANK_INTR_WAIT_FLAGS |= IRQ_VBLANK; //Signal that vblank interrupt has been processed
+<br/>
+      REG_IF |= IRQ_VBLANK;
+<br/>
+   }
+<br/>
+   else if(REG_IF &amp; IRQ_TIMER3)
+<br/>
+   {
+<br/>
+      IPC-&gt;tickcount++;
+<br/>
+      VBLANK_INTR_WAIT_FLAGS |= IRQ_TIMER3;
+<br/>
+      REG_IF |= IRQ_TIMER3;
+<br/>
+   }
+<br/>
+   else if(REG_IF &amp; IRQ_FIFO_NOT_EMPTY)
+<br/>
+   {
+<br/>
+      IPC-&gt;temperature = REG_IPC_FIFO_RX; //testing
+<br/>
+      IPC-&gt;a7_fifo_count++;
+<br/>
+      VBLANK_INTR_WAIT_FLAGS |= IRQ_FIFO_NOT_EMPTY;
+<br/>
+      REG_IF |= IRQ_FIFO_NOT_EMPTY;
+<br/>
+   }
+<br/>
+   else
+<br/>
+      REG_IF = REG_IF; //Trigger a write
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+ARM9:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">//Graphics Test ARM9 Code
+<br/>
+#include "main.h"
+<br/>
+<br/>
+/*
+<br/>
+Entry Point
+<br/>
+CPU: ARM9
+<br/>
+Inputs:
+<br/>
+   -argc: Number of arguments
+<br/>
+   -argv: Pointer to arguments
+<br/>
+Returns: Program return code
+<br/>
+*/
+<br/>
+int main(int argc, char** argv)
+<br/>
+{
+<br/>
+   powerON(POWER_ALL_2D); //Turn stuff on (required for some flash cards)
+<br/>
+<br/>
+   //Init video
+<br/>
+   videoSetMode(MODE_5_2D | DISPLAY_BG3_ACTIVE);
+<br/>
+   videoSetModeSub(MODE_5_2D | DISPLAY_BG3_ACTIVE);
+<br/>
+   vramSetMainBanks(VRAM_A_MAIN_BG_0x6000000, VRAM_B_MAIN_BG_0x6000000, VRAM_C_SUB_BG_0x6200000, VRAM_D_LCD);
+<br/>
+<br/>
+   BG3_CR = BG_BMP16_256x256;
+<br/>
+   BG3_XDX = 1 &lt;&lt; 8;
+<br/>
+   BG3_XDY = 0;
+<br/>
+   BG3_YDX = 0;
+<br/>
+   BG3_YDY = 1 &lt;&lt; 8;
+<br/>
+   BG3_CX = 0;
+<br/>
+   BG3_CY = 0;
+<br/>
+<br/>
+   SUB_BG3_CR = BG_BMP16_256x256;
+<br/>
+   SUB_BG3_XDX = 1 &lt;&lt; 8;
+<br/>
+   SUB_BG3_XDY = 0;
+<br/>
+   SUB_BG3_YDX = 0;
+<br/>
+   SUB_BG3_YDY = 1 &lt;&lt; 8;
+<br/>
+   SUB_BG3_CX = 0;
+<br/>
+   SUB_BG3_CY = 0;
+<br/>
+<br/>
+   //Init interrupts
+<br/>
+   REG_IME = 0; //Disable interrupts while changing them
+<br/>
+   IRQ_HANDLER = Interrupt; //Set handler callback
+<br/>
+   REG_IE = IRQ_VBLANK | IRQ_HBLANK | IRQ_IPC_SYNC | IRQ_FIFO_NOT_EMPTY;
+<br/>
+   REG_IF = ~0;
+<br/>
+   DISP_SR = DISP_VBLANK_IRQ | DISP_HBLANK_IRQ;
+<br/>
+   REG_IME = 1; //Enable interrupts
+<br/>
+<br/>
+<br/>
+   //Init IPC
+<br/>
+   REG_IPC_SYNC = IPC_SYNC_IRQ_ENABLE; //Enable IRQs from ARM7
+<br/>
+   REG_IPC_FIFO_CR = IPC_FIFO_SEND_IRQ | IPC_FIFO_RECV_IRQ | IPC_FIFO_ENABLE; //Enable FIFO and interrupt on send FIFO empty/receive FIFO not empty
+<br/>
+   REG_IPC_FIFO_TX = 1337;
+<br/>
+<br/>
+<br/>
+   //Let things get set up
+<br/>
+   swiWaitForVBlank();
+<br/>
+   swiWaitForVBlank();
+<br/>
+   swiWaitForVBlank();
+<br/>
+   sysSetBusOwners(true, true, true); //All to ARM9
+<br/>
+   REG_IPC_FIFO_TX = 5555;
+<br/>
+<br/>
+<br/>
+   MainScreenBuf = CreateGraphicBuffer(SCREEN_WIDTH, SCREEN_HEIGHT);
+<br/>
+   SubScreenBuf = CreateGraphicBuffer(SCREEN_WIDTH, SCREEN_HEIGHT);
+<br/>
+   ClearGraphicBuffer(MainScreenBuf, RGB15(0, 0, 15) | 0x8000);
+<br/>
+   ClearGraphicBuffer(SubScreenBuf, RGB15(0, 0, 0) | 0x8000);
+<br/>
+<br/>
+   //FillRect(MainScreenBuf, 5, 100, 25, 25, RGB15(31, 31, 0));
+<br/>
+<br/>
+   while(true)
+<br/>
+   {
+<br/>
+      swiWaitForVBlank();
+<br/>
+      FillRect(MainScreenBuf, 5, 5, 100, 30, RGB15(0, 0, 15));
+<br/>
+      Print(MainScreenBuf, 0, 5, 5, "Msec=%d\nA7 FIFO=%d, %d\nA9 FIFO=%d, %d\nKey=%08X", IPC-&gt;tickcount, IPC-&gt;a7_fifo_count, IPC-&gt;temperature, IPC-&gt;a9_fifo_count, IPC-&gt;buttons_held, IPC-&gt;keys);
+<br/>
+   }
+<br/>
+   return 0;
+<br/>
+}
+<br/>
+<br/>
+<br/>
+/*
+<br/>
+Interrupt handler
+<br/>
+CPU: ARM9
+<br/>
+*/
+<br/>
+void Interrupt()
+<br/>
+{
+<br/>
+   /*if(REG_IF &amp; IRQ_HBLANK) //HBlank interrupt
+<br/>
+   {
+<br/>
+      VBLANK_INTR_WAIT_FLAGS |= IRQ_HBLANK;
+<br/>
+      REG_IF |= IRQ_HBLANK;
+<br/>
+   }
+<br/>
+   else */if(REG_IF &amp; IRQ_VBLANK) //VBlank interrupt
+<br/>
+   {
+<br/>
+      FastCopy32(MainScreenBuf-&gt;Pixels, BG_GFX, (SCREEN_WIDTH * SCREEN_HEIGHT) * 2);
+<br/>
+      FastCopy32(SubScreenBuf-&gt;Pixels, BG_GFX_SUB, (SCREEN_WIDTH * SCREEN_HEIGHT) * 2);
+<br/>
+      //dmaCopy(MainScreenBuf-&gt;Pixels, BG_GFX, (SCREEN_WIDTH * SCREEN_HEIGHT) * 2);
+<br/>
+      VBLANK_INTR_WAIT_FLAGS |= IRQ_VBLANK; //Signal that vblank interrupt has been processed
+<br/>
+      REG_IF |= IRQ_VBLANK; //Signal that vblank interrupt processing is done. We need to trigger a write even though this shouldn't change the value.
+<br/>
+   }
+<br/>
+   else if(REG_IF &amp; IRQ_FIFO_NOT_EMPTY)
+<br/>
+   {
+<br/>
+      IPC-&gt;buttons_held = REG_IPC_FIFO_RX; //testing
+<br/>
+      IPC-&gt;a9_fifo_count++;
+<br/>
+<br/>
+      VBLANK_INTR_WAIT_FLAGS |= IRQ_FIFO_NOT_EMPTY;
+<br/>
+      REG_IF |= IRQ_FIFO_NOT_EMPTY;
+<br/>
+   }
+<br/>
+   else
+<br/>
+      REG_IF = REG_IF; //Trigger a write
+<br/>
+}</td> </tr></table><span class="postbody"><br/>_________________<br/>I'm a PSP hacker now, but I still &lt;3 DS.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#106788 - masscat - Mon Oct 23, 2006 1:13 pm</h4>
+    <div class="postbody"><span class="postbody">As discussed <a class="postlink" href="http://forum.gbadev.org/viewtopic.php?t=11398" target="_blank">elsewhere</a>, you only get a non-empty fifo interrupt for the transition from empty not not empty. You do not get it for every write to the fifo. Therefore in the interrupt handler you should drain the fifo, i.e. read and process the fifo until it is empty. Might be your problem.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#106853 - HyperHacker - Tue Oct 24, 2006 5:10 am</h4>
+    <div class="postbody"><span class="postbody">Alright, I changed it to loop and keep reading REG_IPC_FIFO_RX while(!(REG_IPC_FIFO_CR &amp; IPC_FIFO_RECV_EMPTY)), but it didn't help.
+<br/>
+<br/>
+[edit] It does work now that I put that loop in the general interrupt handler rather than the IRQ_FIFO_NOT_EMPTY handler, so it gets run during VBlank too.<br/>_________________<br/>I'm a PSP hacker now, but I still &lt;3 DS.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#106859 - DekuTree64 - Tue Oct 24, 2006 6:54 am</h4>
+    <div class="postbody"><span class="postbody">Yeah, just read repeatedly until it's empty. There's a bit in the fifo control register that gets set when it is, so you can check that to see if you should read more.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#106860 - HyperHacker - Tue Oct 24, 2006 6:56 am</h4>
+    <div class="postbody"><span class="postbody">Makes sense. And if I want to send say 16 bytes, I just write to REG_IPC_FIFO_TX as if it were an array and read it back until empty on the other CPU?
+<br/>
+Also since FIFO is a mere 64 bytes, is there a way to ensure a global variable or malloc()'d array is placed in shared RAM so that I can just pass pointers instead of trying to stream data?<br/>_________________<br/>I'm a PSP hacker now, but I still &lt;3 DS.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#106861 - DekuTree64 - Tue Oct 24, 2006 7:05 am</h4>
+    <div class="postbody"><span class="postbody">Not quite like an array, since you write to the same address every time, but yeah, that is about it.
+<br/>
+<br/>
+Malloc will always go in main RAM. Not sure about global variables, but they probably do too. Careful of cache problems when using shared memory though. You can either flush the cache after changing things, or work with the memory as uncached in the first place (add 0x400000 to the normal main RAM address to get to the uncached mirror).<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#106863 - HyperHacker - Tue Oct 24, 2006 7:08 am</h4>
+    <div class="postbody"><span class="postbody">Alright, that's about what I thought. Cache has given me some trouble before. You have to use uncached memory both for reading and writing, correct?<br/>_________________<br/>I'm a PSP hacker now, but I still &lt;3 DS.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#106878 - Lick - Tue Oct 24, 2006 11:10 am</h4>
+    <div class="postbody"><span class="postbody">You should read <a class="postlink" href="http://licklick.wordpress.com/2006/10/08/interesting-fifo-fact-might-save-you-some-debugging/" target="_blank">my entry  on large transfers with the FIFO</a>.
+<br/>
+<br/>
+What you should do is:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">// Before sending
+<br/>
+while(!(REG_IPC_FIFO_CR &amp; IPC_FIFO_SEND_EMPTY));</td> </tr></table><span class="postbody">
+<br/>
+That will wait until the send queue is read from the other side. Not waiting will generate a send error. After waiting, you can send 16 times again without waiting. Note that you only have to wait because you send too fast and thereby make the 16 queueslots full.<br/>_________________<br/><a class="postlink" href="http://licklick.wordpress.com" target="_blank">http://licklick.wordpress.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#106907 - HyperHacker - Tue Oct 24, 2006 5:49 pm</h4>
+    <div class="postbody"><span class="postbody">Yeah, I could do that, but it's not really what I'd like to do. It has a few drawbacks:
+<br/>
+-Unnecessary use of CPU power copying data in and out of FIFO instead of just reading it out of memory.
+<br/>
+-Since I plan to use FIFO as the primary method of communicating between CPUs (ARM9 requesting a change in power status, ARM7 notifying that a sound has finished, etc), I would have to either set up some silly system in which each word is one byte indicating whether it's data or another message and 3 bytes of data, or just be unable to send any messages during the transfer. Again, this seems like an unnecessary communications block when I can just pass a pointer and be done with it.
+<br/>
+<br/>
+I can see some uses for transferring data through FIFO, but for the most part I think just passing a pointer would do the job. Even if the data isn't going to be kept in memory much longer, at least this way one CPU can just copy it to some other place without the overhead of the other copying it into FIFO first.<br/>_________________<br/>I'm a PSP hacker now, but I still &lt;3 DS.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#106916 - Lick - Tue Oct 24, 2006 7:25 pm</h4>
+    <div class="postbody"><span class="postbody">If you check out the LoveLite source, I included ndsx_firmware.h which reads and (can) write to the firmware. It also contains an example of how to use the FIFO for messaging AND transferring. Simply disable the IRQs when doing mass transfer and manual pump the bytes/halfwords/words. Check it out.<br/>_________________<br/><a class="postlink" href="http://licklick.wordpress.com" target="_blank">http://licklick.wordpress.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#106922 - HyperHacker - Tue Oct 24, 2006 8:27 pm</h4>
+    <div class="postbody"><span class="postbody">Right, but I don't <span style="font-style: italic">want</span> to use it for transfers. I just want to use it to pass pointers to the data itself.<br/>_________________<br/>I'm a PSP hacker now, but I still &lt;3 DS.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#106924 - Lick - Tue Oct 24, 2006 8:30 pm</h4>
+    <div class="postbody"><span class="postbody">Ow like that. Yeah, that's possible too. =D<br/>_________________<br/><a class="postlink" href="http://licklick.wordpress.com" target="_blank">http://licklick.wordpress.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#106973 - masscat - Wed Oct 25, 2006 11:06 am</h4>
+    <div class="postbody"><span class="postbody">On the ARM9, using the default linking, both your global data and malloc'd memory will be in main memory (0x02000000 to 0x023FFFFF cached or 0x02400000 to 0x027FFFFF non-cached) and therefore accessable by the ARM7. You can force data/instructions to be placed into the DCTM/ICTM which would not be accessable by the ARM7.
+<br/>
+On the ARM7, using the default linking, both you global data and malloc's memory will be in the ARM7 private RAM (0x03800000 to 0380FFFF). This is not accessable by the ARM9.
+<br/>
+<br/>
+If you do not want to worry with the ARM9 cache, use the uncached main memory mirror for both reading and writing the shared data.
+<br/>
+Depending on what you are doing with the data you may get much better performance using cached memory and flushing/invaliding the cache. To do this easily make all your shared data structures align with 32byte boundaries (32bytes is the size of the cache line). Before sending a structure address from the ARM9 to the ARM7 you need to ensure that any data in the ARM9 cache are written back to memory by calling DC_FlushRange( addr_of_struct, sizeof( struct)). When you receive a structure address from the ARM7 you must invalidate the corresponding cache entries so that the new data are read from memory and not the cache. This is done with DC_InvalidateRange( addr_of_struct, sizeof( struct)).
+<br/>
+<br/>
+<span style="font-weight: bold">EDIT:</span> you can get gcc to do the alignment for you using the <a class="postlink" href="http://gcc.gnu.org/onlinedocs/gcc-4.1.1/gcc/Variable-Attributes.html#index-g_t_0040code_007baligned_007d-attribute-1852" target="_blank">aligned</a> attribute.</span><span class="gensmall"><br/><br/>Last edited by masscat on Wed Oct 25, 2006 1:53 pm; edited 1 time in total</span></div>    
+</div>
+<div class="post">
+    <h4>#106977 - Lick - Wed Oct 25, 2006 12:19 pm</h4>
+    <div class="postbody"><span class="postbody">Great explanation. Thanks for sharing your awesome knowledge!<br/>_________________<br/><a class="postlink" href="http://licklick.wordpress.com" target="_blank">http://licklick.wordpress.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#107139 - wintermute - Fri Oct 27, 2006 1:05 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>HyperHacker wrote:</b></span></td> </tr> <tr> <td class="quote">Yeah, I could do that, but it's not really what I'd like to do. It has a few drawbacks:
+<br/>
+-Unnecessary use of CPU power copying data in and out of FIFO instead of just reading it out of memory.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Actually transferring data using the FIFO is much faster than using shared memory depending on what you're doing with the data.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+-Since I plan to use FIFO as the primary method of communicating between CPUs (ARM9 requesting a change in power status, ARM7 notifying that a sound has finished, etc), I would have to either set up some silly system in which each word is one byte indicating whether it's data or another message and 3 bytes of data, or just be unable to send any messages during the transfer. Again, this seems like an unnecessary communications block when I can just pass a pointer and be done with it.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+The gain in speed may be worth the added complexity.
+<br/>
+<br/>
+Bear in mind that the ARM7 can only play audio data from the main 4meg - at least my experiments seemed to indicate this was the case. I didn't check the switchable RAM but I'm considering moving the default ARM7 code into this area to give a little more space.<br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#107140 - wintermute - Fri Oct 27, 2006 1:10 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>masscat wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+ To do this easily make all your shared data structures align with 32byte boundaries (32bytes is the size of the cache line).
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Data aligment isn't necessary, the flush and invalidate functions align the addresses used. You may invalidate or flush data that doesn't require it with unaligned data but that's going to be a maximum of an extra 63 bytes and not likely to cause major issues with anything.<br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#107174 - masscat - Fri Oct 27, 2006 11:24 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>wintermute wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>masscat wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+ To do this easily make all your shared data structures align with 32byte boundaries (32bytes is the size of the cache line).
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Data aligment isn't necessary, the flush and invalidate functions align the addresses used. You may invalidate or flush data that doesn't require it with unaligned data but that's going to be a maximum of an extra 63 bytes and not likely to cause major issues with anything.</span></td> </tr></table><span class="postbody">
+<br/>
+The structure must be aligned and be the sole occupant of the cache lines it covers.
+<br/>
+For example, you have two structures (A and B) of 16 bytes each next to each other in memory and covered by a single cache line.
+<br/>
+ARM9 is updating A ready to send to ARM7 and ARM7 is updating B ready to send to ARM9.
+<br/>
+Case 1:
+<br/>
+ARM7 completes and sends the address of B to ARM9. ARM9 invalidates (no write back) the cache line covering B and all its writes to A are lost.
+<br/>
+Case 2:
+<br/>
+ARM9 completes updating A and calls DC_FlushRange writing back the entire cache line killing any changes that ARM7 has made to B.
+<br/>
+<br/>
+The memory covered by structure A could be any data used by the ARM9 which may get written back to memory at any time (cache usage). Situations like this lead to code that runs happily most of the time but randomly breaking - bugs like these can be very hard to find.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#107216 - wintermute - Fri Oct 27, 2006 7:05 pm</h4>
+    <div class="postbody"><span class="postbody">Very good point, well presented and I should know better than to post about cache problems straight off the top of my head.<br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#107269 - gladius - Sat Oct 28, 2006 3:45 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>wintermute wrote:</b></span></td> </tr> <tr> <td class="quote">Bear in mind that the ARM7 can only play audio data from the main 4meg - at least my experiments seemed to indicate this was the case. I didn't check the switchable RAM but I'm considering moving the default ARM7 code into this area to give a little more space.</td> </tr></table><span class="postbody">The arm7 can play audio data from anywhere the arm7 can access it looks like.  I have had it play from the main 4meg, shared iwram, the local 64k, and VRAM as well (which is what I currently use).</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#107271 - wintermute - Sat Oct 28, 2006 3:55 am</h4>
+    <div class="postbody"><span class="postbody">really?
+<br/>
+<br/>
+Would you mind sharing some source?
+<br/>
+<br/>
+I was attempting to port an OPL emulator for dsdoom and was greeted with silence when I put the buffer in arm7 iwram. Moving the buffer out to main RAM gave me audio but it's a bit on the gritty side. I'm still having trouble synchronising the ring buffer for some reason.<br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#107376 - gladius - Sun Oct 29, 2006 3:33 am</h4>
+    <div class="postbody"><span class="postbody">That is how the pocketspc arm7 version plays it's audio.  The latest source is at <a class="postlink" href="http://pocketspc.pocketheaven.com/pocketspc-src-v10.zip" target="_blank">http://pocketspc.pocketheaven.com/pocketspc-src-v10.zip</a>.  I just did a readelf to be sure it was located in the arm7 64k, and my play buffer is at 0x0380f5a8.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

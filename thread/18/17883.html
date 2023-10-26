@@ -1,0 +1,195 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Quick/Convenient debugging using the PC register. - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Quick/Convenient debugging using the PC register.</h2>
+<div id="posts">
+<div class="post">
+    <h4>#177571 - Dark Knight ez - Wed Sep 05, 2012 12:17 pm</h4>
+    <div class="postbody">Hello everyone,<br/>
+<br/>
+It's been quite a while since I've asked something at these forums, but hopefully you'll be able to help me out once again.<br/>
+Currently my engine on the DS suffers from a crash/halt, which is likely caused by an infinite loop. So far, I haven't been able to reproduce the flaw, so I was hoping the following scenario is a possibility (whenever we come across the issue by coincidence).<br/>
+<br/>
+When the engine is stuck in an infinite ARM9 loop somehow, is it possible to:<br/>
+1. Trigger an interrupt (say, by means of ejecting the slot1-card)?<br/>
+2. In the triggered code, display the code that was executed before the interrupt (i.e. the value of the pc register where it will eventually return to)?<br/>
+3. To see which function the executed-code belongs to?<br/>
+<br/>
+Knowing in which function the engine is stuck would help a great deal in determining which for-loop or while-loop causes it to occur.<br/>
+<br/>
+If the above is possible, could you enlighten me on how to perform steps 2 and 3? I've looked at gbatek, but cannot find the information I'm looking for (not having much or any experience in assembly does not aid the cause).<br/>
+<br/>
+Thank you in advance!</div>    
+</div>
+<div class="post">
+    <h4>#177572 - elhobbs - Wed Sep 05, 2012 2:20 pm</h4>
+    <div class="postbody">are you calling defaultExceptionHandler()? it will dump registers to the screen when an exception occurs. if you are not using it then it is a good place to start. without it, it is hard to identify a crash vs. an infinite loop.<br/>
+<br/>
+I am sure that it is possible to do what you are saying but it would require unwinding the stack which is not trivial. particularly since a lot of those events happen on the arm7 and then are pushed to the arm9 via fifo.<br/>
+<br/>
+you could try a function that breaks and dumps registers when a key (or a combination) is held. then you need to call that function in likely places.</div>    
+</div>
+<div class="post">
+    <h4>#177574 - sverx - Wed Sep 05, 2012 3:07 pm</h4>
+    <div class="postbody"><blockquote><div><cite>elhobbs wrote:</cite>are you calling defaultExceptionHandler()? it will dump registers to the screen when an exception occurs. if you are not using it then it is a good place to start.</div></blockquote>
+
+is it possible to trigger it directly? that's interesting!</div>    
+</div>
+<div class="post">
+    <h4>#177575 - PypeBros - Wed Sep 05, 2012 4:06 pm</h4>
+    <div class="postbody"><blockquote><div><cite>sverx wrote:</cite><blockquote><div><cite>elhobbs wrote:</cite>are you calling defaultExceptionHandler()? it will dump registers to the screen when an exception occurs. if you are not using it then it is a good place to start.</div></blockquote>
+
+is it possible to trigger it directly? that's interesting!</div></blockquote>
+
+Hmm, iirc, it's only the function that *registers* the default Exception handler that is pointed out here.<br/>
+<br/>
+that being said, the <a class="postlink" href="http://sylvainhb.blogspot.be/2012/03/gurumediationdump.html">register dump feature</a> has been extracted to its own function in libnds at some point, so it is possible to set your *own* handler and <a class="postlink" href="http://dsgametools.svn.sourceforge.net/viewvc/dsgametools/trunk/runMe/arm9/source/main.cpp?r1=892&amp;r2=918&amp;pathrev=918">invoke libnds's goodie here and there</a> at will. (I'm likely to use an outdated libnds here, so double-check your own gurumeditation.[cho] before you go for it).<br/>
+<br/>
+The interrupt-to-quit-endless-loop could be a vblank IRQ that checks for some specific input condition (L+R+START+SELECT), for instance. (haven't tried that out... sounds interesting). It wouldn't actually *get you out*, but it could at least reveal where you are. <br/>
+<br/>
+using an emulator that <a class="postlink" href="http://sylvainhb.blogspot.be/2009/09/debugging-sur-ds.html">can host a gdb/ddd session</a> is much more time-efficient for the job, however.</div>    
+</div>
+<div class="post">
+    <h4>#177577 - elhobbs - Wed Sep 05, 2012 5:06 pm</h4>
+    <div class="postbody">yes, defaultExceptionHandler to register the exception handler. "when an exception occurs" was the keep point.<br/>
+<br/>
+the problem with emulators is that they do not support exceptions. so, the emulator will tend to run a lot of stuff that the hardware has a problem with. still, it can be useful.<br/>
+<br/>
+it may be crude, but print statements are a very useful debug tool on the ds.</div>    
+</div>
+<div class="post">
+    <h4>#177579 - Dark Knight ez - Wed Sep 05, 2012 7:44 pm</h4>
+    <div class="postbody">Thanks for the suggestions.<br/>
+<blockquote class="uncited"><div>The interrupt-to-quit-endless-loop could be a vblank IRQ that checks for some specific input condition (L+R+START+SELECT), for instance. (haven't tried that out... sounds interesting). It wouldn't actually *get you out*, but it could at least reveal where you are.</div></blockquote>
+I'll write a test program to see if the remove-slot1-card IRQ still triggers properly even when ARM9 is stuck in a loop (and perhaps does not retrieve proper key presses from ARM7 etc anymore). Still, how would I go about in retrieving the pc register value from before the interrupt?<br/>
+<br/>
+P.S.<br/>
+Using an emulator is something I cannot do. Emulating my real time strategy game does not run at a doable speed (if at all), nor does it guarantee I get to the point of the crash/being-stuck of the engine.</div>    
+</div>
+<div class="post">
+    <h4>#177580 - Dwedit - Wed Sep 05, 2012 7:50 pm</h4>
+    <div class="postbody">I did this exact thing for PocketNES.<br/>
+If it takes more than 5 seconds to execute code that normally finishes within one frame, then assume it has crashed.  Your interrupt handlers should still be running, so use the vblank handler to perform that check.  Use a counter that counts up.  If it reaches 300, the game has crashed.  Have the main loop set this variable to zero every frame.  If that doesn't happen, you are probably in an infinite loop.<br/>
+<br/>
+You'd also need to be able to turn the "crash detection" feature on and off, for all the times where you aren't yet in the main loop, or have left the main loop.<br/>
+<br/>
+Then once you've triggered the "yep we've crashed" feature, show a stack dump.  You can figure out what stack address corresponds to what register, so you can annotate the registers in the stack dump.</div>    
+</div>
+<div class="post">
+    <h4>#177581 - Dark Knight ez - Wed Sep 05, 2012 7:57 pm</h4>
+    <div class="postbody"><blockquote class="uncited"><div>You can figure out what stack address corresponds to what register, so you can annotate the registers in the stack dump.</div></blockquote>
+Like I said, I'm not too good with assembly, so I'm unsure how. I noticed the following in gbatek:
+<div class="codebox"><p>Code: <a href="#" onclick="selectCode(this); return false;">Select all</a></p><pre><code>BIOS Interrupt handling
+Upon interrupt execution, the CPU is switched into IRQ mode, and the physical interrupt vector is called - as this address is located in BIOS ROM, the BIOS will always execute the following code before it forwards control to the user handler&amp;#58;
+ 00000018  b      128h              ;IRQ vector&amp;#58; jump to actual BIOS handler
+ 00000128  stmfd  r13!,r0-r3,r12,r14;save registers to SP_irq
+ 0000012C  mov    r0,4000000h        ;ptr+4 to 03FFFFFC &amp;#40;mirror of 03007FFC&amp;#41;
+ 00000130  add    r14,r15,0h        ;retadr for USER handler $+8=138h
+ 00000134  ldr    r15,&amp;#91;r0,-4h&amp;#93;      ;jump to &amp;#91;03FFFFFC&amp;#93; USER handler
+ 00000138  ldmfd  r13!,r0-r3,r12,r14;restore registers from SP_irq
+ 0000013C  subs   r15,r14,4h        ;return from IRQ &amp;#40;PC=LR-4, CPSR=SPSR&amp;#41;
+
+As shown above, a pointer to the 32bit/ARM-code user handler must be setup in &amp;#91;03007FFCh&amp;#93;. By default, 160 bytes of memory are reserved for interrupt stack at 03007F00h-03007F9Fh.</code></pre></div>
+Which might give the much needed clue, but, again, I'm not sure. Perhaps anyone more assembly-savvy would be able to help me out with a nice code snippet for obtaining the value of the pc register before the interrupt actually triggered?</div>    
+</div>
+<div class="post">
+    <h4>#177582 - Dwedit - Wed Sep 05, 2012 8:06 pm</h4>
+    <div class="postbody">Make a little ASM function that sets r0-r12 and LR to known values, then immediately does an infinite loop.<br/>
+Use values like 0xDEADBEE0-0xDEADBEEF, so you know what register corresponds to what hex number.<br/>
+Something like this:<br/>
+<br/>
+ldr r0,=0xDEADBEE0<br/>
+ldr r1,=0xDEADBEE1<br/>
+ldr r2,=0xDEADBEE2<br/>
+...<br/>
+ldr r12,=0xDEADBEEC<br/>
+ldr lr,=0xDEADBEEE<br/>
+infiniteloop:<br/>
+b infiniteloop<br/>
+<br/>
+Then you'll see the program counter somewhere in there too.<br/>
+Note that they won't be in a perfect 0-F order.<br/>
+<br/>
+screenshot of what a stack dump may look like: <img alt="Image" class="postimage" src="http://i.imgur.com/Qifyy.png"/></div>    
+</div>
+<div class="post">
+    <h4>#177584 - Dark Knight ez - Wed Sep 05, 2012 9:28 pm</h4>
+    <div class="postbody">I see what you're getting at...<br/>
+After careful examination of the code snippet I posted, it seems I could also do the following:
+<div class="codebox"><p>Code: <a href="#" onclick="selectCode(this); return false;">Select all</a></p><pre><code>asm&amp;#40;".arm     \n"        
+    "ldmfd  r13!,&amp;#123;r0-r3,r12,r14&amp;#125; \n" // restore registers from SP_irq 
+    "sub    r4,r14,#4            \n" // the r4 register now holds stack's previous pc value
+    // line below is only required if hereafter the code 
+    // needs to continue running where it once left off 
+    "stmfd  r13!,&amp;#123;r0-r3,r12,r14&amp;#125; \n" // save registers to SP_irq
+&amp;#41;;
+        
+register int pc_prev asm&amp;#40;"r4"&amp;#41;; </code></pre></div>
+
+I'll have to consider whether I want to go for the quick and 'dirty' approach stated above, or the nice stack dump using vblank.<br/>
+<br/>
+Regardless of which I opt for, thanks for your expert input! (The same goes for elhobbs and PypeBros, obviously!)</div>    
+</div>
+<div class="post">
+    <h4>#177588 - sverx - Thu Sep 06, 2012 8:52 am</h4>
+    <div class="postbody"><blockquote><div><cite>PypeBros wrote:</cite><blockquote><div><cite>sverx wrote:</cite><blockquote><div><cite>elhobbs wrote:</cite>are you calling defaultExceptionHandler()? it will dump registers to the screen when an exception occurs. if you are not using it then it is a good place to start.</div></blockquote>
+
+is it possible to trigger it directly? that's interesting!</div></blockquote>
+
+Hmm, iirc, it's only the function that *registers* the default Exception handler that is pointed out here.</div></blockquote>
+
+Oh, ok, I completely misunderstood. Thanks :)</div>    
+</div>
+<div class="post">
+    <h4>#177593 - Dark Knight ez - Fri Sep 07, 2012 10:10 am</h4>
+    <div class="postbody">Well, I tried to implement it, but somehow failed.<br/>
+In the function triggered by a VBlank interrupt, the following code occurs if the engine is stuck in an infinite loop somewhere (and I tested it indeed gets to this part of the code):<br/>
+<div class="codebox"><p>Code: <a href="#" onclick="selectCode(this); return false;">Select all</a></p><pre><code>asm&amp;#40;".arm\n\t"        
+    "ldmfd  r13!,&amp;#123;r0-r3,r12,r14&amp;#125;\n\t" // restore registers from SP_irq 
+    "sub    r4,r14,#4\n\t" // the r4 register now holds stack's previous pc value 
+    // line below is only required if hereafter the code 
+    // needs to continue running where it once left off 
+    "stmfd  r13!,&amp;#123;r0-r3,r12,r14&amp;#125;" // save registers to SP_irq 
+&amp;#41;; 
+        
+register int pc_prev asm&amp;#40;"r4"&amp;#41;; </code></pre></div>
+
+Although that code compiles fine, the engine crashes and shows the output from the defaultExceptionHandler(), stating it encountered an undefined instruction in my asm code. Any idea what I've done wrong? I simply adjusted, but only slightly, the asm code gbatek states the DS itself uses in its BIOS for handling interrupts. *shrugs*</div>    
+</div>
+<div class="post">
+    <h4>#177594 - Dark Knight ez - Fri Sep 07, 2012 11:29 am</h4>
+    <div class="postbody">When adding ".align 4\n\t", the error turns into a "data abort" error. Not sure if that's an improvement :')</div>    
+</div>
+<div class="post">
+    <h4>#177595 - elhobbs - Fri Sep 07, 2012 11:31 am</h4>
+    <div class="postbody">Did you add a ".type" identifier to your asm function? I believe it is needed to properly transition to/from thumb/arm mode. I am not sure how it works with inline asm though.</div>    
+</div>
+<div class="post">
+    <h4>#177596 - Dark Knight ez - Fri Sep 07, 2012 1:23 pm</h4>
+    <div class="postbody">I thought .arm would take care of that.<br/>
+<br/>
+Anyway, I noticed how defaultExceptionHandler() was outputting values on the stack as well. That's all I needed anyway, and apparently the third value (2nd row, 1st column) is the previous program counter. Huzzah!<br/>
+<br/>
+P.S.<br/>
+For those interested, the fourth value seems to be the previous stack pointer. I haven't checked/investigated the other values.</div>    
+</div>
+<div class="post">
+    <h4>#177597 - elhobbs - Fri Sep 07, 2012 5:04 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Dark Knight ez wrote:</b></span></td> </tr> <tr> <td class="quote">I thought .arm would take care of that.</td> </tr></table><span class="postbody">I think for inline asm code you are probably correct - I do not really know. I was thinking of asm functions <a class="postlink" href="http://devkitpro.org/viewtopic.php?f=13&amp;t=3073" target="_blank">see here</a></span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

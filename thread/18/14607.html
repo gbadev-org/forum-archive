@@ -1,0 +1,379 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>TCM strangely not improving over main RAM - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > TCM strangely not improving over main RAM</h2>
+<div id="posts">
+<div class="post">
+    <h4>#146243 - DiscoStew - Sat Dec 01, 2007 1:00 am</h4>
+    <div class="postbody"><span class="postbody">Was tinkering with my stuff again, and I tried shifting some data over to DTCM so I could see how much on an improvement it made. Consequently, I got not one noticeable difference when making the change. So I went back to how my code was. A thought came into my mind about if I were to try moving some of my other data in DTCM back to main RAM, not just to see if there was any change, but if there was no change, then it meant that there was no reason to have those things in DTCM whatsoever.
+<br/>
+<br/>
+I was astonished that for my test code that took 36 scanlines to complete before ended up taking only 33 scanlines after moving data arrays from DTCM to main RAM. From what I know about TCM, making such a change should have resulted in the opposite, but it didn't. I then proceeded to move my code from ITCM to main RAM, and there was no change. The cache came into my mind, which would explain no change to how long my code took, but the instruction cache is 8KB, and the data cache was 4KB. My two arrays combines are about 7.2KB, and both are accessed and processed at the end of my code alongside each other, not one after another.
+<br/>
+<br/>
+It could be just me, and my further confusion as to how TCM works kicking in, but if merely placing code with the tag ITCM_CODE, data arrays as DTCM_DATA, and even code files with the extention of .itcm allowed my code/data to take advantage of the faster memory, then there is something terribly wrong with my code.<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#146268 - Cydrak - Sat Dec 01, 2007 7:46 pm</h4>
+    <div class="postbody"><span class="postbody">TCM is a lifesaver if you need it, but it isn't free if you end up adding extra I/O to use it. And being so small, often the data must be streamed in or out at some point. Consider:
+<br/>
+<br/>
+* Not using TCM: (Maybe) read RAM, &lt;more code&gt;, write to RAM.
+<br/>
+* Using TCM: (Maybe) copy RAM to TCM, &lt;more code&gt;, copy TCM to RAM.
+<br/>
+<br/>
+Which is faster should depend on the code in between. If you do lots of random, alternating, or--I think--read-modify-write access, the TCM will be gobs faster, because the RAM hates that! If you only ever access the TCM once or twice, or the pattern was already optimal, the copy may just waste time.
+<br/>
+<br/>
+Another caveat could be repeated writes to uncached regions. If you write somewhere you never read (and thus never pulled into cache), apparently it will hit the RAM each time. (Ow. See <a class="postlink" href="http://nocash.emubase.de/gbatek.htm#dsmemorycontrol" target="_blank">Cache, read-allocate method</a>.)
+<br/>
+<br/>
+So I find it helps some things and not others. Take dithering for example. Floyd-steinberg (or moreso Atkinson) uses a fair-sized error buffer, with many cross-scanline updates. Despite being moderately optimized, I saw further speedup with the DTCM. Another case was an AM/FM synth that made very jumpy access to the large wave tables. I also put the mix buffer in DTCM, since it was modified for every sample of every channel.
+<br/>
+<br/>
+My software blitters didn't seem to care, though. Access there was pretty optimal I think (I only ever accessed each src/dest pixel once, in order), and the small palettes, plus the loop itself, were easily cached. The thing was they had to read large, untiled sheets in RAM. I tried interpolation and that really brought the speed down, even with silly bitwise hacks and DTCM involved.
+<br/>
+<br/>
+EWRAM is simply slower than the ARM9, I think even the best code (ie. better than mine ;p) can't get around that. May be worth playing with simpler dummy loops (or STM in assembly), to see what the theoretical limit is, and how all the I/O interacts. I have this bad habit of just eyeballing the FPS, so I eventually would like to do some more accurate benchmarks myself.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#146275 - DiscoStew - Sat Dec 01, 2007 9:32 pm</h4>
+    <div class="postbody"><span class="postbody">To be more direct, I'm still working on my model renderer (refer back to <a class="postlink" href="http://forum.gbadev.org/viewtopic.php?t=13750&amp;postdays=0&amp;postorder=asc&amp;start=28" target="_blank">here</a> for an old version of my code), the code I linked is for taking care of the normals of the model after the bones are calculated and the mesh is processed.
+<br/>
+<br/>
+It grabs the vertex indices for each face (the indices are in main RAM, and the vertices themselves are in DTCM because they had already been processed from each bone), the normal is calculated, and stored (also in DTCM). When the faces are ready to be rendered, I simply take from the tables in DTCM.
+<br/>
+<br/>
+My problem is that moving these array tables back to main RAM actually made it faster, as far as getting through the code. I had tried moving data from main RAM to DTCM, then processing everything, but that took longer to do than keeping it all in main RAM. As far as the code is concerned, it is most likely being cached if I don't force it into ITCM.
+<br/>
+<br/>
+But, I will go and test things myself. Make a few test programs that deal with this sort of thing, to see what is really happening under the hood. If it still comes out with main RAM being done faster, then I'll post them here, and maybe people can find out what I'm doing wrong.<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#146294 - sajiimori - Sun Dec 02, 2007 4:00 am</h4>
+    <div class="postbody"><span class="postbody">DiscoStew, your results are unexpected, and my first thought is that there is indeed something fishy going on.  I'd be curious to hear what you find out.  Maybe the compiler is generating different instructions for some reason...?
+<br/>
+<br/>
+I don't know of any caveats with read-modify-write.  The data cache should handle it fine.
+<br/>
+<br/>
+If you're using TCM just as you would have used main RAM (that is, if you're not doing extra operations that you wouldn't have done if your data was in main RAM), I don't know of any situation where it will be slower.
+<br/>
+<br/>
+Writing to an area you never read is generally not a speed problem, unless you write to the exact same address a lot of times -- say, more than 8 times in a row (but why didn't you wait to write until later in that case?).  Otherwise it will typically be faster to do the uncached write, rather than read an entire cache line and then commit it back again when the line is kicked out.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#146299 - Peter - Sun Dec 02, 2007 10:16 am</h4>
+    <div class="postbody"><span class="postbody">I also had the problem that code I put in ITCM was executed slower. Then I found out that I compile the project in thumb mode, changed to arm and now <a class="postlink" href="http://www.youtube.com/watch?v=BI7YL2F4970" target="_blank">it's faaast</a>.<br/>_________________<br/>Kind Regards,
+<br/>
+Peter</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#146314 - DiscoStew - Sun Dec 02, 2007 6:34 pm</h4>
+    <div class="postbody"><span class="postbody">Hmm, I had made a very simple program, which has two functions that do the exact same thing, except one is specifically called from ITCM, and places/grabs data from DTCM, and the other does not. Now, this sort of test is probably not the best kind of test, as I'm not even sure if I did it correctly, but I just wanted something made quickly.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#include "nds.h"
+<br/>
+#include &lt;nds/arm9/console.h&gt; //basic print funcionality
+<br/>
+#include &lt;stdio.h&gt;
+<br/>
+#include &lt;stdlib.h&gt;
+<br/>
+<br/>
+<br/>
+#define MAX_ARRAY_SIZE  3500
+<br/>
+<br/>
+u32 Filled_Array[MAX_ARRAY_SIZE];
+<br/>
+<br/>
+u32 mainRAM_Array[MAX_ARRAY_SIZE];
+<br/>
+DTCM_DATA u32 DTCM_Array[MAX_ARRAY_SIZE];
+<br/>
+<br/>
+<br/>
+u16 GetKeys = 0;
+<br/>
+<br/>
+void  VblankHandler(void);
+<br/>
+<br/>
+void  VblankHandler(void)
+<br/>
+{
+<br/>
+   scanKeys();
+<br/>
+   GetKeys = keysHeld();
+<br/>
+}
+<br/>
+<br/>
+<br/>
+void test_mainRAM()
+<br/>
+{
+<br/>
+   u32 Counter;
+<br/>
+   for(Counter = 0; Counter &lt; MAX_ARRAY_SIZE; Counter++)
+<br/>
+      mainRAM_Array[Counter] = Filled_Array[Counter];
+<br/>
+   for(Counter = 0; Counter &lt; (MAX_ARRAY_SIZE - 1); Counter++)
+<br/>
+      mainRAM_Array[Counter] *= mainRAM_Array[Counter + 1];
+<br/>
+   for(Counter = 1; Counter &lt; MAX_ARRAY_SIZE; Counter++)
+<br/>
+      mainRAM_Array[Counter] -= mainRAM_Array[Counter - 1];
+<br/>
+   for(Counter = 0; Counter &lt; MAX_ARRAY_SIZE; Counter++)
+<br/>
+      Filled_Array[Counter] = mainRAM_Array[Counter];
+<br/>
+   return;
+<br/>
+}
+<br/>
+<br/>
+ITCM_CODE void test_TCM()
+<br/>
+{
+<br/>
+   u32 Counter;
+<br/>
+   for(Counter = 0; Counter &lt; MAX_ARRAY_SIZE; Counter++)
+<br/>
+      DTCM_Array[Counter] = Filled_Array[Counter];
+<br/>
+   for(Counter = 0; Counter &lt; (MAX_ARRAY_SIZE - 1); Counter++)
+<br/>
+      DTCM_Array[Counter] *= DTCM_Array[Counter + 1];
+<br/>
+   for(Counter = 1; Counter &lt; MAX_ARRAY_SIZE; Counter++)
+<br/>
+      DTCM_Array[Counter] -= DTCM_Array[Counter - 1];
+<br/>
+   for(Counter = 0; Counter &lt; MAX_ARRAY_SIZE; Counter++)
+<br/>
+      Filled_Array[Counter] = DTCM_Array[Counter];
+<br/>
+   return;
+<br/>
+}
+<br/>
+<br/>
+<br/>
+<br/>
+<br/>
+//---------------------------------------------------------------------------------
+<br/>
+int main(void) {
+<br/>
+//---------------------------------------------------------------------------------
+<br/>
+<br/>
+<br/>
+   u32 Counter;
+<br/>
+   u32 VCountS = 0, VCountE = 0;
+<br/>
+<br/>
+   powerON(POWER_ALL);
+<br/>
+   vramSetBankC(VRAM_C_SUB_BG);
+<br/>
+   videoSetModeSub(MODE_0_2D | DISPLAY_BG0_ACTIVE);
+<br/>
+   SUB_BG0_CR = BG_MAP_BASE(31);
+<br/>
+   BG_PALETTE_SUB[255] = RGB15(31,31,31);
+<br/>
+   consoleInitDefault((u16*)SCREEN_BASE_BLOCK_SUB(31), (u16*)CHAR_BASE_BLOCK_SUB(0), 16);
+<br/>
+   irqInit();
+<br/>
+   irqSet(IRQ_VBLANK, VblankHandler);
+<br/>
+   irqEnable(IRQ_VBLANK);
+<br/>
+<br/>
+   iprintf("\x1b[2;0HPlease wait until test is ready to begin\n");
+<br/>
+<br/>
+   
+<br/>
+   for(Counter = 0; Counter &lt; MAX_ARRAY_SIZE; Counter++)
+<br/>
+        Filled_Array[Counter] = Counter;
+<br/>
+<br/>
+<br/>
+   iprintf("Press any key to start test\n");
+<br/>
+   while((GetKeys &amp; KEY_A) == 0)
+<br/>
+        swiWaitForVBlank();
+<br/>
+   iprintf("Starting test...\n\n");
+<br/>
+   swiWaitForVBlank();
+<br/>
+   VCountS = REG_VCOUNT;
+<br/>
+   test_mainRAM();
+<br/>
+   VCountE = REG_VCOUNT;
+<br/>
+   VCountE -= VCountS;
+<br/>
+   iprintf("mainRAM = %04X\n\n", VCountE);
+<br/>
+<br/>
+   swiWaitForVBlank();
+<br/>
+   VCountS = REG_VCOUNT;
+<br/>
+   test_TCM();
+<br/>
+   VCountE = REG_VCOUNT;
+<br/>
+   VCountE -= VCountS;
+<br/>
+   iprintf("TCM = %04X", VCountE);
+<br/>
+<br/>
+   while(1);
+<br/>
+   return 0;
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+The result from this test brought out something I didn't want. Both functions took 29 scanlines to complete.
+<br/>
+<br/>
+As I read following posts, Peter did bring up something. It could just be that I've been running the code via thumb mode the entire time. If it takes longer for code execution to happen in ITCM (or the instruction cache) when the code is in thumb mode instead of arm, that could offset any speed increase brought about from using DTCM, possibly making it even longer (which could explain why putting my arrays into mainRAM made it quicker?). Now that I think about it, my test program is all in one file, and is not split in terms of what should be considered thumb and arm code.
+<br/>
+<br/>
+This is the main options section of my Make file for the ARM9 binary...
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">ARCH   :=   -mthumb-interwork
+<br/>
+CFLAGS   :=   -g -Wall -O3\
+<br/>
+          -march=armv5te -mtune=arm946e-s -fomit-frame-pointer\
+<br/>
+         -ffast-math \
+<br/>
+         $(ARCH)
+<br/>
+CFLAGS      +=   $(INCLUDE) -DARM9
+<br/>
+CXXFLAGS   :=   $(CFLAGS) -fno-rtti -fno-exceptions
+<br/>
+ASFLAGS   :=   -g -march=armv5te $(ARCH)
+<br/>
+LDFLAGS   =   -specs=ds_arm9.specs -g $(ARCH) -mno-fpu -Wl,-Map,$(notdir $*.map)</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Anything wrong with this? I'll post the entire Make file if needed.
+<br/>
+<br/>
+<br/>
+EDIT:
+<br/>
+<br/>
+GG! I check my post, and realized that I hadn't called main_TCM at all. I had ran test_mainRAM twice, so I made the change, and ran the program again. My results are now starting to be different, but even now these results are doing the same thing my other programs have been having. mainRAM is still 29 scanlines, but TCM from the test is showing <span style="font-weight: bold">36 scanlines</span>. This is indeed a major problem. I really hope that my problem is related to what Peter had, and making the similar change will do the trick.<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#146318 - Peter - Sun Dec 02, 2007 7:18 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>DiscoStew wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+This is the main options section of my Make file for the ARM9 binary...
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">ARCH := -mthumb-interwork</td> </tr></table><span class="postbody">
+<br/>
+Anything wrong with this? I'll post the entire Make file if needed.
+<br/>
+</span></td> </tr></table><span class="postbody">
+<br/>
+Looks ok I guess. If you would compile in thumb, you usually add "-mthumb" to ARCH. But you can add -mthumb and see if it makes any difference, or check the compiler output for -mthumb.<br/>_________________<br/>Kind Regards,
+<br/>
+Peter</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#146320 - DiscoStew - Sun Dec 02, 2007 7:35 pm</h4>
+    <div class="postbody"><span class="postbody">I had added "-mthumb" to the line as you said but I got no change. I checked the output log, and found out that not even "-mthumb-interwork" was being added to the instructions, so I tinkered with the Make file, and to my surprise, the problem with that not showing up was because of a comment line I had in there that ended with "\", and in normal cases, that extends to the next line for more commands, so from what I could tell, the comment with that at the end meant the next line got commented out too, commenting out "ARCH".
+<br/>
+<br/>
+I fixed it, and now it is showing up in the output log, but no change to my program (processing-wise). I added "-mthumb", and now everything is running slower. The mainRAM test at 32 scanlines, and the TCM test at 39 scanlines. An increase of 3 scanlines each.
+<br/>
+<br/>
+So have I been running in ARM the entire time? If so, then how is it still that mainRAM is working better than TCM?<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#146321 - Peter - Sun Dec 02, 2007 7:42 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>DiscoStew wrote:</b></span></td> </tr> <tr> <td class="quote">So have I been running in ARM the entire time?</td> </tr></table><span class="postbody">
+<br/>
+Yes I think so. Otherwise you can also add "-marm" (remove "-mthumb" of course).
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">If so, then how is it still that mainRAM is working better than TCM?</td> </tr></table><span class="postbody">
+<br/>
+Hmm great question ^_^<br/>_________________<br/>Kind Regards,
+<br/>
+Peter</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#146324 - DiscoStew - Sun Dec 02, 2007 8:03 pm</h4>
+    <div class="postbody"><span class="postbody">I uploaded the entire test program <a class="postlink" href="http://www.2shared.com/file/2562318/dc7585bc/TCM_test.html" target="_blank">here</a>, so people that want to get the full scoop of what is happening with the program can check it out. The coding environment is VS 2003, but I'm sure if you don't have VS, the structure of the folders and files will be enough.<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#146346 - Exophase - Mon Dec 03, 2007 1:00 am</h4>
+    <div class="postbody"><span class="postbody">Lordus tried this out and says he got the same results.. in No$GBA. On a real DS the TCM version performs much better (which it should because there because the initial reads to the RAM array should result in cache misses).
+<br/>
+<br/>
+You were using a real DS to test this, right?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#146363 - DiscoStew - Mon Dec 03, 2007 3:54 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Exophase wrote:</b></span></td> </tr> <tr> <td class="quote">Lordus tried this out and says he got the same results.. in No$GBA. On a real DS the TCM version performs much better (which it should because there because the initial reads to the RAM array should result in cache misses).
+<br/>
+<br/>
+You were using a real DS to test this, right?</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Alright, you got me there. In my haste of making the test program, I didn't even go to test it on hardware. I did now, and I do see that TCM is faster, though the results from both tests from No$GBA to hardware made mainRAM jump a lake to be slower by almost double what TCM.
+<br/>
+<br/>
+But now I'm completely confused as to what is happening with my program. Where I got results showing mainRAM being faster on my actual program before by about 2-3 scanlines, it is now showing that it is slower by about 2-3 scanlines vs TCM (instruction and data). It wasn't some leap like my test program (and no, I did not have the two mixed up, because I'm getting a shorter process time with TCM, 29 now vs 36 before). Could have been any number of things changed since I made the thread.
+<br/>
+<br/>
+I once again tried moving data from mainRAM to TCM early on in the function so any data access that was done from mainRAM was now in DTCM, but that made no change to my program, emulated or on hardware (and yes, this data is a pretty big chunk).
+<br/>
+<br/>
+Because the function that stores my main processing is in a .itcm.c file, it automatically gets "-marm" added to it, so I went and changed it so it wouldn't be forced to have that in there. What resulted was an increase of 24 bytes to the function. When using "-mthumb" the first time, it made no difference to my program (not test) because of the .itcm.c extention, but trying after changing the extention led to compile errors from function calls to glMaterial inside my render function, so I couldn't even try it.<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

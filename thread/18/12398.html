@@ -1,0 +1,159 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>libfat/gba_nds_fat on both processors at the same time - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > libfat/gba_nds_fat on both processors at the same time</h2>
+<div id="posts">
+<div class="post">
+    <h4>#117921 - simonjhall - Thu Feb 08, 2007 6:46 pm</h4>
+    <div class="postbody"><span class="postbody">I guess questions are gonna be directed at chism :-)
+<br/>
+<br/>
+I'm thinking about pulling sound files for Quake off disk and straight into the sound hardware, with minimal buffering. I'd like to do this on the ARM7, so I don't stall the ARM9 in any way. But as the game sometimes loads models during play, the ARM9 may need to also access files.
+<br/>
+They won't both need to access the fat system *at exactly the same time*, so that's gotta be a good thing...
+<br/>
+<br/>
+At the moment (as I'm just SO lazy) I'm still using gba_nds_fat, but I keep meaning to move to libfat. So what do I need to do (for both fat systems) in order to do these things?
+<br/>
+<br/>
+Ta,
+<br/>
+Simon<br/>_________________<br/><span style="font-weight: bold"><a class="postlink" href="https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&amp;business=simonjhall%40gmail%2ecom&amp;no_shipping=2&amp;no_note=1&amp;tax=0&amp;currency_code=GBP&amp;lc=GB&amp;bn=PP%2dDonationsBF&amp;charset=UTF%2d8" target="_blank">Big thanks to everyone who donated for Quake2</a></span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#117924 - tepples - Thu Feb 08, 2007 7:08 pm</h4>
+    <div class="postbody"><span class="postbody">You'll have to predict which sounds are most likely to be played next and load them up. Imagine if you were pulling the models and sounds off a CD like a PlayStation has to do. You would have to wait 200 ms for the CD to seek and spin to the model or sound effect.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#118014 - chishm - Fri Feb 09, 2007 2:40 am</h4>
+    <div class="postbody"><span class="postbody">There are three ways to do this. The first, bad way is to compile a FAT library into both CPU binaries. This will cause problems when trying to init the library on whichever CPU comes last.
+<br/>
+<br/>
+The second, better way to do it is use an IPC method to call FAT functions on the CPU that has the library. 
+<br/>
+<br/>
+The third, even better way is a variation on the second. This will require libfat and DKA r20. Create a devoptab driver that implements open, close, etc. by calling the relevent function in libfat on the other CPU, using your choice of IPC methods. This will then be called by the newlib functions fopen, fclose, etc. 
+<br/>
+<br/>
+In this case, I suggest you put libfat on the ARM7, although you may need to remove DLDI support to have enough room. The ARM9 functions will need to handle the cache properly, and don't try to read/write anything to/from stack allocated memory (it's in the ARM9's DTCM, inaccessible by the ARM7).<br/>_________________<br/><a class="postlink" href="http://chishm.drunkencoders.com" target="_blank">http://chishm.drunkencoders.com</a>
+<br/>
+<a class="postlink" href="http://dldi.drunkencoders.com" target="_blank">http://dldi.drunkencoders.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#118040 - simonjhall - Fri Feb 09, 2007 10:28 am</h4>
+    <div class="postbody"><span class="postbody">Cool man. As I've wrapped up most of the file access anyway I think it'd be pretty easy to to the IPC method.
+<br/>
+<br/>
+Little bit concerned that there might not be enough memory to use the DLDI though. Is it unlikely that there will be enough space for this? If there ain't, can I just manually compile drivers in? If there is, does DLDI patching work when it's in the ARM7 binary?<br/>_________________<br/><span style="font-weight: bold"><a class="postlink" href="https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&amp;business=simonjhall%40gmail%2ecom&amp;no_shipping=2&amp;no_note=1&amp;tax=0&amp;currency_code=GBP&amp;lc=GB&amp;bn=PP%2dDonationsBF&amp;charset=UTF%2d8" target="_blank">Big thanks to everyone who donated for Quake2</a></span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#118147 - chishm - Sat Feb 10, 2007 1:56 pm</h4>
+    <div class="postbody"><span class="postbody">32KiB of space is reserved for DLDI. Considering that the ARM7 binary has to fit within 96KiB, that's a lot of space to be wasting. libfat itself will consume over 50KiB, which doesn't leave much room for anything else. 
+<br/>
+<br/>
+Also, libfat will need malloc, but you can customize the malloc routine used in mem_allocate.h . You'll probably just want to get the ARM9 to do the mallocing. At this stage, it seems there will be a mess of calls between the two processors, with the ARM9 using the ARM7 for file openning and the ARM7 using the ARM9 for malloc. 
+<br/>
+<br/>
+One thing I'm not sure about is whether libc has filesystem support compiled in on the ARM7. I think it might, but you should ask WinterMute to be sure. This will also involve more malloc messiness.
+<br/>
+<br/>
+DLDI should work no matter where the destination is. The memory address is now determined by the linker, instead of the old method of calculating it based on the supposed destination of the binary.<br/>_________________<br/><a class="postlink" href="http://chishm.drunkencoders.com" target="_blank">http://chishm.drunkencoders.com</a>
+<br/>
+<a class="postlink" href="http://dldi.drunkencoders.com" target="_blank">http://dldi.drunkencoders.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#118285 - simonjhall - Sun Feb 11, 2007 9:31 pm</h4>
+    <div class="postbody"><span class="postbody">Yeah, that looks really tight. As the '7 linker script says that there's only 64k available does this mean that when the machine is started the shared RAM isn't usable by the '7 for program code?
+<br/>
+I don't wanna have to have a dummy ARM7 binary which sets up the memory in a good way then loads in the real binary...
+<br/>
+<br/>
+Is there any way to reduce the memory footprint of libfat and the DLDI driver in some way? I don't need any fancy libc file access stuff. Would be nice to hide file access on the ARM7 though as that'd save me a few precious kilobytes or main RAM!<br/>_________________<br/><span style="font-weight: bold"><a class="postlink" href="https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&amp;business=simonjhall%40gmail%2ecom&amp;no_shipping=2&amp;no_note=1&amp;tax=0&amp;currency_code=GBP&amp;lc=GB&amp;bn=PP%2dDonationsBF&amp;charset=UTF%2d8" target="_blank">Big thanks to everyone who donated for Quake2</a></span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#118315 - chishm - Mon Feb 12, 2007 2:35 am</h4>
+    <div class="postbody"><span class="postbody">The easiest ways to reduce memory footprint are removing DLDI and using a custom malloc. Apart from that, you'll need to start hacking away at the libfat code, which is generally not a good idea.
+<br/>
+<br/>
+If you really want to keep DLDI, you could reduce the space used by editting the io_dldi.s file. Large drivers (such as G6) won't be usable after that.<br/>_________________<br/><a class="postlink" href="http://chishm.drunkencoders.com" target="_blank">http://chishm.drunkencoders.com</a>
+<br/>
+<a class="postlink" href="http://dldi.drunkencoders.com" target="_blank">http://dldi.drunkencoders.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#118339 - simonjhall - Mon Feb 12, 2007 8:44 am</h4>
+    <div class="postbody"><span class="postbody">Ok. re: the mallocing, how much needs to get allocated? I don't like the idea of using the '9 to do memory allocation, so it'd be nice if I could just allocate out of the 96k...<br/>_________________<br/><span style="font-weight: bold"><a class="postlink" href="https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&amp;business=simonjhall%40gmail%2ecom&amp;no_shipping=2&amp;no_note=1&amp;tax=0&amp;currency_code=GBP&amp;lc=GB&amp;bn=PP%2dDonationsBF&amp;charset=UTF%2d8" target="_blank">Big thanks to everyone who donated for Quake2</a></span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#118343 - chishm - Mon Feb 12, 2007 10:20 am</h4>
+    <div class="postbody"><span class="postbody">It needs space for a cache (around 600 bytes per cached sector) and the partition struct. If you have 2 devices inserted, that will be doubled. Each openned file will use space for a file struct.<br/>_________________<br/><a class="postlink" href="http://chishm.drunkencoders.com" target="_blank">http://chishm.drunkencoders.com</a>
+<br/>
+<a class="postlink" href="http://dldi.drunkencoders.com" target="_blank">http://dldi.drunkencoders.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#118379 - simonjhall - Mon Feb 12, 2007 11:03 pm</h4>
+    <div class="postbody"><span class="postbody">I've been trying to get my file access stuff onto the '7 by doing a dummy build of libfat for the '9 by just compiling and linking the libfat source against my ARM9 binary.
+<br/>
+But I'm stuck on the undefined reference to 'AddDevice'. Anything I should be linking to in order to fix this?
+<br/>
+<br/>
+Really all I want to do is to write my own malloc and free functions. If I link with vanilla libfat and call fatInitDefault on the ARM7 it just hangs, so I assume that it's the malloc and free which are the culprits...<br/>_________________<br/><span style="font-weight: bold"><a class="postlink" href="https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&amp;business=simonjhall%40gmail%2ecom&amp;no_shipping=2&amp;no_note=1&amp;tax=0&amp;currency_code=GBP&amp;lc=GB&amp;bn=PP%2dDonationsBF&amp;charset=UTF%2d8" target="_blank">Big thanks to everyone who donated for Quake2</a></span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#118388 - chishm - Tue Feb 13, 2007 12:26 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>simonjhall wrote:</b></span></td> </tr> <tr> <td class="quote">I've been trying to get my file access stuff onto the '7 by doing a dummy build of libfat for the '9 by just compiling and linking the libfat source against my ARM9 binary.
+<br/>
+But I'm stuck on the undefined reference to 'AddDevice'. Anything I should be linking to in order to fix this?
+<br/>
+<br/>
+Really all I want to do is to write my own malloc and free functions. If I link with vanilla libfat and call fatInitDefault on the ARM7 it just hangs, so I assume that it's the malloc and free which are the culprits...</td> </tr></table><span class="postbody">
+<br/>
+AddDevice is part of stdio wrapper added by the DKA patches to newlib. It is used to register libfat as a usable stdio device, and without it, you won't be able to use libfat without modification. It seems you are out of luck, as you'll need to modify and rebuild DKA to change this.<br/>_________________<br/><a class="postlink" href="http://chishm.drunkencoders.com" target="_blank">http://chishm.drunkencoders.com</a>
+<br/>
+<a class="postlink" href="http://dldi.drunkencoders.com" target="_blank">http://dldi.drunkencoders.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#118404 - simonjhall - Tue Feb 13, 2007 1:57 am</h4>
+    <div class="postbody"><span class="postbody">I got too lazy to recompile it, so instead patched malloc with my own malloc (which worked fine, on the libfat functions which called it).
+<br/>
+Never got the lib to init though - it always froze somewhere in _FAT_partition_constructor... Hmm...
+<br/>
+I give up (what with it being nearly 1am!), so thanks for your help anyway!<br/>_________________<br/><span style="font-weight: bold"><a class="postlink" href="https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&amp;business=simonjhall%40gmail%2ecom&amp;no_shipping=2&amp;no_note=1&amp;tax=0&amp;currency_code=GBP&amp;lc=GB&amp;bn=PP%2dDonationsBF&amp;charset=UTF%2d8" target="_blank">Big thanks to everyone who donated for Quake2</a></span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#118745 - simonjhall - Fri Feb 16, 2007 10:45 am</h4>
+    <div class="postbody"><span class="postbody">So I've got my file access on the ARM7 going via an IPC system, with the ARM9 doing all fat the work. As the IPC stuff is handled in the vertical blanking interrupt there's a chance that both the ARM7 and ARM9 may do a file access at the same time.
+<br/>
+<br/>
+So, say the '9 user mode code does an fread. Along comes the vblank, and stops the fread, but the '7 wants to do a fread - what happens here? Are interrupts disabled on entry to the libfat code? If not, is there going to be any kind of corruption going on?
+<br/>
+<br/>
+I'm just wondering as I sometimes get weird results when both processors want to do a disk access...<br/>_________________<br/><span style="font-weight: bold"><a class="postlink" href="https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&amp;business=simonjhall%40gmail%2ecom&amp;no_shipping=2&amp;no_note=1&amp;tax=0&amp;currency_code=GBP&amp;lc=GB&amp;bn=PP%2dDonationsBF&amp;charset=UTF%2d8" target="_blank">Big thanks to everyone who donated for Quake2</a></span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#118746 - chishm - Fri Feb 16, 2007 10:56 am</h4>
+    <div class="postbody"><span class="postbody">Interrupts aren't disabled during an fread. This can cause problems, as in your case, if it interrupts the disc IO in the middle of a sector read/write. Effects vary depending on the card. On some devices it'll just mis-read the sector originally being read. On others it can cause the device to lock up.<br/>_________________<br/><a class="postlink" href="http://chishm.drunkencoders.com" target="_blank">http://chishm.drunkencoders.com</a>
+<br/>
+<a class="postlink" href="http://dldi.drunkencoders.com" target="_blank">http://dldi.drunkencoders.com</a></span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

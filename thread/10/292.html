@@ -1,0 +1,803 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>how many PCM sounds can be played simultaneously on GBA? - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Audio > how many PCM sounds can be played simultaneously on GBA?</h2>
+<div id="posts">
+<div class="post">
+    <h4>#1823 - rome - Thu Jan 23, 2003 7:18 pm</h4>
+    <div class="postbody"><span class="postbody">i?m very confusing about direcsound channels.
+<br/>
+<br/>
+if gba has 2 channels (directsound a and b) then is possible to play only 2 PCM (wav) sounds on GBA device??</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#1824 - Vortex - Thu Jan 23, 2003 7:43 pm</h4>
+    <div class="postbody"><span class="postbody">It is possible to play more that one sample per channel, but you need to implement some kind of mixing in your code.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#1825 - tepples - Thu Jan 23, 2003 7:47 pm</h4>
+    <div class="postbody"><span class="postbody">It's possible to play several sounds simultaneously on the GBA.  You just have to mix them in software.  The two DSound channels are mainly intended to be the mixer outputs for the left and right speakers.
+<br/>
+<br/>
+That said, if you don't have much else to do in your game other than mix samples, such as a 2D platform game or a puzzle game or anything else with simple graphics, physics, and AI, a good software mixer can mix 30 or so channels in mono or 16 channels in stereo.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#1858 - snug - Fri Jan 24, 2003 5:06 pm</h4>
+    <div class="postbody"><span class="postbody">On the topic of software mixing, does anybody know of some good software mixing tutorials geared towards the AGB?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#2320 - regularkid - Sun Feb 02, 2003 2:19 am</h4>
+    <div class="postbody"><span class="postbody">I too would be very interested in a software sound mixing tutorial! Anyone?<br/>_________________<br/>- RegularKid</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#2325 - col - Sun Feb 02, 2003 3:03 am</h4>
+    <div class="postbody"><span class="postbody">This is not gba specific, but it covers most of what you'll need to know.
+<br/>
+<br/>
+Just apply the approach discribed here to the gba hardware.
+<br/>
+<br/>
+And heres a tip to get you started, gba hardware wants signed twos complement 8bit samples.
+<br/>
+However its easier to mix unsigned 8bit samples, so convert them right at the end of the process using your 'volumetable' 
+<br/>
+<br/>
+<a href="http://www.oxygen.it.net.au/mixing/" target="_blank">http://www.oxygen.it.net.au/mixing/</a>
+<br/>
+<br/>
+<br/>
+cheers
+<br/>
+<br/>
+col</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#2326 - tepples - Sun Feb 02, 2003 3:16 am</h4>
+    <div class="postbody"><span class="postbody">Here are the basic ideas behind the mixer in TOD milestone 3 (in progress; I still have four bugs blocking its release).
+<br/>
+<br/>
+First, you'll have to get the PCM channels going in the first place, playing one sound at a time.  You'll have to convert your wave files from .wav format (unsigned 8-bit PCM, signed 16-bit PCM, or something compressed) to a format the GBA understands (signed 8-bit PCM).  Read <a class="postlink" href="http://belogic.com/gba/" target="_blank">these tutorials</a> to get started.
+<br/>
+<br/>
+Then figure out how to change the audio start address every vblank (turn off the DMA channel, set the source address, turn the DMA channel back on).
+<br/>
+<br/>
+Then figure out how to write ARM code and put it in IWRAM.
+<br/>
+<br/>
+Then play sounds by copying pieces into two small buffers in IWRAM.  Start one buffer playing and copy into the other; this technique is called "double buffering".  Because the GBA runs 280896 cycles per frame, you'll have to pick your sample rates carefully.  A good one to start off with is 924 cycles per sample, 304 8-bit (signed char) samples per buffer.  Make sure to do something sensible when the sample's length is not a multiple of your buffer's length, such as cutting off the sample (setting its rate to 0) or looping part of the sample (subtracting a constant from the source pointer).  You'll need to compile this rudimentary mixer as ARM code in IWRAM.
+<br/>
+<br/>
+Then learn fixed point arithmetic.
+<br/>
+<br/>
+Then figure out how to change the volume of a sample (hint: multiply each byte by a constant 0-255 and then shift right by 8).
+<br/>
+<br/>
+Then figure out how to change the pitch of a sample (hint: treat the pointer as a fixed-point number, and add a constant to it every sample).
+<br/>
+<br/>
+Now here comes the hard part.  Make a third buffer with the same number of samples as your other buffers but 16 bits deep (use the 'signed short' type).  Instead of changing volume and pitch directly from a sample in ROM to the buffer in IWRAM, add it to your buffer.  The steps of your algorithm should look like this:
+<br/>
+1. Clear the buffer to all zeroes.
+<br/>
+2. For each voice being mixed, add it to the buffer.  Don't shift right when changing volume; you'll do that at the end.
+<br/>
+3. Now copy the buffer on top of the 8-bit buffer, shifting each sample right 8 bits.  (Truncating the final mix rather than each sample results in less noise.)
+<br/>
+<br/>
+Now put each sample's information in a struct, and you'll be able to do more than one voice.
+<br/>
+<br/>
+Of course, an optimized mixer is a bit tougher.  You'll need to 1. unroll the loop slightly and 2. recognize common special cases and write "fast paths".  It's possible to get a mixer down to 2.5% + 2%/voice CPU usage for 18 kHz mono mixing using only C compiled to ARM with GCC and no assembly language.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#2328 - tepples - Sun Feb 02, 2003 3:25 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>col wrote:</b></span></td> </tr> <tr> <td class="quote">However its easier to mix unsigned 8bit samples</td> </tr></table><span class="postbody">
+<br/>
+How do you figure?  Is unsigned multiplication faster than signed multiplication?  And how do you correct the "bias" for waves that end halfway through a mix buffer?  Currently, I'm mixing signed samples at 2.5% + 2%/voice at 18 kHz mono using only C, and that's with variable volume, pitch, and looping.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">so convert them right at the end of the process using your 'volumetable'</td> </tr></table><span class="postbody">
+<br/>
+Though a table sped up post-processing on the 486 and 586 because they lacked conditional move instructions, post-processing on an ARM processor is probably faster with code than with a table stored in EWRAM or ROM.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#2333 - col - Sun Feb 02, 2003 3:56 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>col wrote:</b></span></td> </tr> <tr> <td class="quote">However its easier to mix unsigned 8bit samples</td> </tr></table><span class="postbody">
+<br/>
+How do you figure?  Is unsigned multiplication faster than signed multiplication?  And how do you correct the "bias" for waves that end halfway through a mix buffer?  Currently, I'm mixing signed samples at 2.5% + 2%/voice at 18 kHz mono using only C, and that's with variable volume, pitch, and looping.</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I don't think that the way i'm mixing will work with twos compliment signed... I'll have another look though - might be wrong...
+<br/>
+As far as specs go, I'm getting 8 channels panned mono(256 positions) pitched with volume @ 18k mixed down in about 14.5% cpu per frame (in ARM assembly)
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">so convert them right at the end of the process using your 'volumetable'</td> </tr></table><span class="postbody">
+<br/>
+Though a table sped up post-processing on the 486 and 586 because they lacked conditional move instructions, post-processing on an ARM processor is probably faster with code than with a table stored in EWRAM or ROM.</span></td> </tr></table><span class="postbody">
+<br/>
+The table is in iwram, and allows non-linear volume clipping with no overhead!
+<br/>
+<br/>
+cheers
+<br/>
+<br/>
+col</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#2336 - tepples - Sun Feb 02, 2003 4:11 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>col wrote:</b></span></td> </tr> <tr> <td class="quote">I don't think that the way i'm mixing will work with twos compliment signed</td> </tr></table><span class="postbody">
+<br/>
+ldrsb is your friend.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">As far as specs go, I'm getting 8 channels panned mono(256 positions) pitched with volume @ 18k mixed down in about 14.5% cpu per frame (in ARM assembly)</td> </tr></table><span class="postbody">
+<br/>
+Is that with or without looping?  Without looping, I'm doing 8 voices in 14.5% cpu (35 scanlines) as well, but with no support for panning.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">The table is in iwram, and allows non-linear volume clipping with no overhead!</td> </tr></table><span class="postbody">
+<br/>
+How big is it?  Some programs need a mixer with a small IWRAM footprint because they're also running graphics code.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#2337 - col - Sun Feb 02, 2003 4:35 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote">How big is it?  Some programs need a mixer with a small IWRAM footprint because they're also running graphics code.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+all in - code buffers tables etc it's about 4.6kb of iwram - with some trickery, i think i can knock that down to around 4k
+<br/>
+<br/>
+please explain what you mean by looping?
+<br/>
+<br/>
+<br/>
+cheers
+<br/>
+<br/>
+<br/>
+col</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#2339 - tepples - Sun Feb 02, 2003 4:39 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>col wrote:</b></span></td> </tr> <tr> <td class="quote">please explain what you mean by looping?</td> </tr></table><span class="postbody">
+<br/>
+Often, a wave will have attack and decay, and then the last <span style="font-style: italic">n</span> bytes of the wave are repeated as a sustain until the channel is silenced.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#2340 - jd - Sun Feb 02, 2003 5:23 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote">Currently, I'm mixing signed samples at 2.5% + 2%/voice at 18 kHz mono using only C, and that's with variable volume, pitch, and looping.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Not being one to brag, but I've managed 0.5% + 1.1%/voice at 24 kHz with variable volume, pitch and looping with ~2K of IWRAM usage. As you can probably tell, I'm pretty chuffed. :)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#2342 - tepples - Sun Feb 02, 2003 6:35 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>jd wrote:</b></span></td> </tr> <tr> <td class="quote">Not being one to brag, but I've managed 0.5% + 1.1%/voice at 24 kHz with variable volume, pitch and looping with ~2K of IWRAM usage.</td> </tr></table><span class="postbody">
+<br/>
+OK, now I need help. If it's possible to make a mixer twice as fast as mine, then what am I doing wrong in the assembly language code generated by compiling <a class="postlink" href="http://www.pineight.com/gba/gbmxr.c.txt" target="_blank">gbmxr.c</a> in GCC? Or is that a "tell you but then I'd have to kill you" trade secret?<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#2345 - jd - Sun Feb 02, 2003 7:10 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+OK, now I need help. If it's possible to make a mixer twice as fast as mine,
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Actually, it's about 2.5 times as fast as the figures I gave were for 24 kHz, not 18. :)
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+then what am I doing wrong in the assembly language code generated by compiling <a class="postlink" href="http://www.pineight.com/gba/gbmxr.c.txt" target="_blank">gbmxr.c</a> in GCC? Or is that a "tell you but then I'd have to kill you" trade secret?</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Well, it's not quite that bad, but the code is for a commercial project. Sorry to be a tease, but I don't think it would be wise to reveal how it's done - at least not yet.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#2359 - FluBBa - Sun Feb 02, 2003 12:18 pm</h4>
+    <div class="postbody"><span class="postbody">I could probably think of one thing at least.
+<br/>
+Don't write to memory more then you need.
+<br/>
+If you build a modplayer/mixer for a specific number of channels (say 8) you can probably mix a sample from all channels into a register then write it to memory, instead of writing/adding one sample at a time to memory.
+<br/>
+That's how I would have done it.
+<br/>
+<br/>
+/FluBBa</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#2360 - Splam - Sun Feb 02, 2003 12:34 pm</h4>
+    <div class="postbody"><span class="postbody">Yeah, thats how I do it, you can manage about 4 channels at a time without running out of registers, so if you want an 8 channel stereo mixer just do 2 lots 1 for each side.  Also some self modifying code comes in handy ;)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#2368 - tepples - Sun Feb 02, 2003 4:07 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Splam wrote:</b></span></td> </tr> <tr> <td class="quote">you can manage about 4 channels at a time without running out of registers</td> </tr></table><span class="postbody">
+<br/>
+How would that work?  I can only see how two voices could be mixed in one pass.
+<br/>
+<br/>
+r0 mix bus
+<br/>
+r1 address of start of wave
+<br/>
+r2 offset into wave (fixed-point)
+<br/>
+r3 pitch
+<br/>
+r4 volume
+<br/>
+r5 address of end of wave
+<br/>
+r6-r10 (same as r1-r5 for the other voice)
+<br/>
+r11-14 temporary values
+<br/>
+r15 program counter
+<br/>
+<br/>
+What am I allocating registers to that I shouldn't?<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#2376 - DekuTree64 - Sun Feb 02, 2003 7:05 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>col wrote:</b></span></td> </tr> <tr> <td class="quote">However its easier to mix unsigned 8bit samples, so convert them right at the end of the process using your 'volumetable'</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Just curious, but wouldn't unsigned samples sound completely different than signed when added together? I think I could speed up my mixer quite a bit if I didn't have to worry about signs, but it just doesn't seem like it would work.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#2379 - col - Sun Feb 02, 2003 7:29 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>jd wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+Not being one to brag, but I've managed 0.5% + 1.1%/voice at 24 kHz with variable volume, pitch and looping with ~2K of IWRAM usage. As you can probably tell, I'm pretty chuffed. :)</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+damn, i'm only getting 0.6% + 1.3%/voice in mono @ 18k :-/
+<br/>
+<br/>
+Do you have the number of channels fixed or variable?
+<br/>
+<br/>
+And what are your specs for stereo(panned mono) channels? as thats what most good games seem to use.
+<br/>
+<br/>
+cheers
+<br/>
+<br/>
+col.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#2387 - jd - Sun Feb 02, 2003 9:05 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>col wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+Do you have the number of channels fixed or variable?
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+The maximum is 8, but it skips unused channels very efficiently. As a result of this on average a complex protracker MOD only uses 4.5% CPU at 24 kHz.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>col wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+And what are your specs for stereo(panned mono) channels? as thats what most good games seem to use.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I assume by panned mono you mean each channel has a left volume and right volume? I haven't implemented this because most people don't use headphones. However, I'd estimate it would slow it down by about 25% at the most - i.e. 0.5% + 1.4%/voice at 24 kHz. But even with this small cost I don't think it's worth it unless you've got CPU cycles to spare.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#2398 - col - Mon Feb 03, 2003 1:36 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>jd wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+I assume by panned mono you mean each channel has a left volume and right volume? I haven't implemented this because most people don't use headphones. However, I'd estimate it would slow it down by about 25% at the most - i.e. 0.5% + 1.4%/voice at 24 kHz. But even with this small cost I don't think it's worth it unless you've got CPU cycles to spare.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Hmm, this is interesting :)
+<br/>
+<br/>
+Firstly, how do you know most people don't use headphones?
+<br/>
+<br/>
+2nd, If folk don't use headphones, why have you chosed such a high sample rate? IMO no-one using the gba speaker is going to notice the difference between 18k and 24k(even if interpolation is being used)
+<br/>
+<br/>
+3rd if you're going to pick a high sample rate, why such an odd one?
+<br/>
+24khz dosn't fit well with a vblank approach to buffer switching, and will cause occasional clicks.  If you're using a 'two timers' approach, why not go for 16k or 32k to sync with the hardware's re-sampling rate - this should give a cleaner sound
+<br/>
+<br/>
+If you can do stereo for only an extra 25%, why not drop the bit rate by 25% to 18k - and give the (supposed few) headphone users a treat, no-one else will tell the difference, and the code will go at the same speed...
+<br/>
+<br/>
+cheers
+<br/>
+<br/>
+col.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#2400 - col - Mon Feb 03, 2003 1:42 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>DekuTree64 wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+Just curious, but wouldn't unsigned samples sound completely different than signed when added together? I think I could speed up my mixer quite a bit if I didn't have to worry about signs, but it just doesn't seem like it would work.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+The sample data needs to be converted to 8bit unsigned before you use it.
+<br/>
+Then when you add and multiply the unsigned samples, you must add a bias value to keep zero at zero - in practice this can be got for free depending on your algorithm (ARM asm has a multiply accumulate instruction that gives you a free addition as part of a multiplication instruction.)
+<br/>
+<br/>
+cheers
+<br/>
+<br/>
+col.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#2403 - jd - Mon Feb 03, 2003 3:08 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>col wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+Firstly, how do you know most people don't use headphones?
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I think it was mentioned as one of the reasons given by Nintendo for the GBA SP not having a headphone socket. However, I've just done a search and I can't for the life of me find the page where I read that. :/
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>col wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+2nd, If folk don't use headphones, why have you chosed such a high sample rate? IMO no-one using the gba speaker is going to notice the difference between 18k and 24k(even if interpolation is being used)
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Three reasons:
+<br/>
+<br/>
+1) My mixer gets more efficient at higher mixing rates.
+<br/>
+2) The difference is noticeable through the speakers. (18 kHz only allows a maximum frequency of 9 kHz, which means aliasing is common.)
+<br/>
+3) The difference is *very* noticeable through headphones. I'd much rather spend the CPU time on a higher mixing rate than on panning as (to my ears) it makes a much bigger difference to percieved quality.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>col wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+3rd if you're going to pick a high sample rate, why such an odd one?
+<br/>
+24khz dosn't fit well with a vblank approach to buffer switching, and will cause occasional clicks.  If you're using a 'two timers' approach, why not go for 16k or 32k to sync with the hardware's re-sampling rate - this should give a cleaner sound
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I chose 24 kHz since it gives the best compromise between CPU usage and quality in my opinion. I didn't feel the extra quality offered by 32 kHz jusitified the extra CPU usage. I should also point out that I'm actually using (approximately :) 24001.739628 Hz so as to fit exactly with the GBA's timers. As for hardware resampling, that doesn't seem to be major problem - it certainly sounds better at ~24 kHz than ~22.05, ~20 or 16.384 (which are the others I've tried).</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#2410 - DekuTree64 - Mon Feb 03, 2003 7:52 am</h4>
+    <div class="postbody"><span class="postbody">[quote="colThe sample data needs to be converted to 8bit unsigned before you use it.
+<br/>
+Then when you add and multiply the unsigned samples, you must add a bias value to keep zero at zero[/quote]
+<br/>
+<br/>
+So, like you'd add a sample to your mix buffer, and then subtract 128 so it's basically the same thing? Not sure if I could really make any improvements with that. I was thinking about adding samples together 2 at a time (into a 16-bit mix buf), which is actually what I already do, but currently I have to load a word, separate it into 2 signed halfwords, add the samples, and put them back together. Not sure if it would be faster to just use ldrsh/strh, since it's in IWRAM, but it does let me use ldm/stm to work on a lot of samples at once.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#2423 - col - Mon Feb 03, 2003 7:13 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>jd wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+I think it was mentioned as one of the reasons given by Nintendo for the GBA SP not having a headphone socket...
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+:) yeah, they had to choose between:
+<br/>
+<br/>
+"Nobody uses headphones anyway" 
+<br/>
+and
+<br/>
+"The decision was made to use a non-standard headphone socket in order to milk as much money as possible out of our customers"
+<br/>
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>jd wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+Three reasons:
+<br/>
+1) My mixer gets more efficient at higher mixing rates.
+<br/>
+2) The difference is noticeable through the speakers. (18 kHz only allows a maximum frequency of 9 kHz, which means aliasing is common.)
+<br/>
+3) The difference is *very* noticeable through headphones. I'd much rather spend the CPU time on a higher mixing rate than on panning as (to my ears) it makes a much bigger difference to percieved quality.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+1) intriguing
+<br/>
+2) as soon as you start changing pitch in a simple mixer, you start haemorraging aliasing noise anyway - unless of course you have incorporated band-limited interpolation into your re-sampling algorithm? ;-)
+<br/>
+I did some tests a while back using soundforge - monitoring on some high quality nearfields, and my conclusion was that (in 8bit), there is a significant difference between 16 and 18k, but above 18k the returns start diminishing dramatically.
+<br/>
+(Did you re-sample all your sounds for each bit-rate in your tests? - this will make quite a difference - if your sounds have been prepared for 24k and you start using them in 16k, there will be bigger pitch shifting jumps, and this will hurt the quality far more than anything else.)
+<br/>
+3) c'mon - everyone knows that nobody uses headphones anyway ;p
+<br/>
+but seriously, a good stereo soundstage can dramatically effect perception of graphic quality and the feeling of immersion that the gamer gets from the game - don't underestimate.
+<br/>
+<br/>
+Whatever, you have some nice spect for your mixer, though I'd still like to hear tested specs/iwram usage for 18k stereo(panned mono) channels :) - its much easier to run out of registers that way...
+<br/>
+<br/>
+<br/>
+cheers
+<br/>
+<br/>
+<br/>
+cheers
+<br/>
+<br/>
+col</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#2446 - jd - Tue Feb 04, 2003 3:17 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>col wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+:) yeah, they had to choose between:
+<br/>
+<br/>
+"Nobody uses headphones anyway" 
+<br/>
+and
+<br/>
+"The decision was made to use a non-standard headphone socket in order to milk as much money as possible out of our customers"
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+LOL. :)
+<br/>
+<br/>
+Mind you, the SP isn't exactly going to increase headphone use. :/
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>col wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+1) intriguing
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+It is, isn't it? :)
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>col wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+2) as soon as you start changing pitch in a simple mixer, you start haemorraging aliasing noise anyway - unless of course you have incorporated band-limited interpolation into your re-sampling algorithm? ;-)
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I see what you mean, but the effect is going to be much worse when the rate you're playing the sample at is closer to the mixing rate so boosting that is still beneficial. Also, once you try to play a sample at above the mixing rate things can get *really* nasty, and that's less likely to happen with a higher mixing rate.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>col wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+I did some tests a while back using soundforge - monitoring on some high quality nearfields, and my conclusion was that (in 8bit), there is a significant difference between 16 and 18k, but above 18k the returns start diminishing dramatically.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I did some tests with MODplug Tracker before settling on 24 kHz. In my test, I found each of the following transistions gave a similar perceived improvement in sound quality:
+<br/>
+<br/>
+16-&gt;20 kHz
+<br/>
+20-&gt;22 kHz
+<br/>
+22-&gt;24 kHz
+<br/>
+24-&gt;32 kHz
+<br/>
+<br/>
+I guess it depends on the music you're using though.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>col wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+(Did you re-sample all your sounds for each bit-rate in your tests? - this will make quite a difference - if your sounds have been prepared for 24k and you start using them in 16k, there will be bigger pitch shifting jumps, and this will hurt the quality far more than anything else.)
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+No. Pretty much every sound in the game can be played at any frequency so there wouldn't be a lot of benefit in doing so.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>col wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+3) c'mon - everyone knows that nobody uses headphones anyway ;p
+<br/>
+but seriously, a good stereo soundstage can dramatically effect perception of graphic quality and the feeling of immersion that the gamer gets from the game - don't underestimate.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I know what you mean, but I still think I'd rather have the extra sound quality. I may yet change my mind though - I'm decisive like that. :)
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>col wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+Whatever, you have some nice spect for your mixer, though I'd still like to hear tested specs/iwram usage for 18k stereo(panned mono) channels :) - its much easier to run out of registers that way...
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+IWRAM usage should only be ~250 bytes greater (so the total would still be ~2K) since the mixing buffers are in EWRAM. Also, I just made some changes to my code so I've currently got a register free and there are another three registers I could free without too much pain so I wouldn't expect that to be a significant problem.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#2485 - col - Tue Feb 04, 2003 8:53 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>jd wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+I see what you mean, but the effect is going to be much worse when the rate you're playing the sample at is closer to the mixing rate so boosting that is still beneficial. Also, once you try to play a sample at above the mixing rate things can get *really* nasty, and that's less likely to happen with a higher mixing rate.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Why will the aliasing be worse as the sample you're playing gets closer to the mixing rate?
+<br/>
+surely as you get closer, the frequency of the noise will drop to the the extent that it will become less! noticable (especially on the gba speaker).
+<br/>
+Anyhow, when would you ever need to play a sample with its fundemental frequency set to near 18k?  It's really only harmonics we have to worry about, and in that case, you will get (very)audible aliasing no matter what your mixing frequency is unless you use high quality interpolation to re-sample as you pitch the sounds!!
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>jd wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+I did some tests with MODplug Tracker before settling on 24 kHz. In my test, I found each of the following transistions gave a similar perceived improvement in sound quality:
+<br/>
+<br/>
+16-&gt;20 kHz
+<br/>
+20-&gt;22 kHz
+<br/>
+22-&gt;24 kHz
+<br/>
+24-&gt;32 kHz
+<br/>
+<br/>
+I guess it depends on the music you're using though.
+<br/>
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>col wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+(Did you re-sample all your sounds for each bit-rate in your tests? - this will make quite a difference - if your sounds have been prepared for 24k and you start using them in 16k, there will be bigger pitch shifting jumps, and this will hurt the quality far more than anything else.)
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+No. Pretty much every sound in the game can be played at any frequency so there wouldn't be a lot of benefit in doing so.
+<br/>
+</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Using a simple non-interpolating mixer, the further you pitch a sound away from the rate it was recorded(re-sampled) at, the worse it will sound!!
+<br/>
+If you use a mod for testing that was written for 44.1k then it will obviously sound much worse the lower you go(Thats why there are 'instruments' in a mod, to allow the use of multiple versions of a the same sound  - to minimise this problem)
+<br/>
+If you re-sample the sounds to fit with the bit-rate you are mixing at, a well constructed mod should sound a whole lot better.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>jd wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+IWRAM usage should only be ~250 bytes greater (so the total would still be ~2K) since the mixing buffers are in EWRAM. Also, I just made some changes to my code so I've currently got a register free and there are another three registers I could free without too much pain so I wouldn't expect that to be a significant problem.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+curiouser and curiouser - this is cheeky but - are your specs from testing on gba hardware, or from cycle counting and calculations?  ewram is just so slow, and you have registers to spare !?
+<br/>
+<br/>
+cheers
+<br/>
+<br/>
+col.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#2537 - jd - Thu Feb 06, 2003 1:24 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>col wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+Why will the aliasing be worse as the sample you're playing gets closer to the mixing rate?
+<br/>
+surely as you get closer, the frequency of the noise will drop to the the extent that it will become less! noticable (especially on the gba speaker).
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+If you're playing the sample at 16 kHz then I agree, it will sound better mixed at 16 kHz than at 24 kHz. However, if you aren't playing the sample at the mixing rate (which is a very common situation) then the average error will be much greater with a lower mixing rate that with a larger one. (I agree that when the play rate gets very near the mix rate the quality is better - I don't know what I was smoking when I wrote the opposite of that before. :)
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>col wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+Anyhow, when would you ever need to play a sample with its fundemental frequency set to near 18k?
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Quite often!
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>col wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+It's really only harmonics we have to worry about, and in that case, you will get (very)audible aliasing no matter what your mixing frequency is unless you use high quality interpolation to re-sample as you pitch the sounds!!
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Unless I've misunderstood, it sounds like you're arguing that increasing the mixing rate doesn't reduce aliasing, which is clearly not the case. (For example, consider the case of an infinite mixing rate - there wouldn't be any aliasing at all. The higher the mixing rate, the less aliasing there is.)
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>col wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+Using a simple non-interpolating mixer, the further you pitch a sound away from the rate it was recorded(re-sampled) at, the worse it will sound!!
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Yes, but that's all that can be done on the GBA. An interpolating mixer isn't practical (at least not if you want any CPU time left afterwards :) and there isn't enough storage space to store all the samples at lots of different mixing rates. That's the whole reason for having a pitch-shifting mixer in the first place.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>col wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+If you use a mod for testing that was written for 44.1k then it will obviously sound much worse the lower you go(Thats why there are 'instruments' in a mod, to allow the use of multiple versions of a the same sound  - to minimise this problem)
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I've got a collection of thousands of MODs, and I've never seen one that had more than one copy of the same instrument to improve its quality when it was played at different pitches. The different instruments are just that - drums, pianos, trumpets, etc.
+<br/>
+<br/>
+Also, the Amiga doesn't have a "mixing rate" per se, so it isn't really worthwhile to optimise songs in the way you describe. Besides, the ones I'm using sound just fine when mixed at 24 kHz, but very poor at 16 kHz.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>col wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+If you re-sample the sounds to fit with the bit-rate you are mixing at, a well constructed mod should sound a whole lot better.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+That only works if you know what pitch the samples will be played at - and if you know that then you've got no need for a mixer that's capable of pitch-shifting in the first place.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>col wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+curiouser and curiouser - this is cheeky but - are your specs from testing on gba hardware, or from cycle counting and calculations?
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Testing on hardware.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>col wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+ewram is just so slow, and you have registers to spare !?
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I'm only writing to EWRAM twice (for Direct Sound A and B), not reading and writing for every channel like your mixer does. Putting the mixing buffer in IWRAM would only speed up my routine by ~5% so it's not really worth it.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#2558 - FluBBa - Thu Feb 06, 2003 11:00 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>jd wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+I'm only writing to EWRAM twice (for Direct Sound A and B), not reading and writing for every channel like your mixer does. Putting the mixing buffer in IWRAM would only speed up my routine by ~5% so it's not really worth it.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Why are you using both Direct Sound A &amp; B?
+<br/>
+Is that because of speed reasons?<br/>_________________<br/>I probably suck, my not is a programmer.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#2581 - jd - Fri Feb 07, 2003 8:14 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>FluBBa wrote:</b></span></td> </tr> <tr> <td class="quote">Why are you using both Direct Sound A &amp; B?
+<br/>
+Is that because of speed reasons?</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+No, it would actually be marginally faster to mix all 8 channels at once. However, doing it as 2 batches of 4 channels does have a couple of advantages:
+<br/>
+<br/>
+1) Better quality. The more channels you mix together, the less accuracy you get.
+<br/>
+<br/>
+2) Less IWRAM usage. Having a shorter 4 channel mixer and calling it twice uses less IWRAM than having a longer 8 channel mixer and calling it once.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#3327 - NEiM0D - Sat Feb 22, 2003 9:31 pm</h4>
+    <div class="postbody"><span class="postbody">How can you mix 4 channels per time?
+<br/>
+I've managed to do a 3 channel mix very fast.
+<br/>
+but I didn't have enough registers for 4 channels.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#3328 - NEiM0D - Sat Feb 22, 2003 9:32 pm</h4>
+    <div class="postbody"><span class="postbody">And with 2K IWRAM usage you mean the mixer code plus buffers or something else?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#3364 - jd - Sun Feb 23, 2003 5:22 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>NEiM0D wrote:</b></span></td> </tr> <tr> <td class="quote">How can you mix 4 channels per time? I've managed to do a 3 channel mix very fast. but I didn't have enough registers for 4 channels.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Sorry, it's for a commercial project so I can't go into details.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>NEiM0D wrote:</b></span></td> </tr> <tr> <td class="quote">And with 2K IWRAM usage you mean the mixer code plus buffers or something else?</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Mixer code. The buffers are in EWRAM.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

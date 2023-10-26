@@ -1,0 +1,184 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Double Buffer - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Beginners > Double Buffer</h2>
+<div id="posts">
+<div class="post">
+    <h4>#21056 - bogston - Sat May 22, 2004 3:16 pm</h4>
+    <div class="postbody"><span class="postbody">I'm learning GBA programming.  This is a modification of a double buffer example.  I don't believe it's works correctly.  Also, I don't believe the two original examples worked correctly either. The problem is that I see the screen being painted.  The examples are from gbajunkie and simpdemo.  Using VisualBoyAdvance, will I still see the screen being painted using double buffer?
+<br/>
+<br/>
+#include &lt;gba.h&gt;
+<br/>
+<br/>
+u16 *bg_palette_mem = BG_PALETTE_MEM;
+<br/>
+u16 *video_buffer = BACK_BUFFER;
+<br/>
+<br/>
+void swap_buffer(void)
+<br/>
+{
+<br/>
+	VSYNC();
+<br/>
+<br/>
+    if(REG_DISPCNT &amp; DOUBLE_BUFFER)
+<br/>
+	{
+<br/>
+		REG_DISPCNT &amp;= ~DOUBLE_BUFFER;
+<br/>
+		video_buffer = (u16 *) BACK_BUFFER;
+<br/>
+	}
+<br/>
+	else
+<br/>
+	{
+<br/>
+		REG_DISPCNT |= DOUBLE_BUFFER;
+<br/>
+		video_buffer = (u16 *) FRONT_BUFFER;
+<br/>
+	}
+<br/>
+}
+<br/>
+<br/>
+int main()
+<br/>
+{
+<br/>
+	int i;
+<br/>
+<br/>
+	SET_MODE(MODE_4 | BG2_ENABLE);
+<br/>
+<br/>
+	*bg_palette_mem++ = RGB(31, 31, 31); 	// white
+<br/>
+	*bg_palette_mem++ = RGB(0, 31, 0);		// green
+<br/>
+	*bg_palette_mem++ = RGB(31, 0, 0);		// red
+<br/>
+	*bg_palette_mem++ = RGB(0, 31, 31);		// cyan
+<br/>
+<br/>
+	// back buffer
+<br/>
+	i = 38400;
+<br/>
+	while(i--)
+<br/>
+		*video_buffer++ = 0x0303;
+<br/>
+	swap_buffer();
+<br/>
+<br/>
+	// front buffer
+<br/>
+	i = 38400;
+<br/>
+	while(i--)
+<br/>
+		*video_buffer++ = 0x0202;
+<br/>
+	swap_buffer();
+<br/>
+}</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#21093 - Lupin - Sun May 23, 2004 8:33 pm</h4>
+    <div class="postbody"><span class="postbody">did you try to call swap_buffer before drawing anything? What does VSYNC look like?<br/>_________________<br/><a class="postlink" href="http://pokeme.shizzle.it/" target="_blank">Team Pokeme</a>
+<br/>
+<a class="postlink" href="http://lupin.shizzle.it/" target="_blank">My blog and PM ASM tutorials</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#21176 - Cearn - Tue May 25, 2004 12:53 pm</h4>
+    <div class="postbody"><span class="postbody">Like Lupin said, what does VSYNC look like? It should be something like 
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+   while(REG_VCOUNT &gt;= 160);
+<br/>
+   while(REG_VCOUNT &lt; 160);
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+not just a wait until REG_VCOUNT &gt;= 160. Since swap_buffer() is small, you'll still be inside the VDraw period when the second vsync is called, while will basically be ignored then. There's a recent thread on this subject. (And, plz, no comments on VBlankIntrWait being the Right Thing to do)
+<br/>
+<br/>
+Also, there are number of more sinister problems with the code. First, there's no main loop. GBA programs should never end. Ever. Even when you don't have code for a main loop, still use something like 
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+while(1);
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+at the bottom of main.
+<br/>
+<br/>
+Secondly, on the use of *var++. As much as I can understand the use, it's really <span style="font-style: italic">really</span> ill adviced to do it on global variables. It's not a big deal with short short code, but if you have a bigger program, you'll going to wonder why the hell bg_palette_mem[0] won't set the first background palette entry anymore. (answer, because after *bg_palette_mem++, 
+<br/>
+bg_palette_mem points to the second entry)
+<br/>
+<br/>
+On a cosmetic note, the use of code tags is adviced when listing code, especially since it allows indenting.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#21218 - bogston - Wed May 26, 2004 2:02 am</h4>
+    <div class="postbody"><span class="postbody">Here's VSYNC():
+<br/>
+<br/>
+#define VSYNC() while(REG_VCOUNT &lt; 160);</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#21219 - bogston - Wed May 26, 2004 2:09 am</h4>
+    <div class="postbody"><span class="postbody">And ...
+<br/>
+<br/>
+Don't worry about the bad coding practices.  This code is for me to learn.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#21221 - sajiimori - Wed May 26, 2004 2:25 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+This code is for me to learn.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+And you're posting it for us to read, so have some consideration.
+<br/>
+<br/>
+Fix the problems that have already been mentioned, then post the new version (in code tags) if you still have trouble.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#21251 - Lupin - Wed May 26, 2004 1:54 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Don't worry about the bad coding practices.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Bad coding practices might be the reason for your problem :)
+<br/>
+<br/>
+Now you got quoted twice, doesn't that make you worry? :P<br/>_________________<br/><a class="postlink" href="http://pokeme.shizzle.it/" target="_blank">Team Pokeme</a>
+<br/>
+<a class="postlink" href="http://lupin.shizzle.it/" target="_blank">My blog and PM ASM tutorials</a></span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

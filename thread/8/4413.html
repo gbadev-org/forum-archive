@@ -1,0 +1,405 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>What exactly is the compiler doing? - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>ASM > What exactly is the compiler doing?</h2>
+<div id="posts">
+<div class="post">
+    <h4>#29364 - sgeos - Fri Nov 19, 2004 2:26 am</h4>
+    <div class="postbody"><span class="postbody">This is my C code:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">int x(int a, int b)
+<br/>
+{
+<br/>
+   return a - b;
+<br/>
+}
+<br/>
+<br/>
+int main(void)
+<br/>
+{
+<br/>
+   int a[2] = {12, 77};
+<br/>
+<br/>
+   x(a[0], a[1]);
+<br/>
+   return 0;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+This is the ASM output.  (gcc -S test.c)
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">   .file   "test.c"
+<br/>
+   .text
+<br/>
+   .align   2
+<br/>
+   .global   x
+<br/>
+   .type   x,function
+<br/>
+x:
+<br/>
+   @ args = 0, pretend = 0, frame = 8
+<br/>
+   @ frame_needed = 1, uses_anonymous_args = 0
+<br/>
+   mov   ip, sp
+<br/>
+   stmfd   sp!, {fp, ip, lr, pc}
+<br/>
+   sub   fp, ip, #4
+<br/>
+   sub   sp, sp, #8
+<br/>
+   str   r0, [fp, #-16]
+<br/>
+   str   r1, [fp, #-20]
+<br/>
+   ldr   r2, [fp, #-16]
+<br/>
+   ldr   r3, [fp, #-20]
+<br/>
+   rsb   r3, r3, r2
+<br/>
+   mov   r0, r3
+<br/>
+   ldmea   fp, {fp, sp, pc}
+<br/>
+.Lfe1:
+<br/>
+   .size   x,.Lfe1-x
+<br/>
+   .section   .rodata
+<br/>
+   .align   2
+<br/>
+.LC0:
+<br/>
+   .word   12
+<br/>
+   .word   77
+<br/>
+   .text
+<br/>
+   .align   2
+<br/>
+   .global   main
+<br/>
+   .type   main,function
+<br/>
+main:
+<br/>
+   @ args = 0, pretend = 0, frame = 8
+<br/>
+   @ frame_needed = 1, uses_anonymous_args = 0
+<br/>
+   mov   ip, sp
+<br/>
+   stmfd   sp!, {fp, ip, lr, pc}
+<br/>
+   sub   fp, ip, #4
+<br/>
+   sub   sp, sp, #8
+<br/>
+   ldr   r3, .L3
+<br/>
+   ldmia   r3, {r0-r1}
+<br/>
+   sub   r2, fp, #16
+<br/>
+   stmda   r2, {r0-r1}
+<br/>
+   ldr   r0, [fp, #-20]
+<br/>
+   ldr   r1, [fp, #-16]
+<br/>
+   bl   x
+<br/>
+   mov   r3, #0
+<br/>
+   mov   r0, r3
+<br/>
+   ldmea   fp, {fp, sp, pc}
+<br/>
+.L4:
+<br/>
+   .align   2
+<br/>
+.L3:
+<br/>
+   .word   .LC0
+<br/>
+.Lfe2:
+<br/>
+   .size   main,.Lfe2-main
+<br/>
+   .ident   "GCC: (GNU) 3.2.2 (DevKit Advance R5 Beta 3)"
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+It looks like the compiler moves variables/parameters into a physical memory location and then loads them up again.  What is up with the whole
+<br/>
+<span style="font-weight: bold">mov ip, sp	stmfd sp!, {fp, ip, lr, pc}</span> deal?  Why are only three values being popped from the stack?  Why is 8 being subtracted from the stack?
+<br/>
+<br/>
+I think the array initialization is kind of nifty.
+<br/>
+<br/>
+-Brendan</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#29367 - sajiimori - Fri Nov 19, 2004 2:56 am</h4>
+    <div class="postbody"><span class="postbody">I wouldn't bother trying to decipher compiler output unless you're using at least -O2.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#29370 - DekuTree64 - Fri Nov 19, 2004 4:07 am</h4>
+    <div class="postbody"><span class="postbody">That is the craziest way to do one subtraction I have ever seen. It took me quite a while to even figure out why that works at all. 
+<br/>
+Appearently fp is mainly used for debugging, and it's storing your parameters relative to it so the debugger can look them up. Loading them back again is a total waste nomatter how you look at it though. 
+<br/>
+Also strange is that it would decide to use a reverse subtract instead of a normal one, and then mov to r0 instead of just putting the result of the subtract there. Not to mention that return sequence. ldmea means to decrement and then load, so since fp points to the 'pc' that was pushed onto the stack (4 less than the original sp), it decrements, then loads the lr that was pushed before into pc, then loads the pushed ip (which had just been set to the original sp) into sp, then loads the original fp.
+<br/>
+<br/>
+I'm a little curious to see what it will do with debugging turned off and optimizations on.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#29375 - sgeos - Fri Nov 19, 2004 5:45 am</h4>
+    <div class="postbody"><span class="postbody">Is there a better way to turn off debugging?
+<br/>
+gcc -O2 -g0 -S test.c
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">   .file   "test.c"
+<br/>
+   .text
+<br/>
+   .align   2
+<br/>
+   .global   x
+<br/>
+   .type   x,function
+<br/>
+x:
+<br/>
+   @ args = 0, pretend = 0, frame = 0
+<br/>
+   @ frame_needed = 0, uses_anonymous_args = 0
+<br/>
+   @ link register save eliminated.
+<br/>
+   rsb   r0, r1, r0
+<br/>
+   @ lr needed for prologue
+<br/>
+   mov   pc, lr
+<br/>
+.Lfe1:
+<br/>
+   .size   x,.Lfe1-x
+<br/>
+   .section   .rodata
+<br/>
+   .align   2
+<br/>
+.LC0:
+<br/>
+   .word   12
+<br/>
+   .word   77
+<br/>
+   .text
+<br/>
+   .align   2
+<br/>
+   .global   main
+<br/>
+   .type   main,function
+<br/>
+main:
+<br/>
+   @ args = 0, pretend = 0, frame = 0
+<br/>
+   @ frame_needed = 1, uses_anonymous_args = 0
+<br/>
+   ldr   r2, .L3
+<br/>
+   mov   ip, sp
+<br/>
+   stmfd   sp!, {r4, fp, ip, lr, pc}
+<br/>
+   ldmia   r2, {r3-r4}
+<br/>
+   sub   fp, ip, #4
+<br/>
+   mov   r1, r4
+<br/>
+   mov   r0, r3
+<br/>
+   bl   x
+<br/>
+   mov   r0, #0
+<br/>
+   ldmea   fp, {r4, fp, sp, pc}
+<br/>
+.L4:
+<br/>
+   .align   2
+<br/>
+.L3:
+<br/>
+   .word   .LC0
+<br/>
+.Lfe2:
+<br/>
+   .size   main,.Lfe2-main
+<br/>
+   .ident   "GCC: (GNU) 3.2.2 (DevKit Advance R5 Beta 3)"</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+-Brendan</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#29377 - allenu - Fri Nov 19, 2004 5:59 am</h4>
+    <div class="postbody"><span class="postbody">Basically, what's happening is that in main, the code is creating local variables via the stack.  It allocates room for it and then loads up the constant values (12 and 77) from another location in memory.  Then, in anticipation for the function call to x(), it has to load the parameters into the r0 and r1 registers, which I assume are the registers used for passing the first two parameters.  
+<br/>
+<br/>
+Inside the function x(), it has to copy the contents from r0 and r1 to local variables 'a' and 'b', which are on the stack.  Now the totally redundant step: it copies them to registers r2 and r3.  It does the subtraction using these registers and copies the result to r0, which is used as the 'return value' register.
+<br/>
+<br/>
+I'm not familiar with ARM assembly, but it looks to me that stmfd and ldmea are for storing and restoring multiple registers on the stack.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#29378 - allenu - Fri Nov 19, 2004 6:01 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sgeos wrote:</b></span></td> </tr> <tr> <td class="quote">Is there a better way to turn off debugging?
+<br/>
+gcc -O2 -g0 -S test.c
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Wow, the optimizer did a good job here.  It got rid of the unnecessary local variables.  As far as I can tell, there is no debugging code in this or the original assembly output.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#29406 - sajiimori - Fri Nov 19, 2004 6:59 pm</h4>
+    <div class="postbody"><span class="postbody">If you want to see the compiler do a <span style="font-style: italic">really</span> good job, then declare 'x' static, compile with -O3, -fomit-frame-pointer, and rename 'main' to something else so it won't generate startup code.  If you're using GCC 3.x, the results are almost humorous.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#29408 - isildur - Fri Nov 19, 2004 7:55 pm</h4>
+    <div class="postbody"><span class="postbody">Does anyone use -O3 for real code? I always heard that it's something not to do because it over-optimizes and can create bugs.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#29410 - sajiimori - Fri Nov 19, 2004 8:12 pm</h4>
+    <div class="postbody"><span class="postbody">Any differences in behavior are the result of compiler bugs.  GCC has gotten more solid over the years, and we use -O3 in our studio.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#29419 - sgeos - Fri Nov 19, 2004 8:58 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sajiimori wrote:</b></span></td> </tr> <tr> <td class="quote">If you want to see the compiler do a <span style="font-style: italic">really</span> good job, then declare 'x' static, compile with -O3, -fomit-frame-pointer, and rename 'main' to something else so it won't generate startup code.  If you're using GCC 3.x, the results are almost humorous.</td> </tr></table><span class="postbody">lol.  I'll post the results for others.
+<br/>
+<br/>
+gcc -fomit-frame-pointer -O3 -g0 -S test2.c
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">   .file   "test2.c"
+<br/>
+   .section   .rodata
+<br/>
+   .align   2
+<br/>
+.LC0:
+<br/>
+   .word   12
+<br/>
+   .word   77
+<br/>
+   .text
+<br/>
+   .align   2
+<br/>
+   .global   maine
+<br/>
+   .type   maine,function
+<br/>
+maine:
+<br/>
+   @ args = 0, pretend = 0, frame = 0
+<br/>
+   @ frame_needed = 0, uses_anonymous_args = 0
+<br/>
+   @ link register save eliminated.
+<br/>
+   @ lr needed for prologue
+<br/>
+   mov   r0, #0
+<br/>
+   mov   pc, lr
+<br/>
+.Lfe1:
+<br/>
+   .size   maine,.Lfe1-maine
+<br/>
+   .ident   "GCC: (GNU) 3.2.2 (DevKit Advance R5 Beta 3)"</td> </tr></table><span class="postbody">
+<br/>
+Compiling with these options does, of course, defeat the purpose of the exercise.  I'm trying to figure what the compiler is doing, and why it is working.  In what order are registers pushed onto and popped off of the stack?
+<br/>
+<br/>
+-Brendan</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#29421 - allenu - Fri Nov 19, 2004 9:13 pm</h4>
+    <div class="postbody"><span class="postbody">Ha, nice.  It's basically removed the unnecessary call to x() as the results aren't used by anything.  I've seen this happen on some of our stuff at work.  Kind of makes it tough to debug when code you're expecting to execute doesn't execute. :-)  Hence, do not use the optimizations until your code is solid.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#29425 - sajiimori - Fri Nov 19, 2004 10:04 pm</h4>
+    <div class="postbody"><span class="postbody">Yeah, intentionally debugging an optimized build is pure insanity.  :)
+<br/>
+<br/>
+Occasionally it has to be done to work around a compiler bug or to fix a bug in your own code that was only revealed by optimizations, and then you're stuck debugging in assembler. &gt;_&lt;</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#29428 - tepples - Fri Nov 19, 2004 11:08 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>isildur wrote:</b></span></td> </tr> <tr> <td class="quote">Does anyone use -O3 for real code?</td> </tr></table><span class="postbody">
+<br/>
+TOD is compiled with -O3. The bugs it introduces in practice mostly relate to not declaring the right things as volatile.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>allenu wrote:</b></span></td> </tr> <tr> <td class="quote">It's basically removed the unnecessary call to x()</td> </tr></table><span class="postbody">
+<br/>
+Not removed but inlined. Total removal of a function call should happen only if GCC thinks x() is a pure function, one with no side effects. Sometimes GCC can get confused about pure functions if you forget a volatile somewhere.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#29431 - sajiimori - Fri Nov 19, 2004 11:25 pm</h4>
+    <div class="postbody"><span class="postbody">x was purely functional.  That's why there's no sign of it at all.  The definition wasn't even generated because it was delcared static, so the compiler knows it couldn't be called elsewhere.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

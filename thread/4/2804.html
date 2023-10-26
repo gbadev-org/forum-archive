@@ -1,0 +1,306 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>OAM entry sorting - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > OAM entry sorting</h2>
+<div id="posts">
+<div class="post">
+    <h4>#15944 - abilyk - Wed Feb 04, 2004 10:13 pm</h4>
+    <div class="postbody"><span class="postbody">I wanted to share the OAM entry sorting system I've designed.  Perhaps some of you may find it useful, and if there are any holes in my logic, I'm sure someone will point it out.
+<br/>
+<br/>
+First, let me explain the goals of this system.  Inspired by Rafael Baptista's <a class="postlink" href="http://www.gamasutra.com/features/20010509/baptista_01.htm" target="_blank">GBA Resource Management paper</a>.  I wanted specific control over sprite z-depth without a lot of bookkeeping.  I wanted a sprite array in which each sprite entry will remain in the same position from creation until deletion.
+<br/>
+<br/>
+Here is my Sprite struct and the global Sprite array:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">typedef Struct Sprite
+<br/>
+{
+<br/>
+   u16 attribute0;
+<br/>
+   u16 attribute1;
+<br/>
+   u16 attribute2;
+<br/>
+   u16 attribute3;
+<br/>
+   u16 OAM_index;
+<br/>
+}
+<br/>
+<br/>
+Sprite sprite[128];</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Attributes 0-2 contain the same data you've come to expect from OAM entries.  Obviously, these bytes are necessary to hold the sprite's display info.
+<br/>
+<br/>
+Attribute 3, however, does not hold rotation data as you might expect.  I have no use for sprite rotation, so I'm using these two bytes for the purposes of my sorting system.  The first byte of Attribute 3 holds the sprite-priority (0-127) of the sprite.  Not to be confused with the background-relative priority held in Attribute 2, the sprite-priority is an integer that specifies a sprite's priority in relation to other sprites that have the same background-relative priority.  The system supports 128 levels of sprite priority, so the user can set a different priority for each sprite on the screen if desired.  A sprite with a small sprite-priority value (such as 0) will be drawn above a sprite with a larger sprite-priority value (such as 1).  If 2 sprites have the same sprite-priority value, there is no guarantee as to which will be drawn above the other.
+<br/>
+<br/>
+The second byte of Attribute 3 holds the index (0-127) of the sprite's current position in the global sprite array.  This index is necessary to maintain because while a sprite's position in the global sprite array will maintain constant, its position in OAM will vary.  When a sprite changes position in OAM, the system must be able to refer back to its position in the global array, using this value, so it can update the position of the sprite's current index in OAM.
+<br/>
+<br/>
+The OAM_index variable holds the index (0-127) of this sprite's current position in OAM.
+<br/>
+<br/>
+The double-size variable in attribute 0 tells whether the sprite is active (has been added) or inactive (has been deleted or not yet added).
+<br/>
+<br/>
+<br/>
+<br/>
+Now that the structure has been explained, let's go over how the system works.  The user can add to or delete from the sprite array using functions such as this:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">pseudocode:
+<br/>
+// this function will activate the sprite and return the new sprite's index in the global sprite array
+<br/>
+u16 AddSprite(x_coord, y_coord, palette_type, ..., background_relative_priority, sprite_priority);
+<br/>
+<br/>
+// this function will deactivate the sprite
+<br/>
+void DeleteSprite(sprite_index);</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+As an example, the user could use these functions to add/delete a number of sprites during a single frame.  Once all sprites have been added to or deleted from the global array, the array must be sorted and the necessary data copied into OAM.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">pseudocode:
+<br/>
+// In addition to the global sprite array and OAM,
+<br/>
+// the SortIntoOAM() function requires the use of
+<br/>
+// 4 arrays for sorting.  These each need to be
+<br/>
+// 128 entry arrays with 8 bytes per entry, just like OAM
+<br/>
+<br/>
+typedef Struct OAM_Entry
+<br/>
+{
+<br/>
+   u16 attribute0;
+<br/>
+   u16 attribute1;
+<br/>
+   u16 attribute2;
+<br/>
+   u16 attribute3;
+<br/>
+}
+<br/>
+<br/>
+OAM_Entry bg_priority_0[128];
+<br/>
+OAM_Entry bg_priority_1[128];
+<br/>
+OAM_Entry bg_priority_2[128];
+<br/>
+OAM_Entry bg_priority_3[128];
+<br/>
+<br/>
+void SortIntoOAM()
+<br/>
+{
+<br/>
+   for(each active sprite entry in global sprite array)
+<br/>
+   {
+<br/>
+      copy entry into the bg_priority array corresponding to the background-relative priority value;
+<br/>
+      // for example, background_relative_priority = 0, entry is copied into bg_priority_0 array
+<br/>
+   }
+<br/>
+<br/>
+   Sort each bg_priority array by the sprite-priority values of each entry, in ascending order;
+<br/>
+<br/>
+   Copy bg_priority_0 array into OAM starting at the beginning;
+<br/>
+   Copy bg_priority_1 array into OAM starting immediately after where the previous copy ended;
+<br/>
+   Copy bg_priority_2 array into OAM starting immediately after where the previous copy ended;
+<br/>
+   Copy bg_priority_3 array into OAM starting immediately after where the previous copy ended;
+<br/>
+<br/>
+   for(each active sprite entry in OAM)
+<br/>
+   {
+<br/>
+      use the entry's index of its position in the global sprite array to access the sprite's OAM_index variable;
+<br/>
+      set OAM_index variable to the current OAM index;
+<br/>
+   }
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+After calling this function, OAM should be fully sorted by priority.  All sprites with background-relative priorities of 0 will come before sprites with background-relative priorities of 1, and so forth.  Within each of the 4 groups of sprites with identical background-relative priorities, sprites will be sorted by sprite-priority.  Sprites with small sprite-priority values will come before sprites with larger sprite-priorities.
+<br/>
+<br/>
+So concludes my description of the sprite sorting system I've designed.  I don't believe I left out any necessary details, but if I did, or there are any questions, comments, bug-fixes, etc., please let me know.
+<br/>
+<br/>
+Thanks,
+<br/>
+Andrew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#15945 - sajiimori - Wed Feb 04, 2004 10:29 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+The second byte of Attribute 3 holds the index (0-127) of the sprite's current position in the global sprite array.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+// eliminate need for second byte of attribute 3, so
+<br/>
+// it can be used for the OAM_index instead, reducing
+<br/>
+// the size of the struct by 2 bytes.
+<br/>
+int position_of(Sprite* s) { return s - sprite; }
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Edit: this is a waste of RAM
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+OAM_Entry bg_priority_0[128]; 
+<br/>
+OAM_Entry bg_priority_1[128]; 
+<br/>
+OAM_Entry bg_priority_2[128]; 
+<br/>
+OAM_Entry bg_priority_3[128]; 
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+How about removing all those and using this instead?
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+void SortIntoOAM()
+<br/>
+{
+<br/>
+   for(each active sprite entry in global sprite array)
+<br/>
+     sort entry into OAM by both background-relative-priority
+<br/>
+       and sprite-priority;
+<br/>
+<br/>
+   // why bother keeping the OAM index at all?
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"><br/><br/>Last edited by sajiimori on Wed Feb 04, 2004 10:47 pm; edited 1 time in total</span></div>    
+</div>
+<div class="post">
+    <h4>#15946 - abilyk - Wed Feb 04, 2004 10:41 pm</h4>
+    <div class="postbody"><span class="postbody">I don't know if that will work... calculating the sprite's position in the global array can certainly be done in the manner you describe when you're dealing with the copy of the sprite information that resides in the global array.  However, the only time I need access to the sprite's global array index is when I'm dealing with the copy of the sprite information that exists in OAM.  In that case, I'm unable to calculate the index and must have it stored somewhere.  Or am I missing something?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#15948 - sajiimori - Wed Feb 04, 2004 10:51 pm</h4>
+    <div class="postbody"><span class="postbody">I guess I don't understand why you'd store the current OAM index in the Sprite struct, if it's just going to be recalculated on the next frame anyway.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#15949 - abilyk - Wed Feb 04, 2004 11:06 pm</h4>
+    <div class="postbody"><span class="postbody">Good point!  I suppose I don't really need the OAM index after all.  I was thinking too far ahead, thinking I may need it to access the data there, but you're right, it would just get recalculated the next frame, so no biggie.
+<br/>
+<br/>
+As far as the sorting and the unnecessary arrays, you're probably right. ;)  Granted, I haven't done any tests on it yet, but I figured it would be quicker if I dumped each background-relative priority group into a separate array and sorted, as opposed to sorting the whole thing in place.  In this case I'd prefer to sacrifice space to gain speed, but if sorting all at once is just as fast, then I'd certainly be all for it.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#15951 - sajiimori - Wed Feb 04, 2004 11:30 pm</h4>
+    <div class="postbody"><span class="postbody">Premature optimization is the devil.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#15954 - abilyk - Wed Feb 04, 2004 11:46 pm</h4>
+    <div class="postbody"><span class="postbody">So I've been told.  ;)
+<br/>
+<br/>
+Could anyone suggest what type of sort might be best suited to use in this case?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#15957 - sajiimori - Wed Feb 04, 2004 11:54 pm</h4>
+    <div class="postbody"><span class="postbody">When you start thinking about speed, the first thing to do is take advantage of the fact that the order of the sprites doesn't change very quickly.  Then all you do is walk through the array, and move the few that have changed.  Until you do that, the choice of sorting algorithm isn't really significant (see: scrubbing the deck on the Titanic).</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#15958 - DekuTree64 - Thu Feb 05, 2004 12:11 am</h4>
+    <div class="postbody"><span class="postbody">What mine does is use a linked list to keep track of the order. So the shadow data looks like this:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">typedef struct
+<br/>
+{
+<br/>
+   u16 attr0, attr1, attr2;
+<br/>
+   u8 zDepth, next;
+<br/>
+} OamShadow;</td> </tr></table><span class="postbody">
+<br/>
+Then each time you need a sprite, it starts at the list head (a variable) and searches until it finds a sprite with a lower priority, and then sets its 'next' to that sprite. Then it sets the one before it's 'next to itself. If you tell it to, it sorts same-priority sprites by Y pos too, so you can have people more than one tile tall (it's an RPG). Then it resets the list to empty each frame, so it just starts fresh. A little waste of time, but it's easier to do, and that way things don't have to keep track of what OAM index they're using, saving RAM.
+<br/>
+It might be a little faster to use a doubly linked list and a 'free' list so you can insert and remove things easily and not reset them all each frame, and only update the ones that need it, but you'd have to traverse the list when searching for the place to insert new ones anyway, and coupled with the extra RAM usage, I figure it's not worth the trouble.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#15969 - poslundc - Thu Feb 05, 2004 1:24 am</h4>
+    <div class="postbody"><span class="postbody">I also use the singly-linked list method, but since my arena rotates the order of the sprites can change very quickly, so I don't bother to optimize at all for the steady-state.
+<br/>
+<br/>
+Each frame I detach every element of the list, then as I'm processing sprites I reinsert them in their new order. Then during VBlank, I simply traverse the list and copy into OAM. It's a sleek and elegant way of doing things if your order changes a lot.
+<br/>
+<br/>
+Now as I review my post, I see it is pretty redundant as I pretty much say the same things that DekuTree64 is saying. Oh well. &lt;clicks submit&gt;
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#15985 - rooter - Thu Feb 05, 2004 6:29 am</h4>
+    <div class="postbody"><span class="postbody">I think my method may be a bit different than those mentioned. I keep my sprites x-axis sorted in a list for the collision testing. During the collision testing iteration, if one sprite is detected over-lapping another and if that sprite needs to be drawn on top I just swap their OAM positions(using shadow OAM) if the sprite in question has a greater index than the sprite that would be drawn under it. If the sprite that needs to be drawn on top has a lower index in the first place, it does nothing at all. Not sure how efficient it is, but it seems to work well, and no additional sorting needs to be done. I do it this way mainly because I dish out oam indices to my sprites on the fly using a stack, and they are constantly changing from sprites going on and off screen.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#15988 - poslundc - Thu Feb 05, 2004 2:17 pm</h4>
+    <div class="postbody"><span class="postbody">If you kept your sprites sorted by y-axis instead of x-axis, you would have your OAM-depth sorting for free.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

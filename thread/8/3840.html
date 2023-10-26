@@ -1,0 +1,438 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>atan2 implementation - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>ASM > atan2 implementation</h2>
+<div id="posts">
+<div class="post">
+    <h4>#24599 - ecurtz - Sat Aug 07, 2004 6:17 am</h4>
+    <div class="postbody"><span class="postbody">Here's an implementation of the cordic rotator atan2 we've been discussing in <a class="postlink" href="http://forum.gbadev.org/viewtopic.php?t=3806" target="_blank">this thread.</a>
+<br/>
+<br/>
+It would be great if some of the experts here could take a look at it and suggest any fixes or improvements they see.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+/*
+<br/>
+sint32 atan2asm(sint32 y, sint32 x);
+<br/>
+<br/>
+atan2 using cordic rotator
+<br/>
+implemented by eli curtz, <a href="mailto:eli@nuprometheus.com">eli@nuprometheus.com</a>
+<br/>
+based on information from http://www.andraka.com/cordic.htm
+<br/>
+and forum comments at http://www.gbadev.org from users
+<br/>
+AnthC, DiscoStew, and ecurtz (me)
+<br/>
+<br/>
+entry
+<br/>
+r0: y
+<br/>
+r1: x
+<br/>
+<br/>
+exit
+<br/>
+r0: angle (-256...256) change shift to adjust desired range
+<br/>
+r1: distance (if uncommented at end of routine)
+<br/>
+<br/>
+destroys
+<br/>
+r0: y
+<br/>
+r1: x
+<br/>
+r2: tmp
+<br/>
+r3: shift
+<br/>
+r12: ang
+<br/>
+*/
+<br/>
+<br/>
+.text
+<br/>
+<br/>
+.arm
+<br/>
+.align
+<br/>
+.section .iwram
+<br/>
+.global atan2asm
+<br/>
+.type atan2asm, function
+<br/>
+<br/>
+atan2asm:
+<br/>
+   movs   r12, r1, lsr#31      @ ang = (x &gt;= 0) ? 0 : 1
+<br/>
+   beq      endinit            @ if (x&gt;= 0) branch else
+<br/>
+   rsb      r1, r1, #0         @ x = -x
+<br/>
+   rsbs   r0, r0, #0         @ y = -y
+<br/>
+   mov      r12, #0x4000000      @ ang = pi
+<br/>
+   rsbpl   r12, r12, #0      @ if (y &gt;= 0) ang = -pi
+<br/>
+endinit:
+<br/>
+   orrs   r2, r1, r0         @ tmp = x | y
+<br/>
+   bxeq   lr               @ return if (x == 0) &amp;&amp; (y == 0)
+<br/>
+                        @ there is no reason to calculate the shift
+<br/>
+                        @ if you know the maximum values for x &amp; y
+<br/>
+                        @ are less than 0x00200000, just shift 8
+<br/>
+                        @ and remove this code 
+<br/>
+   submi   r2, r1, r0         @ if (y &lt; 0) tmp = x - y
+<br/>
+   mov      r3, #0            @ shift = 0
+<br/>
+   cmp      r2, #0x8000000      @ if (tmp &lt; 0x8000000)
+<br/>
+   addmi   r3, r3, #3         @   shift += 3
+<br/>
+   cmp      r2, #0x1000000      @ if (tmp &lt; 0x1000000)
+<br/>
+   addmi   r3, r3, #3         @   shift += 3   
+<br/>
+   cmp      r2, #0x200000      @ if (tmp &lt; 0x200000)
+<br/>
+   addmi   r3, r3, #3         @   shift += 3
+<br/>
+                             @ end of shift calculation
+<br/>
+   
+<br/>
+   stmfd   sp!, {r4-r7}      @ push r4-r7 onto stack
+<br/>
+   adr      r4, atan2table      @
+<br/>
+   ldmia   r4!, {r5-r7}      @ read 3 entries from table
+<br/>
+   mov      r1, r1, lsl r3      @ x &lt;&lt;= shift
+<br/>
+   movs   r0, r0, lsl r3      @ y &lt;&lt;= shift
+<br/>
+   bpl      ypos0            @ if (y &gt;= 0) branch
+<br/>
+yneg0:
+<br/>
+   sub      r12, r12, #0x1000000@ ang -= pi/4
+<br/>
+   sub      r2, r1, r0         @ tmp = x - (y)
+<br/>
+   adds   r0, r0, r1         @ y += (x)
+<br/>
+   bpl      ypos1
+<br/>
+yneg1:
+<br/>
+   sub      r12, r12, r5      @ ang -= atantable[n]
+<br/>
+   sub      r1, r2, r0, asr#1   @ x = tmp - (y &gt;&gt; 1)
+<br/>
+   adds   r0, r0, r2, asr#1   @ y += (tmp &gt;&gt; 1)
+<br/>
+   bpl      ypos2
+<br/>
+yneg2:
+<br/>
+   sub      r12, r12, r6      @ ang -= atantable[n]
+<br/>
+   sub      r2, r1, r0, asr#2   @ tmp = x - (y &gt;&gt; 2)
+<br/>
+   adds   r0, r0, r1, asr#2   @ y += (x &gt;&gt; 2)
+<br/>
+   bpl      ypos3
+<br/>
+yneg3:
+<br/>
+   sub      r12, r12, r7      @ ang -= atantable[n]
+<br/>
+   sub      r1, r2, r0, asr#3   @ x = tmp - (y &gt;&gt; 3)
+<br/>
+   adds   r0, r0, r2, asr#3   @ y += (tmp &gt;&gt; 3)
+<br/>
+   bpl      ypos4
+<br/>
+yneg4:
+<br/>
+   ldmia   r4, {r4-r7}         @ read next 4 entries from table
+<br/>
+                        @
+<br/>
+   sub      r12, r12, r4      @ ang -= atantable[n]
+<br/>
+   sub      r2, r1, r0, asr#4   @ tmp = x - (y &gt;&gt; 4)
+<br/>
+   adds   r0, r0, r1, asr#4   @ y += (x &gt;&gt; 4)
+<br/>
+   bpl      ypos5
+<br/>
+yneg5:
+<br/>
+   sub      r12, r12, r5      @ ang -= atantable[n]
+<br/>
+   sub      r1, r2, r0, asr#5   @ x = tmp - (y &gt;&gt; 5)
+<br/>
+   adds   r0, r0, r2, asr#5   @ y += (tmp &gt;&gt; 5)
+<br/>
+   bpl      ypos6
+<br/>
+yneg6:
+<br/>
+   sub      r12, r12, r6      @ ang -= atantable[n]
+<br/>
+   sub      r2, r1, r0, asr#6   @ tmp = x - (y &gt;&gt; 6)
+<br/>
+   adds   r0, r0, r1, asr#6   @ y += (x &gt;&gt; 6)
+<br/>
+   bpl      ypos7
+<br/>
+yneg7:
+<br/>
+   sub      r12, r12, r7      @ ang -= atantable[n]
+<br/>
+   sub      r1, r2, r0, asr#7   @ x = tmp - (y &gt;&gt; 7)
+<br/>
+   adds   r0, r0, r2, asr#7   @ y += (tmp &gt;&gt; 7)
+<br/>
+   b      endrotate
+<br/>
+<br/>
+ypos0:
+<br/>
+   add      r12, r12, #0x1000000@ ang += pi/4
+<br/>
+   add      r2, r1, r0         @ tmp = x + (y)
+<br/>
+   subs   r0, r0, r1         @ y -= (x)
+<br/>
+   bmi      yneg1
+<br/>
+ypos1:
+<br/>
+   add      r12, r12, r5      @ ang += atantable[n]
+<br/>
+   add      r1, r2, r0, asr#1   @ x = tmp + (y &gt;&gt; 1)
+<br/>
+   subs   r0, r0, r2, asr#1   @ y -= (tmp &gt;&gt; 1)
+<br/>
+   bmi      yneg2
+<br/>
+ypos2:
+<br/>
+   add      r12, r12, r6      @ ang += atantable[n]
+<br/>
+   add      r2, r1, r0, asr#2   @ tmp = x + (y &gt;&gt; 2)
+<br/>
+   subs   r0, r0, r1, asr#2   @ y -= (x &gt;&gt; 2)
+<br/>
+   bmi      yneg3
+<br/>
+ypos3:
+<br/>
+   add      r12, r12, r7      @ ang += atantable[n]
+<br/>
+   add      r1, r2, r0, asr#3   @ x = tmp + (y &gt;&gt; 3)
+<br/>
+   subs   r0, r0, r2, asr#3   @ y -= (tmp &gt;&gt; 3)
+<br/>
+   bmi      yneg4
+<br/>
+ypos4:
+<br/>
+   ldmia   r4, {r4-r7}         @ read next 4 entries from table
+<br/>
+                        @
+<br/>
+   add      r12, r12, r4      @ ang += atantable[n]
+<br/>
+   add      r2, r1, r0, asr#4   @ tmp = x + (y &gt;&gt; 4)
+<br/>
+   subs   r0, r0, r1, asr#4   @ y -= (x &gt;&gt; 4)
+<br/>
+   bmi      yneg5
+<br/>
+ypos5:
+<br/>
+   add      r12, r12, r5      @ ang += atantable[n]
+<br/>
+   add      r1, r2, r0, asr#5   @ x = tmp + (y &gt;&gt; 5)
+<br/>
+   subs   r0, r0, r2, asr#5   @ y -= (tmp &gt;&gt; 5)
+<br/>
+   bmi      yneg6
+<br/>
+ypos6:
+<br/>
+   add      r12, r12, r6      @ ang += atantable[n]
+<br/>
+   add      r2, r1, r0, asr#6   @ tmp = x + (y &gt;&gt; 6)
+<br/>
+   subs   r0, r0, r1, asr#6   @ y -= (x &gt;&gt; 6)
+<br/>
+   bmi      yneg7
+<br/>
+ypos7:
+<br/>
+   add      r12, r12, r7      @ ang += atantable[n]
+<br/>
+   add      r1, r2, r0, asr#7   @ x = tmp + (y &gt;&gt; 7)
+<br/>
+   subs   r0, r0, r2, asr#7   @ y -= (tmp &gt;&gt; 7)
+<br/>
+endrotate:
+<br/>
+   addpl   r12, r12, r7, asr#1 @ if (y &gt;= 0) ang += atantable[n]
+<br/>
+   submi   r12, r12, r7, asr#1 @ else ang -= atantable[n]
+<br/>
+   
+<br/>
+   ldmfd   sp!, {r4-r7}      @ pop r4-r7 off stack
+<br/>
+@ correction to distance calculation
+<br/>
+@   mov      r1, r1, asr r3      @ x &gt;&gt;= shift
+<br/>
+@   mul      r1, r1, #2487      @ x *= 2487
+<br/>
+@   mov      r1, r1, asr#12      @ x &gt;&gt;= 12
+<br/>
+   add      r12, r12, #0x10000   @ ang += (1 &lt;&lt; 16)
+<br/>
+   movs   r0, r12, asr#18      @ result = ang &gt;&gt; 18
+<br/>
+@   addmi   r0, r0, #512      @ if (ang &lt; 0) ang += 512
+<br/>
+   bx      lr               @ return from subroutine
+<br/>
+.fend1:
+<br/>
+.size   atan2asm,.fend1-atan2asm
+<br/>
+<br/>
+atan2table:
+<br/>
+.word   0x00972028
+<br/>
+.word   0x004fd9c2
+<br/>
+.word   0x0028888e
+<br/>
+.word   0x0014586a
+<br/>
+.word   0x000a2ebf
+<br/>
+.word   0x000517b0
+<br/>
+.word   0x00028be2
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+&lt;edit&gt; Added ".section .iwram" just in case anybody is copy and pasting it into test code. BTW my guestimate is ~80 cycles for the current version, but I may be totally off due to some beginner mistake. &lt;/edit&gt;</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#24712 - ecurtz - Tue Aug 10, 2004 4:26 am</h4>
+    <div class="postbody"><span class="postbody">I adjusted the shifts slightly. If anybody is going to use this you should check the values against the kind of numbers you'll actually be seeing in your game.
+<br/>
+<br/>
+Anybody tried this in their code yet? I'd like to hear how it goes...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#24714 - DekuTree64 - Tue Aug 10, 2004 4:42 am</h4>
+    <div class="postbody"><span class="postbody">I'm working on a good old fashioned tunnel effect, so I will be needing atan for the texture mapping. I probably won't have it running until next weekend at least, but I'll give your routine a shot when I do<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#55942 - IRbaboon - Tue Oct 04, 2005 8:09 pm</h4>
+    <div class="postbody"><span class="postbody">Sorry for the big bump, but I'm implementing this code and both the distance and the arctan function returns excellent values for me to work with :)
+<br/>
+<br/>
+But I've got two problems:
+<br/>
+<br/>
+1.
+<br/>
+This line:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">   mul      r1, r1, #2478      @ x *= 2487 @</td> </tr></table><span class="postbody">
+<br/>
+Results in the following error:
+<br/>
+<span style="font-style: italic">cordic.s: Assembler messages:
+<br/>
+cordic.s:169: rd and rm should be different in mul
+<br/>
+cordic.s:169: Error: bad arguments to instruction -- `mul r1,r1,#2478'</span>
+<br/>
+<br/>
+2.
+<br/>
+I can only get the r0 (angle) value out of the function, but can I get the value of r1 (distance) out of it at the same time?<br/>_________________<br/><a href="http://www.paulwagener.nl/host/signature.png">[Images not permitted - Click here to view it]</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#55945 - poslundc - Tue Oct 04, 2005 8:39 pm</h4>
+    <div class="postbody"><span class="postbody">Yeah, that's a pretty messed-up instruction. The mul instruction only works out of registers and not immediate values, and the destination register needs to be different from the first source register (but it can be used as the second source register).
+<br/>
+<br/>
+Even if this statement were okay, 2478 (or 2487, depending on whether the instruction or the comment is correct) is an invalid immediate value, so it couldn't just be mov-ed into another source register; it would have to be loaded in from the constant pool (or or-ed together).
+<br/>
+<br/>
+Conclusion: it needs some fixing. :D
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#56027 - IRbaboon - Wed Oct 05, 2005 3:40 pm</h4>
+    <div class="postbody"><span class="postbody">I also solved the second issue by writing an asm function that returns r1:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">getDistance:
+<br/>
+mov      r0, r1
+<br/>
+bx      lr</td> </tr></table><span class="postbody">
+<br/>
+To my amazement it works perfectly, thanks everyone!<br/>_________________<br/><a href="http://www.paulwagener.nl/host/signature.png">[Images not permitted - Click here to view it]</a></span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

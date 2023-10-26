@@ -1,0 +1,164 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>new to assembly =) gcc compiled code loop doesnt execute - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>ASM > new to assembly =) gcc compiled code loop doesnt execute</h2>
+<div id="posts">
+<div class="post">
+    <h4>#21210 - fabel - Tue May 25, 2004 10:02 pm</h4>
+    <div class="postbody"><span class="postbody">Hi All,
+<br/>
+ I have been coding for years but I am totally new to assembly but the bits i have seen on thses boards made me decide to finally take the asm plunge. Here is my code and i compile it with a simple 
+<br/>
+&gt;gcc -c test.S
+<br/>
+&gt;gcc -O binary test.o test.gba
+<br/>
+It looks like it goes through the loop once because vba memory viewer show the first byte in VRAM is set but it doesnt fully loop. any other pointers will be helpful for a person new to asm.  
+<br/>
+Thanks
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#include "screen.h"
+<br/>
+.text
+<br/>
+.arm
+<br/>
+.global main
+<br/>
+<br/>
+<br/>
+<br/>
+main:
+<br/>
+<br/>
+   ldr r1,=REG_DISPCNT @0x04000000
+<br/>
+   
+<br/>
+   ldr r2,=(MODE_3 | BG2_ENABLE) @0x03 | 0x0400
+<br/>
+   
+<br/>
+   str r2,[r1]
+<br/>
+   
+<br/>
+   ldr r9,=(240*160)  @the total pixels we want to write
+<br/>
+   ldr r0,=VRAM   @0x06000000
+<br/>
+   ldr r4,=0x0f00
+<br/>
+<br/>
+<br/>
+.FILLSCREEN:
+<br/>
+      str r4,[r0,#2]
+<br/>
+      sub r9,r9,#1    @subtract one from r9
+<br/>
+      cmp r9,#0       @see if  r9 &gt; 0
+<br/>
+      bgt .FILLSCREEN 
+<br/>
+      </td> </tr></table><span class="postbody"></span><span class="gensmall"><br/><br/>Last edited by fabel on Tue May 25, 2004 10:23 pm; edited 1 time in total</span></div>    
+</div>
+<div class="post">
+    <h4>#21211 - Lord Graga - Tue May 25, 2004 10:14 pm</h4>
+    <div class="postbody"><span class="postbody">The file is called "test.C". When it's a *.C file, GCC will think that it should compile it as C.
+<br/>
+<br/>
+Save the file as .S instead, that is the normal ASM suffix.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#21212 - fabel - Tue May 25, 2004 10:20 pm</h4>
+    <div class="postbody"><span class="postbody">I modified my original post to reflect that it is test.S not test.c. ive been trying to find other examples to show what wrong with mine which im sure is something simple but I havent been able to find anything yet.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#21215 - poslundc - Tue May 25, 2004 11:32 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>fabel wrote:</b></span></td> </tr> <tr> <td class="quote">str r4,[r0,#2]</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+This is a <span style="font-weight: bold">pre-indexed</span> offset. In other words, you are adding 2 to the value of r0 before r0 is used in the calculation. When you compose your address in this style, the 2 is only temporarily added to r0, and will not accumulate as it loops. In order to make it accumulate, you need to set the writeback bit by adding an exclamation (!) after the address, ie: [r0, #2]!
+<br/>
+<br/>
+BUT, this means you are adding 2 before you use the calculation, so you won't be starting at the beginning of VRAM. What you want is a post-indexed offset, which looks like: [r0], #2
+<br/>
+<br/>
+(Post-indexed offsets are always written back to the source register.)
+<br/>
+<br/>
+That said, you want to be using strh, not str. strh stores a halfword (2 bytes) whereas str stores an entire word (4 bytes) and must be aligned to a 4-byte boundary.
+<br/>
+<br/>
+If you prefer you can also just put strh r4, [r0]! which the assembler translates to being the same as a 2-byte post-indexed offset.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#21216 - fabel - Wed May 26, 2004 12:02 am</h4>
+    <div class="postbody"><span class="postbody">Thanks for the tip, I changed that in my code and removed the include and just have it using the actual values i had in the include to see if that would help but it still isnt doing anything. VBA disassemble still show that the value in r9 has only been decremented once and only the first value in VRAM show being set. Ive been trying to figure out if maybe my cmp is wrong but it look right to me(granted this is the first assembly ive ever written =))</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#21227 - fabel - Wed May 26, 2004 4:26 am</h4>
+    <div class="postbody"><span class="postbody">Well Its not just a problem with my code. I just downloaded the source for Rainbow from gbadev.org sources and compiled it via.
+<br/>
+gcc -c rainbow.s
+<br/>
+gcc -O binary rainbow.o rainbow.gba
+<br/>
+<br/>
+and it does the same thing as my ASM code absolutly nothing in VBA or Mappy. Im running devkitadvance r5 beta 3 on window XP. I run the DevKit-Advance-R5-Beta-3.lnk file to get my shell and then run the gcc commands from there.
+<br/>
+<br/>
+Anyone knw if there is something I am missing or need to change in the way i compile to get stuff running?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#21270 - dagamer34 - Wed May 26, 2004 4:20 pm</h4>
+    <div class="postbody"><span class="postbody">The easiest thing to do to test your ASM skills is to simply create a .C file with a main function that calls your ASM function. That way you don't have to fiddle with stuff like this. Besides, unless you plan on writing programs in 100% assembly, there's no need to go that route anyway.<br/>_________________<br/>Little kids and Playstation 2's don't mix. :(</span><span class="gensmall"><br/><br/>Last edited by dagamer34 on Sat May 29, 2004 3:52 pm; edited 1 time in total</span></div>    
+</div>
+<div class="post">
+    <h4>#21451 - booger - Sat May 29, 2004 3:19 pm</h4>
+    <div class="postbody"><span class="postbody">i've got exactly the same problem (i'm also using the same setup). it seems that my generated code fail to get the adress of labels and branches right.
+<br/>
+<br/>
+i really recommend using goldroad if you're into hardcore assembly-coding!
+<br/>
+[/quote]</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#21470 - torne - Sat May 29, 2004 6:43 pm</h4>
+    <div class="postbody"><span class="postbody">Goldroad is buggy and doesn't allow linking to code compiled in other languages; it uses nonstandard syntax and is generally a bit 'weird'. Learn to use GNU as properly.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#21473 - booger - Sat May 29, 2004 7:26 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>booger wrote:</b></span></td> </tr> <tr> <td class="quote">i've got exactly the same problem (i'm also using the same setup). it seems that my generated code fail to get the adress of labels and branches right.
+<br/>
+<br/>
+i really recommend using goldroad if you're into hardcore assembly-coding!
+<br/>
+</td> </tr></table><span class="postbody">[/quote]
+<br/>
+<br/>
+i take this one back.. after having had a second look at the gnu-assembler i would only recommend this one. less buggy, more accurate but according to me, a bit harder to get started with.
+<br/>
+too bad you can't .incbin though..:/</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

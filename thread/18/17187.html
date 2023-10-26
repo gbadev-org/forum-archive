@@ -1,0 +1,525 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>gamecard eeprom detection - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > gamecard eeprom detection</h2>
+<div id="posts">
+<div class="post">
+    <h4>#173254 - wintermute - Mon Mar 29, 2010 2:11 am</h4>
+    <div class="postbody"><span class="postbody">I've just finished rewriting the libnds eeprom detection code which should hopefully work as well as the prior code. I'd still like to get a few more data points to test with though so if you could compile this with svn libnds, or download the prebuilt one from <a href="http://davejmurphy.com/files/eepromtest.nds" target="_blank">http://davejmurphy.com/files/eepromtest.nds</a>
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#include &lt;nds.h&gt;
+<br/>
+#include &lt;stdio.h&gt;
+<br/>
+<br/>
+//---------------------------------------------------------------------------------
+<br/>
+void pause() {
+<br/>
+//---------------------------------------------------------------------------------
+<br/>
+   iprintf("Press A ...\n");
+<br/>
+   while(1) {
+<br/>
+      scanKeys();
+<br/>
+      if(keysDown() &amp; KEY_A)
+<br/>
+         break;
+<br/>
+      swiWaitForVBlank();
+<br/>
+   }
+<br/>
+   scanKeys();
+<br/>
+}
+<br/>
+<br/>
+//---------------------------------------------------------------------------------
+<br/>
+int main(void) {
+<br/>
+//---------------------------------------------------------------------------------
+<br/>
+   consoleDemoInit();
+<br/>
+   
+<br/>
+   sysSetCardOwner(BUS_OWNER_ARM9);
+<br/>
+<br/>
+   while(1) {
+<br/>
+      int pressed = 0;
+<br/>
+      u8 header1[512];
+<br/>
+      u8 header2[512];
+<br/>
+      
+<br/>
+      while(1) {
+<br/>
+         cardReadHeader(header1);
+<br/>
+         cardReadHeader(header2);
+<br/>
+         if (memcmp(header1,header2,32) == 0) break;
+<br/>
+         printf("Please eject &amp; reinsert DS card.\n");
+<br/>
+         pause();
+<br/>
+      }
+<br/>
+      header1[32] = 0;
+<br/>
+      printf("%s\n", header1);
+<br/>
+      
+<br/>
+      int sr = cardEepromCommand(EEPROM_RDSR);
+<br/>
+      int id = cardEepromReadID();
+<br/>
+      
+<br/>
+      printf("sr = %02x, id = %06x\n", sr, id);
+<br/>
+      
+<br/>
+      do {
+<br/>
+         swiWaitForVBlank();
+<br/>
+         scanKeys();
+<br/>
+         pressed = keysDown();
+<br/>
+      } while (!pressed);
+<br/>
+      if (pressed &amp; KEY_START) break;
+<br/>
+   }
+<br/>
+   return 0;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+sr = 0xff, id =0xffffff - no save.
+<br/>
+sr = 0xf0, id =0xffffff - 512 byte save.
+<br/>
+sr = 0x00, id =0xffffff - 8k/64k save
+<br/>
+sr = 0x00, id !=0xffffff - flash with 24 bit address.
+<br/>
+<br/>
+<br/>
+I'm particularly interested in devices which have an ID code, sr = 0, id != 0xffffff. The upper byte is a manufacturer id, you can find a list at <a href="http://www.idhw.com/textual/chip/jedec_spd_man.html" target="_blank">http://www.idhw.com/textual/chip/jedec_spd_man.html</a> . The second byte is a device code, the third may be a dummy byte or have some special meaning. If we can get a list of the jedec id codes along with save sizes it should help with improving detection.
+<br/>
+<br/>
+My MarioKart DS has an id of 0x621600 which is a Sanyo LE25FW203A 2mbit flash.
+<br/>
+<br/>
+Someone was also asking me about the new pokemon games recently. These appear to have some sort of controller on the eeprom SPI which switches between IR for the pokewalker and the save chip, not entirely sure how this is done but there's some save related code which issues cardEepromCommand(0x08), expecting a response of 0xAA.
+<br/>
+<br/>
+Edit: Just gone through my game collection and added TheLazy1's results
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+Band Brothers DX:               sr = 84, id = 202017    m25p64          64mbit
+<br/>
+The Sims 2:                     sr = 00, id = 204012    m25p20          2mbit
+<br/>
+Spore:Creatures                 sr = 00, id = 204012    m25p20          2mbit
+<br/>
+Zelda: Phantom Hourglass        sr = 00, id = 204013    m25p40          4mbit
+<br/>
+100 Classic Book Collection     sr = 00, id = 204014    m45pe80         8mbit
+<br/>
+DS Browser                      sr = 00, id = 621600    LE25FW203A      2mbit   
+<br/>
+Advance Wars: Dual Strike       sr = 00, id = 621600    LE25FW203A      2mbit
+<br/>
+Starfox Command                 sr = 00, id = 621600    LE25FW203A      2mbit
+<br/>
+Contact                         sr = 00, id = 621600    LE25FW203A      2mbit
+<br/>
+Brain age                       sr = 00, id = 621600    LE25FW203A      2mbit
+<br/>
+Mariokart DS                    sr = 00, id = 621600    LE25FW203A      2mbit
+<br/>
+</td> </tr></table><span class="postbody"><br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"><br/><br/>Last edited by wintermute on Tue Apr 13, 2010 8:04 pm; edited 2 times in total</span></div>    
+</div>
+<div class="post">
+    <h4>#173255 - Lazy1 - Mon Mar 29, 2010 2:24 am</h4>
+    <div class="postbody"><span class="postbody">Rhythm Heaven: sr = 00, id = ffffff
+<br/>
+GTA Chinatown wars: sr = 00, id = ffffff
+<br/>
+Brain age: sr = 00, id = 621600
+<br/>
+Mariokart DS: sr = 00, id = 621600
+<br/>
+Worms open warfare 2: sr = 00, id = ffffff
+<br/>
+The Sims 2: sr = 00, id = 204012
+<br/>
+Meteos: sr = 00, id = ffffff
+<br/>
+Super Mario 64 DS: sr = 80, id = ffffff</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#173271 - Stephanie - Mon Mar 29, 2010 1:11 pm</h4>
+    <div class="postbody"><span class="postbody">Edit: I went through all my carts again and discovered that Pokemon SoulSilver returns a different pair of variables every time its queried. It seems almost random.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">Pokemon SS        sr=??        id=??????
+<br/>
+DS Training       sr=00        id=204012
+<br/>
+DS Browser        sr=00        id=204012
+<br/>
+Startrek:TA       sr=00        id=ffffff
+<br/>
+D_Survivor        sr=00        id=ffffff
+<br/>
+Crossword         sr=00        id=ffffff
+<br/>
+Moon              sr=00        id=ffffff
+<br/>
+Timeace           sr=f0        id=ffffff
+<br/>
+Dementium01       sr=00        id=ffffff</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Incidentally, I had disassembled my Pokemon SoulSilver and figured out the eeprom was being controlled by a mystery mcu chip. Some info is here:
+<br/>
+<a href="http://planetstephanie.net/2010/03/20/pokemon-soulsilver-save-hack/" target="_blank">http://planetstephanie.net/2010/03/20/pokemon-soulsilver-save-hack/</a>
+<br/>
+<br/>
+The NDS Adaptor <span style="font-weight: bold">Plus</span> can write/read the eeprom so there must be some software mehod to address it... some command that tells that mcu to enable the eeprom.
+<br/>
+<br/>
+-Stephanie</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#173297 - wintermute - Tue Mar 30, 2010 2:59 pm</h4>
+    <div class="postbody"><span class="postbody">The 45PE40 is a Numonyx/ST Micro 4mbit flash which should return 0x204013 for the id. The random values are probably either coming from the mcu or data from the IR.
+<br/>
+<br/>
+Normmatt found some code in the pokemon games which he thought was antipiracy protection but may actually be an mcu command to switch between IR &amp; eeprom. Not entirely sure what it's expecting but the code added to desmume svn looks like it's sending 0x08 and waiting for a response of 0xaa.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+Index: src/MMU.cpp
+<br/>
+===================================================================
+<br/>
+--- src/MMU.cpp   (revision 2878)
+<br/>
++++ src/MMU.cpp   (revision 2879)
+<br/>
+@@ -2245,7 +2245,7 @@
+<br/>
+                MMU.AUX_SPI_CMD = val &amp; 0xFF;
+<br/>
+ 
+<br/>
+             //T1WriteWord(MMU.MMU_MEM[ARMCPU_ARM7][(REG_AUXSPIDATA &gt;&gt; 20) &amp; 0xff], REG_AUXSPIDATA &amp; 0xfff, bm_transfer(&amp;MMU.bupmem, val));
+<br/>
+-            T1WriteWord(MMU.MMU_MEM[ARMCPU_ARM7][(REG_AUXSPIDATA &gt;&gt; 20) &amp; 0xff], REG_AUXSPIDATA &amp; 0xfff, MMU_new.backupDevice.data_command((u8)val));
+<br/>
++            T1WriteWord(MMU.MMU_MEM[ARMCPU_ARM7][(REG_AUXSPIDATA &gt;&gt; 20) &amp; 0xff], REG_AUXSPIDATA &amp; 0xfff, MMU_new.backupDevice.data_command((u8)val,ARMCPU_ARM9));
+<br/>
+             return;
+<br/>
+ 
+<br/>
+          case REG_DISPA_BG0CNT :
+<br/>
+@@ -3184,7 +3184,7 @@
+<br/>
+                MMU.AUX_SPI_CMD = val &amp; 0xFF;
+<br/>
+ 
+<br/>
+             //T1WriteWord(MMU.MMU_MEM[ARMCPU_ARM7][(REG_AUXSPIDATA &gt;&gt; 20) &amp; 0xff], REG_AUXSPIDATA &amp; 0xfff, bm_transfer(&amp;MMU.bupmem, val));
+<br/>
+-            T1WriteWord(MMU.MMU_MEM[ARMCPU_ARM7][(REG_AUXSPIDATA &gt;&gt; 20) &amp; 0xff], REG_AUXSPIDATA &amp; 0xfff, MMU_new.backupDevice.data_command((u8)val));
+<br/>
++            T1WriteWord(MMU.MMU_MEM[ARMCPU_ARM7][(REG_AUXSPIDATA &gt;&gt; 20) &amp; 0xff], REG_AUXSPIDATA &amp; 0xfff, MMU_new.backupDevice.data_command((u8)val,ARMCPU_ARM7));
+<br/>
+          return;
+<br/>
+ 
+<br/>
+          case REG_SPICNT :
+<br/>
+Index: src/mc.h
+<br/>
+===================================================================
+<br/>
+--- src/mc.h   (revision 2878)
+<br/>
++++ src/mc.h   (revision 2879)
+<br/>
+@@ -83,7 +83,7 @@
+<br/>
+    
+<br/>
+    //commands from mmu
+<br/>
+    void reset_command();
+<br/>
+-   u8 data_command(u8);
+<br/>
++   u8 data_command(u8,int);
+<br/>
+ 
+<br/>
+    //this info was saved before the last reset (used for savestate compatibility)
+<br/>
+    struct SavedInfo
+<br/>
+Index: src/mc.cpp
+<br/>
+===================================================================
+<br/>
+--- src/mc.cpp   (revision 2878)
+<br/>
++++ src/mc.cpp   (revision 2879)
+<br/>
+@@ -376,7 +376,7 @@
+<br/>
+ 
+<br/>
+    com = 0;
+<br/>
+ }
+<br/>
+-u8 BackupDevice::data_command(u8 val)
+<br/>
++u8 BackupDevice::data_command(u8 val, int cpu)
+<br/>
+ {
+<br/>
+    if(com == BM_CMD_READLOW || com == BM_CMD_WRITELOW)
+<br/>
+    {
+<br/>
+@@ -440,6 +440,10 @@
+<br/>
+       switch(val)
+<br/>
+       {
+<br/>
+          case 0: break; //??
+<br/>
++
+<br/>
++         case 8:
+<br/>
++            val = 0xAA;
+<br/>
++            break;
+<br/>
+          
+<br/>
+          case BM_CMD_WRITEDISABLE:
+<br/>
+             write_enable = FALSE;
+<br/>
+@@ -479,7 +483,7 @@
+<br/>
+             break;
+<br/>
+ 
+<br/>
+          default:
+<br/>
+-            printf("COMMAND: Unhandled Backup Memory command: %02X\n", val);
+<br/>
++            printf("COMMAND%c: Unhandled Backup Memory command: %02X FROM %08X\n",(cpu==ARMCPU_ARM9)?'9':'7',val, NDS_ARM9.instruct_adr);
+<br/>
+             break;
+<br/>
+       }
+<br/>
+    }
+<br/>
+@@ -493,9 +497,9 @@
+<br/>
+    if(size&lt;addr)
+<br/>
+    {
+<br/>
+       data.resize(addr);
+<br/>
++      for(u32 i=size;i&lt;addr;i++)
+<br/>
++         data[i] = kUninitializedSaveDataValue;
+<br/>
+    }
+<br/>
+-   for(u32 i=size;i&lt;addr;i++)
+<br/>
+-      data[i] = kUninitializedSaveDataValue;
+<br/>
+ }
+<br/>
+</td> </tr></table><span class="postbody"><br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#173309 - Ludo6431 - Wed Mar 31, 2010 2:32 am</h4>
+    <div class="postbody"><span class="postbody">MP HUNTERS              sr=00          id=621600<br/>_________________<br/>Sorry for my poor english, I'm french.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#173462 - yellowstar - Wed Apr 07, 2010 7:58 pm</h4>
+    <div class="postbody"><span class="postbody">Spirit Tracks: sr = 00, id = 204014
+<br/>
+This EEPROM chip can't be written to the same sequential way as other chips it seems. Backing up seems to work, writing doesn't: bytes are randomly corrupted in the second half of the EEPROM/second save file. I dunno if that could be worked around by rewriting corrupted blocks/sectors, I haven't tried that.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#173463 - wintermute - Wed Apr 07, 2010 9:18 pm</h4>
+    <div class="postbody"><span class="postbody">Did you erase the chip before writing to it?<br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#173466 - yellowstar - Thu Apr 08, 2010 1:14 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>wintermute wrote:</b></span></td> </tr> <tr> <td class="quote">Did you erase the chip before writing to it?</td> </tr></table><span class="postbody">
+<br/>
+Yes, I did erase it. The EEPROM gets corrupted with both savsender and a wifi EEPROM app I wrote.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#173541 - zigg - Tue Apr 13, 2010 4:53 pm</h4>
+    <div class="postbody"><span class="postbody">Were you aware this doesn't work on a DSi?  00's all 'round.  I recall there were similar problems with savsender and probably some of my own stuff.
+<br/>
+<br/>
+WarioWare D.I.Y., which I understand from the Iwata Asks interview, has a NAND (Flash?)  On my old DS it shows up as
+<br/>
+<br/>
+DSMIO
+<br/>
+sr = ff,  id = ffffff
+<br/>
+<br/>
+Band Brothers DX (64mbit Flash):
+<br/>
+<br/>
+BANDBROS DX
+<br/>
+sr = 84,  id = 202017
+<br/>
+<br/>
+I have a patched card.c from stuff I was working on last year that can apparently deal with BBDX.  I don't think I got around to trying writes, but reading seemed to work OK.  I can send it on if you'd like to see, but it was literally just a matter of upping all the limits.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#173542 - wintermute - Tue Apr 13, 2010 8:02 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>zigg wrote:</b></span></td> </tr> <tr> <td class="quote">Were you aware this doesn't work on a DSi?  00's all 'round.  I recall there were similar problems with savsender and probably some of my own stuff.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+You can't currently hotswap gamecards on a DSi with homebrew code. Obviously the DSi firmware can so we may be able to figure it out at some point but not from DS mode. 
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+WarioWare D.I.Y., which I understand from the Iwata Asks interview, has a NAND (Flash?)  On my old DS it shows up as
+<br/>
+<br/>
+DSMIO
+<br/>
+sr = ff,  id = ffffff
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+WarioWare D.I.Y. appears to be entirely flash - I have it on good authority that the card contains only one chip. This probably uses gamecard commands rather than SPI for NAND access.
+<br/>
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+Band Brothers DX (64mbit Flash):
+<br/>
+<br/>
+BANDBROS DX
+<br/>
+sr = 84,  id = 202017
+<br/>
+<br/>
+I have a patched card.c from stuff I was working on last year that can apparently deal with BBDX.  I don't think I got around to trying writes, but reading seemed to work OK.  I can send it on if you'd like to see, but it was literally just a matter of upping all the limits.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+That would be interesting, yes. I think the current code might handle it ok with a couple of modifications though. The chip appears to be an m25p64 and the status register bits say the top two sectors are write protected.<br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#174820 - zigg - Wed Jul 21, 2010 1:05 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>wintermute wrote:</b></span></td> </tr> <tr> <td class="quote">You can't currently hotswap gamecards on a DSi with homebrew code. Obviously the DSi firmware can so we may be able to figure it out at some point but not from DS mode. </td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I had a follow-on question about this... have you (or has anyone else) tried to read/write blindly in DS mode on a DSi?  Obviously we can't detect the save type any longer, but if we already knew the correct type, could it be done?
+<br/>
+<br/>
+I may try to do this if nobody else has.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#174823 - wintermute - Wed Jul 21, 2010 8:28 pm</h4>
+    <div class="postbody"><span class="postbody">It's kind of difficult to read from a flash chip that has no power ...<br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#174824 - zigg - Wed Jul 21, 2010 8:39 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>wintermute wrote:</b></span></td> </tr> <tr> <td class="quote">It's kind of difficult to read from a flash chip that has no power ...</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Ooh.  Yes, sorry, I had an incomplete understanding of the problem at hand.  :)</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

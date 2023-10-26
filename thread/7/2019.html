@@ -1,0 +1,263 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Help Setting up Interrupts for DevKitAdv... - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>C/C++ > Help Setting up Interrupts for DevKitAdv...</h2>
+<div id="posts">
+<div class="post">
+    <h4>#10447 - Mr. GBA - Fri Sep 05, 2003 11:22 am</h4>
+    <div class="postbody"><span class="postbody">I've seen much documentation on this topic, all with conflicting methodologies.
+<br/>
+<br/>
+I'm hoping that one of you intellectuals will be able to help me: set up interrupts for devkitadv (unsing the LinkScript? etc).
+<br/>
+<br/>
+Thanks for your concern!<br/>_________________<br/>my dev/business site:
+<br/>
+<br/>
+<a href="http://codebytesdev.afraid.org" target="_blank">http://codebytesdev.afraid.org</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10452 - Lupin - Fri Sep 05, 2003 2:35 pm</h4>
+    <div class="postbody"><span class="postbody">what exactly is your problem about interrupts?
+<br/>
+<br/>
+you could use interrupts by using the crt0.s file and creating an array of function pointers or specify the <b style="color:#FFA34F">interrupt</b> handler yourself using the interrrupt vector (that's how I do it).
+<br/>
+<br/>
+<br/>
+that's my code:
+<br/>
+<br/>
+//Interrupts
+<br/>
+#define INT_VBLANK				 0x0001
+<br/>
+#define INT_HBLANK				 0x0002
+<br/>
+#define INT_VCOUNT				 0x0004
+<br/>
+#define INT_TIMMER0				 0x0008
+<br/>
+#define INT_TIMMER1			     0x0010
+<br/>
+#define INT_TIMMER2				 0x0020
+<br/>
+#define INT_TIMMER3				 0x0040
+<br/>
+#define INT_COMUNICATION		 0x0080 //serial communication interupt
+<br/>
+#define INT_DMA0				 0x0100
+<br/>
+#define INT_DMA1				 0x0200
+<br/>
+#define INT_DMA2				 0x0400
+<br/>
+#define INT_DMA3				 0x0800
+<br/>
+#define INT_KEYBOARD			 0x1000
+<br/>
+#define INT_CART				 0x2000 //the cart can actually generate an interupt
+<br/>
+#define INT_ALL					 0x4000 //this is just a flag we can set to allow the function to enable or disable all interrupts. Doesn't actually correspond to a bit in REG_IE
+<br/>
+<br/>
+typedef void (*interrupt_handler_t)(); 
+<br/>
+typedef interrupt_handler_t *interrupt_handler_ptr_t; 
+<br/>
+<br/>
+#define REG_IME					 (*(vu16*)0x4000208) //<b style="color:#FFA34F">Interrupt</b> Master Enable
+<br/>
+#define REG_IE					 (*(vu16*)0x4000200) //<b style="color:#FFA34F">Interrupt</b> Enable (Welche Interrupts sollen verarbeitet werden?)
+<br/>
+#define REG_IF					 (*(vu16*)0x4000202) //<b style="color:#FFA34F">Interrupt</b> Flags (welcher <b style="color:#FFA34F">Interrupt</b> ausgel??t wurde, wichtig zur Auswertung)
+<br/>
+#define REG_INTERUPT			 (*((interrupt_handler_ptr_t)0x03007FFC)) 
+<br/>
+<br/>
+<br/>
+//Interruptfunktionen
+<br/>
+void VBLANK(void);
+<br/>
+void KEYBOARD(void);
+<br/>
+<br/>
+//Das ist der <b style="color:#FFA34F">Interrupt</b>-Handler, vielleicht ist es besser ihn
+<br/>
+//im Rom zu haben, da spart man sich immerhin einen long call
+<br/>
+void HandleInterrupt() {
+<br/>
+  if (REG_IF &amp; INT_VBLANK) {
+<br/>
+    VBLANK();
+<br/>
+  }
+<br/>
+  if (REG_IF &amp; INT_KEYBOARD) {
+<br/>
+    KEYBOARD();
+<br/>
+  }
+<br/>
+}
+<br/>
+<br/>
+<br/>
+/*-------enable/disable interupt rutien---------------*/
+<br/>
+void EnableInterrupt(u16 <b style="color:#FFA34F">interrupt</b>) {
+<br/>
+  REG_IME = 0;  //probably not necessary but not a good idea to change interupt registers when an interupt is ocuring
+<br/>
+<br/>
+  if(<b style="color:#FFA34F">interrupt</b> == INT_VBLANK)
+<br/>
+	REG_DISP_STAT |= 0x8;
+<br/>
+  else if(<b style="color:#FFA34F">interrupt</b> == INT_HBLANK)
+<br/>
+	REG_DISP_STAT |= 0x10;
+<br/>
+  else if(<b style="color:#FFA34F">interrupt</b> == INT_KEYBOARD) //Alle Tasten aktivieren
+<br/>
+	REG_P1CNT |= BIT14 | BIT0 | BIT1 | BIT2 | BIT3 | BIT4 | BIT5 | BIT6 |  BIT7 | BIT8 | BIT9;
+<br/>
+<br/>
+  REG_IE |= <b style="color:#FFA34F">interrupt</b>;
+<br/>
+  REG_IME = 1;
+<br/>
+}
+<br/>
+<br/>
+void DissableInterrupts(u16 interrupts) {
+<br/>
+  REG_IE &amp;= ~interrupts;
+<br/>
+<br/>
+  if(interrupts == INT_ALL) //this is were that ALL comes in
+<br/>
+	REG_IME = 0;  //disable all interupts;
+<br/>
+}
+<br/>
+<br/>
+<br/>
+<br/>
+......in main()
+<br/>
+<br/>
+  REG_INTERUPT = HandleInterrupt;
+<br/>
+  EnableInterrupt(INT_VBLANK);
+<br/>
+  EnableInterrupt(INT_KEYBOARD);</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10453 - tepples - Fri Sep 05, 2003 2:43 pm</h4>
+    <div class="postbody"><span class="postbody">The <b style="color:#FFA34F">interrupt</b> strategy I use doesn't involve any mucking about with link scripts or crt0 startup files. Here's what I do for interrupts:
+<br/>
+<br/>
+1. Write an ISR meeting the GBA's requirements. (Read IF into a variable, act on interrupts, write variable back to IF, 'or' variable into BIOS's mirror of IF, and return.)
+<br/>
+2. Compile it as ARM code and put it in IWRAM. (In DevKitAdv R5b3, use -marm instead of -mthumb, and name the object file containing ".iwram.")
+<br/>
+3. Set it as the master ISR by writing the address of the function to 0x03fffffc.
+<br/>
+4. Enable <b style="color:#FFA34F">interrupt</b> sources, the corresponding bits in the mask, and the master enable.
+<br/>
+<br/>
+Lupin's code has pretty much the same idea but a few bugs (namely writing back to IE instead of IF and ignoring the BIOS mirror of IF entirely). Here's some boilerplate code that has actually been <span style="font-style: italic">tested</span> on hardware, taken from <span style="font-style: italic">Tetanus On Drugs</span>:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+/* in isr.iwram.c */
+<br/>
+<br/>
+#define BIOS_IF (*(u32 *)0x03fffff8)
+<br/>
+/* BIOS_IF is needed by IntrWait() and VblankIntrWait() */
+<br/>
+<br/>
+void isr(void)
+<br/>
+{
+<br/>
+  unsigned int interrupts = REG_IF;
+<br/>
+<br/>
+  /* for each <b style="color:#FFA34F">interrupt</b>: */
+<br/>
+  if(interrupts &amp; INTMASK_VBL)
+<br/>
+  {
+<br/>
+    /* do something */
+<br/>
+  }
+<br/>
+<br/>
+  REG_IF = interrupts;  /* important that this is = not |= */
+<br/>
+  BIOS_IF |= interrupts;  /* important that this is |= not = */
+<br/>
+<br/>
+  REG_IME = 1;
+<br/>
+}
+<br/>
+<br/>
+/* in main.c */
+<br/>
+<br/>
+#define SET_MASTER_ISR(isr) (*(u32 *)0x03fffffc = (u32)isr)
+<br/>
+/* yeah, nasty casts, but I was up at 1 AM and couldn't think
+<br/>
+   straight enough for type safety */
+<br/>
+<br/>
+int main(void)
+<br/>
+{
+<br/>
+  /* ... */
+<br/>
+  SET_MASTER_ISR(isr);
+<br/>
+  REG_IE = INTMASK_FOO | INTMASK_BAR;
+<br/>
+  REG_IME = 1;
+<br/>
+  /* ... */
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Please refer to the CowBite spec for more information.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

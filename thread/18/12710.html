@@ -1,0 +1,240 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Reset to GBA mode? - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Reset to GBA mode?</h2>
+<div id="posts">
+<div class="post">
+    <h4>#121752 - ttabbal - Wed Mar 14, 2007 2:51 pm</h4>
+    <div class="postbody"><span class="postbody">I'm sure it has to have been discussed here, but I'm coming up empty on the search. I found this ASM code on NDSTek (IIRC) that I inlined into C for ease of use. 
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+void bootGBA()
+<br/>
+{
+<br/>
+    asm(".arm");
+<br/>
+    asm("mov r2, #0x40");
+<br/>
+    asm("swi 0x1F0000");
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Problem is, it doesn't work. I don't get the GBA logo or anything. Did I miss something?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#121754 - Lick - Wed Mar 14, 2007 3:32 pm</h4>
+    <div class="postbody"><span class="postbody">You should check out Loopy's homebrew firmware source. Google "hbfirmware".<br/>_________________<br/><a class="postlink" href="http://licklick.wordpress.com" target="_blank">http://licklick.wordpress.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#121757 - ttabbal - Wed Mar 14, 2007 4:22 pm</h4>
+    <div class="postbody"><span class="postbody">Thanks for the tip! I've downloaded it and will go over the source.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#121778 - josath - Wed Mar 14, 2007 8:29 pm</h4>
+    <div class="postbody"><span class="postbody">Here's what I call and it works fine for me (resets into GBA mode):
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">                mov    r2, #0x40
+<br/>
+                ldr    r12, =0x11B8      @ call some routine in the bios
+<br/>
+                bx     r12</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+This has to be called on the arm7 btw.
+<br/>
+<br/>
+Also, I never liked inlining asm code. I'd suggest using a .s file. For example:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">@@@@ asmstuff.s
+<br/>
+.arm
+<br/>
+.section        ".text"
+<br/>
+.align  4
+<br/>
+<br/>
+.global GoGBAMode
+<br/>
+.func GoGBAMode
+<br/>
+GoGBAMode:
+<br/>
+                mov    r2, #0x40
+<br/>
+                ldr    r12, =0x11B8      @ call some routine in the bios
+<br/>
+                bx     r12
+<br/>
+.endfunc
+<br/>
+<br/>
+.end</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+In your main file:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">extern void GoGBAMode(void);
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+If you are using C++, don't forget the 'extern "C" {...}' wrapper thing.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#121779 - ttabbal - Wed Mar 14, 2007 8:36 pm</h4>
+    <div class="postbody"><span class="postbody">Hey josath, thanks a bunch! I suspect part of my problem was also that I was running it from the ARM9. Grrr... I guess I'll have to write it on the 7 or use IPC. 
+<br/>
+<br/>
+Any particular reason you don't like inline ASM? Not that I disagree, I don't have enough ASM experience to debate it, just wondering.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#122119 - GrizzlyAdams - Sat Mar 17, 2007 2:33 am</h4>
+    <div class="postbody"><span class="postbody">Here is part of the code I'm using to get into GBA mode.  The missing parts are just the FIFO stuff I'm using.  I'm sure you can figure out how to use the FIFO already.
+<br/>
+<br/>
+ARM7 Code:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void gbaMode() {
+<br/>
+        vu32* startCtrl = (vu32*)0x027FFCE4;
+<br/>
+<br/>
+        if (((*startCtrl &gt;&gt; 3) &amp; 0x01) == 0x01)         // Bottom screen enable
+<br/>
+        {
+<br/>
+                writePowerManagement(0, PM_BOTTOMLIGHT | PM_SOUND);
+<br/>
+        } else {
+<br/>
+                writePowerManagement(0, PM_TOPLIGHT | PM_SOUND);
+<br/>
+        }
+<br/>
+         
+<br/>
+        // Restart in gba mode
+<br/>
+        __asm (".arm\n"
+<br/>
+        "mov    r2, #0x40\n"
+<br/>
+        "swi    0x1F0000\n" 
+<br/>
+        );
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+ARM9 Code:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void gbaMode() {
+<br/>
+        u16 clear = 0x0000;
+<br/>
+        u32 *VRAMA = (u32 *)0x06000000;
+<br/>
+        u32 *VRAMB = (u32 *)0x06020000;
+<br/>
+        u32 *VRAMC = (u32 *)0x06040000;
+<br/>
+        u32 *VRAMD = (u32 *)0x06060000;
+<br/>
+        vramSetMainBanks(       VRAM_A_MAIN_BG, VRAM_B_MAIN_BG,
+<br/>
+                VRAM_C_MAIN_BG, VRAM_D_MAIN_BG);
+<br/>
+        dmaFill(3, VRAMA, clear, 256*256*2);
+<br/>
+        dmaFill(3, VRAMB, clear, 256*256*2);
+<br/>
+        dmaFill(3, VRAMC, clear, 256*256*2);
+<br/>
+        dmaFill(3, VRAMD, clear, 256*256*2);
+<br/>
+        vramSetMainBanks(       VRAM_A_MAIN_BG, VRAM_B_MAIN_BG,
+<br/>
+                VRAM_C_ARM7, VRAM_D_ARM7);
+<br/>
+<br/>
+        if(PersonalData-&gt;_user_data.gbaScreen) {
+<br/>
+                lcdMainOnBottom();
+<br/>
+        }
+<br/>
+        REG_EXEMEMCNT = (0xa08f);
+<br/>
+        FIFOSend(IPC_CMD_GBAMODE);
+<br/>
+        CheckFIFO();
+<br/>
+<br/>
+        for(;;);
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#122192 - HyperHacker - Sat Mar 17, 2007 8:16 pm</h4>
+    <div class="postbody"><span class="postbody">Can you be sure that personal data will never be overwritten during your program's execution? I'd copy the info you need to global variables at startup to be safe.<br/>_________________<br/>I'm a PSP hacker now, but I still &lt;3 DS.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#129769 - spinal_cord - Sat May 26, 2007 11:15 am</h4>
+    <div class="postbody"><span class="postbody">GrizzlyAdams - I have tried using you r code, but I'm getting noise in the border, is there anything I can do to avoid that.
+<br/>
+<br/>
+Also is ther a way to boot a slot-1 card?<br/>_________________<br/>I'm not a boring person, it's just that boring things keep happening to me.
+<br/>
+<a class="postlink" href="http://spinal.dizidesigns.co.uk/" target="_blank">Homepage</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#130118 - tondopie - Thu May 31, 2007 1:39 am</h4>
+    <div class="postbody"><span class="postbody">use lick's reboot lib to boot to a SLot-1 device.<br/>_________________<br/><span style="font-weight: bold">Development Blog:</span> <a class="postlink" href="http://teendev.org" target="_blank">http://teendev.org</a>
+<br/>
+<span style="font-weight: bold">Homebrew Podcast:</span> <a class="postlink" href="http://homebrewcast.net" target="_blank">http://homebrewcast.net</a>
+<br/>
+<span style="font-weight: bold">Web Design:</span> <a class="postlink" href="http://xtendesign.net" target="_blank">http://xtendesign.net</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#130156 - Lick - Thu May 31, 2007 10:53 am</h4>
+    <div class="postbody"><span class="postbody">spinal_cord: yes there is, but it involves re-inserting the slot-1 card and after that you have to do decryption and stuff, very complicated.
+<br/>
+<br/>
+tondopie: my rebootlib unfortunately 1) only works on homebrew devices 2) doesn't work on all homebrew devices 3) doesn't do any GBA mode stuff 4) doesn't clear memory before reseting.
+<br/>
+But it does what it does.<br/>_________________<br/><a class="postlink" href="http://licklick.wordpress.com" target="_blank">http://licklick.wordpress.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#130277 - tondopie - Fri Jun 01, 2007 10:03 pm</h4>
+    <div class="postbody"><span class="postbody">spinal_cord: look in hbfirmware... it will be hard for you to use if you are using PAlib... stick to less advanced functions.<br/>_________________<br/><span style="font-weight: bold">Development Blog:</span> <a class="postlink" href="http://teendev.org" target="_blank">http://teendev.org</a>
+<br/>
+<span style="font-weight: bold">Homebrew Podcast:</span> <a class="postlink" href="http://homebrewcast.net" target="_blank">http://homebrewcast.net</a>
+<br/>
+<span style="font-weight: bold">Web Design:</span> <a class="postlink" href="http://xtendesign.net" target="_blank">http://xtendesign.net</a></span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

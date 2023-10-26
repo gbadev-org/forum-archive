@@ -1,0 +1,152 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Wierd thing - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > Wierd thing</h2>
+<div id="posts">
+<div class="post">
+    <h4>#19325 - Gopher - Sat Apr 17, 2004 7:15 am</h4>
+    <div class="postbody"><span class="postbody">I'm working on a project that's implementing an hblank trick to draw up to 1,024 sprites at once. At present it's enabling only one interrupt (hblank) and so I wrote the handler to assume any interrupt is a hblank interrupt. Originally it worked only on VBA, not on actual hardware. Here was the code:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+void InterruptHandler(void)
+<br/>
+{
+<br/>
+    hword f=REG_IF;
+<br/>
+    static int index=0;
+<br/>
+    //we just assume it's vcount, since that's the only one we enable
+<br/>
+    //if this is the line we're waiting for...
+<br/>
+    if (REG_VCOUNT==batches[index].MaxY)
+<br/>
+    {
+<br/>
+        //if we haven't drawn the last set yet..
+<br/>
+        if (index&lt;(NumTribbles&gt;&gt;5)-4)
+<br/>
+        {
+<br/>
+            //copy in the replacement for me (the guy 4 later)
+<br/>
+           gbadMemCpy(batches[index+4].sprites,(gbasSpriteData +       ((index&amp;0x3)&lt;&lt;5)),32*4);
+<br/>
+            index++;
+<br/>
+        }
+<br/>
+        else  //if we're really at the end...
+<br/>
+        {
+<br/>
+            //reset the index to 0
+<br/>
+            index=0;
+<br/>
+        }
+<br/>
+    }
+<br/>
+    REG_IF|=f;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+All I changed was eliminating the variable f at the begining and changing the last line to
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+REG_IF |= REGI_F;
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+and now it works on HW.
+<br/>
+<br/>
+Can anyone tell me /why/ this fixed the problem? I don't even know what made me try it, it was basicly a shot in the dark.
+<br/>
+<br/>
+thx<br/>_________________<br/>"Only two things are infinite: the universe, and human stupidity. The first is debatable." -Albert Einstein</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#19339 - Miked0801 - Sat Apr 17, 2004 7:00 pm</h4>
+    <div class="postbody"><span class="postbody">You didn't declare f as a volatile var for starters.  This means that the later assignment may not work right if your compiler "Optimizes" this for you.  Also, I'd check and see how REG_IF is declared.  Make sure it is alos declared as volatile for the same reason.  That's my guess.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#19370 - Gopher - Sun Apr 18, 2004 2:35 am</h4>
+    <div class="postbody"><span class="postbody">REG_IF is declared volatile. F shouldn't need to be volatile since hblank was the only enabled interrupt? How could it change otherwise?<br/>_________________<br/>"Only two things are infinite: the universe, and human stupidity. The first is debatable." -Albert Einstein</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#19371 - sajiimori - Sun Apr 18, 2004 3:48 am</h4>
+    <div class="postbody"><span class="postbody">I was going to reply with the obvious, but now that I think of it, it would seem strange for the compiler to optimize away the |= operation.
+<br/>
+<br/>
+I mean, if REG_IF is volatile, saving its value at the beginning of the function and or'ing it with the old value at the end should be assumed significant.  REG_IF could have been zeroed during the function's execution for all the compiler knows.
+<br/>
+<br/>
+Anyway, I'd say declare f volatile.  It couldn't hurt, and if it works like that, maybe it's an optimizer bug.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#19383 - torne - Sun Apr 18, 2004 8:39 pm</h4>
+    <div class="postbody"><span class="postbody">f shouldn't need to be volatile; the optimiser will generally not reorder memory accesses.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#19385 - Lord Graga - Sun Apr 18, 2004 9:03 pm</h4>
+    <div class="postbody"><span class="postbody">Try this:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void Intr_Flag(void)
+<br/>
+{
+<br/>
+   u16 flags;
+<br/>
+   REG_IME = 0;
+<br/>
+   flags = REG_IF;
+<br/>
+   if(flags&amp;2)
+<br/>
+   {
+<br/>
+      //HBLANK
+<br/>
+   }
+<br/>
+   if(flags&amp;IRQ_VBLANK)
+<br/>
+   {
+<br/>
+      //VBLANK
+<br/>
+   }
+<br/>
+<br/>
+   REG_IF = flags;
+<br/>
+   REG_IME |= BIT00;
+<br/>
+}</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

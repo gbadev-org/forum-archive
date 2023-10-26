@@ -1,0 +1,226 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>SWI troubles :-( - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > SWI troubles :-(</h2>
+<div id="posts">
+<div class="post">
+    <h4>#122548 - SpacedCowboy - Tue Mar 20, 2007 4:45 am</h4>
+    <div class="postbody"><span class="postbody">Is there anything "special" about an SWI - are there any registers I have to set to enable them (can't see *why*, but it doesn't hurt to ask :-) or any other hoops to jump through ?
+<br/>
+<br/>
+I've been playing around with the source of Mighty-Max's virt-16 OS. I wanted to change a few things (a single namespace of OS_(whatever); to locate it in the bottom 512k of WRAM so I have more space eg: for a wifi device-driver or proper ELF loader; to use the 'r20' FAT library so my DS-X works; and to add a pthreads layer over the threading facilities, so I can have mutexes/semaphores). 
+<br/>
+<br/>
+I've got some problem code, where I'm calling 'syscall' which was defined as:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+/******************************************************************************\ 
+<br/>
+|* Generic syscall handler. Takes either 0,1,2 or 3 arguments 
+<br/>
+\******************************************************************************/ 
+<br/>
+OS_syscall: 
+<br/>
+OS_syscall1: 
+<br/>
+OS_syscall2: 
+<br/>
+OS_syscall3: 
+<br/>
+   swi 0x00               // Call the handler set up in the BIOS 
+<br/>
+   BX lr                   // then return 
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+... but has now turned into:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+/******************************************************************************\
+<br/>
+|* Generic syscall handler. Takes either 0,1,2 or 3 arguments
+<br/>
+\******************************************************************************/
+<br/>
+OS_syscall:
+<br/>
+OS_syscall1:
+<br/>
+OS_syscall2:
+<br/>
+OS_syscall3:
+<br/>
+   
+<br/>
+   stmdb    r13!, {r0-r3}        // Store the registers
+<br/>
+   
+<br/>
+   bl       OS_cpreg
+<br/>
+   mov      r2, r0               // r2 &lt;= CP15 reg value
+<br/>
+   mov      r0, #0
+<br/>
+   mov      r1, #100
+<br/>
+   ldr      r3, =OS_GFX_printX32
+<br/>
+   bl       _call_via_r3         // print it
+<br/>
+   
+<br/>
+   mov      r2,   #0x08          // r2 &lt;= SWI register value
+<br/>
+   ldr      r2, [r2]
+<br/>
+   mov      r0, #0
+<br/>
+   mov      r1, #113
+<br/>
+   ldr      r3, =OS_GFX_printX32
+<br/>
+   bl       _call_via_r3         // print it
+<br/>
+   
+<br/>
+   ldr      r2,   =OS_codeSWI    // r2 &lt;= 1st insn in SWI routine
+<br/>
+   ldr      r2, [r2]
+<br/>
+   mov      r0, #0
+<br/>
+   mov      r1, #126
+<br/>
+   ldr      r3, =OS_GFX_printX32
+<br/>
+   bl       _call_via_r3         // print it
+<br/>
+   
+<br/>
+   ldr      r1,  =0x06016c1E     // blue dot at (15,182)
+<br/>
+   ldr      r2,  =0xfc00
+<br/>
+   strh     r2,[r1]
+<br/>
+   ldmia    r13!, {r0-r3}        // Restore the registers
+<br/>
+   
+<br/>
+   swi 0x00                      // Call the handler set up in the BIOS
+<br/>
+   BX lr                         // then return
+<br/>
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+... because the code in my SWI just isn't being called. The expanded 'syscall' routine fetches (at the time just before I call 'swi') register 1 of the CP15 chip, and prints it out, then fetches the contents of the SWI vector (a branch instruction), and prints that, then fetches the contents of the memory address that branch points at, and prints that out. It then plots a blue pixel (this works) and finally calls the SWI as planned
+<br/>
+<br/>
+All of the printed-out numbers seem perfectly ok...
+<br/>
+<br/>
+ - the CP15 register(1) has the value 0x0005107D, so the 'V' bit is clear, meaning the exception jump-table is at 0x00000000 rather than 0xffff0000. So that's good.
+<br/>
+<br/>
+ - the value at 0x00000008 is 0xEA000007, which is a branch-always to +7 words, and my routine (OS_codeSWI) is 9 words away from the branch instruction. Given the PC offset of 2 words, this seems pretty peachy.
+<br/>
+<br/>
+ - the value at 0x0000002C (= OS_codeSWI) is 0xE92D5FFF, which is the bit-vector for the "stmdb r13!, {r0-r12,r14}" instruction, which is the first statement of the code at the address OS_codeSWI. 
+<br/>
+<br/>
+The first thing the SWI routine does (after storing the registers on the stack) is plot a *red* pixel close to the blue one. Unfortunately the red pixel never appears :-(
+<br/>
+<br/>
+So, I'm struggling to understand how (when it all seems set up ok), the code in the SWI is never jumped-to. Max was (is :-) using regions to define what addresses can be accessed, so it occured to me that maybe a fault was happening when the SWI instruction was executed, but according to Steve Furber ("Arm System-on-a-chip architecture, 2nd edition"), the SWI process is:
+<br/>
+<br/>
+ - save the address of the insn after the SWI in r14_svc
+<br/>
+ - save CPSR in SPSR_svc
+<br/>
+ - Enter supervisor mode, disable IRQ (not FIQ)
+<br/>
+ - Set PC to 0x08 and begin executing
+<br/>
+<br/>
+... so the system mode ought to be privileged by the time it tries to read address 0x08, and the current state of the protection registers is:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+   OS_MPU_writeProtectionBase0(0x0000003F) ;
+<br/>
+   OS_MPU_writeDataPermissions(0x33333331) ;      
+<br/>
+   OS_MPU_writeCodePermissions(0x33333331) ; 
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+... meaning that region 0 is enabled for the entire address range (0-4GB), and access is granted to system-modes. So it ought to be ok. Just in case, I modified the permissions to 0x33333333 instead, but I still had the problem.
+<br/>
+<br/>
+I moved the pageAddress array of swappable pages to start at 0x02080000 instead of 0x02000000, so I have the first 512k to play with - I oughn't be being swapped out :-) It's not allocating much memory yet anyway - the 'memStatistics' call show both TCM and WRAM still have plenty of space in them...
+<br/>
+<br/>
+So, Im not having much luck solving this - if anyone has a clue as to why it might not be working, I'd love to hear it :-) Full source available if that'll help...
+<br/>
+<br/>
+Cheers,
+<br/>
+    Simon.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#122555 - HyperHacker - Tue Mar 20, 2007 7:00 am</h4>
+    <div class="postbody"><span class="postbody">Does it work if you call the SWI routine yourself instead of using an SWI instruction? I understand some trickery had to be used so that the OS's SWIs were called rather than the ones in the BIOS; perhaps you've broken this.<br/>_________________<br/>I'm a PSP hacker now, but I still &lt;3 DS.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#122558 - SpacedCowboy - Tue Mar 20, 2007 7:12 am</h4>
+    <div class="postbody"><span class="postbody">Perhaps I have - I noticed that Max was using a different 'specs' file (that I don't have) for compiling his kernel. I'll PM him and ask him what that was for :)
+<br/>
+<br/>
+In the mean-time, I've uploaded <a class="postlink" href="http://www.gornall.net/nds/os.zip" target="_blank">the source</a> in case anyone wants to look at it (hey, you can't fault a man for trying [grin])
+<br/>
+<br/>
+Simon</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#123011 - Mighty Max - Sat Mar 24, 2007 2:20 pm</h4>
+    <div class="postbody"><span class="postbody">Sorry, for responding that late. 
+<br/>
+<br/>
+The specs were modified because i load the the system mode code (.knl) into the shared wram at 0x3000000 so that this code was needed to compile to reside at that place instead of the 0x2000000 base.
+<br/>
+<br/>
+For tracking down your problem i recomment starting it in desmume. 
+<br/>
+<br/>
+I allways used to insert a halt (label: b label) and check whether desmume  showed the expected register contents when it reaches this label.
+<br/>
+<br/>
+But I think GPF has released a gdb-enabled version of desmume somewhere since, which makes it more easy to track the error down.<br/>_________________<br/><a class="postlink" href="http://mightymax.org/gbamp_multiboot.html" target="_blank">GBAMP Multiboot</a></span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

@@ -1,0 +1,140 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Linkerscript Memory Layout - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Linkerscript Memory Layout</h2>
+<div id="posts">
+<div class="post">
+    <h4>#100104 - veniteo - Sat Aug 26, 2006 5:04 am</h4>
+    <div class="postbody"><span class="postbody">I'm currently using the GBA cart / passkey method for testing my DS ROMs on the actual hardware.  I'm curious how the linkerscript sets up the various areas of memory used by the ARM9 and ARM7.  
+<br/>
+<br/>
+*  The way I understand it, the actual contents of the code get copied from the cart to main memory on startup -- does this include both ARM7 and ARM9 code?
+<br/>
+<br/>
+*  If I use one of the filesystem libraries currently being developed, the files attached to the ROM do not get copied into memory, correct?
+<br/>
+<br/>
+*  If I declare global variables in the code (unintialized, initialized, or constant), do they all go directly into memory for both processors?
+<br/>
+<br/>
+*  When I use malloc() in C or 'new' in C++, what area of memory does the data get allocated in?  How does it avoid overwriting any other data already there?
+<br/>
+<br/>
+*  Is there any way I can control what area of memory a declared variable will be allocated to?  I.e., shared WRAM, VRAM, ITCM, DTCM, etc. instead of EWRAM?
+<br/>
+<br/>
+Thanks for your help.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#100107 - tepples - Sat Aug 26, 2006 5:24 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>veniteo wrote:</b></span></td> </tr> <tr> <td class="quote">*  The way I understand it, the actual contents of the code get copied from the cart to main memory on startup -- does this include both ARM7 and ARM9 code?</td> </tr></table><span class="postbody">
+<br/>
+Correct.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">If I use one of the filesystem libraries currently being developed, the files attached to the ROM do not get copied into memory, correct?</td> </tr></table><span class="postbody">
+<br/>
+Correct. You have to fopen(), fread(), and fclose() just like on the PC.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">If I declare global variables in the code (unintialized, initialized, or constant), do they all go directly into memory for both processors?</td> </tr></table><span class="postbody">
+<br/>
+Each processor sees only its own global variables unless you define IPC explicitly.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">When I use malloc() in C or 'new' in C++, what area of memory does the data get allocated in?  How does it avoid overwriting any other data already there?</td> </tr></table><span class="postbody">
+<br/>
+malloc() allocates out of EWRAM, and the default implementation of operator new uses malloc() as its back end.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Is there any way I can control what area of memory a declared variable will be allocated to?  I.e., shared WRAM, VRAM, ITCM, DTCM, etc. instead of EWRAM?</td> </tr></table><span class="postbody">
+<br/>
+This is largely done the same way as it was done on the Game Boy Advance.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#100496 - veniteo - Mon Aug 28, 2006 8:31 am</h4>
+    <div class="postbody"><span class="postbody">Based on your comments, I tried looking at the linker maps generated when compiling some of the NDS examples along with running a few tests.  Here's what I found -- please let me know if any of this is incorrect:
+<br/>
+<br/>
+ARM9:
+<br/>
+<br/>
+Code + global data: Begins in EWRAM at 0x02000000 to the total size of the code.
+<br/>
+Heap: The remainder of EWRAM after the code and data, minus the last 4K.  I'm not certain what that 4K is used for.
+<br/>
+User Stack: DTCM starting at 0x0B000000 - 0x0B003CFF (15.25KB)
+<br/>
+IRQ Stack: 0x0B003D00 - 0x0B003DFF (256 bytes)
+<br/>
+Service Stack: 0x0B003E00 - 0x0B003EFF (256 bytes)
+<br/>
+<br/>
+ARM7:
+<br/>
+<br/>
+Code + global data: Begins in ARM7 WRAM at 0x03800000 to the total size of the code.
+<br/>
+Heap: In ARM7 WRAM after the code, but not beyond the bottom of the user stack.
+<br/>
+User stack: In ARM7 WRAM after the heap up to 0x0380FD9F.  I'm not sure if malloc() checks to see if a new allocation overlaps the stack, and I don't know how the code in general ensures that stack allocations don't overlap the heap.  My guess is they don't.
+<br/>
+IRQ Stack: 0x0380FEA0 - 0x0380FF9F (256 bytes)
+<br/>
+Service Stack: 0x0380FDA0 - 0x0380FE9F (256 bytes)
+<br/>
+<br/>
+It seems that while the DTCM is dedicated to the ARM9 stack, ITCM is not being used by default.  Also, shared memory between 0x03000000 and 0x03007FFF isn't being used.  Am I right in assuming shared memory is managed directly by the program?
+<br/>
+<br/>
+I tried specifying a function to be placed in ITCM in the same way that I used to place GBA code in IWRAM (as best as I could from memory...).  Here's a snippet of what I have:
+<br/>
+<br/>
+__attribute__ ((section (".itcm"), long_call))
+<br/>
+<br/>
+void test(void) {
+<br/>
+	iprintf("\n\n\tHello World!\n");
+<br/>
+}
+<br/>
+<br/>
+void main(void) {
+<br/>
+	...
+<br/>
+	test();
+<br/>
+	...
+<br/>
+}
+<br/>
+<br/>
+When I do this, the file compiles fine, but I get a number of link-time error messages saying something like "relocation truncated to fit: R_ARM_THM_CALL against symbol `test' defined in .itcm section in template.o".  Do I have the correct syntax, or am I missing something?
+<br/>
+<br/>
+Thanks again for your help.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

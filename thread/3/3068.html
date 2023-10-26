@@ -1,0 +1,92 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Sprite scaling algorithm - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Hardware > Sprite scaling algorithm</h2>
+<div id="posts">
+<div class="post">
+    <h4>#17927 - poslundc - Wed Mar 17, 2004 5:19 pm</h4>
+    <div class="postbody"><span class="postbody">It looks to me as though the GBA uses nearest-neighbour scaling, with the 8 fractional bits of the scale registers as its counters.
+<br/>
+<br/>
+The only thing that throws me off is that it seems to scale outward from the centre (versus from the top-left), which makes me a little less certain of how the algorithm works.
+<br/>
+<br/>
+Can anyone shed a little light onto what's taking place? I just need to be able to recreate the same scaling effect so I can model my own scaling routine to generate the same results.
+<br/>
+<br/>
+Thanks,
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#17931 - DekuTree64 - Wed Mar 17, 2004 6:12 pm</h4>
+    <div class="postbody"><span class="postbody">It's pretty easy to scale around the center, just set your scaling variables so they end up being at the center when you get there. Like, if your sprite is 16x16, set them to (8&lt;&lt;8) - 8*var. So after you've added that value 8 times to get to the center, you're back to 8&lt;&lt;8, which is the fixed-point center of the sprite.
+<br/>
+That would be assuming you're using vars for dx added to the source x for each dest x pixel, dy added to source y for each dest x, dx added for each y, and dy added for each y. Then you just add pa, pb, pc and pd respectively and you're done. You'll need to clip them for a sprite though, which will be a little slower, unless you want to try to do something trickier like tracing the edges of the rotated sprite's bounding rectangle and only draw inside there.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#17935 - poslundc - Wed Mar 17, 2004 6:50 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>DekuTree64 wrote:</b></span></td> </tr> <tr> <td class="quote">It's pretty easy to scale around the center, just set your scaling variables so they end up being at the center when you get there. Like, if your sprite is 16x16, set them to (8&lt;&lt;8) - 8*var. So after you've added that value 8 times to get to the center, you're back to 8&lt;&lt;8, which is the fixed-point center of the sprite.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Yeah, I suppose it's straightforward... although I wanna make sure that's what the GBA is actually <span style="font-style: italic">doing</span>. :)
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">That would be assuming you're using vars for dx added to the source x for each dest x pixel, dy added to source y for each dest x, dx added for each y, and dy added for each y. Then you just add pa, pb, pc and pd respectively and you're done. You'll need to clip them for a sprite though, which will be a little slower, unless you want to try to do something trickier like tracing the edges of the rotated sprite's bounding rectangle and only draw inside there.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I don't think I'm going to do anything nearly so complicated. That is to say, I don't think the hardware is fast enough for me to apply a general scaling algorithm to scale up 32x32 to 64x64 sprites. Besides which, the way sprites are stored as separate tiles in VRAM doesn't go well with general scaling algorithms (at least, not any way that makes sense to me).
+<br/>
+<br/>
+What I'm hoping to do is instead map every possible case (or just a subset of them, maybe for 32 scaling levels) and see if I can write an assembler routine for each specific case. I could then DMA the necessary routine into IWRAM and run it. This seems as though it is my best shot.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#18786 - Cearn - Mon Apr 05, 2004 1:18 pm</h4>
+    <div class="postbody"><span class="postbody">Don't know if you' re still interested since it has been three weeks, but if you are...
+<br/>
+<br/>
+It seems that the transformation between screen and texel coordinates is given by
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+  px = (pa*qx + pb*qy - (x0&lt;&lt;8))&gt;&gt;8
+<br/>
+  py = (pc*qx + pd*qy - (y0&lt;&lt;8))&gt;&gt;8
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+where pa-pd are the familiar 8.8 fixed numbers, (qx,qy) is the screen-position of the sprite, relative to the its center (pure integers), (px, py) are the texture-coordinates relative to the top-left (pure integers) and (x0,y0) are the coordinates of the top-left, relative to the center.
+<br/>
+<br/>
+For example, for a 64x64 sprite, the top-side of the sprite (on screen!) is given by qy = -32 (or -64 for double size sprites) and (x0. y0) = (-32, -32) (or (-64, -64) for double size sprites).
+<br/>
+<br/>
+Because of roundoff nastiness you have to follow the equations to the letter, though I have little doubt there are equivalent expressions. Note, by the way, that I've only tested this on VBA, not hardware. Pixel-counting is a lot easier on a screen-shot than on an LCD screen.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

@@ -1,0 +1,302 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Software mixing - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Software mixing</h2>
+<div id="posts">
+<div class="post">
+    <h4>#77766 - ProblemBaby - Sun Apr 02, 2006 10:52 pm</h4>
+    <div class="postbody"><span class="postbody">Hello
+<br/>
+<br/>
+Iam trying to write a software mixer but I dont get the correct sync. Ive no idea why it should work.
+<br/>
+<br/>
+Some pseudo code:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+<br/>
+arm7vbank:
+<br/>
+<br/>
+if (curBufFlag == 1)
+<br/>
+  curBuf = MixBuf
+<br/>
+else
+<br/>
+ Start Play from the beginning of the MixBuf
+<br/>
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Iam using the frequency: 31536hz with a buffersize of 528
+<br/>
+Ive succeeded to do this on the gba (thanks dekutree64!) so it's something with the sync that doesnt work.
+<br/>
+<br/>
+thanks</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#77767 - HyperHacker - Sun Apr 02, 2006 10:53 pm</h4>
+    <div class="postbody"><span class="postbody">Should you be resetting curBufFlag? Hard to tell with so little code, especially when it's not even the actual source.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#77770 - ProblemBaby - Sun Apr 02, 2006 10:58 pm</h4>
+    <div class="postbody"><span class="postbody">Yeah, Ive no idea why I didnt show u the real source=)
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+<br/>
+Arm7VBlank:
+<br/>
+<br/>
+if (CurrentBuffer)
+<br/>
+{   
+<br/>
+g_dsipc-&gt;Sound.CurrentMixingBuffer = g_dsipc-&gt;Sound.MixingBuffer;
+<br/>
+CurrentBuffer = 0;
+<br/>
+}
+<br/>
+else
+<br/>
+{
+<br/>
+REG_SOUNDCHNCNT(0) = 0
+<br/>
+REG_SOUNDCHNCNT(1) = 0;
+<br/>
+               
+<br/>
+REG_SOUNDCHNTMR(0) = -0x1000000 / 31536;
+<br/>
+REG_SOUNDCHNTMR(1) = -0x1000000 / 31536;
+<br/>
+REG_SOUNDCHNLEN(0) = (528 * 4) / 4;
+<br/>
+REG_SOUNDCHNLEN(1) = (528 * 4) / 4;
+<br/>
+REG_SOUNDCHNPNT(0) = 0;
+<br/>
+REG_SOUNDCHNPNT(1) = 0;
+<br/>
+REG_SOUNDCHNSAD(0) = (u32)&amp;g_dsipc-&gt;Sound.MixingBuffer[0 * 528];
+<br/>
+REG_SOUNDCHNSAD(1) = (u32)&amp;g_dsipc-&gt;Sound.MixingBuffer[2 * 528];
+<br/>
+      
+<br/>
+REG_SOUNDCHNCNT(0) = SOUNDCHNCNT_ENABLED | SOUNDCHNCNT_REPEATMODE_LOOP | SOUNDCHNCNT_FORMAT_PCM16 | SOUNDCHNCNT_PANNING(0x00) | SOUNDCHNCNT_VOLUME(0x7F);
+<br/>
+REG_SOUNDCHNCNT(1) = SOUNDCHNCNT_ENABLED | SOUNDCHNCNT_REPEATMODE_LOOP | SOUNDCHNCNT_FORMAT_PCM16 | SOUNDCHNCNT_PANNING(0x7F) | SOUNDCHNCNT_VOLUME(0x7F);
+<br/>
+                  
+<br/>
+CurrentBuffer = 1;
+<br/>
+}
+<br/>
+<br/>
+<br/>
+<br/>
+// Some terrible written mix code. in Arm9
+<br/>
+<br/>
+u32 i, j;
+<br/>
+<br/>
+BIOSCpuSetZero32(TempMixingBuffer, 528 * 2);
+<br/>
+   
+<br/>
+for (i = 0; i &lt; 32; i++)
+<br/>
+{
+<br/>
+if (Chn[i].pData)
+<br/>
+{      
+<br/>
+for (j = 0; j &lt; 528; j++)
+<br/>
+{
+<br/>
+TempMixingBuffer[j*2+0] = Chn[i].pData[Chn[i].Position] * Chn[i].LeftVolume;
+<br/>
+TempMixingBuffer[j*2+1] = Chn[i].pData[Chn[i].Position] * Chn[i].RightVolume;
+<br/>
+Chn[i].Position++;
+<br/>
+//while (Chn[i].Position &gt;= Chn[i].Length)
+<br/>
+//   Chn[i].Position -= Chn[i].LoopLength;
+<br/>
+}
+<br/>
+}
+<br/>
+}
+<br/>
+   
+<br/>
+for (i = 0; i &lt; 528; i++)
+<br/>
+{
+<br/>
+if (TempMixingBuffer[i*2+0] &gt; 32767)
+<br/>
+TempMixingBuffer[i*2+0] = 32767;
+<br/>
+else if (TempMixingBuffer[i*2+0] &lt; -32768)
+<br/>
+TempMixingBuffer[i*2+0] = -32768;
+<br/>
+<br/>
+if (TempMixingBuffer[i*2+1] &gt; 32767)
+<br/>
+TempMixingBuffer[i*2+1] = 32767;
+<br/>
+else if (TempMixingBuffer[i*2+1] &lt; -32768)
+<br/>
+TempMixingBuffer[i*2+1] = -32768;
+<br/>
+      
+<br/>
+      
+<br/>
+g_dsipc-&gt;Sound.CurrentMixingBuffer[528 * 2] = TempMixingBuffer[i*2+1];
+<br/>
+g_dsipc-&gt;Sound.CurrentMixingBuffer[0] = TempMixingBuffer[i*2+0];
+<br/>
+g_dsipc-&gt;Sound.CurrentMixingBuffer++;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#77773 - DekuTree64 - Sun Apr 02, 2006 11:26 pm</h4>
+    <div class="postbody"><span class="postbody">Those mixing rate/buffer size settings only work on the GBA, because it runs at 280896 clocks/vblank. According to <a class="postlink" href="http://www.bottledlight.com/ds/index.php/Video/Screens" target="_blank">this</a>, DS runs at 560190 clocks/vblank, which when plugged into tepples' <a class="postlink" href="http://www.pineight.com/gba/samplerates" target="_blank">sample rate calculator</a>, doesn't come up with anything.
+<br/>
+<br/>
+So, you'll need to use a timer to count samples, instead of VBlank. What I've done before is set the sound channel to loop, set one CPU timer to run at the same rate as the sound channel's timer, and cascade another timer off that. Each VBlank, I read the cascade timer and take the difference since last frame (remember to handle wrap around), and mix that many samples. Store the value you read from the cascade timer for getting the difference next frame.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#77775 - ProblemBaby - Sun Apr 02, 2006 11:43 pm</h4>
+    <div class="postbody"><span class="postbody">I tested the sample rate calculater myself (to be sure) and actually it comes up with some. When setting Fetch witdth = 2.
+<br/>
+And I don't have to care about the fetch witdth for DS, right?
+<br/>
+I tried to put in the new values, it still doesnt work but shouldnt those values work?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#77776 - DekuTree64 - Sun Apr 02, 2006 11:49 pm</h4>
+    <div class="postbody"><span class="postbody">I'm not sure what the DS's fetch width is. What kind of problem are you getting? Clicking during the restart, or like it's not filling the buffer properly or something?<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#77779 - ProblemBaby - Sun Apr 02, 2006 11:58 pm</h4>
+    <div class="postbody"><span class="postbody">hmm hard to describe...
+<br/>
+The sound is played incorrectly all the time through, I think its a sync problem, cause I can't see something wrong in the Mix function.
+<br/>
+The sample seems to be restarted each time, like it just copies the data the first time, then just let it loop around.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#77784 - tepples - Mon Apr 03, 2006 12:04 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>ProblemBaby wrote:</b></span></td> </tr> <tr> <td class="quote">Iam trying to write a software mixer but I dont get the correct sync. Ive no idea why it should work.
+<br/>
+[...]Iam using the frequency: 31536hz with a buffersize of 528</td> </tr></table><span class="postbody">
+<br/>
+You will want to use frequency 32768 Hz on the DS, with timer based switching instead of vblank based switching.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#77786 - ProblemBaby - Mon Apr 03, 2006 12:08 am</h4>
+    <div class="postbody"><span class="postbody">It isnt played at all if the Play Once is enabled (instead of loop).
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+You will want to use frequency 32768 Hz on the DS, with timer based switching instead of vblank based switching.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Yeah probably Ive too, but I want to try some more, cause I think its better to have vblank based switching when it comes to synced video/audio/input effects.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#77855 - ProblemBaby - Mon Apr 03, 2006 4:47 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>DekuTree64 wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+So, you'll need to use a timer to count samples, instead of VBlank. What I've done before is set the sound channel to loop, set one CPU timer to run at the same rate as the sound channel's timer, and cascade another timer off that. Each VBlank, I read the cascade timer and take the difference since last frame (remember to handle wrap around), and mix that many samples. Store the value you read from the cascade timer for getting the difference next frame.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I don't understand. At which CPU is what done?, Do you just start the two channels in the audio init code? Is the actual mix code in VBlank?
+<br/>
+Sorry that iam so slow in understanding</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#77869 - DekuTree64 - Mon Apr 03, 2006 6:45 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>ProblemBaby wrote:</b></span></td> </tr> <tr> <td class="quote">At which CPU is what done?, Do you just start the two channels in the audio init code? Is the actual mix code in VBlank?</td> </tr></table><span class="postbody">
+<br/>
+Either CPU, yes, yes.
+<br/>
+<br/>
+If you want to mix on the ARM9, getting the sound channels and timers started at the same time is pretty tricky. I set up a little CPU communication system using the FIFO registers, to send across start/stop mixer commands, and wait until they finish processing before starting the timers on ARM9.
+<br/>
+<br/>
+Another thing I forgot to mention for this style, you have to mix to a ring buffer instead of swapping between 2 equal size buffers. Basically that means you need to check if mixing your full batch will run past the end of the buffer, and if so, split it in two. Mix right to the end, set the buffer position back to the start, and mix the rest.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#77872 - ProblemBaby - Mon Apr 03, 2006 7:00 pm</h4>
+    <div class="postbody"><span class="postbody">Just have to ask, if you've tried this.. what speed did you come up with? The main reason for me to do this is to be able to support 32 channels, linear interpolation, volume ramps, Play from ROM and no length/loopstart restrictions. But if this end up in 50+ cpu usage it isnt worth it.
+<br/>
+<br/>
+So I just want to make sure that its worth it before I start, what speed do you think I'll will end up in.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

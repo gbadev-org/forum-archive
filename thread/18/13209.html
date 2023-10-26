@@ -1,0 +1,216 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Console Help!! - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Console Help!!</h2>
+<div id="posts">
+<div class="post">
+    <h4>#128786 - kalus - Tue May 15, 2007 7:52 am</h4>
+    <div class="postbody"><span class="postbody">Ok, i have got 3D on top screen, and a 2D hud on bottom screen. Id like to use console text ontop of the HUD, but cant quite get it to work... is this a stupid idea, or should it work, and ive made a stupid mistake? Code below, please help!
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">   powerON(POWER_ALL);
+<br/>
+   
+<br/>
+<br/>
+   //put 3D on top 
+<br/>
+   lcdMainOnTop(); 
+<br/>
+   // Setup the Main screen for 3D 
+<br/>
+   videoSetMode(MODE_0_3D);
+<br/>
+   videoSetModeSub(MODE_5_2D | DISPLAY_BG3_ACTIVE); //sub bg 0 will be used to print text
+<br/>
+<br/>
+     vramSetMainBanks(   VRAM_A_MAIN_BG_0x06000000, VRAM_B_TEXTURE,
+<br/>
+                  VRAM_C_SUB_BG , VRAM_D_LCD);
+<br/>
+    SUB_BG0_CR = BG_MAP_BASE(31);
+<br/>
+<br/>
+   BG_PALETTE_SUB[255] = RGB15(31,31,31);//by default font will be rendered with color 255
+<br/>
+<br/>
+   consoleInitDefault((u16*)SCREEN_BASE_BLOCK_SUB(31), (u16*)CHAR_BASE_BLOCK_SUB(0), 16);
+<br/>
+<br/>
+<br/>
+   SUB_BG3_CR = BG_BMP8_256x256;
+<br/>
+<br/>
+   SUB_BG3_XDX = 1 &lt;&lt; 8;
+<br/>
+      SUB_BG3_XDY = 0;
+<br/>
+      SUB_BG3_YDX = 0;
+<br/>
+      SUB_BG3_YDY = 1 &lt;&lt; 8;
+<br/>
+   
+<br/>
+<br/>
+   dmaCopy(hud_texture_bin, BG_GFX_SUB, 256*256);
+<br/>
+   dmaCopy(palette_bin, BG_PALETTE_SUB, 256*2);
+<br/>
+   
+<br/>
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#128791 - mml - Tue May 15, 2007 10:11 am</h4>
+    <div class="postbody"><span class="postbody">Have a look at what the various bits in the SUB_BGx_CR registers actually mean, and explicitly set all of them, even if you're just setting them to their default of zero.
+<br/>
+<br/>
+The macros for the defaults are usually just (0&lt;&lt;n) for some n position, and I've noticed a *lot* of the beginner-level example code just leaves them out, because they're not needed for the example -- but they don't explain a) that they're leaving it out, or b) why!  Which means when you go to modify your code later, you don't realise that you need to set more flags for more complex stuff.  At least if you've got all the defaults right there in your face, as soon as you go to modify it later you'll notice immediately that there's that extra place you need to change it.
+<br/>
+<br/>
+In short, I'd be willing to bet that both your SUB_BG0 and SUB_BG3 are looking in the same chunk of memory for their information, because you've left the bits in their _CR registers that tell it where to find it blank, and they default to the same.  And so they each interpret whatever you pu there in whatever way they feel like, and you end up with garbage on your screen.  
+<br/>
+<br/>
+You might also need to carefully poke around in the source for the consoleInit* functions to see how they work, since their interface docs for consoleInitDefault and consoleInitDemo don't actually explain what they default to or why (so as soon as you need to do something more complex, you have no idea what you can do, let alone how to do it).  This will only work if you have libnds sitting around in source form somewhere.
+<br/>
+<br/>
+This bit me the other day. :P</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#128796 - kalus - Tue May 15, 2007 10:49 am</h4>
+    <div class="postbody"><span class="postbody">cheers, will look into it :)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#128804 - tepples - Tue May 15, 2007 12:37 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>mml wrote:</b></span></td> </tr> <tr> <td class="quote">You might also need to carefully poke around in the source for the consoleInit* functions to see how they work, since their interface docs for consoleInitDefault and consoleInitDemo don't actually explain what they default to or why (so as soon as you need to do something more complex, you have no idea what you can do, let alone how to do it).  This will only work if you have libnds sitting around in source form somewhere.</td> </tr></table><span class="postbody">
+<br/>
+Do you plan on submitting revised documentation for some of these functions so that the maintainers can incorporate it into the next version of libnds?<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#128871 - mml - Wed May 16, 2007 5:36 am</h4>
+    <div class="postbody"><span class="postbody">I imagine so, if such still doesn't exist by the time I wrap my head around it adequately.  I've been at this for like, a week. :)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#128902 - kalus - Wed May 16, 2007 5:47 pm</h4>
+    <div class="postbody"><span class="postbody">Ok, with this code:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">   irqInit();
+<br/>
+   irqSet(IRQ_VBLANK, 0);
+<br/>
+   // Turn on everything
+<br/>
+   powerON(POWER_ALL);
+<br/>
+   
+<br/>
+<br/>
+   //put 3D on top 
+<br/>
+   lcdMainOnTop(); 
+<br/>
+   // Setup the Main screen for 3D 
+<br/>
+   videoSetMode(MODE_0_3D);
+<br/>
+   videoSetModeSub(MODE_5_2D | DISPLAY_BG0_ACTIVE | DISPLAY_BG3_ACTIVE); //sub bg 0 will be used to print text
+<br/>
+<br/>
+//   vramSetBankA();                        //NEW  must set up some memory for textures
+<br/>
+     vramSetMainBanks(   VRAM_A_MAIN_BG_0x06000000, VRAM_B_TEXTURE,
+<br/>
+                  VRAM_C_SUB_BG , VRAM_D_LCD);
+<br/>
+  
+<br/>
+   SUB_BG3_CR = BG_BMP8_256x256 | BG_BMP_BASE(0) | BG_TILE_BASE(2) | BG_PRIORITY(3);
+<br/>
+   SUB_BG0_CR = BG_MAP_BASE(4) | BG_TILE_BASE(5) | BG_PRIORITY(0);
+<br/>
+<br/>
+//   BG_PALETTE_SUB[255] = RGB15(31,31,31);//by default font will be rendered with color 255
+<br/>
+<br/>
+   consoleInitDefault((u16*)SCREEN_BASE_BLOCK_SUB(4), (u16*)CHAR_BASE_BLOCK_SUB(5), 16);
+<br/>
+<br/>
+<br/>
+<br/>
+      SUB_BG3_XDX = 1 &lt;&lt; 8;
+<br/>
+      SUB_BG3_XDY = 0;
+<br/>
+      SUB_BG3_YDX = 0;
+<br/>
+      SUB_BG3_YDY = 1 &lt;&lt; 8;
+<br/>
+   // our bitmap looks a bit better if we center it so scroll down (256 - 192) / 2
+<br/>
+      SUB_BG3_CX = 0;
+<br/>
+      SUB_BG3_CY = 0;;
+<br/>
+<br/>
+   dmaCopy(drunkenlogo_bin, BG_GFX_SUB, 256*192);
+<br/>
+   dmaCopy(palette_bin, BG_PALETTE_SUB, 256*2);</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+it MOSTLY works, except im still getting some overflow into BG3 from BG0. Pics below, when first run, it looks like this:
+<br/>
+<br/>
+<a href="http://i6.photobucket.com/albums/y231/paracelus/1.jpg">[Images not permitted - Click here to view it]</a>
+<br/>
+<br/>
+then as the text scrolls down, the wierdness mostly scrolls up to this:
+<br/>
+<br/>
+<a href="http://i6.photobucket.com/albums/y231/paracelus/2.jpg">[Images not permitted - Click here to view it]</a>
+<br/>
+<br/>
+Please, someone has to know whats going on with this![/img]</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#128969 - mml - Thu May 17, 2007 5:42 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">   SUB_BG3_CR = BG_BMP8_256x256 | BG_BMP_BASE(0) | BG_TILE_BASE(2) | BG_PRIORITY(3);
+<br/>
+   SUB_BG0_CR = BG_MAP_BASE(4) | BG_TILE_BASE(5) | BG_PRIORITY(0); </td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Check those offsets into BG_BMP_BASE(), BG_MAP_BASE() and BG_TILE_BASE() carefully.  The _MAP_ and _TILE_ ones start at the same address with different multipliers, and I suspect the _BMP_ one will be much the same (don't have headers with me at present).
+<br/>
+<br/>
+For example, IIRC, BG_MAP_BASEs 0-7 will overlap the same area of memory as BG_TILE_BASE 0; BG_MAP_BASEs 8-15 will overlap BG_TILE_BASE 1; etc.  So you'll need to be careful how you decide which bmp, tile, and map bases you use so they aren't overlapping each other.  Otherwise, when you copy your bitmap data in, you may or may not be crapping it all over your tile or map data (which is used by the console), and/or when you print to the console it might be crapping all over your bitmap.
+<br/>
+<br/>
+From memory, these macros are defined in nds/arm9/video.h</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#128978 - kalus - Thu May 17, 2007 9:34 am</h4>
+    <div class="postbody"><span class="postbody">cheers! its coming along in leap and bounds now, thats only problem so far! Will have a bash at fixing tonight :)</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

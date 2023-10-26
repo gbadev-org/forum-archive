@@ -1,0 +1,126 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Mode 7 Graphics - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > Mode 7 Graphics</h2>
+<div id="posts">
+<div class="post">
+    <h4>#12942 - GunterPete - Mon Dec 01, 2003 9:52 pm</h4>
+    <div class="postbody"><span class="postbody">Hi there.
+<br/>
+<br/>
+I'm trying to implement Mode 7 3D graphics based around DarkFader's tutorial at <a class="postlink" href="http://users.raketnet.nl/darkfader/http://darkfader.net/gba/files/Mode%207%20tutorial.txt" target="_blank">http://users.raketnet.nl/darkfader/http://darkfader.net/gba/files/Mode%207%20tutorial.txt</a>. I'm using C++, and have implemented Vector and Matrix classes using fixed point maths.
+<br/>
+I can determine the map coordinates for any given ray projected through the frustum. The only bit I don't understand is the final part, where this information is loaded into the GBA background registers.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+Put the left/right results (X/Z) into StartX, StartY, H_DiffX &amp; H_DiffY into a BgAffineDestData array:
+<br/>
+<br/>
+	d-&gt;StartX = V2AFF(left3[0]);					// simply does a divide by 256 (16:16 -&gt; 24:8 fixed point)
+<br/>
+	d-&gt;StartY = V2AFF(left3[2]);					// "
+<br/>
+	d-&gt;H_DiffX = V2AFF2(right3[0] - left3[0]);		// same, but also includes a division by 240
+<br/>
+	d-&gt;H_DiffY = V2AFF2(right3[2] - left3[2]);		// "
+<br/>
+<br/>
+Interrupt &amp; DMA the rotation/scaling values
+<br/>
+-------------------------------------------
+<br/>
+Set up a V-count interrupt at scanline 0 or something...
+<br/>
+<br/>
+	void VCountIntr()
+<br/>
+	{
+<br/>
+		rDMA0CNT_H = 0;		// stop DMA
+<br/>
+		rDMA0SAD = bgAffineDestData;
+<br/>
+		rDMA0DAD = (void *)&amp;rBg2Affine;
+<br/>
+		rDMA0CNT = DMA_ENABLE | DMA_TIMMING_H_BLANK | DMA_16BIT_BUS | DMA_CONTINUOUS_ON | DMA_SRC_INC | DMA_DEST_RELOAD | 8;
+<br/>
+	}
+<br/>
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Can anyone help explain this to me? Or are there any other usefull tutorials on Mode 7 graphics for the GBA (I can't seem to find any other than this one).
+<br/>
+<br/>
+Thanks in advance (No pun intended).
+<br/>
+-Pete Gunter</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12944 - poslundc - Mon Dec 01, 2003 11:40 pm</h4>
+    <div class="postbody"><span class="postbody">It might help if you were a bit more specific about what part you don't understand... do you not understand the principle behind the Mode7 technique, do you not understand DMA, do you not understand the HBlank-reloading aspect of DMA, etc.
+<br/>
+<br/>
+Basically that chunk of code sets up an automated hardware feature in the GBA to copy your precalculated rot/scale values into the GBA's background control registers on every HBlank.
+<br/>
+<br/>
+If you are unfamiliar with DMA, I suggest you check out <a class="postlink" href="http://thepernproject.com/English/tutorial_5.html" target="_blank">Day 5 of The Pern Project Tutorials</a> for a good explanation of how it works.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12946 - GunterPete - Mon Dec 01, 2003 11:53 pm</h4>
+    <div class="postbody"><span class="postbody">You're right, I should have made myself clearer.
+<br/>
+<br/>
+My problem is more that I don't understand how the rotation and scale values are calculated. I can calculate the 2Dmap coordinates of the left and right pixels of the scanline (Is it best to calculate these whenever the camera moves, and store them in arrays?. I just don't understand how to get the values for REG_BG2PA-D and REG_BG2X-Y from these coordinates.
+<br/>
+<br/>
+In the code I'm not sure what V2AFF or V2AFF2 do. Also, what kind of structure is a BgAffineDetData?
+<br/>
+<br/>
+Thanks,
+<br/>
+-Pete Gunter</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12948 - poslundc - Tue Dec 02, 2003 12:38 am</h4>
+    <div class="postbody"><span class="postbody">The tricky part with answering your questions is that the tutorial you've used clearly has its own way of going about the process of calculating the register values. The basic Mode7 technique doesn't require anything more than dividing "y" by "x" to obtain a "z" value you can use on each scanline for the scale data.
+<br/>
+<br/>
+I can't tell you what V2AFF or V2AFF2 do. From the name they likely do a vector-to-affine-register conversion, but how that conversion takes place is anyone's guess; presumably there is a code listing in the tutorial somewhere.
+<br/>
+<br/>
+BgAffineDestData is most likely a structure that mimics the layout of the background registers in memory: four half-words and two words. An array of 160 of these could then be used to represent values you want to use for every scanline of the screen.
+<br/>
+<br/>
+I am going to suggest that you instead have a look at the Pern Project's Mode7 tutorial instead; it is more focussed on the actual Mode7 technique and doesn't try to implement raycasting. Raycasting tutorials for the GBA are a bit of a tease: they spend 90% of the time on raycasting and make you think you've accomplished everything once you understanding how their system works, but when it finally comes time to mixing it with Mode7 it turns out that the raycasting is the easy part. :)
+<br/>
+<br/>
+Once you've got a better grasp of Mode7 you can give raycasting a shot, but I'll warn you right now that when I tried it I found that I couldn't really wrap my head around anyone else's tutorial, and eventually needed to combine the two on my own.
+<br/>
+<br/>
+Good luck,
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

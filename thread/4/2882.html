@@ -1,0 +1,205 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Sprite compression - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > Sprite compression</h2>
+<div id="posts">
+<div class="post">
+    <h4>#16488 - DekuTree64 - Tue Feb 17, 2004 9:57 pm</h4>
+    <div class="postbody"><span class="postbody">Inspired by that 'buffers &amp; compression' thread a little ways down, I'd like to start some general discussion of different compression algorithms applied to sprites, which need to be readable one frame at a time. 
+<br/>
+<br/>
+128 byte chunks seems to be best, since most sprites are at least 16x16 pixels, and with 4-bit color, that's what you need. So far I've tried a variation of RLE and LZ77. The RLE performs just like any other RLE, getting large areas of color basically free, and everything else basically the same. LZ77 doesn't do too good on 128 byte chunks, as it's based on referencing the previously decompressed data, but it does take care of large emtpy areas about as well as RLE.
+<br/>
+Now I'm thinking about a 4-bit based LZ77. The 8-bit one's decompression goes like this:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">Read byte into length
+<br/>
+if length != 0 
+<br/>
+  read another byte into start
+<br/>
+  copy length bytes from dest[start] to dest[destPos]
+<br/>
+  add length to destPos
+<br/>
+else no start byte is stored, so do nothing
+<br/>
+<br/>
+then read next byte into dest[destPos++]
+<br/>
+repeat until destPos == 128</td> </tr></table><span class="postbody">
+<br/>
+So if you're not familiar with LZ77, if the next string of data matches anything that's already decompressed, it copies it from the decompressed data to the current position. Then, wether there was any matching data or not, it copies the next character (I'll call it C) to the current pos. 
+<br/>
+<br/>
+In the 4-bit version, the max string length is 15, so it can store the 4-bit C (the next char) in the upper part of that, and then if the matching string length != 0, the next byte will be the starting pos of the string in the decompressed data. 
+<br/>
+<br/>
+Anyway, what I'm thinking about it a more LZSS approach, having one byte to tell the next 8 types (matching string or not), and that way you don't have to store the 0 in the lower 4 bits of a non-string entry. But then it gets even more compicated reading the data because it's no longer always byte-aligned, and it's only the writing of data that doesn't matter if it's 4-bit aligned, because the GBA's VRAM is 16 bits anyway, so I'd have to write a 20byte at a time decompresser anyway.
+<br/>
+<br/>
+Does anyone else have any good ideas on small-data compression? I have another possible algorithm in mind, but it's pretty confusing and I don't really have time to explain it right now, so I'll add that later.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#16491 - Miked0801 - Tue Feb 17, 2004 10:27 pm</h4>
+    <div class="postbody"><span class="postbody">I'll post some ideas later today - am trying to get a build out the door right now :)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#16505 - DekuTree64 - Wed Feb 18, 2004 4:39 am</h4>
+    <div class="postbody"><span class="postbody">Thanks Mike, quite understandable.
+<br/>
+<br/>
+Anyway, here's that crazy algorithm I thought of. It's another 4-bit based one, but the basic idea is to make a list of 16 strings, which will be used by every 128 byte chunk of the data. Then you store one byte like LZSS, to mark the types of the next 8 bytes. The two types are 0: one byte of uncompressed data, and 1: lower 4 bits are the string index, and the upper 4 bits are a value that you add to each 4-bit value in the string. 
+<br/>
+String lengths are always multiples of 2 for simplicity, so you can just take that 4-bit value and OR it with itself&lt;&lt;4 and add that to each byte.
+<br/>
+<br/>
+So, the strings are very recyclable, and 16 should be enough to get some farily decent compression, while keeping the string table pretty small. So if you have some data like 123456, and you have a string, say #2 in your table is 012, and then it could be stored as 2|(1&lt;&lt;4) and 2|(4&lt;&lt;4), so you get 0+1, 1+1, 2+1 for the first, which becomes 123, and same for the other, but add 4 to them for 456. 
+<br/>
+If you arrange your palette to where different shades of the same color go in order from dark to light or light to dark, it would make similar shading patterns in different colors all be able to use the same strings.
+<br/>
+<br/>
+So, the hard part of it is deciding what strings to use. My idea is to store 16 strings, which each have a rating to them based on how much they will help the compressed data. Logically, each time a string appears it will save its own length in data, but it will also take a byte for it to appear, and also its own data in the string table, so I just calculate the rating like numUses*length-numUses-length. 
+<br/>
+<br/>
+With that, you can just loop through the whole file counting the number of occurrences of every string. You copy from the current position to the string length into a temporary buffer, and then find the minimum and maximum values in the string, subtract the minimum from each value so your values are always as low as possible, giving the maximum range of numbers to add to them (like, 456 you can only add 9 before you hit 15, but 012 lets you add up to 13). Then you go through checking each length bytes of data in the file for a match with the string with every possible offset added to it, of course bailing out as soon as possible so it doesn't take too incredibly long. 
+<br/>
+<br/>
+What do you think? The compression would be very time-consuming, but since most sprites are pretty small, I don't think it would be too bad. The decompression should be pretty fast though. Still a hassle having to put bytes together for VRAM's 16-bit-ness, but if I special-case odd and even starting addresses for string copying it should be ok.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#16508 - Miked0801 - Wed Feb 18, 2004 6:15 am</h4>
+    <div class="postbody"><span class="postbody">I'll digest that a bit tonight as I sleep.  Compression is like that, it takes 2 or 3 readings to get all the details.
+<br/>
+<br/>
+Here's a basic RLE/LZ77 hybrid:
+<br/>
+<br/>
+Assign the top 2 bits of each code be represented as follows:
+<br/>
+00 - Uncompressed
+<br/>
+01 - RLE
+<br/>
+1X - LZ77 with the X bit being used in the LZ for better results.
+<br/>
+<br/>
+For RLE or Uncompressed, the next 6 bits represent the run length and the following byte(s) are either uncompressed data or the repeated symbol.  
+<br/>
+<br/>
+For LZ77, you can either do a short symbol of 3 bits run, 4 bits look back - or long symbol of 5 bits run, 10 bits run (useful for larger data sets.  You can set the bits how you want depending on the situation.)  You could even use the extra bit for choosing between short/long - though there are better ways to mode switch.
+<br/>
+<br/>
+It's 8/16 bit aligned (all 16 if you keep your uncompressed sizes of odd amounts and use larger LZ77) so there's not much bit twiddling and it will compress/decompress very quickly (in most cases faster than the built in RLE and always faster than the built in LZ77).  Then you get the added bonuses of +3 to runs sizes due to that being the minimum length that will compress and such.
+<br/>
+<br/>
+Check out the docs on PUCrunch as well.  It's explained in wonderful detail and shows how to add Gamma Code, Huffman lookup, and a few other neat tricks that cost CPU but gain compression.
+<br/>
+<br/>
+Mike</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#16510 - tepples - Wed Feb 18, 2004 6:45 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Miked0801 wrote:</b></span></td> </tr> <tr> <td class="quote">Here's a basic RLE/LZ77 hybrid</td> </tr></table><span class="postbody">
+<br/>
+In theory, RLE is in fact a special case of LZ77 with a ring buffer size of one symbol.
+<br/>
+<br/>
+Another technique that may prove useful in an LZ77 codec is making the top half of the run length range increase faster than linearly (e.g. 3, 4, 5, 6, 7, 8, 9, 10, 16, 24, 32, 48, 64, 96, 128, 192 for a 4-bit run length).<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#16520 - DekuTree64 - Wed Feb 18, 2004 6:24 pm</h4>
+    <div class="postbody"><span class="postbody">That sounds like a pretty nice scheme. Still classic LZ77/RLE though, which works better on larger data. That's why I'm looking for a good way to recycle data between all chunks without having to decompress everything up until the part you want.
+<br/>
+I don't really have any size problems I need this for, but it is interesting, and seems to be something without a standard solution yet. Besides, compression has been one of my long-time weaknesses in programming, so of course I have to hit it head on.
+<br/>
+<br/>
+Another possible improvement to be made is mixing filters into the compression. A standard difference filter would probably do quite a bit of good before RLE encoding, since shading generally goes in a sequential pattern. And I found <a class="postlink" href="http://forum.gbadev.org/viewtopic.php?t=2317" target="_blank">this</a> old post I remembered (which turned out to be written by you), about an averaging filter. How exactly do you deal with odd bits in that? 
+<br/>
+<br/>
+I think I'll try out that hybrid RLE/LZ77 later, I don't think it would take long to write, and should work better than my current RLE at least.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#16521 - Miked0801 - Wed Feb 18, 2004 6:29 pm</h4>
+    <div class="postbody"><span class="postbody">Now that's an interesting idea (LUT for run-lengths).  I'll have to run with that one after the project I'm working on is finished.  It'll be a tad slower, but oh the possibilities. 
+<br/>
+<br/>
+Better yet, check 4th bit of length.  If set, then do Lookup or algorithm, else just read as is.  This will eliminate 99% of the table look-ups (data depending.)
+<br/>
+<br/>
+BTW, while you are correct in stating that RLE is a special LZ case, it does takes an extra symbol to begin coding a RLE run so the RLE side does give you some extra compression.  Also, this algorithm steals from the max uncompressed length to get its RLE data so you aren't hurting the LZ symbol size at all.  You can also do cute things like saying that a run of max size means to read the next N bytes for a very long RUN/LZ length to get some more minor compression.
+<br/>
+<br/>
+So running with your idea a bit further:
+<br/>
+<br/>
+Created an 8-bit LZ77 (or LZDM from our handles ;) system.  Set 4 bits for look back and 4 bits for look ahead (or perhaps 5 bits back and 3 ahead with an even shorter table would do better.)  Let a look back of 0 stand for a run of uncompressed data with the length field denoting the size.  A match length of 2 compresses with this approach so we should have the algorithm compress such lengths as symbols.  As we're 8-bit the decompression will be real fast and this should do fairly well against smaller data sets.
+<br/>
+<br/>
+For the 5/3 idea for lookback/run I'd probably do my table something like: 2,3,4,5,7,11,19,35. (+1x4,+2,+4,+8,+16)
+<br/>
+<br/>
+Looks like it would work at least.  Further ideas?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#16522 - tepples - Wed Feb 18, 2004 6:43 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>DekuTree64 wrote:</b></span></td> </tr> <tr> <td class="quote">Still classic LZ77/RLE though, which works better on larger data. That's why I'm looking for a good way to recycle data between all chunks without having to decompress everything up until the part you want.</td> </tr></table><span class="postbody">
+<br/>
+Then perhaps you want a more LZ78-ish system with a static dictionary.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">A standard difference filter would probably do quite a bit of good before RLE encoding, since shading generally goes in a sequential pattern.</td> </tr></table><span class="postbody">
+<br/>
+Sequential color indices work best in handmade palettes. Are most 256-color palettes handmade? And once you start getting into filters, you should investigate Huffman or Rice codes because the 8-bit granularity of byte-oriented methods will begin to trip you up when you begin to get Laplacian distributed data streams containing lots of 0, +/-1, and +/-2 data.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">And I found <a class="postlink" href="http://forum.gbadev.org/viewtopic.php?t=2317" target="_blank">this</a> old post I remembered (which turned out to be written by you), about an averaging filter. How exactly do you deal with odd bits in that? </td> </tr></table><span class="postbody">
+<br/>
+Try a Google search for <span style="font-weight: bold">wavelet image compression</span>. Many implementations store the sum halved and difference at full precision.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

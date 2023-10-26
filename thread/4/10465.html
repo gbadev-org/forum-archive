@@ -1,0 +1,370 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Help needed with evil global interrupt variable - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > Help needed with evil global interrupt variable</h2>
+<div id="posts">
+<div class="post">
+    <h4>#93832 - LOst? - Fri Jul 21, 2006 4:08 pm</h4>
+    <div class="postbody"><span class="postbody">This is for the Nintendo DS, but should probably be the same on GBA.
+<br/>
+<br/>
+I have a global variable declared like this:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+// h file:
+<br/>
+namespace BLAH
+<br/>
+{
+<br/>
+ extern volatile s32 mouse_x;
+<br/>
+}
+<br/>
+<br/>
+// cpp file:
+<br/>
+namespace BLAH
+<br/>
+{
+<br/>
+ volatile s32 mouse_x;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+This variable is accessible through every cpp file that have included the h file by doing this:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#include "h file" // You get the idea ok!
+<br/>
+<br/>
+{
+<br/>
+ BLAH::mouse_x += 30;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+This works. Until the evil Vblank interrut reads the variable for the first time. The evil interrupt routine is part of the BLAH namespace and is working! Looks like this:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+namespace BLAH
+<br/>
+{
+<br/>
+ volatile SpriteEntry sprites [128];
+<br/>
+<br/>
+ void Vblank ()
+<br/>
+ {
+<br/>
+  // Disable interupts
+<br/>
+  REG_IME = 0;
+<br/>
+<br/>
+  sprites [0].attribute [1] = ((sprites [0].attribute [1] &amp; 0xFE00) | (mouse_x - 16) &amp; 0x1FF);
+<br/>
+<br/>
+  DC_FlushAll ();
+<br/>
+  dmaCopy ((SpriteEntry*) sprites, OAM, 128 * sizeof (SpriteEntry));
+<br/>
+<br/>
+  // Vblank is done
+<br/>
+  REG_IF = REG_IF;
+<br/>
+  VBLANK_INTR_WAIT_FLAGS = REG_IF | REG_IE;
+<br/>
+<br/>
+  // Enable interupts
+<br/>
+  REG_IME = 1;  
+<br/>
+ }
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I get the sprite up. It is where mouse_x was at. But accessing mouse_x again, trying to update it's contents will fail.
+<br/>
+<br/>
+Now I have tried a lot of things for a long time (including removing the namespace, saving copies of the variable before it enters the Vblank and restore it after, trying EWRAM_BSS declarations). I only ask for help when I am out of ideas.
+<br/>
+<br/>
+Thanks for any help!<br/>_________________<br/><span style="font-style: italic">Exceptions are fun</span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#93883 - LOst? - Fri Jul 21, 2006 8:22 pm</h4>
+    <div class="postbody"><span class="postbody">I have located the problem to the interupt. For some reason it won't return from Vblank. It hangs there.
+<br/>
+<br/>
+EDIT:
+<br/>
+It is the REG_IF = REG_IF that hangs the program. Hmm, I need to replace it with something but what?<br/>_________________<br/><span style="font-style: italic">Exceptions are fun</span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#93903 - MrD - Fri Jul 21, 2006 10:11 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>LOst? wrote:</b></span></td> </tr> <tr> <td class="quote">I have located the problem to the interupt. For some reason it won't return from Vblank. It hangs there.
+<br/>
+<br/>
+EDIT:
+<br/>
+It is the REG_IF = REG_IF that hangs the program. Hmm, I need to replace it with something but what?</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+It's possible that it might be optimised away... is your REG_IF define volatile?
+<br/>
+<br/>
+Try REG_IF |= REG_IF.
+<br/>
+<br/>
+You could also try the more specific interrupt acknowledgement:
+<br/>
+<br/>
+REG_IF |= IRQ_VBLANK;<br/>_________________<br/>Not active on this forum. For Lemmings DS help see its website.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#93960 - tepples - Sat Jul 22, 2006 2:40 am</h4>
+    <div class="postbody"><span class="postbody">Should never do REG_IF |= anything. The REG_IF register already has |= semantics coded into its plain =.
+<br/>
+<br/>
+The ISR should look like this:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void isr(void) {
+<br/>
+  int interrupts = REG_IF;
+<br/>
+<br/>
+  if (interrupts &amp; INT_SERIAL) {
+<br/>
+    /* ... */
+<br/>
+  }
+<br/>
+  if (interrupts &amp; INT_HBLANK) {
+<br/>
+    /* ... */
+<br/>
+  }
+<br/>
+  if (interrupts &amp; INT_VBLANK) {
+<br/>
+    /* ... */
+<br/>
+  }
+<br/>
+  INTRWAIT_FLAGS |= interrupts;  // operator |= because it's plain memory
+<br/>
+  REG_IF = interrupts; // operator = because it's a register with side effects
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+EDIT: express the intent more clearly<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"><br/><br/>Last edited by tepples on Sat Jul 22, 2006 4:07 am; edited 1 time in total</span></div>    
+</div>
+<div class="post">
+    <h4>#93967 - wintermute - Sat Jul 22, 2006 3:37 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote">Should never do REG_IF |= anything. The REG_IF register already has |= semantics coded into its plain =.
+<br/>
+<br/>
+The ISR should look like this:
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void isr(void) {
+<br/>
+  int interrupts = REG_IF;
+<br/>
+  if (interrupts &amp; INT_VBLANK) {
+<br/>
+    /* ... */
+<br/>
+  }
+<br/>
+  INTRWAIT_FLAGS |= interrupts;  // operator |= because it's plain memory
+<br/>
+  REG_IF = interrupts; // operator = because it's a register with side effects
+<br/>
+}</td> </tr></table><span class="postbody"></span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+That's completely and utterly wrong.
+<br/>
+<br/>
+The reason you shouldn't use |= on REG_IF is because setting bits in that register clears the interrupt associated with that bit. Using |= reads the register, ors in the new bits then writes the whole thing back, thus clearing *all* interrupts which are pending. The code you've written here does exactly the same thing in a slightly different way. You should only write a single bit to REG_IF, the bit associated with the interrupt you've just serviced. You do this because another interrupt may become pending while you are servicing another interrupt.<br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#93968 - tepples - Sat Jul 22, 2006 3:54 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>wintermute wrote:</b></span></td> </tr> <tr> <td class="quote">That's completely and utterly wrong.</td> </tr></table><span class="postbody">
+<br/>
+The last half-dozen times that people have said that to me on other boards, we ended up in "violent agreement".
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">The reason you shouldn't use |= on REG_IF is because setting bits in that register clears the interrupt associated with that bit.</td> </tr></table><span class="postbody">
+<br/>
+That's what I meant by "built-in |= semantics".
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote"> Using |= reads the register, ors in the new bits then writes the whole thing back, thus clearing *all* interrupts which are pending. The code you've written here does exactly the same thing in a slightly different way. You should only write a single bit to REG_IF, the bit associated with the interrupt you've just serviced.</td> </tr></table><span class="postbody">
+<br/>
+In my code, the variable 'interrupts' has true values for only those interrupts that the ISR just serviced.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">You do this because another interrupt may become pending while you are servicing another interrupt.</td> </tr></table><span class="postbody">
+<br/>
+Another interrupt from a different source (different bit in REG_IF), or another interrupt from the same source (same bit in REG_IF)?<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#93970 - DekuTree64 - Sat Jul 22, 2006 4:01 am</h4>
+    <div class="postbody"><span class="postbody">There's not enough info to make the call of wether it's good or bad. If you did like
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">  if (interrupts &amp; INT_VBLANK) { 
+<br/>
+    /* ... */ 
+<br/>
+  }
+<br/>
+<br/>
+  if (interrupts &amp; INT_HBLANK) { 
+<br/>
+    /* ... */ 
+<br/>
+  }</td> </tr></table><span class="postbody">
+<br/>
+Then it would be fine. But if you did <span style="font-weight: bold">else</span> if HBlank, it would be bad. Personally I prefer the else if method, writing only the bit for the one I processed to IF. Multiple interrupts triggering at the exact same time is rare, so it's faster to let the handler run twice than to check for all of them every time.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#93972 - tepples - Sat Jul 22, 2006 4:06 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>DekuTree64 wrote:</b></span></td> </tr> <tr> <td class="quote">If you did like
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">  if (interrupts &amp; INT_VBLANK) { 
+<br/>
+    /* ... */ 
+<br/>
+  }
+<br/>
+<br/>
+  if (interrupts &amp; INT_HBLANK) { 
+<br/>
+    /* ... */ 
+<br/>
+  }</td> </tr></table><span class="postbody">
+<br/>
+Then it would be fine.</span></td> </tr></table><span class="postbody">
+<br/>
+And this in fact is what my ISRs do. I'll edit my earlier example to make this more specific.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#93976 - wintermute - Sat Jul 22, 2006 4:20 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">The reason you shouldn't use |= on REG_IF is because setting bits in that register clears the interrupt associated with that bit.</td> </tr></table><span class="postbody">
+<br/>
+That's what I meant by "built-in |= semantics".
+<br/>
+</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+built in ^= semantics maybe. Writing a 1 clears the bit.
+<br/>
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+In my code, the variable 'interrupts' has true values for only those interrupts that the ISR just serviced.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+The variable has true bits for the interrupts which required servicing at the start of the dispatcher code. It doesn't take account of which interrupts are enabled. You're right though, it won't clear interrupts which haven't yet been serviced. Not as bad as I thought it was at first glance.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">You do this because another interrupt may become pending while you are servicing another interrupt.</td> </tr></table><span class="postbody">
+<br/>
+Another interrupt from a different source (different bit in REG_IF), or another interrupt from the same source (same bit in REG_IF)?</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Either, depending on how long your interrupt takes.<br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#93978 - MrD - Sat Jul 22, 2006 4:28 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>MrD wrote:</b></span></td> </tr> <tr> <td class="quote">REG_IF |= IRQ_VBLANK;</td> </tr></table><span class="postbody">
+<br/>
+I wonder... where the hell did I read that?<br/>_________________<br/>Not active on this forum. For Lemmings DS help see its website.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#93987 - LOst? - Sat Jul 22, 2006 9:11 am</h4>
+    <div class="postbody"><span class="postbody">Well, I can see a lot of you have different techniques to handle an interrupt or more interrupts at the same time. And I believe it works for all of you because you have never tested all the exceptions that can happen.
+<br/>
+<br/>
+I will design my program after what's currently working. That means I will go with one interrupt only, and try to build everything around it. I once hoped for more but it isn't time for it yet.
+<br/>
+<br/>
+The |= is wierd because it was just &amp; (anded) in the if statement above meaning the bit is already on. Wierd. I have a choice to use it of not, and I am using it..... because most people do use that in their code :P
+<br/>
+<br/>
+I am happy to inform you that my code is working on my real DS after a week of programming only in an emulator. I never saw it actually hang and I thought it run much faster that way (more fps). Now it runs okay, or slow depending on what programming technique I am going for.
+<br/>
+<br/>
+Thanks for all replies!<br/>_________________<br/><span style="font-style: italic">Exceptions are fun</span></span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

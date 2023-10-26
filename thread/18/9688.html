@@ -1,0 +1,214 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Need help with 3d engines... - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Need help with 3d engines...</h2>
+<div id="posts">
+<div class="post">
+    <h4>#84835 - iainprice - Wed May 24, 2006 10:55 pm</h4>
+    <div class="postbody"><span class="postbody">I'm on the beg...
+<br/>
+<br/>
+I have been trying to write a 3d racing engine for ages now.
+<br/>
+<br/>
+I started from scratch and imported models poly by poly and did proper physics with colision detection and plane sliding on contact (with sphere distance optimisation) but far to slow.
+<br/>
+<br/>
+I tried using a simple md2 program and adding physics  so that the models would be sphere bound and quick to load ... too slow
+<br/>
+<br/>
+I have even tried converting quake source to nds...
+<br/>
+<br/>
+And writing bsp tress from scrtach but I get lost....
+<br/>
+<br/>
+I'm just not having any luck... I have some coding ability, some 3d models, some textures, some free time and lots of ideas and enthusiasm but I really need some help....  anyone?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#84884 - mike260 - Thu May 25, 2006 9:45 am</h4>
+    <div class="postbody"><span class="postbody">What bits do you have working ok, and what areas are you looking for help with?<br/>_________________<br/>"Ever tried? Ever failed? No matter. Try Again. Fail again. Fail better."
+<br/>
+ -- Samuel Beckett</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#84919 - iainprice - Thu May 25, 2006 6:48 pm</h4>
+    <div class="postbody"><span class="postbody">For a racing game a high visible poly count has always been an issue...
+<br/>
+<br/>
+but that aside the speed of the collision detection and plane sliding is bad whenever I alow for gravity etc...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#84920 - ecurtz - Thu May 25, 2006 6:59 pm</h4>
+    <div class="postbody"><span class="postbody">You shouldn't be doing enough sphere collision testing to really be taxing the DS. It sounds like you need to use some sort of spacial division on your world data.
+<br/>
+<br/>
+Racing engines are generally considered "2d" worlds, so I'd try something like a QuadTree.
+<br/>
+<a class="postlink" href="http://en.wikipedia.org/wiki/Quadtree" target="_blank">Wikipedia QuadTree</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#85033 - iainprice - Fri May 26, 2006 4:36 pm</h4>
+    <div class="postbody"><span class="postbody">Any good tutorials hanging around?????</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#85040 - mike260 - Fri May 26, 2006 6:32 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Any good tutorials hanging around?????</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Try looking into OBB (oriented bounding-box) trees. They're quite costly in terms of memory, so you need to keep your collision-mesh as low-poly as possible, but it's quite easy to implement and perform well. Plus, if memory does turn out to be a problem then there are lots of ways to reduce their size.
+<br/>
+<br/>
+The basic idea is, to partition your collision mesh up a tree, where each node looks something like this:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+//NB: Ridiculously wasteful of memory
+<br/>
+typedef struct OBBNode
+<br/>
+{
+<br/>
+    vec3 bbox[2];   //the OBB of this node and all its children
+<br/>
+    bool is_leaf;
+<br/>
+    triangle *tri;    //only valid if is_leaf
+<br/>
+    struct OBBNode *children[2];    //only valid if !is_leaf
+<br/>
+}
+<br/>
+OBBNode;
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+To build an OBB tree, you first create a node for each triangle in your collision-mesh. Now you repeatedly find the pair of nodes whose obb's are closest/most overlapping, and who both don't yet have a parent, and you create a parent node for them. When there's only a single parentless node left, you've got a complete OBB tree.
+<br/>
+<br/>
+To test a sphere against an OBB tree, you do something like this:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+void sphere_obbnode_test( sphere *s, OBBNode *node )
+<br/>
+{
+<br/>
+    if( !sphere_overlaps_bbox(s,node-&gt;bbox) )
+<br/>
+    {
+<br/>
+        //this node and all its children are irrelevant
+<br/>
+        return;
+<br/>
+    }
+<br/>
+<br/>
+    if( node-&gt;is_leaf )
+<br/>
+    {
+<br/>
+        //this should do the actual collision-detection
+<br/>
+        sphere_triangle_test( s, node-&gt;tri );
+<br/>
+    }
+<br/>
+    else
+<br/>
+    {
+<br/>
+        //Recurse to both children
+<br/>
+        sphere_obbnode_test( s, node-&gt;children[0] );
+<br/>
+        sphere_obbnode_test( s, node-&gt;children[1] );
+<br/>
+    }
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody"><br/>_________________<br/>"Ever tried? Ever failed? No matter. Try Again. Fail again. Fail better."
+<br/>
+ -- Samuel Beckett</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#85093 - lazmike - Sat May 27, 2006 12:39 am</h4>
+    <div class="postbody"><span class="postbody">Make sure you're not using floats so it will be faster.  A few floats hasn't been a problem for me, but they start taking their toll eventually; just a heads up.  There are hardware fixed point functions (div, mul, sqrt, etc) - check those out in libnds.<br/>_________________<br/>-laZmike-
+<br/>
+<a href="http://lazmike.nintendev.com" target="_blank">http://lazmike.nintendev.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#85144 - iainprice - Sat May 27, 2006 12:59 pm</h4>
+    <div class="postbody"><span class="postbody">Cheers, I'll let you know how it goes.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#85305 - Payk - Sun May 28, 2006 9:07 pm</h4>
+    <div class="postbody"><span class="postbody">So i would always recommand precalculation what can be precalculated.
+<br/>
+For example u have that street and some trees arround it.
+<br/>
+So why not making an array for colision.
+<br/>
+bool Map[256][256];
+<br/>
+<br/>
+When starting map u should precalc for the racefield which parts are "driveable" and which not. Then store that in that array.
+<br/>
+<br/>
+When driving u just have to read thoose parts out of that array
+<br/>
+which are arround the car.
+<br/>
+<br/>
+Deepending how good your precalc is and how big your array is i can get a very good result and its much faster then cheking some displaylists...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#85378 - silent_code - Mon May 29, 2006 4:50 pm</h4>
+    <div class="postbody"><span class="postbody">i haven't read all posts, but displaylists are BAD!!! EVIL!!! like doc. evil... you know ;)
+<br/>
+<br/>
+an array may not be the best choise, but it's definitely better than disp lists (EVIL). there are some data structures that may be better, smaller and faster than the array approach. i can imagine situations where the quadric nature of array elements won't be able to represent certain cells of the track, so you'll have to limit the angles of the traks like in 90 or 45 degree stepps and storing the type of the current cells track layout as an enumeration that looks like:
+<br/>
+<br/>
+NORTH_SOUTH,
+<br/>
+NORTH _SOUTHWEST...
+<br/>
+<br/>
+WEST_NORTHEAST...
+<br/>
+etc.
+<br/>
+<br/>
+all possible connections in just 8 directions... it's like the restrictions you had in wolfenstine 3d, where everything needed to be in 90? angles. i hope you get it.
+<br/>
+<br/>
+then according to that you can determine if a car hits off road or if it's in a  "legal" position on track.
+<br/>
+<br/>
+but if you want to got for real "free form" tracks rather than the tile based         approach, then you'll perhps be better off with some hierarchy. like a simple 2d "line splitting" bsp tree. you'll have to check that out and decide for yourself how restricted you want the art to be.
+<br/>
+<br/>
+good luck!</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

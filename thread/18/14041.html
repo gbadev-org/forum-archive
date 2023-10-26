@@ -1,0 +1,292 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Variables mystically changed [SOLVED] - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Variables mystically changed [SOLVED]</h2>
+<div id="posts">
+<div class="post">
+    <h4>#139070 - Mighty Max - Sat Sep 01, 2007 1:46 pm</h4>
+    <div class="postbody"><span class="postbody">Hello,
+<br/>
+<br/>
+i didn't do anything DS related for a long time now, but started something yesterday again, and stumbled directly over some weirdness.
+<br/>
+<br/>
+devkitPro was updated via the updater on the 30.8. 
+<br/>
+<br/>
+The arm7 is on hold, the arm9 executes the main() and irq's are disabled to ensure it is not messing with the problem.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+   [in CreateMessageQueue after some small mallocs]
+<br/>
+<br/>
+   printf("  buffer = %X\n",newQ-&gt;buffer) ;
+<br/>
+   printf("  entries = %X\n",newQ-&gt;numEntries) ;
+<br/>
+   for (i=0;i&lt;maxMessages;i++)
+<br/>
+   {
+<br/>
+      LPMESSAGEBUFFER mb = (LPMESSAGEBUFFER)(((unsigned long)newQ-&gt;buffer) + i * sizeof(MESSAGEBUFFER)) ;
+<br/>
+      printf("from %X to %X\n",(((unsigned long)fullData) + i * maxMessageSize),mb) ;
+<br/>
+   }
+<br/>
+   printf("returning\n") ;
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+is the particular part that fails:
+<br/>
+It's output:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+  buffer = 2413838
+<br/>
+  entries = 0
+<br/>
+from 2411120 to 0
+<br/>
+from 24118F0 to 14
+<br/>
+...
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+As you may notice the "to 0" is obviously wrong. But the values it was created from were correct. newQ-&gt;buffer is in the uncached mem area, i=0 and sizeof(MESSAGEBUFFER) is 0x14. It seems that newQ-&gt;buffer gets overwritten. 
+<br/>
+<br/>
+Declaring them as volatile showed that the problem persists, so i am relatively sure that i don't have just messed up registers.
+<br/>
+<br/>
+When commenting out the firts two printfs the first "from ... to ..." line is calculated correct, and the failure starts in the second line. (After the first (i)printf is called)
+<br/>
+<br/>
+the console has init before calling this routine by
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+int main(void) {
+<br/>
+<br/>
+   REG_EXMEMCNT=0xe800;
+<br/>
+<br/>
+   powerON(POWER_ALL);
+<br/>
+   REG_IME = 0 ;
+<br/>
+   REG_IE = 0 ;
+<br/>
+   REG_IF = 0xFFFF ;
+<br/>
+<br/>
+   videoSetMode(0);   //not using the main screen
+<br/>
+   videoSetModeSub(MODE_0_2D | DISPLAY_BG0_ACTIVE);   //sub bg 0 will be used to print text
+<br/>
+   vramSetBankC(VRAM_C_SUB_BG);
+<br/>
+<br/>
+   SUB_BG0_CR = BG_MAP_BASE(31);
+<br/>
+<br/>
+   BG_PALETTE_SUB[255] = RGB15(31,31,31);   //by default font will be rendered with color 255
+<br/>
+<br/>
+   //consoleInit() is a lot more flexible but this gets you up and running quick
+<br/>
+   consoleInitDefault((u16*)SCREEN_BASE_BLOCK_SUB(31), (u16*)CHAR_BASE_BLOCK_SUB(0), 16);
+<br/>
+   
+<br/>
+<br/>
+   defaultExceptionHandler() ;
+<br/>
+<br/>
+   printf("Starting up...\n");
+<br/>
+   mq7to9 = CreateMessageQueue(5,2000) ;
+<br/>
+   mq9to7 = CreateMessageQueue(5,2000) ;
+<br/>
+   printf("  Queue 7to9: @%08X\n",mq7to9) ;
+<br/>
+   printf("  Queue 9to7: @%08X\n",mq9to7) ;
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+<br/>
+So my question:
+<br/>
+Is there a known problem recently in the (i)printf functions or does anyone see an error that could cause this.
+<br/>
+<br/>
+:edit1: 
+<br/>
+Problem does not occure when using the cached mirror of memory. Probably a timing issue?
+<br/>
+<br/>
+:edit2:
+<br/>
+Turned out to be some arbitary data flushed the cachline overwriting the data i had just written to the uncached version.<br/>_________________<br/><a class="postlink" href="http://mightymax.org/gbamp_multiboot.html" target="_blank">GBAMP Multiboot</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#145030 - wondersye - Sat Nov 10, 2007 6:17 pm</h4>
+    <div class="postbody"><span class="postbody">Hi,
+<br/>
+<br/>
+I think I have the same problem here, on the ARM9 I am using a C++ constructor which allocates an uint16 thanks to a new, adds 0x400000 to this address (to be in the non cacheable mirror), set a non-null value in the pointed address and then stores the pointer into a data member declared 'volatile uint16*', but at the end of the constructor, when the pointed value is read, it has been set to zero (whereas the FIFO and IRQ are not activated yet, ARM7 not guilty neither IRQ handler).
+<br/>
+<br/>
+So I may be too a victim of the DTCM cache. How did you solve your problem ?
+<br/>
+I tried a version with 'normal' addresses and DC_FlushRange, works a bit better but what I want to use is the mirror in order not to mess with the cache.
+<br/>
+<br/>
+Thanks in advance for any hint !</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#145031 - Mighty Max - Sat Nov 10, 2007 6:37 pm</h4>
+    <div class="postbody"><span class="postbody">I worked around at first with disabling the cache for the region, which has too much downsides for a useable option but enabled me to work on the actual code instad of the IPC for some time.
+<br/>
+<br/>
+At the end i switched to using the fifo hardware. 
+<br/>
+<br/>
+The only way to prevent problems here is to allocate a memory region that exactly fits into one or more cachelines, flush it, and _never_ use any of the cached memory of these lines again.<br/>_________________<br/><a class="postlink" href="http://mightymax.org/gbamp_multiboot.html" target="_blank">GBAMP Multiboot</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#145032 - wondersye - Sat Nov 10, 2007 7:05 pm</h4>
+    <div class="postbody"><span class="postbody">Hi Mighty Max,
+<br/>
+<br/>
+thanks for your answer. I was trying to use DC_InvalidateRange on the shared variables, with no luck for the moment.
+<br/>
+How do you allocate a memory region that exactly fits into one or more cachelines ? You malloc a bigger area to ensure that, whatever the allocated memory offset, the aimed number of full cachelines will fit, knowing they must be boundary-aligned ?
+<br/>
+It still puzzles me because I have the impression that most sound streaming code uses shared chunks from the ARM9 to the ARM7 without special care.
+<br/>
+<br/>
+Actually I am too in the process of using the hardware FIFO. It has been a real nightmare: I am using an IRQ-based approach, but as notifications of FIFO sendings might be missed while in the FIFO handler, I added a FIFO no-empty check in the VBlank handler to catch these sendings. It works almost ok, except it is not 100% in all cases:  the same executable sometimes behaves perfectly correctly, sometimes it looses ~2000 sent commands out of 500 000 (I do not plan to share data thanks to the FIFO, only bidirectional commands).
+<br/>
+So to ease debugging I added an ARM7 status word and error code to be read from the ARM9; but sometimes the handshake of the ARMs in the FIFO constructor misses, because of these cache corruption.
+<br/>
+<br/>
+Developing for the DS in not for the faint-hearted...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#145033 - Mighty Max - Sat Nov 10, 2007 7:23 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>wondersye wrote:</b></span></td> </tr> <tr> <td class="quote">Hi Mighty Max,
+<br/>
+<br/>
+thanks for your answer. I was trying to use DC_InvalidateRange on the shared variables, with no luck for the moment.
+<br/>
+How do you allocate a memory region that exactly fits into one or more cachelines ? You malloc a bigger area to ensure that, whatever the allocated memory offset, the aimed number of full cachelines will fit, knowing they must be boundary-aligned ?
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Exactly
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+It still puzzles me because I have the impression that most sound streaming code uses shared chunks from the ARM9 to the ARM7 without special care.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Well the IPC structs of libnds is within a non heap area and thus the cached representation is never used.
+<br/>
+The sound data is usually big enough, so it was written back to main ram until the arm7 sound hw tries to read it.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+Actually I am too in the process of using the hardware FIFO. It has been a real nightmare: I am using an IRQ-based approach, but as notifications of FIFO sendings might be missed while in the FIFO handler, I added a FIFO no-empty check in the VBlank handler to catch these sendings. It works almost ok, except it is not 100% in all cases:  the same executable sometimes behaves perfectly correctly, sometimes it looses ~2000 sent commands out of 500 000 (I do not plan to share data thanks to the FIFO, only bidirectional commands).
+<br/>
+So to ease debugging I added an ARM7 status word and error code to be read from the ARM9; but sometimes the handshake of the ARMs in the FIFO constructor misses, because of these cache corruption.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I used the IPC_Sync registers to prevent this: Have one of the CPU's set the owned sync part to 1, and wait until the other side sets it to the same value, increase and repeat until both sides reach 15. Whenever an error occures or the other side needs too long, the sequence resets.
+<br/>
+<br/>
+It's not the final IPC code, but you might want to have a look at the IPC-Test application in <a href="svn://91.184.39.23/svn/repos/libwifi" target="_blank">svn://91.184.39.23/svn/repos/libwifi</a>
+<br/>
+The lib's IPC code is in ./common/source/MessageQueue.c and ./common/include/MessageQueue.h<br/>_________________<br/><a class="postlink" href="http://mightymax.org/gbamp_multiboot.html" target="_blank">GBAMP Multiboot</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#145034 - wondersye - Sat Nov 10, 2007 8:16 pm</h4>
+    <div class="postbody"><span class="postbody">Thanks again for your help, I checked-out your code. From your explanations I think I understood your method based on the 4 bits available in REG_IPCSYNC. I thought it would have allowed exactly the same features as having IPC_FIFO_RECV_IRQ being triggered, but since the IRQ can be missed, having a way of exchanging (reliably ?) "sequence numbers" might be a way of having a fool-proof system, a bit like with a mini-network protocol.
+<br/>
+<br/>
+I may be mistaken but, beyond the IRQ being missed or not, I am not sure that the FIFO reading/writing is itself 100% reliable. I ran tests with the FIFO being managed only in Vblank handlers (with a while loop, not reading from empty nor writing to full, checking the error conditions, no other IRQ) and in some cases apparently the same executable could show some commands were missed.
+<br/>
+<br/>
+Thanks again and have a good luck with your libwifi !</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#145035 - Mighty Max - Sat Nov 10, 2007 8:25 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>wondersye wrote:</b></span></td> </tr> <tr> <td class="quote">Thanks again for your help, I checked-out your code. From your explanations I think I understood your method based on the 4 bits available in REG_IPCSYNC. I thought it would have allowed exactly the same features as having IPC_FIFO_RECV_IRQ being triggered, but since the IRQ can be missed, having a way of exchanging (reliably ?) "sequence numbers" might be a way of having a fool-proof system, a bit like with a mini-network protocol.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+One side could be in a state not able to receive the irq, or having data left in the fifo.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+I may be mistaken but, beyond the IRQ being missed or not, I am not sure that the FIFO reading/writing is itself 100% reliable. I ran tests with the FIFO being managed only in Vblank handlers (with a while loop, not reading from empty nor writing to full, checking the error conditions, no other IRQ) and in some cases apparently the same executable could show some commands were missed.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+You have to ensure that there is place left in the fifo (flagged in the CR)  before writing, otherwise the fifo will be flagged with an error and the data is lost.
+<br/>
+<br/>
+IRQs are not missed if you clear the IF before emptying the buffers. Otherwise, if the irq fires at the time you are still reading the fifo, it is missed, as you flag it also done with the next REG_IF write.
+<br/>
+Btw. as many tutorials do it the wrong way: do not clear IF with REG_IF |= flag, but with REG_IF = flag.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Thanks again and have a good luck with your libwifi !</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+You'r welcome and Thanks :D<br/>_________________<br/><a class="postlink" href="http://mightymax.org/gbamp_multiboot.html" target="_blank">GBAMP Multiboot</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#145587 - wondersye - Sun Nov 18, 2007 4:34 pm</h4>
+    <div class="postbody"><span class="postbody">Hi,
+<br/>
+<br/>
+I finally implemented my full IPC system. Needed quite a lot efforts, but according to the tests is correct now. Hardware FIFO proved 100% reliable. As you said allocating buffers for the ARM7 from the ARM9 needed being boundary-aligned, cache-line wise, and flushed. I documented this IPC a bit:
+<br/>
+<a class="postlink" href="http://ceylan.sourceforge.net/Ceylan-latest/Ceylan-userguide.html#ds-ipc" target="_blank">http://ceylan.sourceforge.net/Ceylan-latest/Ceylan-userguide.html#ds-ipc</a>
+<br/>
+<br/>
+Now I plan to integrate the Helix MP3 decoder on the ARM7, streamed from the ARM9 with libfat. I guess it won't be easy...</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

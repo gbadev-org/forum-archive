@@ -1,0 +1,153 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Weird 16 color sprite data problem - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Graphics > Weird 16 color sprite data problem</h2>
+<div id="posts">
+<div class="post">
+    <h4>#20420 - mr_schmoe - Tue May 11, 2004 12:46 am</h4>
+    <div class="postbody"><span class="postbody">I've been developing a bmp to gba convert and I've ran into a little snag that I can't seem to figure out. Everything works fine in 256 color mode, but when I try 16 colors, it doesn't seem to work properly
+<br/>
+<br/>
+My program goes something like this.
+<br/>
+<br/>
+load the bitmap data so the data in memory equals this
+<br/>
+unsigned char bmpdata[] = { 0xA1, 0xB0, 0x1E, 0x1E, ... }
+<br/>
+<br/>
+convert the data to GBA format and type cast the data to 16 bit words
+<br/>
+<br/>
+so you end up with, 
+<br/>
+{ 0xA1B0, 0x1E1E, ... }
+<br/>
+<br/>
+I figure the problem isn't in my conversion program, but how the GBA displays sprite data. If you look at it, the first pixel of the sprite should be color index A (or 10), right? Then then next two are ones and the fourth is a 0, right? But when I load the program on the GBA, it's sort of screwed up. It looks like the first pixel is a color index 0 and the next is a 10 (or A). Or in other words it looks like this 0x0B1A.
+<br/>
+<br/>
+So like me break it down this way.
+<br/>
+<br/>
+The bitmap data is stored like this:
+<br/>
+{ 0xA1B0, 0x1E1E, ... }
+<br/>
+<br/>
+In the GBA memory sprite data addresss (0x06010000), it looks like this:
+<br/>
+{ 0xA1B0, 0x1E1E, ... }
+<br/>
+<br/>
+On the screen it looks like it should be more like:
+<br/>
+{ 0x0B1A, 0xE1E1, ... }
+<br/>
+<br/>
+Is there something I'm missing here?
+<br/>
+<br/>
+And as I was writing this, I went back check on somethings and now I'm not so sure my 256 color mode conversion works. I'll check that and get back with you. But in the mean time, does anyone know how would I go about reversing the data so it shows up on the screen correctly? Thanks a million.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#20421 - DiscoStew - Tue May 11, 2004 1:10 am</h4>
+    <div class="postbody"><span class="postbody">The way you have your data stored is reversed every 4 pixels. 
+<br/>
+Value of 0xA1B0 and 0xE1E1 would have the pixels in this order: 0 B 1 A 1 E 1 E
+<br/>
+Reversing to 0x0B1A and 0x1E1E would display: A 1 B 0 E 1 E 1
+<br/>
+<br/>
+Every 2 bytes in 16 color mode is 4 pixels, with the first 4 bits being the 1st pixel, then next 4 bits for the 2nd pixel, then the 3rd, then the 4th, therefore in a 2 byte hexidecimal format, the bit are arranged from right to left. So if you had a pixel layout like this row of 12 pixels...
+<br/>
+<br/>
+0, 0, 4, 7, 6, 3, 8, 7, 2, F, A, 4,
+<br/>
+<br/>
+...the format would look like this...
+<br/>
+<br/>
+0x7400, 0x7836, 0x4AF2
+<br/>
+<br/>
+From the look of it, every 4 pixels looks like it is in a reversed format.
+<br/>
+<br/>
+Hope that helps<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#20422 - mr_schmoe - Tue May 11, 2004 1:15 am</h4>
+    <div class="postbody"><span class="postbody">Good, that coinsided with what I figured out and provided the clarity. Thanks for the help. But how would I go about coding that? Is there an operator or something that does that or do I have to do it manually? Like this:
+<br/>
+<br/>
+hi = data / 16;
+<br/>
+lo = data % 16;
+<br/>
+data = lo * 16 + hi;</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#20424 - DiscoStew - Tue May 11, 2004 2:43 am</h4>
+    <div class="postbody"><span class="postbody">For simplicity, assume you have your picture array where every byte represents a pixel, with each value representing a palette index from 0 to 15 (16 colors). To stuff 4 pixels into a 2-byte value, do the following:
+<br/>
+<br/>
+(2-byte value) = (1st pixel) + ((2nd pixel) &lt;&lt; 4) + ((3rd pixel) &lt;&lt; 8) + ((4th pixel) &lt;&lt; 12);
+<br/>
+<br/>
+Now, by looking at the way you have your data stored, you have 2 pixels per byte, am I right, where if you had a value of "0xA1", "A" would be the 2nd pixel and "1" would be the first pixel? If not, assume it was. To convert with this method, try this...
+<br/>
+<br/>
+(2-byte value) = (2nd byte) + ((1st byte) &lt;&lt; 8);
+<br/>
+<br/>
+If the above is correct, except that the pixels are swapped, where "A" would be the 1st pixel, and "1" is the second pixel, then do this...
+<br/>
+<br/>
+(2-byte value) = (((1st byte) &amp; 0xF0) &gt;&gt; 4) + (((1st byte) &amp; 0x0F) &lt;&lt; 4) + (((2nd byte) &amp; 0xF0) &lt;&lt; 4) + (((2nd byte) &amp; 0x0F) &lt;&lt; 12);
+<br/>
+<br/>
+I know it looks odd, but it would do something like this...
+<br/>
+<br/>
+{0xA1, 0x8F} -&gt; 0xF81A
+<br/>
+<br/>
+<br/>
+I know there is a lot here, but I wasn't quite sure what you were suggesting, so I gave you what I thought you needed.<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#20454 - scknight - Tue May 11, 2004 5:03 pm</h4>
+    <div class="postbody"><span class="postbody">I just finished a first pass at writing something really similar. I put the code up so you can check it out if you want.
+<br/>
+<br/>
+<a class="postlink" href="http://www.wideopenwest.com/~scknight/bmp2gba.zip" target="_blank">http://www.wideopenwest.com/~scknight/bmp2gba.zip</a>
+<br/>
+<br/>
+The exe probally isnt going to run unless you have the cygwin installed on your system.
+<br/>
+<br/>
+I think its all easier than what others said. Dont worry reading two bytes at a time, just read byte by byte but when you read 4bit images remeber that you only need half as many bytes and you need to swap hi and lo.
+<br/>
+<br/>
+(num&lt;&lt;4) | (num&gt;&gt;4)
+<br/>
+<br/>
+That will do the swapping. Anyway take a look at the code and see if it helps. It extracts out raw information for both palette and data. The palette files can be read by Peebrains gbpal program. The output files are designed to be directly linked in rather than used in a c header.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

@@ -1,0 +1,129 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Background and Sprite Loading - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Background and Sprite Loading</h2>
+<div id="posts">
+<div class="post">
+    <h4>#99486 - dannyboy - Tue Aug 22, 2006 1:06 am</h4>
+    <div class="postbody"><span class="postbody">Hi all, I started messing around with 2D stuff on the DS and a couple of issues have come up.
+<br/>
+<br/>
+1) I had some code to load a 2D background working nicely as so:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">for(int i = 0; i &lt; 256*192; i++) {
+<br/>
+        BG_GFX_SUB[i] = ((u16*)ColourField_bin)[i] | BIT(15);
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+However I decided to start using a filesystem, namely gbfs. I changed the code to the following:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">for(int i = 0; i &lt; 256*192; i++) {
+<br/>
+        BG_GFX_SUB[i] = ((u16*)gbfs_get_obj(&amp;data_gbfs, "ColourField.bin", NULL)) [i] | BIT(15);
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+The problem is, it works, but the new code is a lot slower. Where the first code seemed instantaneous the new code takes a short while, even on hardware. Is there a way to speed it up? Oh, and what about 8 bit backgrounds. What's the best way to load those?
+<br/>
+<br/>
+2) I am having problems with the colours for my sprites. In this example, I load 3 sprites. I use the palette of the second sprite which shows perfectly. However the other 2 show with distorted colouring. Is there a way to synchronise the palettes?
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">sImage Image;
+<br/>
+<br/>
+void CSprite::LoadPalette()
+<br/>
+{
+<br/>
+    for(int i = 0; i &lt; 256; i++) { SPRITE_PALETTE_SUB[i] = Image.palette[i]; }
+<br/>
+}
+<br/>
+<br/>
+void CSprite::LoadImage(unsigned char* pcxFile, int i) // Load simage into the given memory location
+<br/>
+{
+<br/>
+    int offset = i*32*16;           // offset in memory for multiple sprites
+<br/>
+<br/>
+    loadPCX(pcxFile, &amp;Image);           // load our pcx file into an image
+<br/>
+    imageTileData(&amp;Image);              // tile it so it is useful as sprite data
+<br/>
+    for(int i = 0; i &lt; 32*16; i++) { SPRITE_GFX_SUB[offset + i] = Image.data16[i]; }
+<br/>
+}
+<br/>
+<br/>
+    LoadImage((u8*)gbfs_get_obj(&amp;data_gbfs, "one.pcx", NULL), 1);
+<br/>
+    LoadImage((u8*)gbfs_get_obj(&amp;data_gbfs, "two.pcx", NULL), 2);
+<br/>
+    for(int i = 0; i &lt; 256; i++) { SPRITE_PALETTE_SUB[i] = Image.palette[i]; 
+<br/>
+    LoadImage((u8*)gbfs_get_obj(&amp;data_gbfs, "three.pcx", NULL), 3);
+<br/>
+}</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#99494 - tepples - Tue Aug 22, 2006 1:50 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>dannyboy wrote:</b></span></td> </tr> <tr> <td class="quote">However I decided to start using a filesystem, namely gbfs. I changed the code to the following:
+<br/>
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">for(int i = 0; i &lt; 256*192; i++) {
+<br/>
+        BG_GFX_SUB[i] = ((u16*)gbfs_get_obj(&amp;data_gbfs, "ColourField.bin", NULL)) [i] | BIT(15);
+<br/>
+}</td> </tr></table><span class="postbody"></span></td> </tr></table><span class="postbody">
+<br/>
+Oh my gosh. You're doing a file system lookup for every single pixel! Try not calling gbfs_get_obj() in an inner loop. Rather, call it once before the loop and put the result in a variable:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">u16 *bg = (u16*)gbfs_get_obj(&amp;data_gbfs, "ColourField.bin", NULL);
+<br/>
+for(int i = 0; i &lt; 256*192; i++) {
+<br/>
+  BG_GFX_SUB[i] = bg[i] | BIT(15);
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Oh, and what about 8 bit backgrounds. What's the best way to load those?</td> </tr></table><span class="postbody">
+<br/>
+Same way, except you're just copying 2 pixels at a time instead of 4.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#99570 - silent_code - Tue Aug 22, 2006 1:50 pm</h4>
+    <div class="postbody"><span class="postbody">draw the sprites using the same palette... if you're using 4-bit sprites, you also need to assign one sub palette out of the 16 available to each sprite.
+<br/>
+<br/>
+that's about everything i can think of.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

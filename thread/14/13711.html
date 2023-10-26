@@ -1,0 +1,364 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Background woe - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Beginners > Background woe</h2>
+<div id="posts">
+<div class="post">
+    <h4>#134902 - ShannonB - Wed Jul 18, 2007 4:16 am</h4>
+    <div class="postbody"><span class="postbody">First off, all of this code is shamelessly ripped off from Jonathan Harbour's book on GBA programming.  I'm just trying to figure out how it works before I write my own.  The theory all makes sense in my head, it should work, it even compiles with no errors, except nothing appears on the screen.  Nada.  Big black nothingness.
+<br/>
+<br/>
+I made my own tilemap, palette and tile data.  I don't think they are the problem.  I've even dumped them into the main.cpp file (after converting to a c++ array) just to simplify stuff.  Still compiles.  Personally I have a feeling the problem is with the DMAfastcopy function.
+<br/>
+<br/>
+I ran the code in the VBA emulator and when opened the palette and map in VBA there was nothing there.   Somehow I think the data just isn't being copied into the correct memory location.
+<br/>
+<br/>
+I'll try to keep this as short as possible and as organized as possible:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+const unsigned short test_Palette[256] = {
+<br/>
+0x7fff, 0x25f5, 0x2658, 0x2637, 0x2636, 0x2615,........yadda yadda, this goes on for a while, not going to paste an entire 256 element array here...};
+<br/>
+<br/>
+const unsigned char test_Tiles[28416] = {
+<br/>
+0xf6, 0xed, 0xd2, 0xd2, 0xd2, 0xd2, 0xd2...erm, as above...};
+<br/>
+<br/>
+const unsigned short test_Map[1024] = {
+<br/>
+0x0000, 0x0001, 0x0001, 0x0002, 0x0000, 0x0001, 0x0001, 0x0003, 
+<br/>
+0x0004, 0x0001, 0x0001...one last time for the tilemap...};
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Next my header code.  No, it's not in a separate file.  I'm trying to keep this simple until I can figure out what the problem is.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+<br/>
+//defines needed by DMAFastCopy
+<br/>
+#define REG_DMA3SAD * (volatile unsigned int*) 0x40000D4
+<br/>
+#define REG_DMA3DAD * (volatile unsigned int*) 0x40000DC
+<br/>
+#define REG_DMA3CNT *(volatile unsigned int*)0x40000DC
+<br/>
+#define DMA_ENABLE 0x80000000
+<br/>
+#define DMA_TIMING_IMMEDIATE 0x00000000
+<br/>
+#define DMA_16 0x00000000
+<br/>
+#define DMA_32 0x04000000
+<br/>
+#define DMA_32NOW (DMA_ENABLE | DMA_TIMING_IMMEDIATE | DMA_32)
+<br/>
+#define DMA_16NOW (DMA_ENABLE | DMA_TIMING_IMMEDIATE | DMA_16)
+<br/>
+<br/>
+//scrolling registers for background 0
+<br/>
+#define REG_BG0HOFS *(volatile unsigned short*)0x4000010
+<br/>
+#define REG_BG0VOFS *(volatile unsigned short*)0x4000012
+<br/>
+<br/>
+//background setup registers and data
+<br/>
+#define REG_BG0CNT *(volatile unsigned short*)0x4000008
+<br/>
+#define REG_BG1CNT *(volatile unsigned short*)0x400000A
+<br/>
+#define REG_BG2CNT *(volatile unsigned short*)0x400000C
+<br/>
+#define REG_BG3CNT *(volatile unsigned short*)0x400000E
+<br/>
+#define BG_COLOR256 0x80
+<br/>
+#define CHAR_SHIFT 2
+<br/>
+#define SCREEN_SHIFT 8
+<br/>
+#define WRAPAROUND 0x1
+<br/>
+<br/>
+//background tile bitmap sizes
+<br/>
+#define TEXTBG_SIZE_256x256 0x0
+<br/>
+#define TEXTBG_SIZE_256x512 0x8000
+<br/>
+#define TEXTBG_SIZE_512x256 0x4000
+<br/>
+#define TEXTBG_SIZE_512x512 0xC000
+<br/>
+<br/>
+//background memory offset macros
+<br/>
+#define CharBaseBlock(n) (((n)*0x4000)+0x6000000)
+<br/>
+#define ScreenBaseBlock(n) (((n)*0x800)+0x6000000)
+<br/>
+<br/>
+//background mode identifiers
+<br/>
+#define BG0_ENABLE 0x100
+<br/>
+#define BG1_ENABLE 0x200
+<br/>
+#define BG2_ENABLE 0x400
+<br/>
+#define BG3_ENABLE 0x800
+<br/>
+<br/>
+//video identifiers
+<br/>
+#define REG_DISPCNT *(unsigned int*)0x4000000
+<br/>
+#define BGPaletteMem ((unsigned short*)0x5000000)
+<br/>
+#define SetMode(mode) REG_DISPCNT = (mode)
+<br/>
+<br/>
+//vertical refresh register
+<br/>
+#define REG_DISPSTAT *(volatile unsigned short*)0x4000004
+<br/>
+<br/>
+//button identifiers
+<br/>
+#define BUTTON_RIGHT 16
+<br/>
+#define BUTTON_LEFT 32
+<br/>
+#define BUTTON_UP 64
+<br/>
+#define BUTTON_DOWN 128
+<br/>
+#define BUTTONS (*(volatile unsigned int*)0x04000130)
+<br/>
+<br/>
+//function prototype
+<br/>
+void DMAFastCopy (void*, void*, unsigned int, unsigned int);
+<br/>
+<br/>
+//wait for vertical refresh
+<br/>
+void WaitVBlank(void)
+<br/>
+{
+<br/>
+while((REG_DISPSTAT &amp; 1));
+<br/>
+}
+<br/>
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Lastly the main() and game loop.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+int main(void)
+<br/>
+{
+<br/>
+int x = 0, y = 0;
+<br/>
+int n;
+<br/>
+<br/>
+//create a pointer to background 0 tilemap buffer
+<br/>
+unsigned short* bg0map =(unsigned short*)ScreenBaseBlock(31);
+<br/>
+<br/>
+//set up background 0
+<br/>
+REG_BG0CNT = BG_COLOR256 | TEXTBG_SIZE_256x256 | (31 &lt;&lt; SCREEN_SHIFT) | WRAPAROUND;
+<br/>
+<br/>
+//set video mode 0 with background 0
+<br/>
+SetMode(0 | BG0_ENABLE);
+<br/>
+<br/>
+//copy the palette into the background palette memory
+<br/>
+DMAFastCopy((void*)test_Palette, (void*)BGPaletteMem, 256, DMA_16NOW);
+<br/>
+<br/>
+//copy the tile images into the tile memory
+<br/>
+ //DMAFastCopy((void*)test_Tiles, (void*)CharBaseBlock(0), 57984/4, DMA_32NOW);
+<br/>
+DMAFastCopy((void*)test_Tiles, (void*)CharBaseBlock(0), 28416/4, DMA_32NOW);
+<br/>
+<br/>
+<br/>
+//copy the tile map into background 0
+<br/>
+DMAFastCopy((void*)test_Map, (void*)bg0map, 1024, DMA_32NOW);
+<br/>
+<br/>
+   //main game loop
+<br/>
+   while(1)
+<br/>
+   {
+<br/>
+    
+<br/>
+   //wait for vertical refresh
+<br/>
+   WaitVBlank();
+<br/>
+<br/>
+   //D-pad moves background
+<br/>
+   if(!(BUTTONS &amp; BUTTON_LEFT)) x--;
+<br/>
+   if(!(BUTTONS &amp; BUTTON_RIGHT)) x++;
+<br/>
+   if(!(BUTTONS &amp; BUTTON_UP)) y--;
+<br/>
+   if(!(BUTTONS &amp; BUTTON_DOWN)) y++;
+<br/>
+<br/>
+   //use hardware background scrolling
+<br/>
+   REG_BG0VOFS = y ;
+<br/>
+   REG_BG0HOFS = x ;
+<br/>
+<br/>
+   //wait for vertical refresh
+<br/>
+   WaitVBlank();
+<br/>
+   for(n = 0; n &lt; 4000; n++);
+<br/>
+   }
+<br/>
+   
+<br/>
+return 0;
+<br/>
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+And here we have the suspect DMA copy function:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+void DMAFastCopy(void* source, void* dest, unsigned int count,
+<br/>
+unsigned int mode)
+<br/>
+{
+<br/>
+if (mode == DMA_16NOW || mode == DMA_32NOW)
+<br/>
+{
+<br/>
+REG_DMA3SAD = (unsigned int)source;
+<br/>
+REG_DMA3DAD = (unsigned int)dest;
+<br/>
+REG_DMA3CNT = count | mode;
+<br/>
+}
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+That's it.  Thanks muchly in advance to anyone that can figure this out.  I've spent more than a week on this.  Read as much as I could and I just can't find what the problem is.  Not trying to insult Mr Harbour's coding.  I'm sure his stuff all works.  Likely I've simply done something stupid, I just can't for the life of me figure out what it is.<br/>_________________<br/>"Do you know what the chain of command is? It's the chain I get and beat you with until you understand who's in rutting command here!" -Jayne Cobb</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#134917 - Cearn - Wed Jul 18, 2007 9:46 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>ShannonB wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#define REG_DMA3SAD * (volatile unsigned int*) 0x40000D4
+<br/>
+#define REG_DMA3DAD * (volatile unsigned int*) 0x40000DC
+<br/>
+#define REG_DMA3CNT *(volatile unsigned int*)0x40000DC </td> </tr></table><span class="postbody"></span></td> </tr></table><span class="postbody">
+<br/>
+REG_DMA3DAD is at 0x40000D<span style="font-weight: bold">8</span>, not 0x40000DC.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>ShannonB wrote:</b></span></td> </tr> <tr> <td class="quote">Not trying to insult Mr Harbour's coding. I'm sure his stuff all works.</td> </tr></table><span class="postbody"> Actually, no, a good deal of the book doesn't work. REG_DMA3DAD is correct in the book, but, for example, all of the four WaitForVBlank variations in the book are incorrect (the one you have here actually waits for the VBlank to be <span style="font-style: italic">over</span>, rather than when it begins). Those silly empty wait-loops ( "for(n=0;n&lt;4000;n+) ;", etc ) are attempts to work around those incorrect VBlankWait routines. Just use the <a class="postlink" href="http://www.coranac.com/tonc/text/video.htm#sec-vsync1" target="_blank">correct</a> one once per game-loop and remove those kinds of loops. Other incorrect #defines here are WRAPAROUND, which should be 0x2000, and BUTTONS, which is a 16-bit register, not 32-bit.
+<br/>
+<br/>
+Be careful what you take from the book. The code style is inconsistent and the code itself often inefficient and at times even wrong. These things don't help when you're learning :\</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#134918 - ShannonB - Wed Jul 18, 2007 9:56 am</h4>
+    <div class="postbody"><span class="postbody">Oh man, thanks so much.  It would have taken me years to figure all of that out.
+<br/>
+<br/>
+I've been going through the TONC tutorials.  I really like them, but they're a lot less gentle than the Jharbour book.  Something I like, but somedays I guess I just want to be molly-coddled :)
+<br/>
+<br/>
+Thanks again.<br/>_________________<br/>"Do you know what the chain of command is? It's the chain I get and beat you with until you understand who's in rutting command here!" -Jayne Cobb</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#136969 - elyk1212 - Mon Aug 06, 2007 10:49 pm</h4>
+    <div class="postbody"><span class="postbody">Cearn is right.  I have had various difficulties with the reasoning in Harbors book.  Although it was a good attempt, it confused me quite a bit in some areas.  Also, as Cearn mentioned, looping for an arbitrary amount of time when an interrupt solution should be used, is silly and not portable (if you are going for this type of thing), nor optimal.
+<br/>
+<br/>
+If he isn't going to do it, I should at least mention Cearn's tutorial:
+<br/>
+<br/>
+<a href="http://www.coranac.com/tonc/" target="_blank">http://www.coranac.com/tonc/</a>
+<br/>
+<br/>
+<br/>
+Sorry man, I had to SPAM your stuff :).  But I think it is really worth reading.
+<br/>
+<br/>
+Anyhow, read up on some of these folk's tutorials (referenced on this board).  Keep in mind, the random ones you find online have some slop and inconsistencies, just like many of my engineering books (unfortunately).
+<br/>
+<br/>
+<br/>
+EDIT: Ops, I should have read last post more carefully, you already found them.</span><span class="gensmall"><br/><br/>Last edited by elyk1212 on Mon Aug 06, 2007 11:40 pm; edited 1 time in total</span></div>    
+</div>
+<div class="post">
+    <h4>#136972 - keldon - Mon Aug 06, 2007 11:17 pm</h4>
+    <div class="postbody"><span class="postbody">Well what's your programming experience, maybe you're jumping too far into the deep end! You <span style="font-style: italic">can in theory</span> learn programming entirely using the Game Boy Advance, but there are no tutorials on earth that would put a beginner in that position - not because it's impossible or bad, but because it's difficult for the teacher.
+<br/>
+<br/>
+There are many basic programming concepts you must know, most GBA tutorials are instructions to use the hardware, not to program - and the same can probably be said about just about every tutorials of that nature from Win32 programming to DirectX.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

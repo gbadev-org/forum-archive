@@ -1,0 +1,140 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Heads up: data section! - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Heads up: data section!</h2>
+<div id="posts">
+<div class="post">
+    <h4>#40337 - FeaRog - Sun Apr 17, 2005 6:22 pm</h4>
+    <div class="postbody"><span class="postbody">Hi all,
+<br/>
+ After spending the last few hours wrestling with the linker to get it to do what I want, I figure I'd better give you all a heads up about it.
+<br/>
+<br/>
+If you define a lot of global initialized but not read only data, your program will fail, and it will seem to be quite weird crashes. This is because the current linker scripts place initialized but not read only global data into the IWRAM. The limited supply of this means that not all will fit, and accesses to it from your code will result in strange pointers being accessed! Mine were extra strange, in that I found that my pointers to globally defined strings were pointing to other, perfectly valid, globally defined strings. Some came back NULL. 
+<br/>
+<br/>
+My solution was to modify the link script - I've made it so that all .rodata and .data sections from the object files go into the .text section of the ELF along with the code. This seems to work fine, but I'm sure it won't perform as well.
+<br/>
+<br/>
+Anyway, I hope this helps some of you out a bit...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#40340 - Darkain - Sun Apr 17, 2005 6:35 pm</h4>
+    <div class="postbody"><span class="postbody">have you tried the link script found at <a class="postlink" href="http://ds.darkain.com/hack/" target="_blank">http://ds.darkain.com/hack/</a> yet?<br/>_________________<br/>-=- Darkain Dragoon -=-
+<br/>
+<a class="postlink" href="http://www.darkain.com" target="_blank">http://www.darkain.com</a>
+<br/>
+<a class="postlink" href="http://ds.darkain.com/hack" target="_blank">DarkStar</a> for <a class="postlink" href="http://ds.darkain.com" target="_blank">Nintendo DS</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#40341 - FeaRog - Sun Apr 17, 2005 6:39 pm</h4>
+    <div class="postbody"><span class="postbody">Yes, thats what I was using before. The .data section goes into the IWRAM with that script, which is what produces the problem.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#40344 - dovoto - Sun Apr 17, 2005 7:40 pm</h4>
+    <div class="postbody"><span class="postbody">Yes i was having that same issue.  I ended up moving iwram to ewram memory space to solve it.. your solution is much cleaner.  There needs to be a way to get the linker to recognized when it has used all the available ram and have it allocate space elsewhere.  Or we should just leave iwram alone and let the user choose what goes in (via IN_IWRAM and CODE_IN_IWRAM).<br/>_________________<br/><a href="http://www.drunkencoders.com" target="_blank">www.drunkencoders.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#40346 - Darkain - Sun Apr 17, 2005 7:45 pm</h4>
+    <div class="postbody"><span class="postbody">I would personally prefer to NOT have anything go into IWRAM at all.  this is, because, that is where i want to dump the flash cart code.  since flash cards can already be read, i plan on throwing a file into the filesystem... something like "flash card driver", and have DarkStar automatically load this into IWRAM, and contain a statically located struct w/ the various file pointers for the main flash card functions.  i dont want other things interfearing w/ this code and data.  :)  this idea is kinda cool really, as it means we could build new flash drivers w/o the need to recompile the entire application.<br/>_________________<br/>-=- Darkain Dragoon -=-
+<br/>
+<a class="postlink" href="http://www.darkain.com" target="_blank">http://www.darkain.com</a>
+<br/>
+<a class="postlink" href="http://ds.darkain.com/hack" target="_blank">DarkStar</a> for <a class="postlink" href="http://ds.darkain.com" target="_blank">Nintendo DS</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#40348 - DekuTree64 - Sun Apr 17, 2005 8:53 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Darkain wrote:</b></span></td> </tr> <tr> <td class="quote">I would personally prefer to NOT have anything go into IWRAM at all.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I prefer a mix. Linker script support for things that will always be used, like interrupt handling, and then manually copy in bits of code as needed depending on the situation. Those can be done with overlays though, which I haven't tried on DS, but had weird alignment problems on GBA when I tried a long time ago.
+<br/>
+<br/>
+For your flash card drivers, I'd suggest just changing the .iwram section start address to leave whatever portion you need unused, and the rest free to be allocated by the linker.
+<br/>
+<br/>
+One thing that's been bothering me though... there's only one .iwram section, which is in DTCM according to the crt0, but you can't execute from DTCM. It's only for data. 
+<br/>
+There's completely seperate ITCM for code. You can store data there too, but it will stall stall one cycle if you execute and load/store from it at the same time (just tested).
+<br/>
+Check "CP15 register map" in the programmer's model section of <a class="postlink" href="http://www.arm.com/pdfs/DDI0155A_946ES.pdf" target="_blank">http://www.arm.com/pdfs/DDI0155A_946ES.pdf</a> for how to enable it/ask how big it is/etc.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#40364 - FeaRog - Mon Apr 18, 2005 12:57 am</h4>
+    <div class="postbody"><span class="postbody">I think we should clean out the linker script, and make the .data and .rodata go into main RAM. Its probably not the cleanest idea to put it all in .text, because then you can't actually check how much of each you have - it was just my 3am hack solution ;) We should have a .iwram and .ewram section (in fact, I think there already is..) and use __attribute__ to specify any functions (eg interrupt handlers) that we wish to go into these sections. Possibly .itcm and .dtcm sections too. Wrap the clunky __attribute__ things with some nice macros (eg PUT_IN_IWRAM) and we're set for clean, trouble free coding :)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#40369 - tepples - Mon Apr 18, 2005 1:19 am</h4>
+    <div class="postbody"><span class="postbody">At least .rodata should go to main RAM to match the behavior of the GBA multiboot link scripts.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#40370 - FeaRog - Mon Apr 18, 2005 1:31 am</h4>
+    <div class="postbody"><span class="postbody">.rodata already does - its pretty much straight after .text (I think .fini is in between them, from memory). It was .data that wasn't. So while my strings were in .rodata and hence in main memory, the variables pointing to the strings were in .data, and so were messed up!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#40402 - FeaRog - Mon Apr 18, 2005 6:07 pm</h4>
+    <div class="postbody"><span class="postbody">We also seem to be having problems with .bss
+<br/>
+Both the arm7 and arm9 put their .bss and stack into the same part of memory, which strikes me as being terribly bad. I got bitten by this one - with a program with such a large amount of data as the one I'm working on I found that the (uninitialized) variable containing the pointer to the file system control memory was (seemingly) randomly changing. It was either the place where this was linked to or the arm7 process was trashing my memory. Anyway, I went nuts with the .text thing and added that too - unfortunately its blown the size of my executable out by 800k! We *really* need to come up with a good resolution for this.
+<br/>
+<br/>
+I propose that .data and .rodata go into main memory, and that we rationalize the linker script's handling of the iwram and ewram (making these NOT seemingly magic numbers that depend on sizes of other sections) by perhaps making them their own section, that *nothing* else goes into. I'm not sure about what we should do with .bss. Any ideas?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#40432 - tepples - Mon Apr 18, 2005 9:20 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>FeaRog wrote:</b></span></td> </tr> <tr> <td class="quote">Anyway, I went nuts with the .text thing and added that too - unfortunately its blown the size of my executable out by 800k! We *really* need to come up with a good resolution for this.</td> </tr></table><span class="postbody">
+<br/>
+It could be along the lines of the GBA linker script in devkitARM, which adds a section called .sbss that goes into EWR^H^H^Hmain memory.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#40454 - FeaRog - Mon Apr 18, 2005 11:45 pm</h4>
+    <div class="postbody"><span class="postbody">Both the ARM7 &amp; ARM9 attempt to put a .sbss section into main memory.
+<br/>
+<br/>
+Its not the .sbss section thats hurting, its the .bss one which appears to automatically place itself at the last VMA referenced in the linker script. This happens to be at something like 0x800000 (plus or minus some zeros), and causes all sorts of weird stuff..</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#40480 - wintermute - Tue Apr 19, 2005 9:12 am</h4>
+    <div class="postbody"><span class="postbody">does anyone have a decent DS memory map?
+<br/>
+<br/>
+The layout on the wiki doesn't seem to be up to date and it's a bit difficult to sort out the linker scripts without knowing which parts are arm9/arm7 exclusive.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#40488 - sasq - Tue Apr 19, 2005 12:04 pm</h4>
+    <div class="postbody"><span class="postbody">Everything is exclusive except where it says so. The memory maps seems pretty complete, except you can access parts of VRAM from ARM7 at 0x06000000 if you allocate a bank dor it on the ARM9.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

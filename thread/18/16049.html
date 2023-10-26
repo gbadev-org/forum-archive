@@ -1,0 +1,278 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Converting (and understanding) float -> fixed point code - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Converting (and understanding) float -> fixed point code</h2>
+<div id="posts">
+<div class="post">
+    <h4>#162862 - ZeroSum - Sun Sep 14, 2008 11:32 pm</h4>
+    <div class="postbody"><span class="postbody">I've been using floats for my calculations so far and I got to the point where a certain amount of geometry would cause to framerate to dive. I thought I needed to add some culling so I added a simple check to see if vertexs were out of camera view. Of course, I also did this in floats and it has made my framerate even worse with fewer polys drawn!
+<br/>
+<br/>
+I understand now that I should be working in fixed point, and I understand it up to a point (no pun intended). What I don't understand is how to perform the operations in the code below with fixed point numbers. At first I tried to change all floats to v16 and (obviously :p) this failed, but I'm not sure what I <span style="font-style: italic">should</span> be doing. 
+<br/>
+<br/>
+Do I need to be shifting everywhere to make everything the right format? Or am I completly wrong? It that would make the code quite ugly and hard to follow. What are the correct ways to perform add/sub/multiply/divide on fixed point numbers using libnds? I have some of my code below to give an idea of what I am trying to do.
+<br/>
+<br/>
+Thanks for reading.
+<br/>
+<br/>
+This is what I'm using to cull:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">bool DmRenderer::CullCheck( float curX, float curZ )
+<br/>
+{
+<br/>
+   // Divide by 10.0 to match the camera and world coords because
+<br/>
+   // the world is scaled by 10.0 when drawn to fit larger maps.
+<br/>
+   float camX = m_Interface.Graphics-&gt;GetCamX() / 10.0;
+<br/>
+   float camZ = m_Interface.Graphics-&gt;GetCamZ() / 10.0;
+<br/>
+<br/>
+<br/>
+   // Check the coords passed in are in range of visible X.
+<br/>
+   if( curX &lt; (camX - 0.6 ) ) return false;
+<br/>
+   if( curX &gt; (camX + 0.6 ) ) return false;
+<br/>
+<br/>
+   // Check the coords passed in are in range of visible Z.
+<br/>
+   if( curZ &lt; (camZ - 0.5 ) ) return false;
+<br/>
+   if( curZ &gt; (camZ + 0.5 ) ) return false;
+<br/>
+<br/>
+   // Passed cull check.
+<br/>
+   return true;
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+And this is one of my main drawing functions:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+void Renderer::DrawFloors( Level* level, std::string texture)
+<br/>
+{
+<br/>
+   // Get the size of the level.
+<br/>
+   int TotalX = level-&gt;GetCellsX();
+<br/>
+   int TotalY = level-&gt;GetCellsY();
+<br/>
+<br/>
+   float CellWidth = 0.1;
+<br/>
+   float CellHeight = 0.1;
+<br/>
+<br/>
+   // Calculate where to start the grid so it is centered on cam 0,0,0.
+<br/>
+   float StartPointX = 0.0 - (CellWidth * (TotalX / 2 )) ;
+<br/>
+   float StartPointZ = 0.0 - (CellHeight * (TotalY / 2) ) ;
+<br/>
+<br/>
+   // Current position to drawn. Incremented in loops.
+<br/>
+   float currentX = StartPointX ;
+<br/>
+   float currentZ = StartPointZ ;
+<br/>
+<br/>
+   // Bind the passed in texture.
+<br/>
+   TexturePool-&gt;BindTexture( texture );
+<br/>
+<br/>
+   // Tell the graphics class we're going to draw.
+<br/>
+   Graphics-&gt;Begin();
+<br/>
+<br/>
+   // Loop through the grid of cells.
+<br/>
+   for( int y = 0; y &lt; TotalY; y++ )
+<br/>
+   {
+<br/>
+      for( int x = 0; x &lt; TotalX; x++ )
+<br/>
+      {
+<br/>
+         // If this cell is a passageway...
+<br/>
+         if( level-&gt;GetCellType(x, y) == Passage )
+<br/>
+         {
+<br/>
+            // and passes the cull check...
+<br/>
+            if( CullCheck( currentX, currentZ ) )
+<br/>
+            {
+<br/>
+               // Draw it..
+<br/>
+               Graphics-&gt;DrawPlaneFloor( floattov16( currentX ), floattov16( 0.2 ), 
+<br/>
+                                                     floattov16( CellWidth ), floattov16( CellHeight ), 
+<br/>
+                                            floattov16( currentZ ) );               
+<br/>
+            }
+<br/>
+         }
+<br/>
+         // Every X move along one cell width.
+<br/>
+         currentX += CellWidth;
+<br/>
+      }
+<br/>
+<br/>
+      // Move back to the first X pos and increment Z to drawn next row.
+<br/>
+      currentX = StartPointX ;
+<br/>
+      currentZ += CellHeight;
+<br/>
+   }
+<br/>
+<br/>
+   Graphics-&gt;End();
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#162863 - silent_code - Mon Sep 15, 2008 12:02 am</h4>
+    <div class="postbody"><span class="postbody">FYI: The hardware already offers an asynchronous frustum culling test (a.k.a. box test).<br/>_________________<br/><span style="font-size: 9px; line-height: normal"><span style="text-decoration: underline"><span style="font-weight: bold"></span></span> July 5th 08: "<span style="font-weight: bold">Volumetric Shadow Demo</span>" 1.6.0 (final) source released
+<br/>
+June 5th 08: "<span style="font-weight: bold">Zombie NDS</span>" WIP released!
+<br/>
+It's all on my page, just click <span style="font-weight: bold">WWW</span> below.</span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#162865 - DensitY - Mon Sep 15, 2008 12:45 am</h4>
+    <div class="postbody"><span class="postbody">I did a post many moons ago on fixed point math
+<br/>
+<br/>
+<a href="http://forum.gbadev.org/viewtopic.php?p=153700&amp;highlight=#153700" target="_blank">http://forum.gbadev.org/viewtopic.php?p=153700&amp;highlight=#153700</a>
+<br/>
+<br/>
+<br/>
+I also give an example of using fixed point math todo some jobs that we normally use float point
+<br/>
+<br/>
+ie 
+<br/>
+<br/>
+number * 0.5 in fixed point.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#162869 - sgeos - Mon Sep 15, 2008 4:30 am</h4>
+    <div class="postbody"><span class="postbody"><a href="http://forum.gbadev.org/viewtopic.php?t=15976" target="_blank">http://forum.gbadev.org/viewtopic.php?t=15976</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#162873 - a128 - Mon Sep 15, 2008 11:10 am</h4>
+    <div class="postbody"><span class="postbody">use the search function luke!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#162910 - Lazy1 - Tue Sep 16, 2008 6:05 am</h4>
+    <div class="postbody"><span class="postbody">So, if we were to make a fixed point class would it still be more beneficial than floating-point?
+<br/>
+What about double? Is a 64bit integer used instead or what?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#162912 - DensitY - Tue Sep 16, 2008 7:29 am</h4>
+    <div class="postbody"><span class="postbody">the benefits is purely in the speed department. precision is what suffers. Ideally I personally avoid fixed point numbers overflowing 32bits on the ds.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#162956 - sgeos - Wed Sep 17, 2008 3:04 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Lazy1 wrote:</b></span></td> </tr> <tr> <td class="quote">What about double?</td> </tr></table><span class="postbody">
+<br/>
+Last I heard, doubles are not used in games because they are "too slow", but this may be changing on higher end platforms (ie, 64 bit systems).</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#163180 - mreaves - Wed Sep 24, 2008 7:37 pm</h4>
+    <div class="postbody"><span class="postbody">doubles aren't so slow nowadays, especially on new vectorised processors...
+<br/>
+<br/>
+Fixed point precision on the DS should be fine, a 19:12 format gives you a very decent fraction range (enough for what is needed anyway).
+<br/>
+<br/>
+I also wouldn't wrap fixed point stuff in a class. Lots to overload plus you'll lose a little bit of speed because of class overhead. It is fairly trivial to set up a bunch of Macros for all your needs.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#163187 - tepples - Wed Sep 24, 2008 8:43 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>mreaves wrote:</b></span></td> </tr> <tr> <td class="quote">you'll lose a little bit of speed because of class overhead.</td> </tr></table><span class="postbody">
+<br/>
+What class overhead? In C++, you pay for what you use. I don't know of any necessary space or time overhead that methods in a class have over equivalent functions outside of a class. I'd imagine that a good C++ compiler would optimize inline methods of a class with one field, no virtual methods, no explicit destructor, etc. to be as fast as inline functions or even macros. Have you implemented it both ways and profiled the result?<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#163189 - DensitY - Wed Sep 24, 2008 9:13 pm</h4>
+    <div class="postbody"><span class="postbody">as tepples says, unless you do a polymorphic design of your classes the compiler generally does a good job. 
+<br/>
+<br/>
+doubles are still avoided on PC even when usage of SIMD, simply because its alot quicker todo 4 parallel operations vs 2. GPUs, not entirely sure.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#163198 - Lazy1 - Thu Sep 25, 2008 3:16 am</h4>
+    <div class="postbody"><span class="postbody">Well, I just asked about double since it was being used in some code I was converting to fixed point.
+<br/>
+I have no idea why they would use that over float since everything seems to work great even using fixed point.
+<br/>
+<br/>
+Right now I have the YM3812 emulator from MAME 99% converted to fixed point, thanks for all the helpful information you all posted.
+<br/>
+In the end I chose not to make a full fixed point class since I got bored part way through.
+<br/>
+<br/>
+Now I have to hope it will run acceptably on the ARM9/ARM7 :D</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#163203 - mreaves - Thu Sep 25, 2008 6:32 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>mreaves wrote:</b></span></td> </tr> <tr> <td class="quote">you'll lose a little bit of speed because of class overhead.</td> </tr></table><span class="postbody">
+<br/>
+What class overhead? In C++, you pay for what you use. I don't know of any necessary space or time overhead that methods in a class have over equivalent functions outside of a class. I'd imagine that a good C++ compiler would optimize inline methods of a class with one field, no virtual methods, no explicit destructor, etc. to be as fast as inline functions or even macros. Have you implemented it both ways and profiled the result?</span></td> </tr></table><span class="postbody">
+<br/>
+In my experience a class version will just never be as efficient as using specific code or macros. Lets be honest, it isn't like it is super hard to NOT have a class wrapper and just used fixed point macros. But hey, what do I know.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#163204 - a128 - Thu Sep 25, 2008 8:04 am</h4>
+    <div class="postbody"><span class="postbody">I put my fixpoint C++ class online...a few weeks ago
+<br/>
+<br/>
+<a class="postlink" href="http://a128.blogspot.com/2008/09/fixed-point-class-nds-2008.html" target="_blank">http://a128.blogspot.com/2008/09/fixed-point-class-nds-2008.html</a></span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

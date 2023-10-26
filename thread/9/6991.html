@@ -1,0 +1,268 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Fast Map Copying - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Graphics > Fast Map Copying</h2>
+<div id="posts">
+<div class="post">
+    <h4>#55344 - thegamefreak0134 - Tue Sep 27, 2005 9:23 pm</h4>
+    <div class="postbody"><span class="postbody">I made it through the Pong Demo, and noticed a problem I do not like. You can see the Map being drawn onto the screen, rather than it being instantaneous. What's the deal?
+<br/>
+<br/>
+Is there a way to quickly copy maps to the screen, or does it have do be done with somewhat of a frame buffer?<br/>_________________<br/>What if the hokey-pokey really is what it's all about?
+<br/>
+<br/>
+[url=http:/www.darknovagames.com/index.php?action=recruit&amp;clanid=1]Support Zeta on DarkNova![/url]</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#55345 - tepples - Tue Sep 27, 2005 9:41 pm</h4>
+    <div class="postbody"><span class="postbody">You can copy an entire tile map along with tile data from ROM to VRAM during vblank time. You can copy an entire mode 4 or 5 frame from ROM to VRAM during vblank time. You may not be able to <span style="font-style: italic">decompress</span> an entire image during vblank time.
+<br/>
+<br/>
+What is the URL of this demo?<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#55347 - DiscoStew - Tue Sep 27, 2005 9:56 pm</h4>
+    <div class="postbody"><span class="postbody">If something is gonna take time to decompress into VRAM, one thing you might want to try is doing some visual transition before hand, like fade to black, load the needed stuff, then fade back.
+<br/>
+<br/>
+Or, for something simplier, just disable the layers that would show the change, and then reenable them once everything is done.
+<br/>
+<br/>
+There are many ways to prevent the visual loading of items. Hopefully the ones I gave may lead to others....
+<br/>
+<br/>
+But like tepples said, for something that is not being decompressed, it should fit into the vblank time. If you are doing that, maybe you are not doing the loading right as the vblank starts?<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#55366 - headspin - Wed Sep 28, 2005 1:52 am</h4>
+    <div class="postbody"><span class="postbody">If you use gfx2gba, it will create an array of the map data that you can just DMACopy() to VRAM. It is quick, you won't notice the re-draw effect you get from using a loop.
+<br/>
+<br/>
+If your using compressed data, say compressed with GBACrusher using LZ77 for example, you can use my function I wrote with the help of Tepples. It uses the GBA's built in LZ77 decompression routine in the BIOS and returns the size of the uncompressed data. It's important to get the size so you can DMACopy() directly to VRAM.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">// UnCompress LZ77 Data to WRAM and return size of uncompressed data
+<br/>
+u32 LZ77UnCompWRAM(u32 source, u32 dest) {
+<br/>
+u32 size;
+<br/>
+asm volatile (
+<br/>
+"mov r0, %1  \n"   // put first parameter into r0
+<br/>
+"mov r1, %2  \n"   // put second parameter into r1
+<br/>
+"push {r0}   \n"   // push r0 onto the stack (pointer to header)
+<br/>
+"swi 0x11    \n"   // call the BIOS function (r0 gets trashed)
+<br/>
+"pop {r0}    \n"   // pull r0 off the stack
+<br/>
+"ldr r0, [r0]\n"   // load the value r0 (header) into r0
+<br/>
+"lsr r0, #8  \n"   // right shift 8 bits
+<br/>
+"mov %0, r0  \n"   // move r0 into size (to return)
+<br/>
+:"=r" (size)
+<br/>
+:"r" (source), "r" (dest)
+<br/>
+:"r0", "r1", "r2" );
+<br/>
+return size;
+<br/>
+}
+<br/>
+<br/>
+// --------------------------------
+<br/>
+<br/>
+// Uncompress to Buf and return size of uncompressed data
+<br/>
+gfxSize = LZ77UnCompWRAM((u32) pGfx, (u32) Buf);
+<br/>
+<br/>
+// Now we DMA Copy to the appropriate tile address using the size
+<br/>
+DMA_Copy(3, (void*) Buf, (void*) TileAddr, gfxSize, DMA_16NOW);</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Then there is always the LZ77 BIOS decompression function that decompresses directly to VRAM. Make sure you use the VRAM (safe) option in GBACrusher. Although I could never get it to work without getting corrupt data on the screen.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">// UnCompress LZ77 Data to VRAM
+<br/>
+inline void LZ77UnCompVRAM(u32 source, u32 dest) {
+<br/>
+asm("mov r0, %0\n"
+<br/>
+"mov r1, %1\n"
+<br/>
+"swi 0x12\n"
+<br/>
+:
+<br/>
+:"r" (source), "r" (dest)
+<br/>
+:"r0", "r1" );
+<br/>
+}
+<br/>
+<br/>
+LZ77UnCompVRAM((u32) pGfx, (u32) TileAddr);</td> </tr></table><span class="postbody"><br/>_________________<br/><a class="postlink" href="http://headsoft.com.au/index.php?category=warhawk" target="_blank">Warhawk DS</a> | <a class="postlink" href="http://headsoft.com.au/index.php?category=mmll" target="_blank">Manic Miner: The Lost Levels</a> | <a class="postlink" href="http://headsoft.com.au/index.php?category=tdg" target="_blank">The Detective Game</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#55406 - Cearn - Wed Sep 28, 2005 9:12 am</h4>
+    <div class="postbody"><span class="postbody">Pong Demo ... you mean <a class="postlink" href="http://www.webbesen.dk/gba/" target="_blank">this thing</a>? The code there is among the slowest you can possibly get. For overall speed-ups, use thumb code and compile with at least some optimisations on. Add <span style="font-weight: bold">-mthumb -mthumb-interwork -O2</span> to the compiler flags.
+<br/>
+Also, don't use halfwords or bytes as local variables, use int or u32 only. In particular, don't <span style="font-weight: bold"><span style="font-style: italic">ever</span></span> use u16 for a loop variable; view every code that uses it with just a little suspicion. Extra code needs to be generated for dealing with the smaller types, so it will be slower. This also goes for mempry copies: copying u32-arrays is almost twice as fast as u16-arrays. But even the standard memcpy() is faster than that, and if you really want speed, use DMACopy or CPUFastSet.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">// --- minimal DMA information (browse around for more) ---
+<br/>
+#define REG_DMA3SAD       *(vu32*)(0x040000D4)
+<br/>
+#define REG_DMA3DAD       *(vu32*)(0x040000D8)
+<br/>
+#define REG_DMA3CNT       *(vu32*)(0x040000DC)
+<br/>
+<br/>
+#define _DMA_16     (0x0000&lt;&lt;16)
+<br/>
+#define DMA_32      (0x0400&lt;&lt;16)
+<br/>
+#define DMA_ON      (0x8000&lt;&lt;16)
+<br/>
+<br/>
+#define DMA_16NOW    DMA_NOW | _DMA_16
+<br/>
+#define DMA_32NOW    DMA_NOW | DMA_32
+<br/>
+<br/>
+/*!
+<br/>
+    \param src Source address; must be word aligned
+<br/>
+    \param dst Destination address; must be word aligned
+<br/>
+    \param count number of (half)words to copy
+<br/>
+    \param mode DMA mode (see list above)
+<br/>
+*/
+<br/>
+static inline void dmacpy3(const void *src, void *dst, u32 count, u32 mode)
+<br/>
+{
+<br/>
+    REG_DMA3SAD= src;
+<br/>
+    REG_DMA3DAD= dst;
+<br/>
+    REG_DMA3CNT= count | mode;
+<br/>
+}
+<br/>
+<br/>
+<br/>
+// --- CpuFastSet (it's been a while since I used inline asm; hope this is ok ---
+<br/>
+<br/>
+#if   defined   ( __thumb__ )
+<br/>
+#define   swi_call(x)    asm volatile("swi\t"#x ::: "r0", "r1", "r2", "r3")
+<br/>
+#else
+<br/>
+#define   swi_call(x)    asm volatile("swi\t"#x"&lt;&lt;16" ::: "r0", "r1", "r2", "r3")
+<br/>
+#endif
+<br/>
+<br/>
+/*!
+<br/>
+    \param src Source address; must be word aligned
+<br/>
+    \param dst Destination address; must be word aligned
+<br/>
+    \param count Length/mode
+<br/>
+        Bit 0-15: Number of words to copy (must be multiple of 8). 
+<br/>
+        Bit 24: Fixed source flag (for fills)
+<br/>
+*/
+<br/>
+void CpuFastSet(const void *src, void *dst, u32 count)
+<br/>
+{    swi_call(0x0C);    }
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#55581 - thegamefreak0134 - Thu Sep 29, 2005 5:23 pm</h4>
+    <div class="postbody"><span class="postbody">Yes, I mean "This Thing." (see above, not dealing with links right now.) I am kind of a new programmer, so a lot of you are speaking greek to me. The DMACopy() is about the only thing I recognise as a possible solution to my problem. I didn't know untill this point that the GBA supported compression of any kind. (although I don't suppose it does, that's done with code isn't it?) Temm me how to use the DMACopy() please and I'll me on my way.
+<br/>
+<br/>
+BTW, I am only familier with Mode 3, due to the tutorial. I am perfectly aware of the other modes, but I will devote a separate chunk of my life to learning about them later. Right now I want a quick fix. Thanx in advance!<br/>_________________<br/>What if the hokey-pokey really is what it's all about?
+<br/>
+<br/>
+[url=http:/www.darknovagames.com/index.php?action=recruit&amp;clanid=1]Support Zeta on DarkNova![/url]</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#55584 - poslundc - Thu Sep 29, 2005 6:07 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>thegamefreak0134 wrote:</b></span></td> </tr> <tr> <td class="quote">Yes, I mean "This Thing." (see above, not dealing with links right now.) I am kind of a new programmer, so a lot of you are speaking greek to me. The DMACopy() is about the only thing I recognise as a possible solution to my problem. I didn't know untill this point that the GBA supported compression of any kind. (although I don't suppose it does, that's done with code isn't it?) Temm me how to use the DMACopy() please and I'll me on my way.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Call the dmacpy3() function that Cearn posted.
+<br/>
+<br/>
+Read the comments that he put above the function definition to see how.
+<br/>
+<br/>
+DMA is not a magic fix. Your program may be suffering from any number of other timing issues. Are you sure you're copying your data during VBlank?
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#55868 - thegamefreak0134 - Mon Oct 03, 2005 4:45 pm</h4>
+    <div class="postbody"><span class="postbody">No, I'm not even really sure what that means. The tutorial wasn't exactly in-depth by any means. I can get games running, but this is just one of the issues I really didn't like.
+<br/>
+<br/>
+Come to think of it, I don't think the tutorial even game me the DMAcopy function at all. I'll have to add it. How do you check to see if you are in VBlank? Or perhaps would copying the data right after a VSync call do the same purpose?<br/>_________________<br/>What if the hokey-pokey really is what it's all about?
+<br/>
+<br/>
+[url=http:/www.darknovagames.com/index.php?action=recruit&amp;clanid=1]Support Zeta on DarkNova![/url]</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#55872 - poslundc - Mon Oct 03, 2005 5:37 pm</h4>
+    <div class="postbody"><span class="postbody">Work through Cearn's <a class="postlink" href="http://user.chem.tue.nl/jakvijn/tonc/toc.htm" target="_blank">TONC tutorial</a>.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

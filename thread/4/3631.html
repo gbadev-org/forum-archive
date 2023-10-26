@@ -1,0 +1,108 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>linker scripts - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > linker scripts</h2>
+<div id="posts">
+<div class="post">
+    <h4>#22780 - MothAttack - Tue Jun 29, 2004 8:46 am</h4>
+    <div class="postbody"><span class="postbody">Does anyone about using linker scripts with GNU ld?  I have two questions:
+<br/>
+<br/>
+ALIGN() only seems to work with values of at least 16.  For example, ALIGN(4) has the same effect as ALIGN(16), but ALIGN(256) will indeed align to the next 256 bytes.  Is that just how it works?  How would I get word-aligned sections, then?
+<br/>
+<br/>
+Also, FILL() doesn't seem to work at all.  I've tried both the "FILL(x)" and "=x" expressions, but neither has any effect.  My sections are ending with repeating copies of four random bytes.  (One section ends with "00 00 a0 e1 00 00 a0 e1 00 00 a0 e1", another with "36 00 03 90 36 00 03".)  Anyone know what the problem is?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#22824 - Miked0801 - Tue Jun 29, 2004 11:53 pm</h4>
+    <div class="postbody"><span class="postbody">Have you gone to gnu.org and looked up the docs on link scripts?  They are pretty straight forward - though I will admit that linker scripts are pretty arcane :)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#22833 - MothAttack - Wed Jun 30, 2004 1:13 am</h4>
+    <div class="postbody"><span class="postbody">Update: Well, it turns out ALIGN and FILL actually do work.  Both these perceived problems stem from the same real problem: ld wants to align all data within a section to the next 16 bytes.  Example:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">rom _rom_vma : AT(_rom_lma) {
+<br/>
+   _rom_start = ABSOLUTE(.);
+<br/>
+   *(rom);
+<br/>
+   _rom_end = ABSOLUTE(.);
+<br/>
+   _rom_length = _rom_end - _rom_start;
+<br/>
+   }</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+If I use the above section, _rom_end is always rounded up to the nearest 0x10, and therefore _rom_length is always a multiple of 16.  Here's the problem: the extra bytes at the end are filled with repeating copies of four random bytes.  FILL(0) and =0 both have no effect on these bytes, but filling does work.  Another example:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">rom _rom_vma : AT(_rom_lma) {
+<br/>
+   *(rom);
+<br/>
+   } = 0</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+This section will end with, e.g.:
+<br/>
+<br/>
+12 34 56 78 00 00 a0 e1 00 00 a0 e1 00 00 a0 e1
+<br/>
+<br/>
+The bytes "12 34 56 78" are the actual end of the section, and the rest is filling to the next 0x10.  But if I do this:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">rom _rom_vma : AT(_rom_lma) {
+<br/>
+   *(rom);
+<br/>
+   . = ALIGN(32);
+<br/>
+   } = 0</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Now the section will end with:
+<br/>
+<br/>
+12 34 56 78 00 00 a0 e1 00 00 a0 e1 00 00 a0 e1
+<br/>
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+<br/>
+<br/>
+So the =0 expression works.  It's just this 16-byte internal alignment that's causing trouble.  Is there any way to change this?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#22845 - wintermute - Wed Jun 30, 2004 12:44 pm</h4>
+    <div class="postbody"><span class="postbody">Would you care to have a look at this using devkitARM?
+<br/>
+<br/>
+I suspect the internal alignment you're seeing might be the compiler aligning object files rather than the linker although I could be wrong. It's also possible that the linker in your toolchain has been patched to do this - it's certainly something I've been considering doing with my toolchain for ease of use.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#22921 - MothAttack - Thu Jul 01, 2004 3:44 am</h4>
+    <div class="postbody"><span class="postbody">I made a quick visit to devkit.tk, downloaded devkitARM 6a, and used its copies of as, ld, and objcopy to re-compile my code.  The result was no different.
+<br/>
+<br/>
+I looked at the final test.gba file with a hex editor, and the alignment is in there.  I looked at the test.elf file (after linking but before objcopy), and the alignment is in there.  I looked at the test.obj file (after compiling but before linking), and the alignment is in there.
+<br/>
+<br/>
+Well, I can't really say if it's alignment in the .OBJ file because the .OBJ file has a whole bunch of stuff that gets thrown out for the final version (symbols and junk).  But I can find the string of bytes "12 34 56 78 00 00 a0 e1 00 00 a0 e1 00 00 a0 e1" in the .OBJ file.  So clearly the compiler is generating these bytes.  (The actual source code ends the section with ".byte 0x12, 0x34, 0x56, 0x78"; the extra bytes aren't in the source.)  And the linker seems to like them there.  So...  Any more ideas?</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

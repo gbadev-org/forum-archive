@@ -1,0 +1,738 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>multiplayer doubts - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > multiplayer doubts</h2>
+<div id="posts">
+<div class="post">
+    <h4>#45854 - pafpaf - Wed Jun 15, 2005 9:43 pm</h4>
+    <div class="postbody"><span class="postbody">Hello all! (first post)
+<br/>
+<br/>
+I've started on multiplayer comunications some days ago, and
+<br/>
+with the help from the other posts on the subject i've managed to 
+<br/>
+get it working on the hardware.
+<br/>
+<br/>
+I?m trying to implement a multiplayer feature on one game and i 
+<br/>
+was wandering if this might be a possible :
+<br/>
+________________________________
+<br/>
+game logic begins
+<br/>
+{
+<br/>
+   Process player 1
+<br/>
+   Transfer data to slave
+<br/>
+   player 1 waits for player 2 data
+<br/>
+   Process player 2
+<br/>
+   Transfer data to master
+<br/>
+}
+<br/>
+game logic ends
+<br/>
+<br/>
+both players resume processing whats left to do (graphics etc...)
+<br/>
+<br/>
+next frame
+<br/>
+_____________________________
+<br/>
+<br/>
+the thing is, i need to make more than one comunication per frame
+<br/>
+this way i think i can't use a timer to keep it in sync.
+<br/>
+the timer use for sync and the use of the irq in communications is 
+<br/>
+still not understood completely by me.
+<br/>
+<br/>
+well thats it, sorry for such a long post and thanks in advance !</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#45860 - Miked0801 - Wed Jun 15, 2005 10:03 pm</h4>
+    <div class="postbody"><span class="postbody">You'd be better off running a tic behind on both master and slave and running simultaneously (double buffering input).
+<br/>
+<br/>
+game logic
+<br/>
+{
+<br/>
+  while(1)
+<br/>
+ {
+<br/>
+    run gameloop using previous tics input
+<br/>
+<br/>
+    while(transfer not complete)
+<br/>
+    { 
+<br/>
+       transfer inputs into master then from master to slaves
+<br/>
+    }       
+<br/>
+    swap input buffers and go to next tic
+<br/>
+ }
+<br/>
+}
+<br/>
+<br/>
+This is how we've done it on all our games.  It allows perfect error handling and keeps all games running lock-step with each other.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#45865 - pafpaf - Wed Jun 15, 2005 10:30 pm</h4>
+    <div class="postbody"><span class="postbody">i think i understand the idea you described.
+<br/>
+my plan was to divide the processing of the game between the master
+<br/>
+and the slave, but maybe there is not enough transfer rate to do so.
+<br/>
+<br/>
+in your solution, both master and slave must process everything ?
+<br/>
+the game runs at 30fps, does this influence the transfer rates?
+<br/>
+should i limit the tranfers to the players inputs, and some flags, or is
+<br/>
+it viable to transfer players structures?
+<br/>
+<br/>
+thanks for such a quick reply !</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#45882 - Miked0801 - Wed Jun 15, 2005 11:50 pm</h4>
+    <div class="postbody"><span class="postbody">We only transfer initial random seed and then inputs.  We can transfer other stuff, but the throughput is low enough that this causes us to lose (as in not send) input packets.
+<br/>
+<br/>
+Also, you don't have to run at 30Hz to do this, though interrupt overhead will eat seriously into your overall CPU time to the point where 30Hz is a good target.  And yes, both process everything.  Every system knows where every other "Player" is and processes their data identically so they stay in sync.
+<br/>
+<br/>
+The only (very minor) draw back is the fact that input lags 1 tic on all systems and I promise you won't notice it.  At 1 point, I lagged the input 3 tics, and it felt sluggish, 2 felt slightly sluggish, but 1 is just fine.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#45939 - pafpaf - Fri Jun 17, 2005 12:11 am</h4>
+    <div class="postbody"><span class="postbody">this is probably lame but, how necessary is it to use a timer and interrupt
+<br/>
+for the comunications?
+<br/>
+the source Scott Lininger wrote doesn?t use them and seems to work.
+<br/>
+doesn?t the loops guarantee sync if i have a check code for each frame ?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#45953 - ScottLininger - Fri Jun 17, 2005 1:32 am</h4>
+    <div class="postbody"><span class="postbody">My multiplayer code doesn't use interrupts or timers, and it works fine. But it won't perform as fast as Mike's code, even though the "surface level" code structure that maintains sync is identical to what Mike posted above.
+<br/>
+<br/>
+There are a couple reasons for this. With interrupts every gameboy can pull down data as it comes, and he's presumably only checking for dropped packets (via a checksum) once a frame. My code doesn't use a checksum -- it confirms every byte as it's sent and received. The master gameboy won't transfer the next byte until every slave echoes it back. It just sends and sends and sends until it knows the data arrived.
+<br/>
+<br/>
+This is slow, but it's reliable, as far as I've tested.
+<br/>
+<br/>
+So, like everything else in the homebrew world, the decision is probably more about what your game needs. If you end up using my code or something similar, I'd be really curious to see the results. 
+<br/>
+<br/>
+-Scott</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#45994 - Miked0801 - Fri Jun 17, 2005 7:40 pm</h4>
+    <div class="postbody"><span class="postbody">Good call Scott.  Yep - a checksum and packet number is sent every tic.  The checksum is not only built from raw data, but local random seeds and key player positions.  This way we find immediately if rogue game logic has caused us to go out of sync.  The packet number also makes sure that we lockstep as well.  A little more overhead on the send, but 12-16  bytes total per game loop is just fine - CPU/Interrupt/Handler code overhead is roughly 10% or so when running 30Hz with code located in ROM.  In fast RAM, it'd go faster yet.  THe logic for sending all is well continue is actually the hardest part to get right.  
+<br/>
+<br/>
+1. All are ready (post magic ready number when hit end of loop)?
+<br/>
+2. Send data
+<br/>
+3. Verify data and send magic number "all is good" if good
+<br/>
+4. If fail, send magic number "bad data" until all resond in kind and goto 2
+<br/>
+5. Master sends magic number "Go to next tic" to slaves
+<br/>
+6. Slaves respond with we're gone now.
+<br/>
+7. Master goes to next tic.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#46126 - pafpaf - Mon Jun 20, 2005 4:20 pm</h4>
+    <div class="postbody"><span class="postbody">hello again!
+<br/>
+<br/>
+so far i've managed to get the coms working on the hardware with
+<br/>
+timer and interrupts, but i have one more doubt... how should i calculate
+<br/>
+the timer's setting ? i don?t remeber who but someone said to ditch a 
+<br/>
+macro on the sadge source, i supose the one about the timer...
+<br/>
+i?ve searched everywhere and i can?t find this information.
+<br/>
+(i know not even the official manual has this info... i?ve seen it but i don?t have it...).
+<br/>
+<br/>
+thanks for all the help !</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#46137 - Miked0801 - Mon Jun 20, 2005 6:28 pm</h4>
+    <div class="postbody"><span class="postbody">Keep lowering the timer value until you start getting serial interrupt errors.  There is a lower threshhold at which you're trying to re-trigger the resend before the last one was complete.  Just play until you get it right.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#50756 - pafpaf - Fri Aug 12, 2005 6:46 pm</h4>
+    <div class="postbody"><span class="postbody">hello!
+<br/>
+<br/>
+thanks once again for all the help, but there is a problem i can?t solve...
+<br/>
+If i start the master gba and then the slave it locks
+<br/>
+If i turn the slave on first it works...
+<br/>
+what could it be?
+<br/>
+the code is almost like the one in socrates.
+<br/>
+my apologies in advance for the gigantic post...
+<br/>
+<br/>
+this is the code for the initial comms just to do sync and error checking :
+<br/>
+<br/>
+<br/>
+// THIS IS THE FIRST FUNCTION I CALL FROM MAIN TO START THE COMMS
+<br/>
+<br/>
+int coms_iniciar_multiplayer()
+<br/>
+{
+<br/>
+	//depois o slave e colocado a zero quando fizer o check do SI
+<br/>
+	coms.master=true;
+<br/>
+<br/>
+	tentativas=0;
+<br/>
+<br/>
+	//limpa o reg para preparar para multiplayer
+<br/>
+	REG_RCNT = 0;
+<br/>
+<br/>
+	//troca para o modo multiplayer
+<br/>
+	REG_SIOCNT = SIO_MULTI;
+<br/>
+<br/>
+	//o estado das coms
+<br/>
+	coms.estado=MP_N_INICIADO;
+<br/>
+<br/>
+	//seleccionar o baud rate
+<br/>
+	//REG_SIOCNT |= SIO_115200 | SIO_IRQ;
+<br/>
+	REG_SIOCNT |= SIO_115200;
+<br/>
+<br/>
+<br/>
+	//esperar pela flag SD ficar a 1 BIT(3)
+<br/>
+	while (REG_SIOCNT &amp; SIO_START || (!(REG_SIOCNT &amp; SIO_NOTRDY )) ) 
+<br/>
+	{
+<br/>
+		//cancelar?
+<br/>
+		if (KEY_SELECT_PRESSED)
+<br/>
+		{
+<br/>
+			return 0;
+<br/>
+		}
+<br/>
+<br/>
+	}
+<br/>
+<br/>
+	//o que fica com o SI a 0 e o master
+<br/>
+	if (REG_SIOCNT &amp; BIT(2))
+<br/>
+	{
+<br/>
+		coms.master=false;
+<br/>
+	}
+<br/>
+<br/>
+<br/>
+	// ja sei qual e o master e qual o slave
+<br/>
+	// prepara a primeira comunicacao para obter os ids e verificar que esta tudo bem
+<br/>
+<br/>
+	if (coms.master==true)
+<br/>
+	{
+<br/>
+		texto_charXY(18,0,"MASTER",6);
+<br/>
+<br/>
+		//setup do contador do timer para o master
+<br/>
+		REG_TM3CNT_L=0xFFFF-COMS_TIMER;
+<br/>
+<br/>
+		//liga o interrupto e atribui a func
+<br/>
+		EnableInterrupt(Int_Timer3);
+<br/>
+		SetInterrupt(Int_Timer3,coms_send_inicial);
+<br/>
+<br/>
+		// codigo de verificacao para a transmissao inicial
+<br/>
+		REG_SIOMLT_SEND=FLAG_COMS_MASTER;
+<br/>
+		//e o master entao inicia a transmissao
+<br/>
+		REG_SIOCNT |= SIO_START;
+<br/>
+<br/>
+		//liga o timer e o interrupto
+<br/>
+		REG_TM3CNT_H = TIMER_START | TIMER_IRQ;
+<br/>
+<br/>
+		// codigo de verificacao para a transmissao inicial
+<br/>
+		REG_SIOMLT_SEND=FLAG_COMS_MASTER;
+<br/>
+<br/>
+	}
+<br/>
+	else
+<br/>
+	{
+<br/>
+		texto_charXY(18,0,"SLAVE",5);
+<br/>
+<br/>
+		//e o slave, coloca o codigo de verif.
+<br/>
+		REG_SIOMLT_SEND=FLAG_COMS_SLAVE;
+<br/>
+<br/>
+		//liga o interrupto e atribui a func
+<br/>
+		EnableInterrupt(Int_Serial);
+<br/>
+		SetInterrupt(Int_Serial,coms_send_inicial);
+<br/>
+<br/>
+		//ligar o irq para o slave
+<br/>
+		REG_SIOCNT |= SIO_IRQ;
+<br/>
+<br/>
+<br/>
+		//e o slave, coloca o codigo de verif.
+<br/>
+		REG_SIOMLT_SEND=FLAG_COMS_SLAVE;
+<br/>
+<br/>
+<br/>
+	}
+<br/>
+<br/>
+<br/>
+<br/>
+	//espera ate a comunicacao ter sido estabelecida com sucesso
+<br/>
+	while (coms.estado!=MP_INICIADO)
+<br/>
+	{
+<br/>
+<br/>
+		//cancelar?
+<br/>
+		if (KEY_SELECT_PRESSED)
+<br/>
+		{
+<br/>
+			return 0;
+<br/>
+		}
+<br/>
+<br/>
+<br/>
+		if (coms.estado==MP_MASTER_REPETIR)
+<br/>
+		{
+<br/>
+<br/>
+			while (REG_SIOCNT &amp; SIO_START) 
+<br/>
+			{
+<br/>
+				//cancelar?
+<br/>
+				if (KEY_SELECT_PRESSED)
+<br/>
+				{
+<br/>
+					return 0;
+<br/>
+				}
+<br/>
+<br/>
+			}
+<br/>
+<br/>
+			//continua a tentar
+<br/>
+			if (coms.master==true)
+<br/>
+			{
+<br/>
+				// codigo de verificacao para a transmissao inicial
+<br/>
+				REG_SIOMLT_SEND=FLAG_COMS_MASTER;
+<br/>
+				// inicia a transmissao
+<br/>
+				REG_SIOCNT |= SIO_START;
+<br/>
+<br/>
+				//liga o timer e o interrupto
+<br/>
+				REG_TM3CNT_H = TIMER_START | TIMER_IRQ;
+<br/>
+			}
+<br/>
+<br/>
+		}
+<br/>
+<br/>
+		if (coms.master==true)
+<br/>
+			REG_SIOMLT_SEND=FLAG_COMS_MASTER;
+<br/>
+		else
+<br/>
+			REG_SIOMLT_SEND=FLAG_COMS_SLAVE;
+<br/>
+<br/>
+	}
+<br/>
+<br/>
+	//****************************************************************
+<br/>
+	// BOTH GBAS SHOULDN'T PASS THIS POINT UNTIL THEY ARE IN SYNC
+<br/>
+	// but they seem to...
+<br/>
+	//****************************************************************
+<br/>
+<br/>
+	//setup dos interruptos respectivos a func de transferencia
+<br/>
+	if (coms.master==true)
+<br/>
+	{
+<br/>
+		SetInterrupt(Int_Timer3,coms_enviar_packet);
+<br/>
+		coms.estado = MP_PRONTO;
+<br/>
+	}
+<br/>
+	else
+<br/>
+	{
+<br/>
+		SetInterrupt(Int_Serial,coms_enviar_packet);
+<br/>
+		coms.estado = MP_PRONTO;
+<br/>
+	}
+<br/>
+<br/>
+<br/>
+	return 0;
+<br/>
+}
+<br/>
+<br/>
+<br/>
+// THIS IS THE FUNC I SET FOR THE INTERRUPTS BOTH TIMER AND SERIAL
+<br/>
+<br/>
+void coms_send_inicial()
+<br/>
+{
+<br/>
+	//se e o master desliga o timer
+<br/>
+	if (coms.master==true)
+<br/>
+	{
+<br/>
+		REG_TM3CNT_H = 0;
+<br/>
+		//reset do irq do timer
+<br/>
+		REG_IF |= BIT(6);
+<br/>
+	}
+<br/>
+	else
+<br/>
+	{
+<br/>
+		//reset do irq das coms
+<br/>
+		REG_IF |= BIT(7);
+<br/>
+	}
+<br/>
+<br/>
+	u16 a=0,b=0,c=0;
+<br/>
+<br/>
+	coms.erro = ERRO_NENHUM;
+<br/>
+<br/>
+	//guarda os dados recebidos
+<br/>
+	a=REG_SIOMULTI0;
+<br/>
+	b=REG_SIOMULTI1;
+<br/>
+	c=REG_SIOMULTI2;
+<br/>
+<br/>
+	//verificar os ID's apos a tranmissao
+<br/>
+	if ( (REG_SIOCNT &amp; BIT(4)) &amp;&amp; coms.master==true)
+<br/>
+	{
+<br/>
+		coms.erro = ERRO_ID_MASTER;
+<br/>
+	}
+<br/>
+	else
+<br/>
+	{
+<br/>
+		if ( (!(REG_SIOCNT &amp; BIT(4))) &amp;&amp; coms.master==false)
+<br/>
+		{
+<br/>
+			coms.erro = ERRO_ID_SLAVE;
+<br/>
+		}
+<br/>
+		else
+<br/>
+		{
+<br/>
+			//verificar se estao apenas 2 gbas ligados
+<br/>
+			if (c!=FLAG_COMS_NOGBA)
+<br/>
+			{
+<br/>
+				coms.erro = ERRO_3_GBAS;
+<br/>
+			}
+<br/>
+			else
+<br/>
+			{
+<br/>
+				//flag de erro esta a zero ?
+<br/>
+				if (REG_SIOCNT &amp; SIO_ERR)
+<br/>
+				{
+<br/>
+					coms.erro = ERRO_FLAG_ERRO_SIOCNT;
+<br/>
+				}
+<br/>
+				else
+<br/>
+				{
+<br/>
+					//verifica os codigos de comunicacao inicial
+<br/>
+					if (a==FLAG_COMS_MASTER &amp;&amp; b==FLAG_COMS_SLAVE)
+<br/>
+					{
+<br/>
+						if (coms.master==true) 
+<br/>
+							//print("\n master : codigos synck ok");
+<br/>
+							texto_charXY_alinhado(0,0,"master :sync ",0);
+<br/>
+						else
+<br/>
+							//print("\n slave : codigos synck ok");
+<br/>
+							texto_charXY_alinhado(0,0,"slave :sync ",0);
+<br/>
+					}
+<br/>
+					else
+<br/>
+					{
+<br/>
+						coms.erro = ERRO_FLAGS;
+<br/>
+					}
+<br/>
+<br/>
+				}
+<br/>
+			}
+<br/>
+		}
+<br/>
+	}
+<br/>
+<br/>
+	texto_charXY_alinhado(0,16,"err",0);texto_intXY(5,16,coms.erro);
+<br/>
+<br/>
+	//verificacao final
+<br/>
+	if (coms.erro == ERRO_NENHUM )
+<br/>
+	{
+<br/>
+<br/>
+		//liberta coms_iniciar_multiplayer()
+<br/>
+		coms.estado = MP_INICIADO;
+<br/>
+<br/>
+		//print("\n OK");
+<br/>
+		texto_charXY_alinhado(0,19,"OK",0);
+<br/>
+	}
+<br/>
+	else
+<br/>
+	{
+<br/>
+		if (coms.master==true)
+<br/>
+			coms.estado=MP_MASTER_REPETIR;
+<br/>
+<br/>
+		tentativas++;
+<br/>
+<br/>
+		/*
+<br/>
+		print("\n ERRO : ");Print_Int(coms.erro);
+<br/>
+		print("  master ? ");Print_Int(coms.master);
+<br/>
+		*/
+<br/>
+<br/>
+		texto_charXY_alinhado(0,3,"tentativas ",0);texto_intXY(12,3,tentativas);
+<br/>
+<br/>
+	}
+<br/>
+<br/>
+<br/>
+<br/>
+}
+<br/>
+<br/>
+//THESE ARE SOME OF THE THE DEFINES
+<br/>
+<br/>
+#define COMS_TIMER							15000 //0x3E80 
+<br/>
+<br/>
+#define MP_N_INICIADO						0
+<br/>
+#define MP_INICIADO							1
+<br/>
+#define MP_TRANSFERIR						2
+<br/>
+#define MP_PRONTO							3
+<br/>
+#define MP_MASTER_REPETIR					4
+<br/>
+<br/>
+#define ERRO_NENHUM							0
+<br/>
+#define ERRO_ID_MASTER						1
+<br/>
+#define ERRO_ID_SLAVE						2
+<br/>
+#define ERRO_3_GBAS							3
+<br/>
+#define ERRO_FLAG_ERRO_SIOCNT				4
+<br/>
+#define ERRO_COMS							5
+<br/>
+#define ERRO_FLAGS							6
+<br/>
+<br/>
+#define FLAG_COMS_MASTER					66
+<br/>
+#define FLAG_COMS_SLAVE						77
+<br/>
+#define FLAG_COMS_NOGBA						0xFFFF</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#51032 - pafpaf - Mon Aug 15, 2005 6:56 pm</h4>
+    <div class="postbody"><span class="postbody">nevermind...
+<br/>
+i just needed to make the master gba wait for a keypress after 
+<br/>
+the initialization...</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

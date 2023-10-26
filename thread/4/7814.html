@@ -1,0 +1,205 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Fast ASM decompressor - use it if you need it - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > Fast ASM decompressor - use it if you need it</h2>
+<div id="posts">
+<div class="post">
+    <h4>#63896 - Querdopleen - Sat Dec 17, 2005 11:09 am</h4>
+    <div class="postbody"><span class="postbody">.GLOBL  ASM_DecompressRLData
+<br/>
+<br/>
+.ARM
+<br/>
+.SECTION .iwram
+<br/>
+.ALIGN
+<br/>
+.TEXT
+<br/>
+<br/>
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+<br/>
+@
+<br/>
+@   R0 = Source, R1 = Destination, R2 = Byte counter
+<br/>
+@
+<br/>
+@	R3 = St?tuszbyte, R4 = Adatbyte, R5 = Ugr?s c?m?hez haszn?lt regiszter
+<br/>
+@
+<br/>
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+<br/>
+.macro  PUTCOMPRESSEDBYTE byteszam, index
+<br/>
+		STRB    R4,[R1,#\index]
+<br/>
+.if     \byteszam-1
+<br/>
+PUTCOMPRESSEDBYTE	"(\byteszam-1)","(\index-1)"
+<br/>
+.endif
+<br/>
+.endm
+<br/>
+<br/>
+.macro  PUTUNCOMPRESSEDBYTE byteszam, index
+<br/>
+		LDRSB	R4,[R0,#\index]
+<br/>
+		STRB	R4,[R1,#\index]
+<br/>
+.if     \byteszam-1
+<br/>
+PUTUNCOMPRESSEDBYTE	"(\byteszam-1)","(\index-1)"
+<br/>
+.endif
+<br/>
+.endm
+<br/>
+<br/>
+ASM_DecompressRLData:
+<br/>
+		STMFD   SP!,{R4-R5}
+<br/>
+<br/>
+DRLDCIKLUS:
+<br/>
+		LDRSB	R3,[R0],#1
+<br/>
+		AND		R3,R3,#0xff		@ előjel kiterjesztett ?s ?gy a felső 3 byte-ot t?r?lni kell, hogy j? sz?ml?l? legyen
+<br/>
+		TST		R3,#0x80
+<br/>
+		BEQ		UNCOMPRESSED
+<br/>
+		@ Compressed
+<br/>
+		LDRSB	R4,[R0],#1      @ Sokszorozand? byte
+<br/>
+		SUB		R3,R3,#0x7d     @ Bytesz?m
+<br/>
+		RSB     R5,R3,#130      @ 130-Bytesz?m
+<br/>
+		MOV     R5,R5,LSL#2     @ (130-Bytesz?m)*4 - Ez m?r a c?mz?shez j?
+<br/>
+		ADD     R15,R15,R5
+<br/>
+<br/>
+		MOV     R2,R2           @ Dummy, kell a j? c?mz?shez
+<br/>
+		PUTCOMPRESSEDBYTE 65,129
+<br/>
+		PUTCOMPRESSEDBYTE 65,64
+<br/>
+<br/>
+		ADD     R1,R1,R3
+<br/>
+		SUBS	R2,R2,R3
+<br/>
+		BNE     DRLDCIKLUS
+<br/>
+		BAL     END
+<br/>
+<br/>
+UNCOMPRESSED:
+<br/>
+		ADD		R3,R3,#1        @ Bytesz?m
+<br/>
+		RSB     R5,R3,#128      @ 128-Bytesz?m
+<br/>
+		MOV     R5,R5,LSL#3     @ (128-Bytesz?m)*8 - Ez m?r a c?mz?shez j?
+<br/>
+		ADD     R15,R15,R5
+<br/>
+<br/>
+		MOV     R2,R2           @ Dummy, kell a j? c?mz?shez
+<br/>
+		PUTUNCOMPRESSEDBYTE 64,127
+<br/>
+		PUTUNCOMPRESSEDBYTE 64,63
+<br/>
+<br/>
+		ADD     R0,R0,R3
+<br/>
+		ADD     R1,R1,R3
+<br/>
+		SUBS	R2,R2,R3
+<br/>
+		BNE     DRLDCIKLUS
+<br/>
+@		BAL     END     		@ R?csorog a v?g?re
+<br/>
+<br/>
+END:
+<br/>
+		LDMFD   SP!,{R4-R5}
+<br/>
+        BX  	LR</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#63934 - DiscoStew - Sat Dec 17, 2005 7:09 pm</h4>
+    <div class="postbody"><span class="postbody">We're greatful for this, but what are R3-R5? I only know English and a slight Japanese. And am I to assume that this also can COMPRESS run-length data? Just a little documentation on it would really help a bunch of us out.<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#63943 - poslundc - Sat Dec 17, 2005 8:57 pm</h4>
+    <div class="postbody"><span class="postbody">It looks like a modified RLE scheme designed to support both encoded and unencoded bytestreams.
+<br/>
+<br/>
+Like most decompression routines, it's pretty useless without an encoder (or at least the encoding scheme). For this, the scheme appears to be (N[D+])* (forgive my half-assed attempt at something like a regular expression).
+<br/>
+<br/>
+N is the control byte. If N is less than zero, it indicates a run of N bytes to copy straight out. If N is greater than zero it indicates a single byte to be repeated N times.
+<br/>
+<br/>
+D is a data byte. If N is less than zero, then there are N data bytes. If N is greater than zero, there is only 1 data byte.
+<br/>
+<br/>
+It's not a bad decompression algorithm, but could be further optimized. And, moreover, it won't decompress to VRAM (which requires 16-bit alignment).
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#63991 - Querdopleen - Sun Dec 18, 2005 9:53 am</h4>
+    <div class="postbody"><span class="postbody">It's able to decompress the standard RLE GBA compression. Use it instead of the standard GBA ROM procedure because it's faster (it doesn't contain loops for every single bytes so the overhead is minimal).
+<br/>
+I found this RLE comression very useful; for example my simple background (240*160 pixel) is 17.780 bytes instead of 38.400 bytes. Sometimes it can compress better, sometimes worse. 
+<br/>
+(If you need more info about the compression technology/efficiency on GBA, please read <a href="http://members.iinet.net.au/~freeaxs/gbacomp/;" target="_blank">http://members.iinet.net.au/~freeaxs/gbacomp/;</a> very useful.)
+<br/>
+<br/>
+You can use different compressors; I use gbacrusherCL in my make script (you can download it from gbadev.org)
+<br/>
+<br/>
+R3,R4,R5 - work registers; 
+<br/>
+R3 - status byte (N in the previous letter)
+<br/>
+R4 - data byte (D)
+<br/>
+R5 - address shift; used to jump into the appropriate part of the decompression procedure; it is used instead of the loop and the loop counter.
+<br/>
+The 2 (recursive) macros are used to prevent a lot of typing; otherwise it will create LDRSB, STRB 130 times.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#63994 - Ultima2876 - Sun Dec 18, 2005 11:33 am</h4>
+    <div class="postbody"><span class="postbody">Is there something similar for VRAM-safe or non-VRAM safe LZ77?</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

@@ -1,0 +1,177 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Inefficient texture layout in glTexImage2D - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Inefficient texture layout in glTexImage2D</h2>
+<div id="posts">
+<div class="post">
+    <h4>#123684 - 3D_geek - Fri Mar 30, 2007 7:15 am</h4>
+    <div class="postbody"><span class="postbody">Suppose for sake of argument that I allocated RAM banks A and B for textures (they are 128kbytes each).  Now assume I'm using the 16 bits per texel mode and I have the following set of textures:
+<br/>
+<br/>
+Seven maps each of:  128x128x2bytes = 32kbytes each
+<br/>
+Two maps each of 8x8x2 bytes = 128 bytes each
+<br/>
+<br/>
+That's a total of 32k*7+128*2 = 224.25kbytes.  So theoretically, I have plenty of texture memory (2 banks==256kbytes - I only need 224.25kbytes).
+<br/>
+<br/>
+However - if I say:
+<br/>
+<br/>
+  glTexImage2D ( .... 8x8 map ....);
+<br/>
+  glTexImage2D ( .... 128x128 map ....);
+<br/>
+  glTexImage2D ( .... 128x128 map ....);
+<br/>
+  glTexImage2D ( .... 128x128 map ....);
+<br/>
+  glTexImage2D ( .... 128x128 map ....);
+<br/>
+  glTexImage2D ( .... 8x8 map ....);
+<br/>
+  glTexImage2D ( .... 128x128 map ....);
+<br/>
+  glTexImage2D ( .... 128x128 map ....);
+<br/>
+<br/>
+...then, finally:
+<br/>
+<br/>
+  glTexImage2D ( .... 128x128 map ....);
+<br/>
+<br/>
+...the last call fails because it claims to have run out of texture map memory.   The reason being (as far as I can see from the libnds code) that the system simply stuffs textures into the first bank in the order they are presented - and when there is not enough room left in that bank for the next texture, it moves on to the next bank and starts allocating from there.  However, in the case above, this means that the first 8x8 map and the next three 128x128's go into bank A, then the fourth 128x128 won't quite fit - so it goes onto bank B, then in goes the 8x8 and then two more 128x128's - and finds that there is not quite enough room left for the final 128x128 map.
+<br/>
+<br/>
+The problem is that there was quite a bit of space left (just short of 32kbytes) at the end of bank A that never got used.  If the second 8x8 map had gone into there instead of into bank B, there would have been enough memory left over for the last map.
+<br/>
+<br/>
+This is a classic memory fragmentation problem - the best heuristic for which is always to put each new object into the smallest space into which it'll fit.
+<br/>
+<br/>
+Hence, the algorithm needs to remember how much memory there is left at the end of each bank when it opens a new one.  Then it can fit each new texture into whichever bank has the least amount of room left into which the map will fit.   If that were the case then the second of the tiny 8x8 maps would have been stuck into the end of bank A instead of taking a teeny bit out of bank B and thereby preventing the last large map from just sneaking in.
+<br/>
+<br/>
+In the absence of that change, it's stongly advised that if your applications need more than 128kbytes of textures that you follow the rule of allocating your maps in some very carefully pre-planned order in order to give yourself the best chance of fitting everything in,  RIght now, I think the simplest strategy is to allocate your largest maps first, moving gradually down to doing the smallest ones last.
+<br/>
+<br/>
+...but it really needs to be fixed properly in libnds.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#123719 - 3D_geek - Fri Mar 30, 2007 4:06 pm</h4>
+    <div class="postbody"><span class="postbody">I'm using banks A, B and D for texture and bank C for the bottom screen.  In theory I have just under 256kbytes of texture so it should fit into banks A &amp; B - but due to the problem I described above, it probable actually uses a little of bank D too.   That's inefficient - but it's not "wrong" as such.
+<br/>
+<br/>
+When I test the results of 'glTexImage2D', it says that all of my textures fit into memory...which is what I'd expect because I've allocated three banks for texture which is WAY more than I need.
+<br/>
+<br/>
+But the odd thing is that the bottom display is all screwed up.  This suggests that there is something wrong with the bank selection code and instead of using bank D for my 'overflow' textures, it's actually (illegally) using bank C.   
+<br/>
+<br/>
+Anyway - when I discovered the problem in texture bank allocation, I changed my texture loaded to sort my textures by size and carefully allocate things in big-to-small order. That should allow my textures to fit into banks A &amp; B without overflowing.....and lo and behold...just by changing the order of texture loading - the problem with the bottom screen has 'gone away'.
+<br/>
+<br/>
+Do I have something wrong with my startup code? (I freely confess I have no clue what most of this actually does).
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+  powerON ( POWER_ALL ) ;
+<br/>
+  lcdMainOnTop    () ;
+<br/>
+  videoSetMode ( MODE_0_3D ) ;
+<br/>
+  videoSetModeSub(MODE_0_2D | DISPLAY_BG0_ACTIVE);
+<br/>
+  vramSetBankC(VRAM_C_SUB_BG);
+<br/>
+  SUB_BG0_CR = BG_MAP_BASE(31);
+<br/>
+  BG_PALETTE_SUB[ 0 ] = RGB15(0,0,0); // black backdrop
+<br/>
+  BG_PALETTE_SUB[255] = RGB15(31,31,31); // white foreground
+<br/>
+  consoleInitDefault((u16*)SCREEN_BASE_BLOCK_SUB(31),
+<br/>
+                                (u16*)CHAR_BASE_BLOCK_SUB(0), 16);
+<br/>
+  irqInit();
+<br/>
+  irqEnable(IRQ_VBLANK);
+<br/>
+  vramSetBankA(VRAM_A_TEXTURE_SLOT0);
+<br/>
+  vramSetBankB(VRAM_B_TEXTURE_SLOT1);
+<br/>
+  vramSetBankD(VRAM_D_TEXTURE_SLOT2);
+<br/>
+  vramSetBankC(VRAM_C_SUB_BG);
+<br/>
+<br/>
+  glReset () ;
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+....then I start calling glGenTextures/glBindTexture/glTexImage2D - and as I do so, the bottom display is corrupted.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#124535 - simonjhall - Fri Apr 06, 2007 6:09 pm</h4>
+    <div class="postbody"><span class="postbody">Did you ever sort out these problems? I've never had the problem you're describing, but I AM writing my own VRAM allocator at the moment and I've been staring at those libnds vram/texture functions for the last half an hour!
+<br/>
+<br/>
+Thing is, I'm having trouble following the code and matching it to what you're saying... Let's say you assign A, B and D for textures, but C for other stuff. I can see that if a texture hangs off the end of B (into the unassigned C section) then the code will instead upload the texture to the beginning of D (and waste the end of B). But if you upload a texture and it crosses the A/B boundary then I don't think the code uploads the texture to the beginning of B...
+<br/>
+I can't see anything on gbatek which says that textures can't straddle banks...
+<br/>
+<br/>
+It's not the easiest piece of code, so I could be mistaken!<br/>_________________<br/><span style="font-weight: bold"><a class="postlink" href="https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&amp;business=simonjhall%40gmail%2ecom&amp;no_shipping=2&amp;no_note=1&amp;tax=0&amp;currency_code=GBP&amp;lc=GB&amp;bn=PP%2dDonationsBF&amp;charset=UTF%2d8" target="_blank">Big thanks to everyone who donated for Quake2</a></span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#124556 - 3D_geek - Fri Apr 06, 2007 9:23 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>simonjhall wrote:</b></span></td> </tr> <tr> <td class="quote">Did you ever sort out these problems?</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I have a work-around...but it's not ideal.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Thing is, I'm having trouble following the code and matching it to what you're saying...</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Yes - it's a little tricky to follow - and I could be wrong too.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Let's say you assign A, B and D for textures, but C for other stuff. I can see that if a texture hangs off the end of B (into the unassigned C section) then the code will instead upload the texture to the beginning of D (and waste the end of B). But if you upload a texture and it crosses the A/B boundary then I don't think the code uploads the texture to the beginning of B...
+<br/>
+I can't see anything on gbatek which says that textures can't straddle banks...
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+I assumed they couldn't...but either way, there is still a problem if we have a big texture that doesn't fit in B - it can't straddle into C because that's used for something else - so, yes, it has to go into D.   But from what I understand of the code, if I then give it a small texture, it doesn't check to see if there was space left at the end of B - it mindlessly sticks it onto the end of D.
+<br/>
+<br/>
+So space is frequently wasted at the ends of RAM banks if you allocate a large texture that has to be bumped off onto the next bank.
+<br/>
+<br/>
+Until/unless this gets fixed, the best advice I have (and what my code currently does) is to allocate large maps first - working down to the smallest maps last.  That way, this problem is least likely to happen (although it still can) - and if it does happen, the penalties are minimised.
+<br/>
+<br/>
+What really needs to happen is for the code to keep track of how much space is left at the end of each bank that's allocated to texture and to assign new textures to whichever bank has the least available space (into which the new texture none-the-less fits).</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

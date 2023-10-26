@@ -1,0 +1,234 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Convert MoonShell Video with mp2 audio - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS Misc > Convert MoonShell Video with mp2 audio</h2>
+<div id="posts">
+<div class="post">
+    <h4>#73675 - lobster - Mon Feb 27, 2006 10:29 am</h4>
+    <div class="postbody"><span class="postbody">I updated my MoonShell to 1.0 today and discovered that it now supports mp2 (the last time i updated was to 0.99 at the end of january XD) so after messing around with the included encoder and analyzing the header of the files it created i have come up with a modified method of making DPG files.
+<br/>
+<br/>
+first of all, you need to generate your converted audio and video files.
+<br/>
+this command will convert the video file "foo.avi" to mpeg1video encoded "foo.m1v"
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">mencoder foo.avi -of rawvideo -ofps 24 -sws 9 -vf scale=256:192:::3 -nosound -ovc lavc -lavcopts vcodec=mpeg1video:vbitrate=160 -o foo.m1v
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+this is essentially the same command as the one suggested by <a class="postlink" href="http://forum.gbadev.org/viewtopic.php?t=7897" target="_blank">JaJa's method</a>. the major difference is that i am using a lanczos resize (-sws 9) with filter length 3 (the :::3 after scale=256:192). this ensures that your converted video file will look alot cleaner than without it (mencoder defaults to a bicubic resize which is good but not the best).
+<br/>
+<br/>
+next you need to convert the audio.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">mencoder foo.avi -af resample=32000:1:2 -of rawaudio -oac lavc -ovc copy -lavcopts acodec=mp2:abitrate=160 -o foo.mp2
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+this command will extract and encode the audio from your video to a 160kbps 32000kHz mp2 file. the dpgenc program has only 32000kHz as a selectable sample rate but i think other rates will work as well. the maximum bitrate allowed by dpgenc is 160 you may be able to exceed this parameter as well.
+<br/>
+<br/>
+almost done. you now need to make the header.
+<br/>
+the header is the same up until audio channels. remember that all these values need to be 4 bytes long so if they're not, pad them with 0s. first is the obligatory <span style="color: red">DPG0</span> followed by the <span style="color: blue">number of frames</span>, <span style="color: orange">frames per second</span>, then <span style="color: green">audio sample rate</span>. the new <span style="color: indigo">channels</span> setting for mp2 audio is 0. the audio and video file information is changed a bit in the new header. it starts off the same with the <span style="color: darkred">start of the audio file</span> then the <span style="color: darkblue">size of the audio file</span> (this used to be the end of the audio file), then the <span style="color: violet">start of the video file</span> (this is just 36+size of the audio file in decimals), finally you have the <span style="color: olive">size of the video file</span>.
+<br/>
+<br/>
+if we were using the video used in JaJa's original post this is how the header would break down:
+<br/>
+<span style="color: red">DPG0</span>
+<br/>
+the number of frames in your movie = <span style="color: blue">1000</span>
+<br/>
+the number of frames every second = <span style="color: orange">25</span>
+<br/>
+the sample rate of the audio = <span style="color: green">41000</span>
+<br/>
+number of channels in the audio = <span style="color: indigo">0</span>
+<br/>
+the start of the wav file = <span style="color: darkred">36</span>
+<br/>
+the size of the audio file = <span style="color: darkblue">365100</span>
+<br/>
+the start of the video file = <span style="color: violet">365136</span>
+<br/>
+the size of the video file = <span style="color: olive">15007142</span>
+<br/>
+<br/>
+<span style="color: red">44 50 47 30 </span><span style="color: blue">E8 03 00 00 </span><span style="color: orange">00 19 00 00 </span><span style="color: green">44 AC 00 00 </span><span style="color: indigo">00 00 00 00 </span><span style="color: darkred">00 24 00 00 </span><span style="color: darkblue">2C 92 05 00 </span><span style="color: violet">50 92 05 00 </span><span style="color: olive">A6 FD E4 00</span>
+<br/>
+<br/>
+here is my modification of the header maker written by juhees
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#include &lt;stdio.h&gt;
+<br/>
+#include &lt;stdlib.h&gt;
+<br/>
+<br/>
+void putint(unsigned int i, FILE* outfile) {
+<br/>
+   fputc(i &amp; 0xff, outfile);
+<br/>
+   i &gt;&gt;= 8;
+<br/>
+   fputc(i &amp; 0xff, outfile);
+<br/>
+   i &gt;&gt;= 8;
+<br/>
+   fputc(i &amp; 0xff, outfile);
+<br/>
+   i &gt;&gt;= 8;
+<br/>
+   fputc(i &amp; 0xff, outfile);
+<br/>
+}
+<br/>
+<br/>
+int main(int argc, char* argv[]) {
+<br/>
+   int frames;
+<br/>
+   int fps;
+<br/>
+   int samples;
+<br/>
+   int audiosize;
+<br/>
+   int videosize;
+<br/>
+   
+<br/>
+   //char* filename = "header",0;
+<br/>
+   FILE* outfile;
+<br/>
+   
+<br/>
+   if (argc != 7) {
+<br/>
+      printf("usage: headermaker &lt;#frames&gt; &lt;fps&gt; &lt;samples&gt; &lt;audiosize&gt; &lt;videosize&gt; &lt;filename&gt;\n");
+<br/>
+      return -1;
+<br/>
+   }
+<br/>
+   
+<br/>
+   // read our parameters
+<br/>
+   frames   = atoi(argv[1]);
+<br/>
+   fps   = atoi(argv[2]);
+<br/>
+   samples   = atoi(argv[3]);
+<br/>
+   audiosize = atoi(argv[4]);
+<br/>
+   videosize = atoi(argv[5]);
+<br/>
+   
+<br/>
+   outfile = fopen(argv[6], "wb");
+<br/>
+   
+<br/>
+   // magic number:
+<br/>
+   fputc(0x44, outfile);
+<br/>
+   fputc(0x50, outfile);
+<br/>
+   fputc(0x47, outfile);
+<br/>
+   fputc(0x30, outfile);
+<br/>
+   
+<br/>
+   // #frames
+<br/>
+   putint(frames, outfile);
+<br/>
+   
+<br/>
+   // fps
+<br/>
+   fputc(0x00, outfile);
+<br/>
+   fputc(fps%256, outfile);
+<br/>
+   
+<br/>
+   fputc(0x00, outfile);
+<br/>
+   fputc(0x00, outfile);
+<br/>
+   
+<br/>
+   // samples
+<br/>
+   putint(samples, outfile);
+<br/>
+   
+<br/>
+   // channels
+<br/>
+   putint(0, outfile);
+<br/>
+   
+<br/>
+   // begin and end audio
+<br/>
+   putint(36, outfile);
+<br/>
+   putint(audiosize, outfile);
+<br/>
+   
+<br/>
+   // begin and end video
+<br/>
+   putint(36+audiosize, outfile);
+<br/>
+   putint(videosize, outfile);
+<br/>
+   
+<br/>
+   fclose(outfile);
+<br/>
+   
+<br/>
+   return 0;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+enjoy your fancy new dpg files with mp2 audio!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#73696 - Rudi Rastelli - Mon Feb 27, 2006 3:44 pm</h4>
+    <div class="postbody"><span class="postbody">How to edit the mencoder-commandline within DPGEnc to use lanczos resize ?
+<br/>
+<br/>
+I'm not very common with that kind of commandline-stuff, so help is welcome...
+<br/>
+<br/>
+Best Regards
+<br/>
+<br/>
+ Rudi</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

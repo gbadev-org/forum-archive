@@ -1,0 +1,380 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Timing events for a game - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > Timing events for a game</h2>
+<div id="posts">
+<div class="post">
+    <h4>#2102 - headspin - Wed Jan 29, 2003 11:50 am</h4>
+    <div class="postbody"><span class="postbody">What do you think is the best way to time events, say like certain tiles in a background need changing at different intervals, or timed pauses between changing graphics.
+<br/>
+<br/>
+A for loop with a wait for VBlank during each iteration seems to give different timings in an emulator compared to real hardware.
+<br/>
+<br/>
+I could use TIMERx or VCOUNT interrupts too, but I'm not sure the best way to go about timing for multiple events. Any ideas?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#2104 - Splam - Wed Jan 29, 2003 12:00 pm</h4>
+    <div class="postbody"><span class="postbody">Have a global GAME TIME which just gets incremented every frame, you can base a lot of stuff from that, like gametime&amp;3 to do something every 4 frames etc.  I tend to use something like that for general things (like slowing down background anims) and have local timers for sprite animations if they need them (things like a flying kick in a karate game, you want more frames of the "flying" bit than the actual moves to get to that state).</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#2119 - headspin - Wed Jan 29, 2003 9:02 pm</h4>
+    <div class="postbody"><span class="postbody">Sorry Splam.. what do you mean exactly? What sort of timing do you use, by frames I guess u mean VBlank? That means it would be screwed up for emu's right? And I don't get Gametime&amp;3... do you mean if (Gametime &amp; 3), which suggests your using bits to represent timings or something.. Please explain!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#2121 - Splam - Wed Jan 29, 2003 9:32 pm</h4>
+    <div class="postbody"><span class="postbody">Yes, vblank just does gametimer++ which won't screw up on emus, not sure why you think that?
+<br/>
+<br/>
+And yup,  if (!(3&amp;gametimer)) so the if only happens every 4th frame  using that you can &amp; with different values to get 2 4 8 16 frame waits, you know those binary numbers ;)
+<br/>
+<br/>
+Not sure how I can explain it any simpler than that.  Every vblank the variable is incremented.  You then use it as a global timer for events during the game.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#2125 - headspin - Wed Jan 29, 2003 10:14 pm</h4>
+    <div class="postbody"><span class="postbody">Waiting for VBlank using an inturrupt seems to work differently than using a simple function to wait for VCOUNT to hit 160 scan lines, say..
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#define REG_VCOUNT     *(u16*)0x4000006
+<br/>
+#define INT_VBLANK 0x0001
+<br/>
+<br/>
+void WaitVBlankInterrupt()
+<br/>
+{
+<br/>
+    REG_IME=0;
+<br/>
+    REG_IE|=INT_VBLANK;
+<br/>
+    REG_DISPSTAT|=(1&lt;&lt;3);
+<br/>
+    REG_IME=1; //enable interrupt
+<br/>
+}
+<br/>
+<br/>
+void WaitVBlank(void)
+<br/>
+{
+<br/>
+    while (REG_VCOUNT != 160);
+<br/>
+}
+<br/>
+<br/>
+void Wait(u16 count)
+<br/>
+{
+<br/>
+    u16 i;
+<br/>
+<br/>
+    for(i=0;i&lt;count;i++) WaitVBlank();
+<br/>
+}
+<br/>
+<br/>
+void InterruptHandler(void)
+<br/>
+{
+<br/>
+   u16 temp_reg_if=REG_IF;
+<br/>
+  
+<br/>
+   REG_IME=0;
+<br/>
+<br/>
+   *((u16*)0x03007ff8) = REG_IF;
+<br/>
+  
+<br/>
+   if(temp_reg_if &amp; INT_VBLANK) { }
+<br/>
+<br/>
+   REG_IME=1;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Then using:
+<br/>
+<br/>
+Wait(100); is different to using WaitVBlankInterrupt(); and then using the interrupt to count the VBlanks.
+<br/>
+<br/>
+If you use Wait(100); in an emu like VisualBoy Advance, it will wait a much shorter time than on real hardware... Sorry dude am I making any sense?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#2128 - Splam - Wed Jan 29, 2003 11:03 pm</h4>
+    <div class="postbody"><span class="postbody">If your waitforvblank routine isn't happening as often as the Wait(100) then there must be something wrong with your code :(  The vblank happens on line 160 every frame same as line 100 happens on every frame and I've never seen any problem with using either on an emu.  The only thing I can think is if you call a Wait(100) then do some code then loop back to the wait in a tight loop you'll actually still be on line 100 when the loop goes round again.  ie
+<br/>
+<br/>
+while (1)
+<br/>
+{
+<br/>
+Wait(100);
+<br/>
+gametimer++;
+<br/>
+}
+<br/>
+<br/>
+would probably increment gametimer quite a few times every frame.
+<br/>
+however doing something like
+<br/>
+<br/>
+while (1)
+<br/>
+{
+<br/>
+Wait(100);
+<br/>
+gametimer++;
+<br/>
+Wait(101);
+<br/>
+}
+<br/>
+<br/>
+Would stop that happening.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#2130 - FluBBa - Wed Jan 29, 2003 11:07 pm</h4>
+    <div class="postbody"><span class="postbody">But then again...
+<br/>
+the REG_VCOUNT stays at 160 for the whole scanline doesn't it?
+<br/>
+And if your C compiler makes any efficient code your for loop wont work very good then as when the WaitVBlank is called right after it's finnished the count will still be 160 and return without any waiting.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#2146 - Maddox - Thu Jan 30, 2003 3:56 am</h4>
+    <div class="postbody"><span class="postbody">Yeah!  You better make you code work.  Try this:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+void WaitVBlank(void) 
+<br/>
+{
+<br/>
+    while(REG_VCOUNT == 160); 
+<br/>
+    while (REG_VCOUNT != 160); 
+<br/>
+} 
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I win!<br/>_________________<br/>You probably suck.  I hope you're is not a game programmer.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#2163 - slip - Thu Jan 30, 2003 11:28 am</h4>
+    <div class="postbody"><span class="postbody">Why not use one of the timers for events?
+<br/>
+Each object can have a time watcher variable to watch the global timer (one of the timer registers). Say the frame had to change every x seconds then your variable compares its current value with the new value of the regisiter, you calculate how long it has been taking in factors like timer frequency and overflow.
+<br/>
+Thats what I do.
+<br/>
+<br/>
+slip</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#2172 - Splam - Thu Jan 30, 2003 1:16 pm</h4>
+    <div class="postbody"><span class="postbody">@slip
+<br/>
+Depends how many different timings you need and if you're using timers for other things (playing samples etc) you would run out of timers very quickly.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#2192 - dragor - Fri Jan 31, 2003 12:38 am</h4>
+    <div class="postbody"><span class="postbody">If you do things correctly, you only ever need one timer.  Look at the PC, it only has one and you can do everything with it.  Let's say I have a timer that goes off every 1 millisecond.  I can use that to create a 10 millsecond timer and a one second timer.  Like the following:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+time = 0;
+<br/>
+ten_millisecond = 0;
+<br/>
+one_second = 0;
+<br/>
+<br/>
+void timer_0(void) {
+<br/>
+<br/>
+  time++;
+<br/>
+<br/>
+  if(time % 10 == 0)
+<br/>
+    ten_millisecond++;
+<br/>
+  if(ten_millisecond % 100 == 0)
+<br/>
+    one_second++;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Doing something like this you can create any number of times with any resolution by using only one hardware timer.<br/>_________________<br/>Sum Ergo Cogito</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#2198 - slip - Fri Jan 31, 2003 2:09 am</h4>
+    <div class="postbody"><span class="postbody">I'm only using one timer in my current project, and I control the speed of the background the speed of the player moving and when I get to it the speed of bullets and other animations.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#2199 - JonH - Fri Jan 31, 2003 2:23 am</h4>
+    <div class="postbody"><span class="postbody">the way that i do this is :
+<br/>
+<br/>
+in an init() (or where you initialise your game)
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+//start the timer
+<br/>
+REG_TM3CNT = TIME_FREQUENCY_1024 | TIME_ENABLE;
+<br/>
+s16 start_time = REG_TM3D;
+<br/>
+s16 current_time, diff_time;
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+then, in the main game loop (right at the top of it)
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+// update anims
+<br/>
+current_time = REG_TM3D;
+<br/>
+diff_time = current_time - start_time;
+<br/>
+<br/>
+if(diff_time &gt;= 4000)
+<br/>
+{
+<br/>
+      diff_time=0;
+<br/>
+      start_time=REG_TM3D;
+<br/>
+<br/>
+      // change the anim frame here
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+by doing it this way, it checks the timer just once every frame so that your program can do other things instead of pausing the whole processor while the game waits!
+<br/>
+<br/>
+thats just how i do it, but i can see that a global timer is a good idea and i will try to use that method in the future.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#2210 - tepples - Fri Jan 31, 2003 4:20 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>dragor wrote:</b></span></td> </tr> <tr> <td class="quote">If you do things correctly, you only ever need one timer.  Look at the PC, it only has one</td> </tr></table><span class="postbody">
+<br/>
+No.  The PC has three timers on the motherboard and one on the sound card.  The timer on the sound card requests samples from the DMA controller; two of the timers on the motherboard control DRAM refresh and the internal speaker's frequency.  But it's true that there's only one timer used for scheduling.
+<br/>
+<br/>
+But you generally don't need to use one of the GBA's four timers to time animations on the GBA because you already have a 280896 cycle timer called "vblank".  Most real console game loops work by synchronizing each frame of a sprite's animation to a given number of vblanks.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#2212 - slapout - Fri Jan 31, 2003 4:28 am</h4>
+    <div class="postbody"><span class="postbody"><a href="http://www.thepernproject.com/" target="_blank">http://www.thepernproject.com/</a>
+<br/>
+Day 5 of the tutorials section has some info on timers.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#2358 - headspin - Sun Feb 02, 2003 12:12 pm</h4>
+    <div class="postbody"><span class="postbody">I was undecided as to whether to use interrupt timers or waiting for a VBlank. Seems like people here are tending towards using timers.
+<br/>
+<br/>
+I had also thought of a global variable keeping track of time for all events, so I think I might give that a go. It's interesting that so many people use different ways for timing. I thought there would be some sort of standard way for the GBA for the most efficient timing of events.
+<br/>
+<br/>
+Waiting for a VBlank still dosn't seem to wait consistent times on an Emulator compared to real hardware. I guess timers are a failsafe way to get the exact timing you require.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#2363 - Splam - Sun Feb 02, 2003 3:03 pm</h4>
+    <div class="postbody"><span class="postbody">There is a "standard way" and thats vsync/vblank ;)  not waiting for it (like the wait(16) method) but using the vsync interrupt.  Thats standard on any hardware that has a vsync, trust me I've been coding a looooong time and have always done it that way and every other professional code I know does it that way.  You should be using a vsync to time when screen updating is processed to avoid flicker so adding a gametimer++ to that is the most sensible way.  It's there for FREE no need to use a timer to do exactly the same thing, whats the point?
+<br/>
+<br/>
+Still not sure why you're having problems with emulators, if it didn't work properly then games would screw up badly.
+<br/>
+<br/>
+Anyway, ignore my sagely advice if you wish ;) obviously other people are using timers and thats up to them and yourself to do as you see fit but to me thats something akin to using a mul instruction to multiply by 32.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#2373 - Maddox - Sun Feb 02, 2003 6:37 pm</h4>
+    <div class="postbody"><span class="postbody">Yeah.  Never heard of a pro using a timer for animation/graphics based timing.  Even if you wanted to do stuff INTRAframe you would use hblank ints.  It's just natural.  It's just what those interrupts are for.  Maybe someone could post WHY they use a timer instead of vblank or hblank.<br/>_________________<br/>You probably suck.  I hope you're is not a game programmer.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#2389 - JonH - Sun Feb 02, 2003 9:39 pm</h4>
+    <div class="postbody"><span class="postbody">purely to annoy the likes of you ;)
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Maddox wrote:</b></span></td> </tr> <tr> <td class="quote">You probably suck. I hope your not a game programmer.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+err... You definitely suck at grammar. I do hope you're not a professional writer.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#2442 - headspin - Tue Feb 04, 2003 1:23 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">There is a "standard way" and thats vsync/vblank ;) not waiting for it (like the wait(16) method) but using the vsync interrupt. Thats standard on any hardware that has a vsync, trust me I've been coding a looooong time and have always done it that way and every other professional code I know does it that way. You should be using a vsync to time when screen updating is processed to avoid flicker so adding a gametimer++ to that is the most sensible way. It's there for FREE no need to use a timer to do exactly the same thing, whats the point?</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I missed that most obvious point of screen updating during a VBlank so I'm convinced VBlank is the way to go now. Still interesting to see the different ideas on the subject. I spose timers are good for other events that arn't related to updating graphics.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Still not sure why you're having problems with emulators, if it didn't work properly then games would screw up badly. </td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Me neither, I think I might be doing too much processing between the VBlanks so an emulator gives different results. I'm just confused why my game runs faster on an emulator and everyone elses games &amp; demos seem to run the same on hardware as emulators. I'll figure it out one day, just having a break from programming at the moment.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Anyway, ignore my sagely advice if you wish ;) obviously other people are using timers and thats up to them and yourself to do as you see fit but to me thats something akin to using a mul instruction to multiply by 32.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I always appreciate your sagely advice Splam!! ;) And thanks for your input on the subject. :)</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

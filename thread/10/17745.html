@@ -1,0 +1,115 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Whats the process of getting sound to run gba? - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Audio > Whats the process of getting sound to run gba?</h2>
+<div id="posts">
+<div class="post">
+    <h4>#176909 - blessingta@hotmail.co.uk - Tue Oct 18, 2011 6:44 pm</h4>
+    <div class="postbody"><span class="postbody">hi
+<br/>
+<br/>
+I was looking as the audio samples proided by devkitpro found out that there wasn't an project aranged for the files (unlike the graphics section which had projects that I could copy from and rewrite).
+<br/>
+<br/>
+How does the whole process of getting sound on screen work?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176910 - Dwedit - Tue Oct 18, 2011 8:06 pm</h4>
+    <div class="postbody"><span class="postbody">This is from memory, sorry if I get some details wrong or missing...
+<br/>
+<br/>
+First, set whatever sound registers are needed to enable sound, and enable the dma sound channels.
+<br/>
+<br/>
+Prepare a buffer to play sound from, synthesize your wave.
+<br/>
+Set the first timer to the rate you want sound to play at.
+<br/>
+Set the next timer to operate in "count up" mode, give it your buffer size (negative), so it triggers an interrupt when the play buffer has finished.
+<br/>
+Write the first 4 bytes manually to the sound FIFO register.
+<br/>
+Set one of the DMA channels to Timer DRQ mode, have it use your audio buffer as the source, and the sound FIFO register as the destination.
+<br/>
+Enable the first timer.  Now it's spitting out bytes to the sound FIFO register whenever the first timer expires.  Then it increments the second timer to indicate that it has played that word.
+<br/>
+When the second timer expires (counts up to max), you need to get it to play at the beginning of the buffer again, otherwise it will just keep playing more sound beyond the end of the buffer.  You also reset the second timer, so it gets ready to let you know for the next time.  Also you need to fill the buffer with your new wave to play.  So it's best to divide your sound buffer in two, and have one half of your sound buffer "Filling" and the other half "playing".
+<br/>
+<br/>
+You can also use Maxmod as your sound engine if you'd rather do that.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176922 - blessingta@hotmail.co.uk - Fri Oct 21, 2011 10:42 am</h4>
+    <div class="postbody"><span class="postbody">could you post me a code sample with comments?
+<br/>
+<br/>
+else am I guranteed that it will work if I try to mod the devkitpro examples? All I can do at the moment is compiling those examples, because of the make file provided; but at the sametime there isn't even a project with the sound files.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176935 - wintermute - Sat Oct 29, 2011 12:21 pm</h4>
+    <div class="postbody"><span class="postbody">If you mean the .pnproj file then just copy the one from the gba template example. It's a magic folder setup so it automatically picks up the source files.
+<br/>
+<br/>
+If you're looking to do something a bit more low level then <a href="http://belogic.com/gba/" target="_blank">http://belogic.com/gba/</a> is worth a look but their code will need a bit of tweaking since it was originally written in the days of devkitadv.<br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176948 - blessingta@hotmail.co.uk - Thu Nov 03, 2011 6:41 pm</h4>
+    <div class="postbody"><span class="postbody">Ok, in the devkit project file the main issue I've been having is with actually loading a wave file it self. And in this I've spent all day trying to find where the audio files: "Audio" "Boom" and "FlatOutLies" are read in and converted to something gba friendly as I would presume.
+<br/>
+<br/>
+But all I seem to notice is that there appear to be a magic blackbox that extracting the sound files but I can't even tell where they are. Plus does the magic box you are talking about actually automatically convert the sound files so long as they are in the appropriate folder?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176949 - Dwedit - Thu Nov 03, 2011 7:48 pm</h4>
+    <div class="postbody"><span class="postbody">The "Magic" is in the makefile:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+MUSIC      :=  maxmod_data
+<br/>
+ - snip - 
+<br/>
+export AUDIOFILES   :=   $(foreach dir,$(notdir $(wildcard $(MUSIC)/*.*)),$(CURDIR)/$(MUSIC)/$(dir))
+<br/>
+ - snip -
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+# rule to build soundbank from music files
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+soundbank.bin : $(AUDIOFILES)
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+   @mmutil $^ -osoundbank.bin -hsoundbank.h
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+It calls a program called mmutil (MaxMod utility) to create a sound bank file out of all the mod files.  You end up with "soundbank.bin" then "soundbank.bin.o" sitting in the build folder, then that can be linked into the program.
+<br/>
+<br/>
+Then you use the maxmod library to play music.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

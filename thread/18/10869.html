@@ -1,0 +1,173 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Questions about loading graphics and sprites - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Questions about loading graphics and sprites</h2>
+<div id="posts">
+<div class="post">
+    <h4>#99124 - Lupi - Sat Aug 19, 2006 5:19 pm</h4>
+    <div class="postbody"><span class="postbody">Hi, newbie here, while I was learning some libnds with the examples in devkitPro and the orange spaceship example of the pdf guide, I got myself a bit confused by NDS Hardware and the way to load sprites and bg:
+<br/>
+<br/>
+1) VRAM banks... they are used to load backgrounds and sprites, but do I need to use one of the VRAM banks for one background, or I can use for several different type of data(sprites and backgrounds)?
+<br/>
+<br/>
+<br/>
+2) When starting a background, I have seen something like this:
+<br/>
+    BG3_CR = BG_BMP16_256x256 | BG_BMP_BASE(0) | BG_PRIORITY(3);
+<br/>
+    I know that BG_BMP_BASE(base) is used to later load the background with BG_BMP_RAM(base) in the dmaCopy function, but what does that 'base' variable represent, I don't get it :S:S
+<br/>
+<br/>
+3) To load sprites..., first I load the palette, with this:
+<br/>
+    dmaCopy(test_pal_bin, SPRITE_PALETTE, test_pal_bin_size);
+<br/>
+    Then I load the sprite with this:
+<br/>
+    dmaCopy(test_bin, &amp;SPRITE_GFX[64 * 16], test_bin_size);
+<br/>
+<br/>
+    Why is it loading at 64*16, and by the way, somehow it load the sprite at the position 0 of the OAM, but what if I want to load it on a different position...
+<br/>
+    And SPRITE_GFX, what part of VRam does it represent?, what's its memory limit?
+<br/>
+<br/>
+4) Last one, it's about palettes, i have read you can have 1 big palette of 256 colours or 16 palettes of 16 colours, I don't quite get this palette thing, where are they stored?, in SPRITE_PALETTE, what about the BG_MAIN_PALETTE?, if I want to load several sprites that uses several palettes (converted with git I must add), how do I load a new sprite if that SPRITE_PALETTE is covered by a different one?
+<br/>
+<br/>
+<br/>
+Sorry, too many questions here, I just can't find what do those macros mean, or loading multiple sprites without a .pcx file. You don't have to answer all of course ^_^
+<br/>
+<br/>
+Thanks in advance</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#99128 - Sausage Boy - Sat Aug 19, 2006 5:46 pm</h4>
+    <div class="postbody"><span class="postbody">1.
+<br/>
+Depends on how you map the VRAM banks. Look at this code
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+vramSetMainBanks(   VRAM_A_MAIN_BG_0x6000000,      //map A and B to main background memory
+<br/>
+                    VRAM_B_MAIN_BG_0x6020000,      //this gives us 256KB which is a healthy amount for 16-bit gfx
+<br/>
+...
+<br/>
+<br/>
+vramSetBankE(VRAM_E_MAIN_SPRITE); //mapping E to main sprites gives us 64k for sprites
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+This maps banks A and B for backrounds and bank E for sprites, both for the main core.
+<br/>
+<br/>
+2.
+<br/>
+Have a look at the table at <a class="postlink" href="http://user.chem.tue.nl/jakvijn/tonc/regbg.htm" target="_blank">http://user.chem.tue.nl/jakvijn/tonc/regbg.htm</a>. The charblock is your base variable. It's just a way to refer to vram. Read the section I linked on TONC, it's for GBA, but the same thing applies to the DS, only you have twice as much VRAM.
+<br/>
+<br/>
+3.
+<br/>
+The 64*16 actually means that you don't load the data at 0, but rather at 1024. Perhaps there's something else before it, such as other sprite data? SPRITE_GFX represents the vram bank you have mapped for sprites on the main core.
+<br/>
+<br/>
+Don't confuse OAM and VRAM. OAM tells the DS what to load, how and where. VRAM contains the image data. Again,  
+<br/>
+<br/>
+<a class="postlink" href="http://user.chem.tue.nl/jakvijn/tonc/regobj.htm" target="_blank">TONC is good</a>. Read and understand. Just ask if anything's unclear.
+<br/>
+<br/>
+4.
+<br/>
+You don't. Convert all the sprites that will be visible at the same time to use the same palette. I actually don't know where the palettes are stored. You can think of it as some secret palette memory :P<br/>_________________<br/>"no offense, but this is the gayest game ever"</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#99136 - Lupi - Sat Aug 19, 2006 7:11 pm</h4>
+    <div class="postbody"><span class="postbody">Ok, now I'm starting to get this.
+<br/>
+<br/>
+In charblocks I store the tile data and in the screen blocks I store the map data (with the tiles)
+<br/>
+<br/>
+But what if the tile data surpass the 16 kb/charblock, or that's not posible? :P
+<br/>
+<br/>
+I don't quite get the sprites thing.
+<br/>
+Let's say I reserve one of the 64 kb VRAM for sprites, now I have 64.000 bytes.
+<br/>
+every 8x8 sub-tile of every sprite is 64 bytes long(considering 8bpp), that would be 1000 sub-tiles of sprites
+<br/>
+Now let's say I want to access the sprite that starts at the sub-tile 30 of 1000, how is that done? and what would I put in attribute[2] to tell the OAM the sprite data is there?
+<br/>
+<br/>
+Thanks again, you are helping me A LOT =)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#99139 - tepples - Sat Aug 19, 2006 7:25 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Lupi wrote:</b></span></td> </tr> <tr> <td class="quote">Ok, now I'm starting to get this.
+<br/>
+<br/>
+In charblocks I store the tile data and in the screen blocks I store the map data (with the tiles)
+<br/>
+<br/>
+But what if the tile data surpass the 16 kb/charblock, or that's not posible? :P</td> </tr></table><span class="postbody">
+<br/>
+The GBA or DS will happily render tiles from the following charblock(s) if you specify a tile number greater than 256 (in 256 color mode) or 512 (in 16 color mode).
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">I don't quite get the sprites thing.</td> </tr></table><span class="postbody">
+<br/>
+Did you get it on the GBA? If you're referring to accessing tiles past the first 32 KB of your sprite cel VRAM bank, you can <a class="postlink" href="http://nocash.emubase.de/gbatek.htm#dsvideoobjs" target="_blank">set bits 20-21 of DISPCNT to multiply all sprites' tile indices by 2, 4, or 8</a>.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#99166 - Lupi - Sat Aug 19, 2006 10:09 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Lupi wrote:</b></span></td> </tr> <tr> <td class="quote">I don't quite get the sprites thing.</td> </tr></table><span class="postbody">
+<br/>
+Did you get it on the GBA? If you're referring to accessing tiles past the first 32 KB of your sprite cel VRAM bank, you can <a class="postlink" href="http://nocash.emubase.de/gbatek.htm#dsvideoobjs" target="_blank">set bits 20-21 of DISPCNT to multiply all sprites' tile indices by 2, 4, or 8</a>.</span></td> </tr></table><span class="postbody">
+<br/>
+No, not exactly that, I'm refering what index do I have to put in SPRITE_GFX[i] and, if I load it in SPRITE_GFX[i], what do I have to put in attribute[2] of the SpriteEntry.
+<br/>
+In other words, a element from that vector, what does it represent, a pixel?, a kb?, a sprite 8x8 sub-tile?
+<br/>
+<br/>
+Thanks in advance, and excuse my english :P
+<br/>
+Lupi</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#99167 - tepples - Sat Aug 19, 2006 10:12 pm</h4>
+    <div class="postbody"><span class="postbody">OAM attribute 2 refers to 32-byte, 64-byte, 128-byte, or 256-byte offsets from the start of the sprite cel VRAM bank. If you're using all 8-bit sprite cels, you will want to set DISPCNT to 64-byte mode so that each OAM attribute 2 unit represents one 8x8 pixel sub-tile.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

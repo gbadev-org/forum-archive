@@ -1,0 +1,159 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Texture palette banks - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Texture palette banks</h2>
+<div id="posts">
+<div class="post">
+    <h4>#108041 - ollhak - Sat Nov 04, 2006 7:13 pm</h4>
+    <div class="postbody"><span class="postbody">Alright, I'm stuck again :/ I'm trying to set up the following memory bank layout (I basicly want to have as much texture memory as possible with some (64kb) 2d bg memory and a little memory for the subscreen):
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+vramSetBankA(VRAM_A_TEXTURE); // 128 KB
+<br/>
+vramSetBankB(VRAM_B_TEXTURE); // 128 KB
+<br/>
+vramSetBankC(VRAM_C_TEXTURE); // 128 KB
+<br/>
+vramSetBankD(VRAM_D_TEXTURE); // 128 KB
+<br/>
+<br/>
+vramSetBankE(VRAM_E_MAIN_BG); // 64 KB
+<br/>
+vramSetBankF(VRAM_F_TEX_PALETTE); // 16 KB
+<br/>
+<br/>
+vramSetBankG(VRAM_G_LCD); // 16 KB
+<br/>
+vramSetBankH(VRAM_H_SUB_BG); // 32 KB
+<br/>
+vramSetBankI(VRAM_I_SUB_SPRITE); // 16 kb </td> </tr></table><span class="postbody">
+<br/>
+<br/>
+However, it doesn't work very well at all.. with this layout, I get neither textures nor a background. Only a subscreen background. The best layout I have got to work is this: 
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">vramSetBankA(VRAM_A_TEXTURE); // 128 KB
+<br/>
+vramSetBankB(VRAM_B_TEXTURE); // 128 KB
+<br/>
+vramSetBankC(VRAM_C_TEXTURE); // 128 KB
+<br/>
+vramSetBankD(VRAM_D_MAIN_BG_0x6000000); // 128 KB
+<br/>
+<br/>
+vramSetBankE(VRAM_E_TEX_PALETTE); // 64 KB
+<br/>
+//vramSetBankF(VRAM_F_TEX_PALETTE); // 16 KB
+<br/>
+   
+<br/>
+vramSetBankG(VRAM_G_LCD); // 16 KB
+<br/>
+vramSetBankH(VRAM_H_SUB_BG); // 32 KB
+<br/>
+vramSetBankI(VRAM_I_SUB_SPRITE); // 16 kb </td> </tr></table><span class="postbody">
+<br/>
+<br/>
+If i change the texture palette to bank F instead, the texture goes black, and I can't figure out why...
+<br/>
+<br/>
+Anyone got any ideas? Here's the code I use for loading the texture if that might be the problem:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+glGenTextures(1, &amp;textureID);
+<br/>
+glBindTexture(0, textureID);
+<br/>
+glTexImage2D(0, 0, GL_RGB256, TEXTURE_SIZE_64, TEXTURE_SIZE_64, 0, TEXGEN_TEXCOORD | GL_TEXTURE_COLOR0_TRANSPARENT, data);
+<br/>
+   
+<br/>
+u16 palette[256];
+<br/>
+palette[1] = RGB15(0, 31, 0);
+<br/>
+   
+<br/>
+pal = gluTexLoadPal( (u16*)palette, 255, GL_RGB256);
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#108103 - duencil - Sun Nov 05, 2006 1:26 pm</h4>
+    <div class="postbody"><span class="postbody">yes, last I looked the texture uploading code in libnds (function glTexLoadPal in videoGL.c) assumes palettes are uploaded to VRAM_E. It would need reworking to handle more complicated bank handling</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#108107 - ollhak - Sun Nov 05, 2006 1:59 pm</h4>
+    <div class="postbody"><span class="postbody">Ah, I thought I had read that somewhere. Guess I'll try downloading the library source and see if I can change it then.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#108110 - ollhak - Sun Nov 05, 2006 2:32 pm</h4>
+    <div class="postbody"><span class="postbody">- wow, that was easy. Now it works perfectly, thanks for the heads-up.
+<br/>
+<br/>
+For the record, I just changed the glTexLoadPal into this:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code"> //---------------------------------------------------------------------------------
+<br/>
+void glTexLoadPal(u16* pal, u16 count, u32 addr) {
+<br/>
+ //---------------------------------------------------------------------------------
+<br/>
+    vramSetBankF(VRAM_F_LCD);
+<br/>
+       
+<br/>
+   swiCopy( pal, &amp;VRAM_F[addr&gt;&gt;1] , count / 2 | COPY_MODE_WORD);
+<br/>
+ 
+<br/>
+    vramSetBankF(VRAM_F_TEX_PALETTE);
+<br/>
+}
+<br/>
+<br/>
+// Note - the only thing changed is that all the E's are changed into F's.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Not sure if this breaks any other functionality but it works for the application I'm making right now.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#108112 - Payk - Sun Nov 05, 2006 2:48 pm</h4>
+    <div class="postbody"><span class="postbody">^^yeep...by default ndslib uses vram h to store pals for textures.
+<br/>
+If u ask me, it should be change able on a more elegant way. But this way above, works fine and afaik it doesnt break down any things ;)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#108114 - OOPMan - Sun Nov 05, 2006 2:54 pm</h4>
+    <div class="postbody"><span class="postbody">ollhak, maybe you should just write a custom function based of the original glTexLoadPal that takes a custom VRAM bank as a parm. This way you get to keep the original, not change the defaults and keep your custom functionality :-)<br/>_________________<br/>"My boot, your face..." - Attributed to OOPMan, Emperor of Eroticon VI
+<br/>
+<br/>
+You can find my NDS homebrew projects <a class="postlink" href="http://blog.dev-scene.com/oopman/" target="_blank">here...</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#108119 - ollhak - Sun Nov 05, 2006 3:18 pm</h4>
+    <div class="postbody"><span class="postbody">Heh, good point OOPMan. Why didn't I think of that? :D</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

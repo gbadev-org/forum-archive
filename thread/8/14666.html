@@ -1,0 +1,242 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>devkitARM r21 (gcc-4.1.2) bad function prolog? - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>ASM > devkitARM r21 (gcc-4.1.2) bad function prolog?</h2>
+<div id="posts">
+<div class="post">
+    <h4>#147028 - bpoint - Thu Dec 13, 2007 11:57 am</h4>
+    <div class="postbody"><span class="postbody">Hello all,
+<br/>
+<br/>
+I have run into a problem where it seems gcc is generating invalid prolog code for a function in my audio engine at optimization levels -O2 and higher (the code works fine at -O0 and -O1).  The actual problem is that generated code tries accesses invalid/unaligned memory addresses on the GBA.  From what I can tell, gcc is mistakingly using r3 (a register passed as a parameter) when it should be using the stack pointer.
+<br/>
+<br/>
+Here is a dissassembly of the problem code at level -O3, with the relevant C++ code and my comments/notes mixed in:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">(89):        return snddev-&gt;playSample(this, volume, frequency, panning, offset, priority, createPaused, autoFree, cbFunc, cbArg);
+<br/>
+0801966C: 9B12    ldr     r3, [sp, #0x048]              ; [sp+0x048]=00000000           (offset)
+<br/>
+0801966E: 464A    mov     r2, r9                        ; r9=00000002                   (priority)
+<br/>
+08019670: 9301    str     r3, [sp, #0x004]
+<br/>
+08019672: 9202    str     r2, [sp, #0x008]
+<br/>
+08019674: 4653    mov     r3, r10                       ; r10=00000000                  (createPaused)
+<br/>
+08019676: 4642    mov     r2, r8                        ; r8=00000000                   (autoFree)
+<br/>
+08019678: 9303    str     r3, [sp, #0x00C]
+<br/>
+0801967A: 9204    str     r2, [sp, #0x010]
+<br/>
+0801967C: 9B16    ldr     r3, [sp, #0x058]              ; [sp+0x058]=00000000           (cbfunc)
+<br/>
+0801967E: 9A17    ldr     r2, [sp, #0x05C]              ; [sp+0x05C]=00000000           (cbarg)
+<br/>
+08019680: 6830    ldr     r0, [r6]                      ; r6=this, [r6]=02006E2C        (device ptr)
+<br/>
+08019682: 9305    str     r3, [sp, #0x014]
+<br/>
+08019684: 9206    str     r2, [sp, #0x018]
+<br/>
+08019686: 1C31    add     r1, r6, #0x0                  ; r6=this (0201B80C)
+<br/>
+08019688: 465A    mov     r2, r11                       ; r11=00000000                  (volume)
+<br/>
+0801968A: 1C3B    add     r3, r7, #0x0                  ; r7=000001E0                   (freq)
+<br/>
+0801968C: 9500    str     r5, [sp]                      ; r5=FFFFFF81                   (panning)
+<br/>
+<br/>
+0801968E: F7FF    bl                                    ; r0=02006E2C, r1=0201B80C, r2=00000000, r3=000001E0, sp=03007B5C
+<br/>
+08019690: FEA3    bl      ::playSample                  ; [sp]=FFFFFF81, [sp+4]=00000000, [sp+8]=00000002, [sp+12]=00000000, [sp+16]=00000000
+<br/>
+(90):    }                                              ; [sp+20]=00000000, [sp+24]=00000000
+<br/>
+<br/>
+(92):    Channel *Device::playSample(Sample *sample, u8 volume, u32 frequency, s8 panning, uint offset, Priority priority, bool createPaused, bool autoFree, SampleCallback cbFunc, void *cbArg)
+<br/>
+080193D8: B5F0    push    {r4, r5, r6, r7, lr}
+<br/>
+080193DA: 465F    mov     r7, r11
+<br/>
+080193DC: 4656    mov     r6, r10
+<br/>
+080193DE: 464D    mov     r5, r9
+<br/>
+080193E0: 4644    mov     r4, r8
+<br/>
+080193E2: B4F0    push    {r4, r5, r6, r7}
+<br/>
+080193E4: B085    add     sp, #-0x014                   ; sp -&gt; 0x03007B24
+<br/>
+080193E6: 4693    mov     r11, r2                       ; r2=00000000                           (volume)
+<br/>
+080193E8: 9A0F    ldr     r2, [sp, #0x03C]              ; [sp+0x03C] -&gt; [p.sp+4] = 00000000     (offset)
+<br/>
+080193EA: 1C1F    add     r7, r3, #0x0                  ; r3=000001E0                           (frequency)
+<br/>
+080193EC: 605A    str     r2, [r3, #0x04]               ; [r3+0x04]=!?!?
+<br/>
+080193EE: 9B13    ldr     r3, [sp, #0x04C]
+<br/>
+080193F0: 9A14    ldr     r2, [sp, #0x050]
+<br/>
+080193F2: 615B    str     r3, [r3, #0x14]
+<br/>
+080193F4: 619A    str     r2, [r3, #0x18]
+<br/>
+080193F6: AB0E    add     r3, sp, #0x038
+<br/>
+080193F8: 781B    ldrb    r3, this
+<br/>
+080193FA: 469A    mov     r10, r3
+<br/>
+080193FC: AB10    add     r3, sp, #0x040
+<br/>
+080193FE: 781B    ldrb    r3, this
+<br/>
+08019400: 4699    mov     r9, r3
+<br/>
+08019402: AB11    add     r3, sp, #0x044
+<br/>
+08019404: 781B    ldrb    r3, this
+<br/>
+(93):    {
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+The point where Device::playSample() is called is correct, register r0 contains the Device's "this" pointer, r1-&gt;r3 contain the first 3 parameters and the rest are pushed onto the stack (I've also noted the actual values on the stack at the bl instruction).  However, once inside playSample(), the volume (r2) and frequency (r3) are properly retrieved, but the instruction at 0x080193EC is attempting to store the volume data back into memory using the frequency as a base address!  Since the frequency is 0x000001E0, this is obviously incorrect.
+<br/>
+<br/>
+For comparison, here is the disassembly of just the prolog at -O1:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">(92):    Channel *Device::playSample(Sample *sample, u8 volume, u32 frequency, s8 panning, uint offset, Priority priority, bool createPaused, bool autoFree, SampleCallback cbFunc, void *cbArg)
+<br/>
+08019410: B5F0    push    {r4, r5, r6, r7, lr}
+<br/>
+08019412: 465F    mov     r7, r11
+<br/>
+08019414: 4656    mov     r6, r10
+<br/>
+08019416: 464D    mov     r5, r9
+<br/>
+08019418: 4644    mov     r4, r8
+<br/>
+0801941A: B4F0    push    {r4, r5, r6, r7}
+<br/>
+0801941C: B083    add     sp, #-0x00C
+<br/>
+0801941E: 1C05    add     r5, r0, #0x0
+<br/>
+08019420: 4688    mov     r8, r1
+<br/>
+08019422: 4693    mov     r11, r2
+<br/>
+08019424: 1C1E    add     r6, r3, #0x0
+<br/>
+08019426: AB0C    add     r3, sp, #0x030
+<br/>
+08019428: 781B    ldrb    r3, this
+<br/>
+0801942A: 469A    mov     r10, r3
+<br/>
+0801942C: AB0E    add     r3, sp, #0x038
+<br/>
+0801942E: 781F    ldrb    r7, this
+<br/>
+08019430: AB0F    add     r3, sp, #0x03C
+<br/>
+08019432: 781B    ldrb    r3, this
+<br/>
+08019434: 4699    mov     r9, r3
+<br/>
+08019436: AB10    add     r3, sp, #0x040
+<br/>
+08019438: 781B    ldrb    r3, this
+<br/>
+0801943A: 9301    str     r3, [sp, #0x004]
+<br/>
+(93):    {
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I really don't like blaming the compiler when code breaks at higher optimization levels (since it usually turns out to be my fault anyway), but I don't understand what I could possibly be doing wrong here -- especially since it's in the prolog before any of my code executes.
+<br/>
+<br/>
+If it matters, the CFLAGS I am using are: -DGBA -mcpu=arm7tdmi -mtune=arm7tdmi -mthumb -mthumb-interwork -ffunction-sections -fdata-sections -g -O3 -Wall -fomit-frame-pointer -ffast-math
+<br/>
+<br/>
+Does anyone have any suggestions?  Could this just be a compiler bug?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#147154 - bpoint - Sat Dec 15, 2007 1:30 pm</h4>
+    <div class="postbody"><span class="postbody">I've been working on this problem for a few days now, and frankly, I'm still baffled.
+<br/>
+<br/>
+Knowing that the code works at -O1 and does not at -O2 (or even -Os, I might add), I set out to determine exactly which specific optimization it is that is causing this function's prolog to be generated incorrectly.  My initial plan was to specify -O2, and disable all -O2-specific optimizations using "-fno-xxx" (which should effectively give me -O1) listed at <a class="postlink" href="http://gcc.gnu.org/onlinedocs/gcc-4.1.2/gcc/Optimize-Options.html" target="_blank">GCC's optimization options</a> page, then re-enable them one-by-one, retesting afterward to see which optimization was causing the problem.
+<br/>
+<br/>
+Well, even disabling all of the optimizations still didn't work.  The prolog code was unchanged.
+<br/>
+<br/>
+I am now convinced this is a bug in gcc's optimizer.  Since devkitARM r21 is using a slightly old version of gcc, is there any chance of having a new release with, say, gcc-4.2.2 any time soon?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#147198 - Exophase - Sun Dec 16, 2007 4:24 am</h4>
+    <div class="postbody"><span class="postbody">The optimization guide may not be giving everything, I hear about things every now and then that aren't on there. Maybe you should try the opposite approach, starting with -O1 and adding the features in an attempt to reproduce the code. The funny thing is that I could swear the -O3 code actually looks worse than the -O1 code, but maybe it pays off later in the function.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#147203 - tepples - Sun Dec 16, 2007 6:13 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Exophase wrote:</b></span></td> </tr> <tr> <td class="quote">The funny thing is that I could swear the -O3 code actually looks worse than the -O1 code, but maybe it pays off later in the function.</td> </tr></table><span class="postbody">
+<br/>
+After upgrading from DevKit Advance to devkitARM rsingledigit, I tried compiling the Toast decoder (used by GSM Player) with -O3, and I found that GCC was unrolling loops so far that it took twice as much of the GBA's IWRAM as -O2, with minimal speed benefit. Once you get the difference between -O1 and -O2 ironed out, I'd suggest sticking with -O2 or -Os unless you have a good reason to go to -O3, including profiler results.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#147211 - bpoint - Sun Dec 16, 2007 8:43 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Exophase wrote:</b></span></td> </tr> <tr> <td class="quote">Maybe you should try the opposite approach, starting with -O1 and adding the features in an attempt to reproduce the code.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+After posting last night, I was going to try that when I realized I was changing the wrong makefile to do my testing... :)  So I started over and was able to finally find the culprit.  I can now build using -O2, -Os, and -O3 as long as I specify -fno-gcse.
+<br/>
+<br/>
+I poked a bit through GCC Bugzilla and it seems gcse optimizations seem to be a repetitive problem.  One specific bug that caught my eye was <a class="postlink" href="http://gcc.gnu.org/bugzilla/show_bug.cgi?id=11440" target="_blank">this one</a>, but it's supposedly been fixed since gcc-3.3.1.  I also tried to see if I could generate a cut-down test case, but it seems that it's not just that single function that causes it, and my audio engine is too complicated to start trying to rip it apart.  :(
+<br/>
+<br/>
+So, until a new devkitARM comes with a new gcc, I'll just specify -fno-gcse for now.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote">Once you get the difference between -O1 and -O2 ironed out, I'd suggest sticking with -O2 or -Os unless you have a good reason to go to -O3, including profiler results.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I'm actually noticing quite a bit of a speed improvement between -O2/-Os and -O3, specifically in the mixing code where there is a small loop of only a few instructions.  My engine's build environment setup to be able to compile to both -Os and -O3, so it really depends on the application to balance out between the memory usage and performance.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

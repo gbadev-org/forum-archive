@@ -1,0 +1,393 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>DMA transfer help... - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Beginners > DMA transfer help...</h2>
+<div id="posts">
+<div class="post">
+    <h4>#36647 - Dan_attacker - Sat Feb 26, 2005 10:52 pm</h4>
+    <div class="postbody"><span class="postbody">I'm trying to use DMA to transfer tile data into VRAM.  The way I was doing it before was...
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+for(int loop2=tiledataloc;loop2&lt;tiledataloc+2;loop2++)
+<br/>
+{
+<br/>
+CharBB[loop2]=(u16)((u8)smallfont_blockgfx[(((letter)*16)+fontdataloc)*2])+((((u8)smallfont_blockgfx[((((letter)*16)+fontdataloc)*2)+1]))&lt;&lt;8);
+<br/>
+fontdataloc++;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+...but it was too slow. But with DMA, I don't know how to merge the two 8 bit values into a 16 bit value. I thought storing the merged 8 bit values into a temp variable and then doing the DMA transfer from that variable to the VRAM location would work, but it doesn't, at least using my code...
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+gfxdatatemp = (u16)((u8)smallfont_blockgfx[(((letter)*16)+fontdataloc)*2])+((((u8)smallfont_blockgfx[((((letter)*16)+fontdataloc)*2)+1]))&lt;&lt;8);
+<br/>
+REG_DMA3SAD = (u32)&amp;gfxdatatemp;
+<br/>
+REG_DMA3DAD = (u32)&amp;CharBB[tiledataloc];
+<br/>
+REG_DMA3CNT = 1 | DMA_16NOW;
+<br/>
+fontdataloc++;
+<br/>
+gfxdatatemp = (u16)((u8)smallfont_blockgfx[(((letter)*16)+fontdataloc)*2])+((((u8)smallfont_blockgfx[((((letter)*16)+fontdataloc)*2)+1]))&lt;&lt;8);
+<br/>
+REG_DMA3SAD = (u32)&amp;gfxdatatemp;
+<br/>
+REG_DMA3DAD = (u32)&amp;CharBB[tiledataloc+1];
+<br/>
+REG_DMA3CNT = 1 | DMA_16NOW;
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Even if it worked, would it even be faster than my old code with that whole merging values into temp variable thing? Any thoughts would be appreciated...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#36650 - ymalik - Sat Feb 26, 2005 11:43 pm</h4>
+    <div class="postbody"><span class="postbody">All those parentheses make your code hard to read.  But using DMA is quite simple.  Here's what I do:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#define DMA_Copy(channel, source, dest, WordCount, mode)\
+<br/>
+   REG_DMA##channel##SAD = (u32)source;\
+<br/>
+   REG_DMA##channel##DAD = (u32)dest;\
+<br/>
+   REG_DMA##channel##CNT = WordCount | mode;\
+<br/>
+<br/>
+DMA_Copy(3, (void *) clouds_Tiles, (void *) CharBaseBlock(1), 9984/2, DMA_16NOW);</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+The .c file had 9984 char values, but since DMA_16NOW tells how many 16 bit values to copy, you divide 9984 by 2.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#36703 - Cearn - Mon Feb 28, 2005 10:56 am</h4>
+    <div class="postbody"><span class="postbody">Thanks to the little-endian architecture, you don't have to combine two sequential u8 into one u16, that's the normal organisation. If you have the bytes '01 02' you can cast the address to u16* it will read 0x0201, exactly as you'd have if you combine them manually.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+u8 array[4]= { 0x01, 0x02, 0x03, 0x04 }; // to be combined to 0x0201, 0x0403
+<br/>
+u16 *ptr16= (u16*)array;  // done. Easy, isn't it?
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+The only snare is that when reading an u16 array, that data <span style="font-style: italic">must</span> be on a 2-byte-boundary.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Dan_attacker wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">gfxdatatemp = (u16)((u8)smallfont_blockgfx[(((letter)*16)+fontdataloc)*2])+((((u8)smallfont_blockgfx[((((letter)*16)+fontdataloc)*2)+1]))&lt;&lt;8); 
+<br/>
+REG_DMA3SAD = (u32)&amp;gfxdatatemp; 
+<br/>
+REG_DMA3DAD = (u32)&amp;CharBB[tiledataloc]; 
+<br/>
+REG_DMA3CNT = 1 | DMA_16NOW;</td> </tr></table><span class="postbody"></span></td> </tr></table><span class="postbody">
+<br/>
+It's strange that this doesn't work, as far as I can tell it should. This particular version wouldn't be faster than doing it in a for loop though, since you're doing 4 assignments to set up a single copy. DMA is good for larger transfers. 
+<br/>
+<br/>
+By the way, ymalik's right, you have waaaay to many parentheses in your code.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Dan_attacker wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+for(int loop2=tiledataloc;loop2&lt;tiledataloc+2;loop2++)
+<br/>
+{
+<br/>
+CharBB[loop2]=(u16)((u8)smallfont_blockgfx[(((letter)*16)+fontdataloc)*2])+((((u8)smallfont_blockgfx[((((letter)*16)+fontdataloc)*2)+1]))&lt;&lt;8);
+<br/>
+fontdataloc++;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody"></span></td> </tr></table><span class="postbody">
+<br/>
+The following code should do the same work, but is a lot easier on the eyes. (btw, I think this is what you're trying to do, it's hard to see exactly)
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+u8 *src= (u8*)&amp;smallfont_blockgfx[(16*letter+fontdataloc)*2];
+<br/>
+u16 *dst= (u16*)&amp;CharBB[tiledataloc];
+<br/>
+for(int loop2=0; loop2&lt;4; loop2 += 2)
+<br/>
+    CharBB[loop2] = src[loop2] + ((u16)src[loop2+1]&lt;&lt;8);
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+In fact you can do one better and copy by u32, since you're only copying 4 bytes in this loop. However, the source and destination addresses but be u32 aligned for this to work:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+u32 *src= (u32*)&amp;smallfont_blockgfx[32*letter+2*fontdataloc];
+<br/>
+u32 *dst= (u32*)&amp;CharBB[tiledataloc];
+<br/>
+*dst = *src;
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#36748 - Dan_attacker - Tue Mar 01, 2005 3:38 am</h4>
+    <div class="postbody"><span class="postbody">Thanks for the code peoples.  I tried to implement your code, Cearn, into my program but I just couldn't get it to work right. I really don't know C programming well. Anyways, this code seems to work for me...
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+            for(int loop2=0;loop2&lt;2;loop2++)
+<br/>
+            {
+<br/>
+               REG_DMA3SAD = (u32)&amp;smallfont_blockgfx+((16*letter+fontdataloc)*2);
+<br/>
+               REG_DMA3DAD = (u32)&amp;CharBB[tiledataloc+loop2];
+<br/>
+               REG_DMA3CNT = 1 | DMA_16NOW;
+<br/>
+               fontdataloc++;
+<br/>
+            }
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+I'll probably be back for some more help because this is just one portion of my font engine.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#36752 - dagamer34 - Tue Mar 01, 2005 4:36 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Dan_attacker wrote:</b></span></td> </tr> <tr> <td class="quote">I'm trying to use DMA to transfer tile data into VRAM.  The way I was doing it before was...
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+for(int loop2=tiledataloc;loop2&lt;tiledataloc+2;loop2++)
+<br/>
+{
+<br/>
+CharBB[loop2]=(u16)((u8)smallfont_blockgfx[(((letter)*16)+fontdataloc)*2])+((((u8)smallfont_blockgfx[((((letter)*16)+fontdataloc)*2)+1]))&lt;&lt;8);
+<br/>
+fontdataloc++;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+...but it was too slow. But with DMA, I don't know how to merge the two 8 bit values into a 16 bit value. I thought storing the merged 8 bit values into a temp variable and then doing the DMA transfer from that variable to the VRAM location would work, but it doesn't, at least using my code...
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+gfxdatatemp = (u16)((u8)smallfont_blockgfx[(((letter)*16)+fontdataloc)*2])+((((u8)smallfont_blockgfx[((((letter)*16)+fontdataloc)*2)+1]))&lt;&lt;8);
+<br/>
+REG_DMA3SAD = (u32)&amp;gfxdatatemp;
+<br/>
+REG_DMA3DAD = (u32)&amp;CharBB[tiledataloc];
+<br/>
+REG_DMA3CNT = 1 | DMA_16NOW;
+<br/>
+fontdataloc++;
+<br/>
+gfxdatatemp = (u16)((u8)smallfont_blockgfx[(((letter)*16)+fontdataloc)*2])+((((u8)smallfont_blockgfx[((((letter)*16)+fontdataloc)*2)+1]))&lt;&lt;8);
+<br/>
+REG_DMA3SAD = (u32)&amp;gfxdatatemp;
+<br/>
+REG_DMA3DAD = (u32)&amp;CharBB[tiledataloc+1];
+<br/>
+REG_DMA3CNT = 1 | DMA_16NOW;
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Even if it worked, would it even be faster than my old code with that whole merging values into temp variable thing? Any thoughts would be appreciated...</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Writing lots of code like this might lead to eyestrain if you even have to fix it. I hope it's neatly tucked away in functions!<br/>_________________<br/>Little kids and Playstation 2's don't mix. :(</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#36764 - Cearn - Tue Mar 01, 2005 12:43 pm</h4>
+    <div class="postbody"><span class="postbody">Pointer skills are essential to C programming, especially on something like the GBA. Try to understand what's going on at the memory-level. Take some time to really learn what's going on, or it will bite you in the ass later on.
+<br/>
+<br/>
+Suppose tou have a byte-array of the numbers 1 through 8. u8 array1[8]= { 1,2,3,4,5,6,7,8};. The memory layout will be like this:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">array1:   0x01 0x02 0x03 0x04 0x05 0x06 0x07 0x08
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+A halfword array (u16) is a bit differently, because is used two bytes for each entry. The GBA uses a little endian scheme, which means that the lower byte has a lower memory location:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">u16 array2[4]= { 0x0201, 0x0403, 0x0605, 0x0807 };
+<br/>
+  in memory:
+<br/>
+array2: 0x01 0x02 0x03 0x04 0x05 0x06 0x07 0x08
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Note that this is <span style="font-style: italic">exactly</span> the same as array1. The <span style="font-style: italic">difference</span> manifests itself when you access individual elements. array1[1] points to the second u8 in the list, so it gives 0x02. array2[1], however, gives the second <span style="font-weight: bold">u16</span> in the list, which is 0x0403. One-byte offsets vs two-byte offsets. You can look at the divisions this way:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">        | 0    |  1   |  2   |   3  |   4  |   5  |   6  |   7  |
+<br/>
+array1: | 0x01 | 0x02 | 0x03 | 0x04 | 0x05 | 0x06 | 0x07 | 0x08 |
+<br/>
+<br/>
+        |      0      |      1      |      2      |      3      |
+<br/>
+array2: |  0x01 0x02  |  0x03 0x04  |  0x05 0x06  |  0x07 0x08  |
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+This is only a difference of <span style="font-style: italic">interpretation</span> brought on by the type of the variable, the data itself is still the same.
+<br/>
+<br/>
+Suppose you want to copy array1 to another memory location. You create a pointer to that address and then run through the element one my one:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">u8 *dst= (u8*)[some address];
+<br/>
+for(ii=0; ii&lt;8; ii++)
+<br/>
+  dst[ii]= array1[ii];
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+The end result would be:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">array1:   0x01 0x02 0x03 0x04 0x05 0x06 0x07 0x08
+<br/>
+dst:      0x01 0x02 0x03 0x04 0x05 0x06 0x07 0x08
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+An exact duplicate, which is generally what you want. You can do the same thing with array2. But, since it only has half as many elements, you only need four iterations, which roughly means a speed-up of a factor two.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">u16 *dst= (u16*)[some address];
+<br/>
+for(ii=0; ii&lt;4; ii++)
+<br/>
+  dst[ii]= array2[ii];
+<br/>
+<br/>
+  End result
+<br/>
+array2:   0x01 0x02 0x03 0x04 0x05 0x06 0x07 0x08
+<br/>
+dst:      0x01 0x02 0x03 0x04 0x05 0x06 0x07 0x08
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Note that the end result is <span style="font-style: italic">exactly</span> the same as before.
+<br/>
+<br/>
+Now, unless you have a good reason not to, the source and destination arrays should be of <span style="font-weight: bold">the same type</span>. Copying from a u8-array to a u16-array will do something, but maybe not what you expected. Since your smallfont_blockgfx array is u8[] (I think) and CharBB is probably u16[] (or u16*, which is pretty much the same), a normal for-loop won't give you an exact copy.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">u16 *dst= (u16*)[some address];
+<br/>
+for(ii=0; ii&lt;4; ii++)
+<br/>
+  dst[ii]= array1[ii];    // u8 array!!
+<br/>
+<br/>
+  End result (oops)
+<br/>
+array1: | 0x01 | 0x02 | 0x03 | 0x04 | 0x05 | 0x06 | 0x07 | 0x08 | 
+<br/>
+dst:    |  0x01 0x00  |  0x02 0x00  |  0x03 0x00  |  0x04 0x00  | 
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+You can get an exact copy whether you use u8[], u16[] or u32[] for both source and destination, since the memory contents are the same. The only difference is the the number of bytes you copy in one go. And now for the clever part: you can re-interpret the memory locations using pointer-casts. This does not change the data, you're just telling the compiler how big the chunks are. So you could cast both array1 and the destination to u16* and do the copy:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">u16 *src= (u16*)array;
+<br/>
+u16 *dst= (u16*)[some address];
+<br/>
+for(ii=0; ii&lt;4; ii++)
+<br/>
+  dst[ii]= src[ii];
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+You can even go to u32* for maximum effect. It is the number of iterations that kills your speed; bigger chunks == less iterations == less time. 
+<br/>
+Of course, there's still no such thing as a free lunch. The problem with this casting business is that an u16 must be on an u16 boundary, and the same goes for u32. For example, u16* ptr= (u16*)1 will give you a pointer to address 1, but when dereferencing it you will actually get the u16 starting at address 0. Alignment matters.
+<br/>
+<br/>
+And then there is DMA. DMA can be seen as a mass-copier. But it only works like that if you actually give is a big mass of data to copy. The point of using it for general copies is that you can eliminate the slow loops, but if you use it inside a loop you're pretty must defeating the purpose of using it. Especially if you're just giving it two bytes to copy. Try this instead
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">REG_DMA3SAD = (u32)&amp;smallfont_blockgfx+((16*letter+fontdataloc)*2); 
+<br/>
+REG_DMA3DAD = (u32)&amp;CharBB[tiledataloc]; 
+<br/>
+REG_DMA3CNT = 2 | DMA_16NOW;
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+No loop, just this. Hmm, I don't really trust the operator precedence of the source-register. Just out of curiosity, what exactly is the declaration of smallfont_blockgfx?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#36783 - poslundc - Tue Mar 01, 2005 6:13 pm</h4>
+    <div class="postbody"><span class="postbody">VBA's memory viewer can also be instructive if you're having trouble grasping Cearn's post. Try viewing a chunk of memory (that has data in it!) in 32-, 16-, and 8-bit mode and see how the same data reorganizes itself.
+<br/>
+<br/>
+The u8, u16 and u32 data types match up to these different widths (and are typedefs of char, short and int respectively). Hopefully you can see the difference between an array of the three types.
+<br/>
+<br/>
+(FYI, the backwards ordering of the bytes in 16- and 32-bit modes is called <span style="font-style: italic">little-endian</span>. It is usually seen as making more mathematical sense if less visual sense. As you might have guessed, big-endian computers also exist.)
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#36818 - Dan_attacker - Wed Mar 02, 2005 2:50 am</h4>
+    <div class="postbody"><span class="postbody">Thanks for the explanation of little and big-endian, learned something new today. Yeah, I had to use VBA's memory viewer several times to debug my program, its great.
+<br/>
+<br/>
+I understand the differences of u8,u16,u32 and have a decent understanding of memory locations and stuff. I actually already removed that loop in my code except I just did a DMA32_NOW instead of doing two 16 bit transfers. What I didn't understand before was what the * did, then I looked it up.
+<br/>
+<br/>
+Anyways, I have a another question. I read somewhere that you can only copy 16 bits at a time to VRAM. Is this not the case for DMA, since I did a DMA32_NOW?
+<br/>
+<br/>
+Ok, heres my real question. Can I set the DMA destination address register to point to a memory location in VRAM that isn't, i'm not sure how to say this, 16 bit aligned? Or, can I just point to any memory address and have DMA copy there?
+<br/>
+<br/>
+Oh, Cearn, smallfont_blockgfx is const unsigned char.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#36819 - tepples - Wed Mar 02, 2005 2:58 am</h4>
+    <div class="postbody"><span class="postbody">In a 16-bit DMA, the source and destination pointers must be 16-bit aligned (multiple of 2). In a 32-bit DMA, the source and destination pointers must be 32-bit aligned (multiple of 4).
+<br/>
+<br/>
+A 32-bit DMA to VRAM works just as well as a 16-bit DMA to VRAM, but it's only faster if the source is in IWRAM. They run at the same speed otherwise.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#36823 - Dan_attacker - Wed Mar 02, 2005 3:24 am</h4>
+    <div class="postbody"><span class="postbody">lol, that would explain why my program restarts when I put the destination address as 0600d823!</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

@@ -1,0 +1,267 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Inaccuracies and no texture - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Inaccuracies and no texture</h2>
+<div id="posts">
+<div class="post">
+    <h4>#114079 - NeX - Wed Jan 03, 2007 6:02 pm</h4>
+    <div class="postbody"><span class="postbody">My code is below.  On Dualis, the texture appears, and there are no visible seams between the quads.  However, on the DS itself, the texture does not appear, and there are seams between the landscape tiles.  The texture is black and white, and I am intending upon using the colour function to make grass and dirt seamlessly fade from one to another.  Help!
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">/*---------------------------------------------------------------------------------
+<br/>
+<br/>
+RTS
+<br/>
+<br/>
+---------------------------------------------------------------------------------*/
+<br/>
+#include &lt;nds.h&gt;
+<br/>
+#include &lt;stdio.h&gt;
+<br/>
+#include &lt;stdlib.h&gt;
+<br/>
+#include &lt;unistd.h&gt;
+<br/>
+#include &lt;gbfs.h&gt;
+<br/>
+<br/>
+extern const GBFS_FILE  data_gbfs; //Don't touch the red button
+<br/>
+u32 totalframes;
+<br/>
+int texture[8];
+<br/>
+v16 heightmap[65536];
+<br/>
+   float rotateX = 0.0;
+<br/>
+   float rotateY = 0.0;
+<br/>
+//---------------------------------------------------------------------------------
+<br/>
+int main(void) {
+<br/>
+//---------------------------------------------------------------------------------
+<br/>
+   touchPosition touchXY;
+<br/>
+   
+<br/>
+   powerON(POWER_ALL);
+<br/>
+   videoSetMode(MODE_0_3D);   //not using the main screen
+<br/>
+   videoSetModeSub(MODE_0_2D | DISPLAY_BG0_ACTIVE);   //sub bg 0 will be used to print text
+<br/>
+   vramSetBankA(VRAM_A_TEXTURE);
+<br/>
+      glViewPort(0,0,255,191);
+<br/>
+<br/>
+   glClearColor(0,0,0);
+<br/>
+   glClearDepth(0x7FFF);
+<br/>
+   irqInit();
+<br/>
+   irqEnable(IRQ_VBLANK);
+<br/>
+   const void *terrain_dta_bin = gbfs_get_obj(&amp;data_gbfs, "terrain.dta.bin", NULL);    
+<br/>
+   glGenTextures(1, &amp;texture[0]);
+<br/>
+   glBindTexture(0, texture[0]);
+<br/>
+   glTexImage2D(0, 0, GL_RGB, TEXTURE_SIZE_256 , TEXTURE_SIZE_256, 0, TEXGEN_TEXCOORD,  (u8*)terrain_dta_bin);
+<br/>
+   const void *test_heightmap_raw = gbfs_get_obj(&amp;data_gbfs, "test.heightmap.raw", NULL);    
+<br/>
+      dmaCopy(test_heightmap_raw, (void*)heightmap, 65536);
+<br/>
+      u32 i=0;
+<br/>
+      
+<br/>
+      while(i&lt;65536)
+<br/>
+      {
+<br/>
+         heightmap[i]=heightmap[i]*0.1;
+<br/>
+         i++;
+<br/>
+      }
+<br/>
+   while(1) {
+<br/>
+   totalframes++;
+<br/>
+   
+<br/>
+      glReset();
+<br/>
+<br/>
+      //any floating point gl call is being converted to fixed prior to being implemented
+<br/>
+      gluPerspective(35, 256.0 / 192.0, 0.1, 40);
+<br/>
+<br/>
+      gluLookAt(   0.0, 0.0,1.0,      //camera possition
+<br/>
+               0.0, 0.0, 0.0,      //look at
+<br/>
+               0.0, 1.0, 0.0);      //up
+<br/>
+               glTranslate3f32(0, 0, floattof32(-1));
+<br/>
+      glRotateX(rotateX);
+<br/>
+      glRotateY(rotateY);
+<br/>
+      
+<br/>
+      glPushMatrix();
+<br/>
+<br/>
+      //move it away from the camera
+<br/>
+<br/>
+<br/>
+<br/>
+<br/>
+<br/>
+      glMatrixMode(GL_MODELVIEW);
+<br/>
+<br/>
+<br/>
+<br/>
+      //not a real gl function and will likely change
+<br/>
+      glPolyFmt(POLY_ALPHA(31) | POLY_CULL_NONE);
+<br/>
+<br/>
+      scanKeys();
+<br/>
+      
+<br/>
+      u16 keys = keysHeld();
+<br/>
+      
+<br/>
+      if((keys &amp; KEY_UP)) rotateX += 3;
+<br/>
+      if((keys &amp; KEY_DOWN)) rotateX -= 3;
+<br/>
+      if((keys &amp; KEY_LEFT)) rotateY += 3;
+<br/>
+      if((keys &amp; KEY_RIGHT)) rotateY -= 3;
+<br/>
+<br/>
+<br/>
+   glBindTexture(0, texture[0]);
+<br/>
+      //draw the obj
+<br/>
+      
+<br/>
+      u8 i=0;
+<br/>
+      u8 j=0;
+<br/>
+      while(j&lt;32)
+<br/>
+      {
+<br/>
+      glBegin(GL_QUAD_STRIP);
+<br/>
+      while(i&lt;32)
+<br/>
+      {
+<br/>
+         glColor3b(0,255,0);
+<br/>
+         glTexCoord1i(TEXTURE_PACK(inttot16((j*32)%256), inttot16((i*32)%256)));
+<br/>
+         glVertex3v16(floattov16(i*0.1),heightmap[(j*256)+i],floattov16(-0.05));
+<br/>
+<br/>
+<br/>
+<br/>
+         glColor3b(0,255,0);
+<br/>
+         glTexCoord1i(TEXTURE_PACK(inttot16(((j+1)*32)%256), inttot16((i*32)%256)));
+<br/>
+         glVertex3v16(floattov16(i*0.1), heightmap[((j+1)*256)+i], floattov16(0.05));
+<br/>
+      i++;
+<br/>
+      }
+<br/>
+      glEnd();
+<br/>
+      glTranslate3f32(0, 0, floattof32(0.1));
+<br/>
+      i=0;
+<br/>
+      j++;
+<br/>
+      }
+<br/>
+      
+<br/>
+<br/>
+      glPopMatrix(1);
+<br/>
+<br/>
+      glFlush();
+<br/>
+<br/>
+      swiWaitForVBlank();
+<br/>
+<br/>
+   }
+<br/>
+<br/>
+   return 0;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Amendment: Could it be caused by the use of floats to rotate the terrain?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#114082 - NeX - Wed Jan 03, 2007 7:28 pm</h4>
+    <div class="postbody"><span class="postbody">I've gotten around the inaccuracies by overlapping the tiles by 0.5%.  The texture is still a no-show, however.  If I remove the colour commands, it goes black....
+<br/>
+Have I got to set bit 15 on the textures?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#114108 - tepples - Thu Jan 04, 2007 1:30 am</h4>
+    <div class="postbody"><span class="postbody">When in doubt, set bit 15.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

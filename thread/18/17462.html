@@ -1,0 +1,150 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>How to work with too large sprites (>4MB) ? - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > How to work with too large sprites (>4MB) ?</h2>
+<div id="posts">
+<div class="post">
+    <h4>#175765 - JanoSicek - Thu Feb 03, 2011 3:50 pm</h4>
+    <div class="postbody"><span class="postbody">tl;dr = 24MB of sprites in filesystem, how to animate them in real time?
+<br/>
+<br/>
+<br/>
+I am thinking about a 2D game with a lot of sprite animations. For simplicity sake let's make all sprites 32x32 in 256 colors. Each frame is 1024 bytes uncompressed. I am not worried about 128 sprite limit, maximum concurrent sprites on screen will definitely be smaller.
+<br/>
+<br/>
+However for animation I am assuming 5 different facings (N,NE,E,SE,S+others done with flipping) for each of the 6 animations (stand-still, walk, attack, get-hit, die, change-to-battle-stance). If we use ~8 frames for each animation, this ends up with 5*6*8 = 240 frames = uncompressed 240 kB per character.
+<br/>
+<br/>
+Let's assume some standard D&amp;D game, which would need characters Human,Elf,Halfling,Dwarf each with different armors&amp;weapons. Baldur's gate uses composite sprites, where they joing character+helmet+weapon+shield from 4 different sprites into one. For simplicity let's assume all characters are already pre-rendered with all their weapons&amp;armors. We will end up with 100 characters, each having 240kB, total is 24MB of animations. 
+<br/>
+<br/>
+At any moment there will be only a small number of frames visible, however it is not really feasible to stream the data from filesystem to VRAM, right? The benchmarks show it takes 6-10ms to copy 16kB. Should I build a cache in RAM (for example 1MB) and use it as an intermediate cache between filesystem and VRAM? 
+<br/>
+So that 24MB of characters on filesystem will be cached in 1MB of RAM, on their way to the 128kB VRAM dedicated to sprites.
+<br/>
+<br/>
+Would this work? During every frame, look what frames are missing in RAM cache and download them from filesystem. If there is still time, maybe try to prefetch subsequent animation frames to RAM. If there are too many frames missing, we will end up with a frame skip. For 30FPS game we should be able to copy up to 88kB between two frames, and that should be more than enough for 10-20 characters I expect to see onscreen.
+<br/>
+<br/>
+How much would compression help? I understand there are 3 algorithms in BIOS (huffman, LZ77 and RL). They would save speed for copying from filesystem, but would slow down copying from cache to VRAM. I tried googling for speed benchmark, but I haven't found anything relevant for GBA/NDS. 1kB sprites should compress very nicely, as 50% of the sprite is transparent color usually.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#175768 - TwentySeven - Fri Feb 04, 2011 1:29 am</h4>
+    <div class="postbody"><span class="postbody">Yes, it does seem you'll have to use the file system and some sort of cache/management.
+<br/>
+<br/>
+basically something like
+<br/>
+<br/>
+[file io]-&gt;[Ram cache]-&gt;[Vram]
+<br/>
+<br/>
+Where each frame your entity tells the ram cache what frame it wants to use.
+<br/>
+<br/>
+The ram caches job is to return an OAM slot with the correct data in it, by cheching the contents of vram, and if its not there, loading it, preferably during vblank.
+<br/>
+<br/>
+You have a fair chunk of time to load stuff from file IO during vblank.  I have managed to move a full 128kb bank to vram during those 2ms, using DMA. (I just checked)
+<br/>
+<br/>
+You can also avoid being "wrong" alot by making sure that you load sets of sprites in advance (your elf is just off screen, start loading his frames up...)</span><span class="gensmall"><br/><br/>Last edited by TwentySeven on Fri Feb 04, 2011 1:32 am; edited 1 time in total</span></div>    
+</div>
+<div class="post">
+    <h4>#175769 - JanoSicek - Fri Feb 04, 2011 1:31 am</h4>
+    <div class="postbody"><span class="postbody">If 100kB can be transferred in 2ms, then the whole point is moot.
+<br/>
+I haven't tested it myself, I only looked at DLDI benchmarks and there I saw 16kB transfers taking 6-10ms, which scared me.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#175770 - TwentySeven - Fri Feb 04, 2011 1:33 am</h4>
+    <div class="postbody"><span class="postbody">Yeah no you cant move it off disk -&gt; vram that fast, I meant from system ram to vram.
+<br/>
+<br/>
+Disk is horribly slow.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#175771 - TwentySeven - Fri Feb 04, 2011 1:43 am</h4>
+    <div class="postbody"><span class="postbody">so yeah, with disk being that slow you'll have to stream stuff in.
+<br/>
+<br/>
+Looking at my file streamer, I allocated 8ms each frame to streaming files.
+<br/>
+<br/>
+A fopen is assumed to take 8ms, so any frame a fopen takes place on, no freads take place.
+<br/>
+<br/>
+freads are capped at one per frame, with a maximum size of 4096kb.
+<br/>
+<br/>
+so loading 128kb would take 33 frames (at 60hz)
+<br/>
+<br/>
+Because fopen is so expensive I'd seriously suggest some kind of single binary blob file with all your sprite data, especially if you are loading 1kb frames peacemeal.
+<br/>
+<br/>
+Correcting my first post, my (tried and tested) setup is actually
+<br/>
+<br/>
+[Files]-&gt;[Streamer]-&gt;[Texture Cache Manager]-&gt;[Vram]</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#175772 - sverx - Fri Feb 04, 2011 10:05 am</h4>
+    <div class="postbody"><span class="postbody">These days I was thinking about similar things because I'm also planning to develop a game which involves a lot of characters. What I thought until now is that -relating to what you wrote- I guess you won't ever have really many different characters on screen, of course never 100 together. Say 10, for instance? Well, this will use 2.4 MB uncompressed space, and will fit into RAM.
+<br/>
+Also if you're not planning to go isometric (but I guess you are) you can also flip sprites vertically. You could reduce the number of sprite used by each character this way. One last thing: on the MAIN engine you can have up to 256KB of VRAM for sprites. And if that's not enough you could switch to 3D quads and use 512KB texture VRAM instead of using regular 3D sprites. Also there are compressed textures, even if I never used them and I don't know if they'll fit your needs...
+<br/>
+<br/>
+p.s. : if you're searching for collaboration I'm really interested :D</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#175773 - relminator - Fri Feb 04, 2011 12:36 pm</h4>
+    <div class="postbody"><span class="postbody">sverx: On a sidenote, the new libnds would have dynamic textures and palettes. So it should be easy to manage textures.<br/>_________________<br/><a href="http://rel.betterwebber.com" target="_blank">http://rel.betterwebber.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#175775 - JanoSicek - Fri Feb 04, 2011 7:25 pm</h4>
+    <div class="postbody"><span class="postbody">Thank you for all your answers. Next step for me is to put together a rough tech demo to see how are the speeds.
+<br/>
+<br/>
+sverx: Please PM me.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#175776 - DiscoStew - Fri Feb 04, 2011 11:53 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>relminator wrote:</b></span></td> </tr> <tr> <td class="quote">sverx: On a sidenote, the new libnds would have dynamic textures and palettes. So it should be easy to manage textures.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Are you referring to their own version, or mine (nglVideo integration)? If mine, then don't rely on it just yet, as I sent in my patch to them for review, but nothing has been reported back.<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#175779 - relminator - Sat Feb 05, 2011 3:15 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>DiscoStew wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>relminator wrote:</b></span></td> </tr> <tr> <td class="quote">sverx: On a sidenote, the new libnds would have dynamic textures and palettes. So it should be easy to manage textures.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Are you referring to their own version, or mine (nglVideo integration)? If mine, then don't rely on it just yet, as I sent in my patch to them for review, but nothing has been reported back.</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Your's.  Your patch is already on SF (WM pointed it to me) and it's very likely to be on the next release.<br/>_________________<br/><a href="http://rel.betterwebber.com" target="_blank">http://rel.betterwebber.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#175943 - ingramb - Mon Mar 07, 2011 9:02 am</h4>
+    <div class="postbody"><span class="postbody">Check out the NeoDS source: <a href="http://groups.google.com/group/neods" target="_blank">http://groups.google.com/group/neods</a>
+<br/>
+<br/>
+It does pretty much exactly what you are asking about.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

@@ -1,0 +1,192 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Graphic -> .h file - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>C/C++ > Graphic -> .h file</h2>
+<div id="posts">
+<div class="post">
+    <h4>#51511 - stevos - Sat Aug 20, 2005 9:36 pm</h4>
+    <div class="postbody"><span class="postbody">I've just read through the tonc tutorial and have written my first thing, a really simple unbeatable pong game.
+<br/>
+<br/>
+So now I'm working on sprites. I'm on a Mac, and the utility posted on this site doesn't seem to work at all (maybe I'm tossing it the wrong image format). Anyway, I have code written to read the colors from any image format and convert them to the BGR15 format. I was planning on just generating a .c file to hold this data. But! If you download the tonc source and go to /code/gfx/gba_pic.c, it doesn't make any sense to me. So the gba_picData holds a bunch of unsigned ints which will actually be interpreted by the  GBA as 4 bit quantities, which are then used as indecies into the lookup table gba_picPal. This is fine. But gba_picPal doesn't appear to hold color values, unless I'm reading it totally wrong.
+<br/>
+<br/>
+Also, I understand that for 1D images you need to make tiles and then place them horizontally. How high/wide are the tiles supposed to be? 32x32? Or are they 32 high by however wide your sprite is?
+<br/>
+<br/>
+Yeah, I'm dumb. I need this stuff to be spelled out to me. And maybe it was spelled out in tonc but I am too blind to see it! So thanks for help in advance guys.
+<br/>
+<br/>
+When I get this done I will release this utility for sure (Mac).</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#51611 - Cearn - Mon Aug 22, 2005 9:25 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>stevos wrote:</b></span></td> </tr> <tr> <td class="quote">I've just read through the tonc tutorial and have written my first thing, a really simple unbeatable pong game.
+<br/>
+<br/>
+So now I'm working on sprites. I'm on a Mac, and the utility posted on this site doesn't seem to work at all (maybe I'm tossing it the wrong image format). Anyway, I have code written to read the colors from any image format and convert them to the BGR15 format. I was planning on just generating a .c file to hold this data. But! If you download the tonc source and go to /code/gfx/gba_pic.c, it doesn't make any sense to me. So the gba_picData holds a bunch of unsigned ints which will actually be interpreted by the  GBA as 4 bit quantities ...
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+8bit. It's a background. (a mode 4 background in fact)
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">... , which are then used as indices into the lookup table gba_picPal. This is fine. But gba_picPal doesn't appear to hold color values, unless I'm reading it totally wrong.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+const unsigned int gba_picPal[8]= 
+<br/>
+{
+<br/>
+    0x698c7c1f, 0x3a734108, 0x5b182508, 0x63185f18, 
+<br/>
+    0x6b186718, 0x72b66f18, 0x7b187718, 0x777b7f18
+<br/>
+};
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+I admit it may look a bit strange, but in the end data is data and types are just for show. Well, mostly anyway. On little endian systems (like ARM and intel) the u32 
+<br/>
+{ 0x698c7c1f } is the same as two u16 
+<br/>
+{ 0x7c1f, 0x698c } or four bytes 
+<br/>
+{ 0x1f, 0x7c, 0x8c, 0x69 }. 
+<br/>
+The 0x7c1f may be recognized as a 15bit red+blue = magenta, the rest are more difficult to explain. That's for little endian systems, for big-endian (like the mac, or so I'm told), the u16 and u8 are read/stored the other way around:
+<br/>
+{ 0x698c7c1f } == 
+<br/>
+{ 0x698c, 0x7c1f } ==
+<br/>
+{ 0x69, 0x8c, 9x7c, 0x1f }
+<br/>
+You may have to switch the bytes of your exported arrays to match the byte-order of the GBA. 
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Also, I understand that for 1D images you need to make tiles and then place them horizontally. How high/wide are the tiles supposed to be? 32x32? Or are they 32 high by however wide your sprite is?
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+GBA tiles are always 8x8. For bigger sprites, say WxH, first cut the bitmap into blocks of WxH tiles, and make a W wide column out of those. Then repeat the process, but this time with 8x8 blocks.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+// Each space is one 8x8 tile: A, B, C are 32x24 sprites 
+<br/>
+// (yes I know those don't really exist, humour me)
+<br/>
+ ____ ____ ____
+<br/>
+|    |    |    |
+<br/>
+| A  | B  | C  |
+<br/>
+|____|____|____|
+<br/>
+<br/>
+// go to 32 wide column
+<br/>
+ ____
+<br/>
+|    |
+<br/>
+| A  |
+<br/>
+|____|
+<br/>
+|    |
+<br/>
+| B  |
+<br/>
+|____|
+<br/>
+|    |
+<br/>
+| C  |
+<br/>
+|____|
+<br/>
+<br/>
+// go to 8 wide column
+<br/>
+ __
+<br/>
+|_A0|
+<br/>
+|_A1|
+<br/>
+|_A2|
+<br/>
+<br/>
+// A3 to A10
+<br/>
+<br/>
+|A11|
+<br/>
+ --- 
+<br/>
+|_B0|
+<br/>
+| B1|
+<br/>
+// etc
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+But wait, columns are vertical? Yes, but the point is that you need groups of 8x8 pixels. Converting a bigger bitmap directly to 8x8 tiles is kind of a drag, but when you have an 8 pixel wide bitmap, that part is actually already done, and it can then be exported like any other bitmap.
+<br/>
+What really matters in 1D mode is that the different tiles of a sprite are stored in consecutive cells; when you look at it on a tile-viewer they'll be placed horizontally but that's only a representation detail.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#51652 - stevos - Mon Aug 22, 2005 6:59 pm</h4>
+    <div class="postbody"><span class="postbody">Thanks for the reply!
+<br/>
+<br/>
+I've got the palette working fine it seems. I didn't have to swap my colors because let's say 0x7FFF was color 1 on intel, on mine it's just going to be color 0. (Except that I need to fix that because color 0 is supposed to be transparent). Anyway, I think unless there is some required order for palettes (like light to dark or something) I am okay.
+<br/>
+<br/>
+I decided it was a 4 bit index because:
+<br/>
+pic_Width = 240, pic_Height =  160, so 240x160 = 38400.
+<br/>
+<br/>
+But we're only using 9600 unsigned integers to hold that data. Which means that each integer has to hold 4 pieces of data. So something like
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+0x04040404
+<br/>
+looks to me like
+<br/>
+0x04 | 04 | 04 | 04
+<br/>
+</td> </tr></table><span class="postbody">.
+<br/>
+<br/>
+Then I remember that integers are 32 bits so if you need to fit 4 pieces into 1 integer, it's an 8 bit quantity. My code was still right, but only magically.
+<br/>
+<br/>
+Right now my utility takes any image file as input and creates .c and .h files containing a (I think) proper palette and a C array of indices into that palette. I also am tiling the image by just grabbing chunks that are WIDTH x 8 and lining them up next to each other. I actually think that minus the transparency issue (is the 0th item in the array supposed to just not get used then?) I am doing these things correctly.
+<br/>
+This should be suitable for a 8 bit sprite in 1D mapping mode in mode3?</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

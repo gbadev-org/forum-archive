@@ -1,0 +1,273 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Beginner Question - graphic & text backgrounds together? - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Beginner Question - graphic & text backgrounds together?</h2>
+<div id="posts">
+<div class="post">
+    <h4>#172972 - Stephanie - Sat Mar 13, 2010 4:32 pm</h4>
+    <div class="postbody"><span class="postbody">So far I've just been using the console modes to output text, as well as playing with some sprites. I'd like to incorporate a graphical background now, but still be able to output text overtop of it.
+<br/>
+<br/>
+I'm looking at one of the libnds examples, Graphics/Backgrounds/16bit_color_bmp and trying to modify that to get what I want.
+<br/>
+<br/>
+I've changed it so it displays the background image on both screens, but now I'm trying to print text over the lower screen, and it keeps giving me garbled output.
+<br/>
+<br/>
+I'm sure it's a problem with either the vram banks, or the layers... but I think I understand how the layers should work? I have mode 5, for two text bg layers and two extended layers. The bgInit / bgInitSub functions work and as I said, I get the graphic on both screens. But when I use consoleInit to set up a text console, the lower screen gets garbled up.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#include &lt;nds.h&gt;
+<br/>
+#include &lt;stdio.h&gt;
+<br/>
+<br/>
+// git outputs a nice header to reference data
+<br/>
+#include "drunkenlogo.h"
+<br/>
+<br/>
+int main(void) {
+<br/>
+   videoSetMode(MODE_5_2D);
+<br/>
+   videoSetModeSub(MODE_5_2D);
+<br/>
+   vramSetMainBanks(VRAM_A_MAIN_BG, VRAM_B_LCD, VRAM_C_SUB_BG, VRAM_D_LCD);
+<br/>
+<br/>
+//   consoleDemoInit();
+<br/>
+<br/>
+   bgInit(3, BgType_Bmp16, BgSize_B16_256x256, 0,0);
+<br/>
+   bgInitSub(3, BgType_Bmp16, BgSize_B16_256x256, 0,0); // graphics on layer 3
+<br/>
+   
+<br/>
+   decompress(drunkenlogoBitmap, BG_GFX,  LZ77Vram);
+<br/>
+   decompress(drunkenlogoBitmap, BG_GFX_SUB,  LZ77Vram);
+<br/>
+<br/>
+   PrintConsole bottomScreen;
+<br/>
+   consoleInit(&amp;bottomScreen, 0, BgType_Text4bpp, BgSize_T_256x256, 31, 0, false, true); // text on layer 0
+<br/>
+<br/>
+   consoleSelect(&amp;bottomScreen);
+<br/>
+   BG_PALETTE_SUB[255] = RGB15(0, 0, 0); // set text to be black
+<br/>
+   iprintf("Hello DS devers\n");
+<br/>
+   iprintf("www.drunkencoders.com\n");
+<br/>
+   iprintf("16 bit bitmap demo");
+<br/>
+   
+<br/>
+   while(1) {
+<br/>
+      swiWaitForVBlank();
+<br/>
+   }
+<br/>
+   return 0;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+If anyone could point me in the right direction as to where I'm going wrong with this, I'd really appreciate it! 
+<br/>
+<br/>
+Thank you!
+<br/>
+<br/>
+-Stephanie</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#172973 - Cearn - Sat Mar 13, 2010 6:27 pm</h4>
+    <div class="postbody"><span class="postbody">The problem here is that <span style="font-weight: bold">VRAM is shared between all backgrounds</span>, and sometimes the data intended for one background will overwrite the data of another. In this particular case, BG 3 is setup to start at BMP_BASE=0, and the console (on BG 0) starts at TILE_BASE=0. Both of these point to the same memory, so the letters of the console overwrite the first couple of lines of the bitmap. The console also uses map-data, starting at MAP_BASE=31. This is the blue line further down. Even though 31 seems like far way, it still overlaps with the bitmap because a 16bmp bitmap is really, really big.
+<br/>
+<br/>
+What you need to do is calculate the requirements of your data use, and set-up the backgrounds and vram-banks accordingly. First, calculate the number of bytes used for each field:<ul><li>BG 3, 256x256@16 bitmap. Size: 256*256*2 = 0x20000 bytes. This is an entire vram-bank.</li><li>Console tiles. In the worst case, you have 256 tiles for 32 bytes/tile, so that's 0x2000 bytes.</li><li>The smallest map is 32x32@16, to give 32*32*2 = 0x800 bytes.</li></ul>The bitmap is the main problem here. The biggest vram-banks - A,B,C,D - can contain exactly one of the smallest bmp16 bitmaps, leaving nothing for the other backgrounds. Technically, you'd need to assign two vram-banks to this screen. However, since only 256x192 of the BG can be displayed on the screen (0x18000 bytes), you could also use the other 0x8000 bytes for other stuff.
+<br/>
+<br/>
+Now for the actual assignments. The backgrounds uses bases to indicate which part of VRAM they should use. There is a BG_BMP_BASE for bitmaps and BG_MAP_BASE and BG_TILE_BASE for tilemaps. The backgrounds can use 32 different bmp- and map-bases, and 16 tile-bases.
+<br/>
+To get the corresponding VRAM locations, you can use the BG_BMP_RAM, BG_MAP_RAM and BG_TILE_RAM macros (append _SUB for the sub-screen variants). 
+<br/>
+<br/>
+These bases divide VRAM into blocks. Each bmp and tile-block is 0x4000 bytes in size, and each map-block is 0x800. Again, all three block-types use the same memory, so that bmp-block 0, tile-block 0 and map-block 0 all overlap; map-blocks 0-7 are all inside bmp/tile-block 0; and map-block 31 is at the end of bmp/tile-block 3. It may be easier to assign VRAM space based on block than bytesize, as the numbers are smaller. VRAM-banks A,B,C,D would allow for 8 blocks (consisting of 64 map-blocks, but you can only assign the first 32 of those).
+<br/>
+<br/>
+Now, for the solution to your case. You need 6 contingent blocks for the bitmap, 1/2 block for the console tiles and 1/8 block for the map. The easiest would be to put the bitmap at the back of the bank: start at bmp-base 2. Then fill up block 0 with the console stuff: tile-base 0 and map-base 7.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#172975 - Stephanie - Sat Mar 13, 2010 7:23 pm</h4>
+    <div class="postbody"><span class="postbody">Thanks for the reply <span style="font-weight: bold">Cearn</span>! The tutorials weren't kidding when they said the vram stuff would be confusing... :)
+<br/>
+<br/>
+I've read through your post several times and I'm still trying to grasp it. I understand about the vram being shared, and the need to work out how much is required for each layer, but I get lost on how to actually determine the way to offset things.
+<br/>
+<br/>
+If I set the background offset using BG_BMP_BASE I get an error message at run time, so I figure I am using it wrong:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">bgInit(3, BgType_Bmp16, BgSize_B16_256x256, BG_BMP_BASE(2), 0);</td> </tr></table><span class="postbody">
+<br/>
+The error is "Background Map Base is out of range".
+<br/>
+<br/>
+If I just put a 2 in there, then everything works but the bitmap is truncated, as if it has run out of memory before reaching the bottom - presumably that's what is happening, when I move the map base from 0 to 2. If I set it to 1 then it gets nearer the bottom but doesn't actually get there.
+<br/>
+<br/>
+I'm going to read things through again and try getting a handle on the map base / tile base / bmp base concepts.
+<br/>
+<br/>
+Edited to add: There's no reason I can't assign two vram banks, is there? eg. for the top screen, if I assign vram bank A to vram_a_main_bg and bank b to vram_b_main_bg then is there a way to tell the bmp background to use bank a and the console bg to use bank b?
+<br/>
+<br/>
+Thanks again!
+<br/>
+<br/>
+-Stephanie</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#172976 - Cearn - Sat Mar 13, 2010 8:54 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Stephanie wrote:</b></span></td> </tr> <tr> <td class="quote">If I set the background offset using BG_BMP_BASE I get an error message at run time, so I figure I am using it wrong:
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">bgInit(3, BgType_Bmp16, BgSize_B16_256x256, BG_BMP_BASE(2), 0);</td> </tr></table><span class="postbody">
+<br/>
+The error is "Background Map Base is out of range".
+<br/>
+<br/>
+If I just put a 2 in there, then everything works but the bitmap is truncated, as if it has run out of memory before reaching the bottom - presumably that's what is happening, when I move the map base from 0 to 2. If I set it to 1 then it gets nearer the bottom but doesn't actually get there.</span></td> </tr></table><span class="postbody">It should just be a `2' in the code. BG_BMP_BASE is for when you set the BG control register (REG_BG<span style="font-style: italic">n</span>CNT) manually, but bgInit does that for you, so it's just the base number. You'll encounter something similar when dealing with OAM.
+<br/>
+<br/>
+I've tested the code as well and it <span style="font-style: italic">should</span> work. The real reason why it doesn't work for you may actually be elsewhere. For example, you could be compressing to the wrong place. Instead of BG_GFX, use BG_BMP_RAM(2). The addresses should match the bases.
+<br/>
+<br/>
+For getting a handle how everything works, run it in an emulator and open up some of the debug windows -- view tiles/maps; that kind of stuff.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Stephanie wrote:</b></span></td> </tr> <tr> <td class="quote">Edited to add: There's no reason I can't assign two vram banks, is there? eg. for the top screen, if I assign vram bank A to vram_a_main_bg and bank b to vram_b_main_bg then is there a way to tell the bmp background to use bank a and the console bg to use bank b?</td> </tr></table><span class="postbody">Yes, you can use multiple VRAM banks, but the way it works is probably a little different than what you're picturing right now.
+<br/>
+<br/>
+The nine VRAM banks are basically removable memory modules of a certain size that can be used for 11 different systems. Examples of those systems are main BG memory, main OBJ memory, sub BG memory or textures for 3D. When you use one of the vramSetBank<span style="font-style: italic">X</span> routines, you're basically plugging the bank into a certain system so that the system has actual memory to work with. If no memory has been assigned to a system, then it can't operate.
+<br/>
+<br/>
+Now, the memory banks don't really have addresses, but some of the systems do. For example, the video memory for the main-BG starts at 0600:0000, and for sub-BG it starts at 0620:0000. That's what the affixes for the VRAM_ defines stand for: what addresses the vram-bank should cover. There are a <span style="font-style: italic">lot</span> of options here, see <a class="postlink" href="http://www.dev-scene.com/NDS/NDS_Tutorials_VramTable" target="_blank">devscene:vramtable</a> for the full list. The VRAM_A_MAIN_BG you've been using is actually VRAM_A_MAIN_BG_0x06000000, which is the setting to map vram-bank A to 0600:0000 to 0601:FFFF. If you need a larger range for the main BG, you can assign another bank to the 0602:0000 range and onwards. Interestingly, this is exactly what VRAM_B_MAIN_BG does.
+<br/>
+<br/>
+The backgrounds themselves don't really care which bank they get their memory from, all that really matters is that the range of addresses that you're using is covered. With VRAM_A_MAIN_BG and VRAM_B_MAIN_BG, you have 0x40000 bytes of memory for the main screen's backgrounds, which should be enough.
+<br/>
+<br/>
+Oh, by the way, "top" and "bottom" screen do not really refer to "main" and "sub" screen. You can set which size the main screen is on with lcdMainOnTop() and lcdMainOnBottom(). Also, sometimes there is a reason that you can't assign two vram banks to a single screen. If you study the table, you'll see that the sub-screen only has a few options.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#172977 - Stephanie - Sat Mar 13, 2010 9:28 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Cearn wrote:</b></span></td> </tr> <tr> <td class="quote">I've tested the code as well and it <span style="font-style: italic">should</span> work. The real reason why it doesn't work for you may actually be elsewhere. For example, you could be compressing to the wrong place. Instead of BG_GFX, use BG_BMP_RAM(2). The addresses should match the bases.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Ah, this is where I was going wrong - I forgot this side of the 'equation' and was sending the image to the original location. 
+<br/>
+<br/>
+I'm starting to get a better grip on it all, that table you linked to really helps to visualize how the vram banks are laid out and how they can be utilized. 
+<br/>
+<br/>
+Re. main/sub vs. top/bottom screens, that makes a lot of sense too - the main screen looks like the one you'd use for most of the heavy work, and the sub screen would be used for less intense stuff... and it doesn't matter which is on top and which is on the bottom because they can get swapped. That's clever.
+<br/>
+<br/>
+Thanks again for your help &amp; patience!
+<br/>
+<br/>
+-Stephanie</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#173312 - Massif - Wed Mar 31, 2010 3:47 am</h4>
+    <div class="postbody"><span class="postbody">I am having a similar issue. I have a 256x192@8bpp image that I'm putting in BG3 at bmp base 0 and I'm trying to do consoleInit on BG0 with map base 31 and tile base 3, but when I do that, my BG3 image gets colored pixels sprinkled all over it.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+int bgMain;
+<br/>
+   int bgSub;
+<br/>
+<br/>
+   videoSetMode(MODE_5_2D);
+<br/>
+   videoSetModeSub(MODE_5_2D);
+<br/>
+<br/>
+   bgMain = bgInit(3, BgType_Bmp8, BgSize_B8_256x256, 0, 0);
+<br/>
+   bgSub = bgInitSub(3, BgType_Bmp8, BgSize_B8_256x256, 0, 0);
+<br/>
+<br/>
+   //Copy the background image to sub screen
+<br/>
+   dmaCopy(menuBitmap,bgGetGfxPtr(bgSub),menuBitmapLen);
+<br/>
+   dmaCopy(menuPal,BG_PALETTE_SUB,menuPalLen);
+<br/>
+<br/>
+   //Copy the background image to main screen
+<br/>
+   dmaCopy(lowermenuBitmap,bgGetGfxPtr(bgMain),lowermenuBitmapLen);
+<br/>
+   dmaCopy(lowermenuPal,BG_PALETTE,lowermenuPalLen);
+<br/>
+<br/>
+   // Initialize the console
+<br/>
+   consoleInit(null, 0, BgType_Text4bpp, BgSize_T_256x256, 31, 3, true, true);
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I also tried putting the image at bmp base 2 with the console stuff at tile base 0 and map base 7 like Cearn suggested, but that did not change anything.
+<br/>
+<br/>
+I also noticed that if I change the last argument of consoleInit to false, the colored dots disappear. I assume that's because I'm not overwriting anything that way.
+<br/>
+<br/>
+It almost seems more like it's a matter of the palette being overwritten and not the image data. Any ideas?<br/>_________________<br/>Massif - It means mountain.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#173317 - Cearn - Wed Mar 31, 2010 7:47 am</h4>
+    <div class="postbody"><span class="postbody">Like VRAM, the palette is shared between all backgrounds of a screen. The console system reserves the last entry of each 16-color sub-palette (entry <span style="font-style: italic">n</span>Fh) for colors so that you can have color swapping. My guess is that this is overwriting your bitmap's palette, giving you unexpected colors in your bitmap.
+<br/>
+<br/>
+There may be a way to use extended palettes to solve this, but I'm not sure how well this would work in your case. You can also try to reduce the total colors in your bitmap so that the console can at least have the last color (0xFF) for itself. If you then load the bitmap's palette after initializing the console, the problems should go away.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#173320 - Massif - Wed Mar 31, 2010 12:40 pm</h4>
+    <div class="postbody"><span class="postbody">I tried loading in the image palette after consoleInit(). This fixed most of the screen. However, the first few rows of pixels (14 in NO$GBA, 39 in DESMUME) are still getting colored dots.
+<br/>
+<br/>
+I checked out the palette viewer in DESMUME and it appeared as though my image palette was completely intact. However, I turned on Auto-update and every 16th entry blinked between the image palette color and the console colors.
+<br/>
+<br/>
+<br/>
+EDIT: I just realized it was my own stupid mistake. I was calling the initConsole command every tick when I assumed it was only being called once!<br/>_________________<br/>Massif - It means mountain.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

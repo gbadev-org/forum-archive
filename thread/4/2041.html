@@ -1,0 +1,662 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Post your custom debug function here! - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > Post your custom debug function here!</h2>
+<div id="posts">
+<div class="post">
+    <h4>#10551 - poslundc - Mon Sep 08, 2003 5:28 pm</h4>
+    <div class="postbody"><span class="postbody">I recently wrote a little function that I use to examine the contents of memory; thought I'd share it in case anyone else finds it useful. It's not sophisticated at all but if you need to check the value of a variable or contents of an array bit-by-bit (as I often do) it's invaluable.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+// use with gba.h
+<br/>
+<br/>
+void DebugVar(void *data, int bytes)
+<br/>
+{
+<br/>
+   int n, i, j;
+<br/>
+   u8 *p = (u8 *)data;
+<br/>
+   u32   oldmode = REG_DISPCNT;
+<br/>
+   u16 *vbuff = (u16*)0x6000000;
+<br/>
+   volatile u32 *k = (volatile u32 *)0x04000130;
+<br/>
+   
+<br/>
+   REG_DISPCNT = 0x3 | 0x400;
+<br/>
+   
+<br/>
+   for (i = 0; i &lt; 240; i += 1)
+<br/>
+      for (j = 0; j &lt; 16; j++)
+<br/>
+         vbuff[i * 240 + j] = 0;
+<br/>
+<br/>
+   i = 0;   
+<br/>
+   for (n = 0; n &lt; bytes; n++)
+<br/>
+   {
+<br/>
+      for (j = 7; j &gt;= 0; j--)
+<br/>
+      {
+<br/>
+         if ((*p &gt;&gt; j) &amp; 0x01)
+<br/>
+            vbuff[i * 240 + (14 - (j &lt;&lt; 1))] = 31;
+<br/>
+         else
+<br/>
+            vbuff[i * 240 + (14 - (j &lt;&lt; 1))] = 31 &lt;&lt; 5;
+<br/>
+      }
+<br/>
+      p++;
+<br/>
+      i += 2;
+<br/>
+   }
+<br/>
+   
+<br/>
+   while (!((~(*k)) &amp; 0x0001))
+<br/>
+      ;
+<br/>
+   while (!((~(*k)) &amp; 0x0002))
+<br/>
+      ;
+<br/>
+   
+<br/>
+   REG_DISPCNT = oldmode;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+To use it, call DebugVar() and pass to it a pointer to the data you want to show (eg. &amp;myVariable or just myArray) and the number of bytes you want to display.
+<br/>
+<br/>
+Every other line on the screen will display a series of eight dots each representing a bit of your variable: green if the bit is clear, red if it's set.
+<br/>
+<br/>
+Note that it displays one byte at a time in the order it appears in memory, so a 32-bit variable will display bits in the order [7..0], [15..8], [23..16] and on the fourth line [31..24].
+<br/>
+<br/>
+Press "A" then "B" when you're done viewing (I use the two-button sequence to debounce it when you call DebugVar multiple times in a row). It'll restore the previous mode, and depending on your app there's a slim chance your graphics might not even glitch! :)
+<br/>
+<br/>
+If anyone else has similar debugging routines, I'd love to see them!
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10553 - sajiimori - Mon Sep 08, 2003 5:55 pm</h4>
+    <div class="postbody"><span class="postbody">After I found out about VBA's debug console, that's all I use for debug output.
+<br/>
+<br/>
+The "error" macro makes sure I get the debug message by filling the screen with red, then waiting until I press "start" to actually print the message.
+<br/>
+<br/>
+I used macros because it's easier to use an unspecified number of arguments (don't have to mess with stdarg.h).  The body of the macros should be a single expression to avoid annoying macro bugs.  That's the reason for the short helper functions at the bottom.
+<br/>
+<br/>
+Using macros a lot makes me wish "for", "while", etc were expressions.  I mean, what good is it to distinguish statements from expressions anyway?  At least I get to use "? :" in expressions.
+<br/>
+<br/>
+Maybe I've just been messing with Haskell too much.  :-P
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+/*** common.h ***/
+<br/>
+<br/>
+#ifdef DEBUG
+<br/>
+static char dprint_buffer[80];
+<br/>
+<br/>
+#define dprint(...) sprintf(dprint_buffer, __VA_ARGS__), \
+<br/>
+   dprint_asm(dprint_buffer)
+<br/>
+<br/>
+static dprint_asm(char *s)
+<br/>
+{
+<br/>
+   asm volatile(
+<br/>
+      "mov r0, %0;"
+<br/>
+       "swi 0xff;"
+<br/>
+      :
+<br/>
+      : "r" (s)
+<br/>
+      : "r0");
+<br/>
+}
+<br/>
+<br/>
+#define error(...) \
+<br/>
+   REG_DISPCNT = MODE_3|BG2_ENABLE, \
+<br/>
+   fill_screen(RED), \
+<br/>
+   wait_for_start(), \
+<br/>
+   dprint(__VA_ARGS__), \
+<br/>
+   halt()
+<br/>
+<br/>
+#else
+<br/>
+#define dprint
+<br/>
+#define error halt
+<br/>
+#endif
+<br/>
+<br/>
+<br/>
+/*** util.c ***/
+<br/>
+<br/>
+fill_screen(u16 val)
+<br/>
+{
+<br/>
+   u16* p = VIDEO_MEMORY;
+<br/>
+   while(p &lt; VIDEO_MEMORY + 240*160)
+<br/>
+      *p++ = val;
+<br/>
+}
+<br/>
+<br/>
+wait_for_start()
+<br/>
+{
+<br/>
+   while(!PRESSED(KEY_START));
+<br/>
+}
+<br/>
+<br/>
+halt()
+<br/>
+{
+<br/>
+   while(1);
+<br/>
+}
+<br/>
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10555 - tepples - Mon Sep 08, 2003 6:31 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sajiimori wrote:</b></span></td> </tr> <tr> <td class="quote">Using macros a lot makes me wish "for", "while", etc were expressions.  I mean, what good is it to distinguish statements from expressions anyway?</td> </tr></table><span class="postbody">
+<br/>
+ANSI C so distinguishes, but <a class="postlink" href="http://gcc.gnu.org/onlinedocs/gcc-3.0.4/gcc_5.html#SEC69" target="_blank">a GNU C extension</a> lets you use for and while inside expressions. Surround the statement with ({ ... }), and then the value of the expression will be the value of the last expression in the block.
+<br/>
+<br/>
+GNU C extensions are safe to use because pretty much everybody reading this board uses either DevKit Advance or Nintendo's compiler, both of which are GCC distributions.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Maybe I've just been messing with Haskell too much.</td> </tr></table><span class="postbody">
+<br/>
+My coding style has some functional influences from a Scheme class I took. You may see a lot of computation in my local variable declarations, which sort of looks like a Scheme let*.
+<br/>
+<br/>
+Anyway, I like to use unused parts of my status-bar layer for displaying debug information.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10557 - sajiimori - Mon Sep 08, 2003 7:01 pm</h4>
+    <div class="postbody"><span class="postbody">Hey, that's pretty cool!  Thanks for the tip, tepples.
+<br/>
+<br/>
+Edit:  Sadly, anonymous {} enclosues are treated as a top-level expression (rather than a primary operator such as () ), so you can use them in if() and while(), but this test didn't compile:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+main()
+<br/>
+{
+<br/>
+   int i;
+<br/>
+<br/>
+   {
+<br/>
+      for(i = 0; i &lt; 10; ++i)
+<br/>
+         0;
+<br/>
+   } ?  // the expression is already over, so ? was not expected
+<br/>
+      puts("++i was last") :
+<br/>
+      puts("zero was last");
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10561 - tepples - Tue Sep 09, 2003 1:28 am</h4>
+    <div class="postbody"><span class="postbody">Did you try enclosing that for loop with ({ and }) instead of { and } ?<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10571 - Darkain - Tue Sep 09, 2003 6:32 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void _assert_handler(const char *reason, const char *file, int line, int val0, int val1, int val2, int val3) {
+<br/>
+   char str[64] = "\n";
+<br/>
+   itoa(val0, str+1);
+<br/>
+   itoa(val1, str+10);
+<br/>
+   itoa(val2, str+19);
+<br/>
+   itoa(val3, str+28);
+<br/>
+   str[9] = ' ';
+<br/>
+   str[18] = '\n';
+<br/>
+   str[27] = ' ';
+<br/>
+   _assert_handler(reason, file, line, str);
+<br/>
+}
+<br/>
+<br/>
+void _assert_handler(const char *reason, const char *file, int line, const char *text) {
+<br/>
+   char str[32];
+<br/>
+<br/>
+   u32 interupt = (REG_INTERUPT &amp; 0x7FFFFFFF) | (REG_IME&lt;&lt;31);
+<br/>
+   u32 interuptdata = REG_IE | (REG_IF&lt;&lt;16);
+<br/>
+   REG_IME = 0;
+<br/>
+   REG_IE = 0;
+<br/>
+<br/>
+   u32 dispmode = REG_DISPCNT;
+<br/>
+   u32 disstat = REG_DISPSTAT | (REG_VCOUNT&lt;&lt;16);
+<br/>
+   u32 backgrounds1 = REG_BG0CNT | (REG_BG1CNT&lt;&lt;16);
+<br/>
+   u32 backgrounds2 = REG_BG2CNT | (REG_BG3CNT&lt;&lt;16);
+<br/>
+   u32 input = REG_P1 | (REG_P1CNT&lt;&lt;16);
+<br/>
+   u32 input1 = REG_JOYRE;
+<br/>
+   u32 input2 = REG_JOYTR;
+<br/>
+   u32 input3 = REG_JSTAT;
+<br/>
+<br/>
+   u32 timer0 = REG_TM0CNT | (REG_TM0D&lt;&lt;16);
+<br/>
+   u32 timer1 = REG_TM1CNT | (REG_TM1D&lt;&lt;16);
+<br/>
+   u32 timer2 = REG_TM2CNT | (REG_TM2D&lt;&lt;16);
+<br/>
+   u32 timer3 = REG_TM3CNT | (REG_TM3D&lt;&lt;16);
+<br/>
+   REG_TM0CNT = 0;
+<br/>
+   REG_TM1CNT = 0;
+<br/>
+   REG_TM2CNT = 0;
+<br/>
+   REG_TM3CNT = 0;
+<br/>
+<br/>
+   u32 waitstate = REG_WSCNT | (REG_PAUSE &lt;&lt; 16);
+<br/>
+   u32 linkmode = REG_SCCNT;
+<br/>
+   u32 players1 = REG_SCD1 | (REG_SCD0 &lt;&lt; 16);
+<br/>
+   u32 players2 = REG_SCD3 | (REG_SCD2 &lt;&lt; 16);
+<br/>
+<br/>
+<br/>
+   gbaDebug debug(0, false);
+<br/>
+   debug.drawString("-----  GBA Debug Screen  -----", 0, 0);
+<br/>
+   debug.drawString("-----------  BSOD  -----------", 0, 152);
+<br/>
+<br/>
+   u32 base = 8;
+<br/>
+   u32 basey = 52;
+<br/>
+<br/>
+   base += 8;
+<br/>
+   itoa(dispmode, str);
+<br/>
+   itoa(disstat, str+9);
+<br/>
+   str[8] = ' ';
+<br/>
+   debug.drawString("Display:", 0, base);
+<br/>
+   debug.drawString(str, basey, base);
+<br/>
+<br/>
+   base += 8;
+<br/>
+   itoa(backgrounds2, str);
+<br/>
+   itoa(backgrounds1, str+9);
+<br/>
+   str[8] = ' ';
+<br/>
+   debug.drawString("Backgrounds:", 0, base);
+<br/>
+   debug.drawString(str, basey, base);
+<br/>
+<br/>
+   base += 8;
+<br/>
+   itoa(interupt, str);
+<br/>
+   itoa(interuptdata, str+9);
+<br/>
+   str[8] = ' ';
+<br/>
+   debug.drawString("Interupts:", 0, base);
+<br/>
+   debug.drawString(str, basey, base);
+<br/>
+<br/>
+   base += 8;
+<br/>
+   itoa(input, str);
+<br/>
+   itoa(input1, str+9);
+<br/>
+   str[8] = ' ';
+<br/>
+   debug.drawString("Input:", 0, base);
+<br/>
+   debug.drawString(str, basey, base);
+<br/>
+<br/>
+   base += 8;
+<br/>
+   itoa(input2, str);
+<br/>
+   itoa(input3, str+9);
+<br/>
+   str[8] = ' ';
+<br/>
+   debug.drawString("Input:", 0, base);
+<br/>
+   debug.drawString(str, basey, base);
+<br/>
+<br/>
+   base += 8;
+<br/>
+   itoa(timer0, str);
+<br/>
+   itoa(timer1, str+9);
+<br/>
+   str[8] = ' ';
+<br/>
+   debug.drawString("Timer 0-1:", 0, base);
+<br/>
+   debug.drawString(str, basey, base);
+<br/>
+<br/>
+   base += 8;
+<br/>
+   itoa(timer2, str);
+<br/>
+   itoa(timer3, str+9);
+<br/>
+   str[8] = ' ';
+<br/>
+   debug.drawString("Timer 2-3:", 0, base);
+<br/>
+   debug.drawString(str, basey, base);
+<br/>
+<br/>
+   base += 8;
+<br/>
+   itoa(waitstate, str);
+<br/>
+   itoa(linkmode, str+9);
+<br/>
+   str[8] = ' ';
+<br/>
+   debug.drawString("Wait State:", 0, base);
+<br/>
+   debug.drawString(str, basey, base);
+<br/>
+<br/>
+   base += 8;
+<br/>
+   itoa(players1, str);
+<br/>
+   itoa(players2, str+9);
+<br/>
+   str[8] = ' ';
+<br/>
+   debug.drawString("Link Cable:", 0, base);
+<br/>
+   debug.drawString(str, basey, base);
+<br/>
+<br/>
+   base += 8;
+<br/>
+   itoa(line, str);
+<br/>
+   itoa(BUILD_NUMBER, str+9);
+<br/>
+   str[8] = ' ';
+<br/>
+   debug.drawString("Line/Build:", 0, base);
+<br/>
+   debug.drawString(str, basey, base);
+<br/>
+<br/>
+   base += 8;
+<br/>
+   debug.drawString("File:", 0, base);
+<br/>
+   debug.drawString(file, basey, base);
+<br/>
+<br/>
+   base += 8;
+<br/>
+   debug.drawString("Reason:", 0, base);
+<br/>
+   debug.drawString(reason, basey, base);
+<br/>
+<br/>
+   if (text) {
+<br/>
+      base += 8;
+<br/>
+      debug.drawString(text, 0, base);
+<br/>
+   }
+<br/>
+<br/>
+   debug.lockScreen();
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+<a href="http://darkain.skin-zone.net/bsod3.png">[Images not permitted - Click here to view it]</a><br/>_________________<br/>-=- Darkain Dragoon -=-
+<br/>
+<a class="postlink" href="http://www.darkain.com" target="_blank">http://www.darkain.com</a>
+<br/>
+<a class="postlink" href="http://ds.darkain.com/hack" target="_blank">DarkStar</a> for <a class="postlink" href="http://ds.darkain.com" target="_blank">Nintendo DS</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10572 - sajiimori - Tue Sep 09, 2003 7:11 am</h4>
+    <div class="postbody"><span class="postbody">D'oh!  Right you are, tepples...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10686 - AnthC - Fri Sep 12, 2003 4:02 pm</h4>
+    <div class="postbody"><span class="postbody">Here's mine
+<br/>
+<br/>
+#include &lt;stdio.h&gt;
+<br/>
+#include &lt;stdarg.h&gt;
+<br/>
+<br/>
+#define assert(e) {if (!(e)) {dprintf("assertion failed in %s line %s\n",__FILE_,__LINE__);}for (;;) {;}}
+<br/>
+<br/>
+void dprints(const char *sz)
+<br/>
+{
+<br/>
+  asm volatile (
+<br/>
+	  "mov r2, %0
+<br/>
+	  ldr r0, =0xc0ded00d 
+<br/>
+	  mov r1, #0 
+<br/>
+	  and r0, r0, r0"  :
+<br/>
+  /* No output */ :
+<br/>
+  "r" (sz) :
+<br/>
+  "r0", "r1", "r2");
+<br/>
+}
+<br/>
+<br/>
+void dprintf(const char *sz,...) 
+<br/>
+{
+<br/>
+   va_list par; 
+<br/>
+   va_start(par,sz); 
+<br/>
+   char temp[1024]; 
+<br/>
+   vsprintf(temp,sz,par); 
+<br/>
+   va_end(par); 
+<br/>
+   dprints(temp); 
+<br/>
+} 
+<br/>
+<br/>
+<br/>
+dprintf() is basically equiv to printf but the output goes to the console in Mappy or VBA</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10692 - sajiimori - Fri Sep 12, 2003 6:50 pm</h4>
+    <div class="postbody"><span class="postbody">AnthC,
+<br/>
+<br/>
+Nice!  Try this:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#define assert(e) ({if (!(e)) \
+<br/>
+{dprintf("assertion failed in %s line %d: "#e"\n",__FILE__,__LINE__);} \
+<br/>
+for (;;) {;}})
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Fixes a couple typos (I'm sure they aren't in your real version), prints the actual assertion that failed, and allows the macro to be used this way without compiler errors:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+   if(a == 0)
+<br/>
+      assert(x == 10);
+<br/>
+   else
+<br/>
+      assert(x == 5);
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Not that assertions are normally used that way...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10697 - AnthC - Fri Sep 12, 2003 10:45 pm</h4>
+    <div class="postbody"><span class="postbody">You sir are dead right! I stand corrected.
+<br/>
+(I did type it in from my debug routine)
+<br/>
+Anth</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10699 - Paul Shirley - Fri Sep 12, 2003 11:50 pm</h4>
+    <div class="postbody"><span class="postbody">removed</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

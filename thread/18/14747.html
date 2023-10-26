@@ -1,0 +1,172 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>VTX_16 vs VTX_10 vs VTX_XY/VTX_ZX/VTX_YZ vs VTX_DIFF - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > VTX_16 vs VTX_10 vs VTX_XY/VTX_ZX/VTX_YZ vs VTX_DIFF</h2>
+<div id="posts">
+<div class="post">
+    <h4>#147927 - kusma - Sun Dec 30, 2007 6:04 pm</h4>
+    <div class="postbody"><span class="postbody">Okay, I'm trying to understand a bit about the DS 3D hardware, and especially the vertex specification. Currently, I'm wondering what the real difference between the different ways of specifying vertices are. I assume the best result is given by combining the methods.
+<br/>
+<br/>
+Here's my current observations:
+<br/>
+<ul><li>VTX_16: Full precision and range. The biggest and most flexible vertex format in terms of range, precision and usage. Requires 64 bits to specify, where 16bits are used for padding.
+<br/>
+</li><li>VTX_10: Low precision, low range. Smaller and less accurate version of VTX_16. Fits in a 32bit word, where only two bits are used for padding.
+<br/>
+</li><li>VTX_XY/VTX_ZX/VTX_YZ: Full precision and range, and no padding. But the same 32-bit word is used for two vertex positions.
+<br/>
+</li><li>VTX_DIFF: Medium precision, medium range. A bit more tricky to encode than the other methods.
+<br/>
+</li></ul>
+<br/>
+Now, here's my questions:
+<br/>
+<ul><li>Is there a limit to the memory used for specifying vertex data? What prevents me from just using VTX_16 for everything? The gfx-fifo is in main RAM anyway, and I have "plenty" of that (compared to VRAM) ;)
+<br/>
+</li><li>How big of an impact does vertex-data bandwidth usage have on performance of the geometry processor / the system as a whole?
+<br/>
+</li><li>Can normals, texture coordinates and/or colors be changed between a pair of vertices specified in a VTX_XY/VTX_ZX/VTX_YZ format?
+<br/>
+</li><li>Can integer wrap-around in the VTX_DIFF-format be "abused" to take long "leaps" to the other side of the coordinate system?
+<br/>
+</li></ul>
+<br/>
+I've searched GBATek, but I can't really find much info on this subject.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#147944 - M3d10n - Sun Dec 30, 2007 10:16 pm</h4>
+    <div class="postbody"><span class="postbody">I can help only with the two first questions:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote"># Is there a limit to the memory used for specifying vertex data? What prevents me from just using VTX_16 for everything? The gfx-fifo is in main RAM anyway, and I have "plenty" of that (compared to VRAM) ;)</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I was using VTX _16 for <span style="font-style: italic">everything</span> until just now. No issues on a 4K triangles scene (characters+level). I don't think the FIFO would have any  problems even if you filled all your RAM with geometry, other than the DS missing a frame or two before it could clip all of it.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+# How big of an impact does vertex-data bandwidth usage have on performance of the geometry processor / the system as a whole? </td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I modified me model converter to use VTX_10 for everything. Reduced the display list files' sizes by 20% but barely registered a change on my profiler (getting rid of redundant color/normal commands helped much more).
+<br/>
+<br/>
+But it impressed me that my prototype still looks the same with the lower precision. I can't notice any artifacts or displaced vertex due to the lower precision anywhere, even on characters' fine details (but I'm normalizing all my meshes' vertices, so that might get around the lower precision coordinates). 20% less RAM usage with no visual glitches? Deal.
+<br/>
+<br/>
+Never used the offset and paired formats, so can't help with those.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#147946 - kusma - Sun Dec 30, 2007 10:30 pm</h4>
+    <div class="postbody"><span class="postbody">Thanks a lot. Since none of the other formats have smaller foot-print than VTX10, I guess there's no big need to optimize any further. I can probably use VTX10 for most meshes anyway.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#147947 - DekuTree64 - Sun Dec 30, 2007 11:07 pm</h4>
+    <div class="postbody"><span class="postbody">Yeah, RAM usage is probably the biggest advantage. But it does help speed a little bit, since the CPU or DMA has one less word to copy.
+<br/>
+<br/>
+For character models, 10 bits should be more than enough to look good on a 256x192 pixel screen. But when you start getting into large scene models, 1024 steps isn't that much. But then all the vertices in a triangle/quad should be close together, so VTX_DIFF works nicely. Especially with strips.
+<br/>
+<br/>
+XY/XZ/YZ seem a bit less useful to me, but I guess they would make heightmap rendering faster since you're only packing 2 coordinates together instead of the 3 for a diff, plus you can just plug in the Y coordinate from the heightmap directly instead of subtracting the previous vertex's Y.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#159014 - a128 - Tue Jun 24, 2008 9:58 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>DekuTree64 wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+<br/>
+XY/XZ/YZ seem a bit less useful to me,</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+it's very usefull
+<br/>
+<br/>
+draw a box and you have a lot of same X or Y or Z values</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#159015 - kusma - Tue Jun 24, 2008 10:12 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>a128 wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+it's very usefull
+<br/>
+<br/>
+draw a box and you have a lot of same X or Y or Z values</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Good point. I recon it should be possible to design indoor-levels so that most polygon lies in the x, y or z planes without everything looking crap.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#159020 - a128 - Tue Jun 24, 2008 11:26 am</h4>
+    <div class="postbody"><span class="postbody">Here is a tool I use in my current projects
+<br/>
+<br/>
+It converts ac3d *.ac 3d scenes into displaylists (incl. textures and many more)
+<br/>
+<br/>
+Check the readme for more details
+<br/>
+<br/>
+it uses XY/XZ/YZ for triangles/quads if possible (only checked for one primitive)
+<br/>
+<br/>
+<a class="postlink" href="http://www.freewebtown.com/festival2005/ac2nds.tgz" target="_blank">http://www.freewebtown.com/festival2005/ac2nds.tgz</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#159022 - kusma - Tue Jun 24, 2008 12:20 pm</h4>
+    <div class="postbody"><span class="postbody">Cool. Personally, I've already made my own Collada-converter that does a lot of similar optimizations, so I doubt I'll look much into it. But it might be very usefull for other people :)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#159025 - a128 - Tue Jun 24, 2008 1:10 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>kusma wrote:</b></span></td> </tr> <tr> <td class="quote">Cool. Personally, I've already made my own Collada-converter that does a lot of similar optimizations, so I doubt I'll look much into it. But it might be very usefull for other people :)</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Release it..if you like. Sharing informations is great!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#159029 - a128 - Tue Jun 24, 2008 2:35 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>kusma wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+[*]VTX_XY/VTX_ZX/VTX_YZ: Full precision and range, and no padding. But the same 32-bit word is used for two vertex positions.
+<br/>
+[/list]
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+VTX_XY/VTX_ZX/VTX_YZ needs VTX_16 as a first VTX command because of the resolution, VTX_10 does not work for the first VTX command</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#159033 - naleksiev - Tue Jun 24, 2008 5:14 pm</h4>
+    <div class="postbody"><span class="postbody">Offtopic
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>kusma wrote:</b></span></td> </tr> <tr> <td class="quote">Cool. Personally, I've already made my own Collada-converter that does a lot of similar optimizations, so I doubt I'll look much into it. But it might be very usefull for other people :)</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I'm a huge fan of XML and I do have quite some experience with it. I start making a COLLADA converter about 2 months ago. There are a lot of things I particularly didn't like in the COLLADA specification. Anyway I struggled with it for some time until I found that there is something that doesn't make sense in the specification. I believe it was in the Joint node but I'm not 100% sure anymore. First I found that two different COLLADA exporters are exporting the ID of the joints using different attributes (as I said I'm not 100% sure it was the joint). One is using ID and one SID. I found out that the one in the specification was SID and when I thought about it for a second I found out that it doesn't suppose to be SID but ID. 
+<br/>
+Too bad that something generic that suppose to have exporter in every 3D editor doesn't do the job right. For now I just made my own simple Maya to XML exporter in MEL and then I'm compiling it to Binary.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

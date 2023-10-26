@@ -1,0 +1,498 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>FIFO handler library - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > FIFO handler library</h2>
+<div id="posts">
+<div class="post">
+    <h4>#131292 - masscat - Wed Jun 13, 2007 11:46 pm</h4>
+    <div class="postbody"><span class="postbody">I was reading the <a class="postlink" href="http://sourceforge.net/mailarchive/message.php?msg_name=8d2d01550704091945oda4d11dr284a2b7cdfaf9882%40mail.gmail.com" target="_blank">devkitpro mailing list</a> and saw that wintermute was looking for a flexible fifo handler so that system and user code can share the ARM to ARM FIFO for message passing. So I thought I would implement something.
+<br/>
+<br/>
+<a class="postlink" href="http://masscat.afraid.org/ninds/tars/libfifohandler_20070613.tar.bz2" target="_blank">libfifohandler_20070613.tar.bz2</a>
+<br/>
+<br/>
+It is not complete (I have not implemented asynchronous send yet amongst other things) but demonstrates the idea.
+<br/>
+<br/>
+A fifo message comprises a word (32bit) command followed by zero or more data bytes (padded to the next word if needed).
+<br/>
+Command handlers are installed on the receive side. Each command handler has a mask and command value associated with it. When a command word is received each command handler is examined in turn. If the command word anded with the mask equals the command value then that handler is called. This masking allows some information to be passed along with the command (number of characters in the example application).
+<br/>
+The command handlers can then read additional data bytes from the fifo using the library.
+<br/>
+<br/>
+The tarball includes an example application that uses the fifo to pass up stdout and stderr output from the ARM7 to the ARM9 that then prints it to the screen.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#131307 - wintermute - Thu Jun 14, 2007 3:01 am</h4>
+    <div class="postbody"><span class="postbody">Being honest I think this is complete overkill and way more complex than it needs to be.
+<br/>
+<br/>
+What I'm aiming for is something that can be placed in the default arm7 core and used for things like audio, touchscreen &amp; powermanagement register settings. I'm not entirely convinced that reading FIFO data in the "handlers" is a good thing either.
+<br/>
+<br/>
+I had envisaged something along the lines of a command word containing a subsytem code, a command and a count of data words to transfer with some area set aside for parameters to single word commands. I was thinking about  reading the entire data stream before handing off to the command handler itself - I can't see a reason for command packets to be huge.
+<br/>
+<br/>
+Something like a 3bit subsystem, 5bit command code, 4bit word count would leave 20 bits for embedded command data.
+<br/>
+<br/>
+Subsystems could be Audio Playback, Audio Recording, Touchscreen, Power Management &amp; RTC, leaving 3 for user defined use. I was considering using a vector for each system so the user could override them all or just use the spare codes.
+<br/>
+<br/>
+Ultimately I'd like to see this develop to a point where the vast majority of programmers don't need a custom ARM7 core. Obviously the FIFO mechanism would be the basis for other higher level functions within libnds.<br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#131314 - tepples - Thu Jun 14, 2007 4:00 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>wintermute wrote:</b></span></td> </tr> <tr> <td class="quote">I was thinking about  reading the entire data stream before handing off to the command handler itself - I can't see a reason for command packets to be huge.</td> </tr></table><span class="postbody">
+<br/>
+Especially when their payload can be just a pointer to a struct in main RAM that has been DC_FlushCache'd.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Something like a 3bit subsystem, 5bit command code, 4bit word count would leave 20 bits for embedded command data.
+<br/>
+<br/>
+Subsystems could be Audio Playback, Audio Recording, Touchscreen, Power Management &amp; RTC, leaving 3 for user defined use.</td> </tr></table><span class="postbody">
+<br/>
+Would "audio playback" include just one-shot sampled sound effects? What about looped samples? What about streaming samples? What about PSG use? What about music?<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#131332 - wintermute - Thu Jun 14, 2007 12:54 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>wintermute wrote:</b></span></td> </tr> <tr> <td class="quote">I was thinking about  reading the entire data stream before handing off to the command handler itself - I can't see a reason for command packets to be huge.</td> </tr></table><span class="postbody">
+<br/>
+Especially when their payload can be just a pointer to a struct in main RAM that has been DC_FlushCache'd.
+<br/>
+</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Actually no, that's an incredibly bad way to do things, flushing the cache takes time and the arm9 will be locked off the bus while the arm7 reads the data. And, yes, I do know libnds currently does this - it was meant to be a temporary thing to allow an API to be developed. Like many of the things I do, time has a habit of getting in the way.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+Would "audio playback" include just one-shot sampled sound effects? What about looped samples? What about streaming samples? What about PSG use? What about music?</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Have you ever considered using the "I'd like to see" approach rather than asking questions which include the features you want? Maybe it's just me but I find the question approach incredibly irritating.
+<br/>
+<br/>
+In any case, right now the actual FIFO mechanism is the important part, I'm not particularly concerned about what gets implemented on top of it. Please don't hijack the thread for unrelated feature requests.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#131344 - Lick - Thu Jun 14, 2007 3:05 pm</h4>
+    <div class="postbody"><span class="postbody">I see two different paths/uses here. WinterMute's idea is probably something that should be implemented into libnds, because it's compact and therefore stable, yet enough to hold a few commands.
+<br/>
+masscat on the other hand has created a more general handler that can be used in a more flexible way by the programmer. This flexibility introduces potential instability if used in an immature way.
+<br/>
+<br/>
+So the question is, are these two different development <span style="font-style: italic">goals</span> or what?<br/>_________________<br/><a class="postlink" href="http://licklick.wordpress.com" target="_blank">http://licklick.wordpress.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#131346 - wintermute - Thu Jun 14, 2007 3:24 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Lick wrote:</b></span></td> </tr> <tr> <td class="quote">I see two different paths/uses here. WinterMute's idea is probably something that should be implemented into libnds, because it's compact and therefore stable, yet enough to hold a few commands.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+How many commands do you envisage being used? For me, the idea of searching a potentially large table for a given command header is abhorrent. Masscat has partially addressed this with the masking approach but I'm not convinced that it needs to be variable. Using subsystem codes to subdivide tables seems like a better approach to me.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+masscat on the other hand has created a more general handler that can be used in a more flexible way by the programmer. This flexibility introduces potential instability if used in an immature way.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Extreme flexibility isn't always a good thing - the FIFO has a very specific purpose, that of transferring data between the processors. The arm7 has limited memory and I don't believe there's a need to transfer large quantities of data for most uses.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+So the question is, are these two different development <span style="font-style: italic">goals</span> or what?</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Possibly - certainly two different approaches to the same problem.
+<br/>
+<br/>
+One thing I think you need to understand is that your particular needs, or perhaps I should say wants, are vastly different from those of the average devkit user. Most people neither need, nor want the low level complexity that you seem so keen on. This is one of the reasons why pa_lib is so popular and indeed why pa_lib users seem to be such prolific coders.<br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#131357 - masscat - Thu Jun 14, 2007 5:15 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>wintermute wrote:</b></span></td> </tr> <tr> <td class="quote">Ultimately I'd like to see this develop to a point where the vast majority of programmers don't need a custom ARM7 core. Obviously the FIFO mechanism would be the basis for other higher level functions within libnds.</td> </tr></table><span class="postbody">
+<br/>
+If that is the goal for the ARM7 code then my fifo handler is not suitable as the user can easily kill the fifo as, for example, it is their responsibility to read/write the right amount of data. As Lick said, different design goals.
+<br/>
+<br/>
+The joy is that if people want/need a handler with the features I am providing then they are can use it.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#131426 - masscat - Fri Jun 15, 2007 1:48 pm</h4>
+    <div class="postbody"><span class="postbody">I was wondering how quickly you can get data through the FIFO.
+<br/>
+<br/>
+The fastest I could get was nearly 20MiB/s from the ARM7 to the ARM9. This is with the ARM7 waiting for the FIFO to empty and then sending 16 words. On the ARM9 it waits for the FIFO to fill and then reads 16 words.
+<br/>
+<br/>
+Reading and writing the FIFO in a similar manner but doing the transfer in the ARM9 to ARM7 direction the rate is about 16MiB/s.
+<br/>
+<br/>
+If, on either the ARM7 or ARM9, the FIFO is read/written as soon as space becomes available the rate drops to about 10MiB/s.
+<br/>
+<br/>
+If you want to check my findings or are just curious you can get the source for the test application <a class="postlink" href="http://masscat.afraid.org/ninds/tars/fifotest_20070615.tar.bz2" target="_blank">here</a>.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#131712 - DekuTree64 - Tue Jun 19, 2007 9:57 am</h4>
+    <div class="postbody"><span class="postbody">I was feeling a bit inspired by this, so I decided to have a go at cleaning up my fifo system and switching it over to use wintermute's suggested command format. I actually quite like the new format. Much nicer to work with than my old 4 bit command with 28 bits of user data.
+<br/>
+<br/>
+It supports synchronous, asynchronous, single word, and multi word transfers. Single word only has 20 bits of user data, and multi word wastes the 20 data bits of the first word (for simplicity's sake).
+<br/>
+<br/>
+<a class="postlink" href="http://deku.gbadev.org/program/ipcfifo.zip" target="_blank">Here is the code.</a> It's a bit more readable if you chop out all the asserts first (which are defined to nothing here anyway). Let me know what you all think :)<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#131827 - wintermute - Wed Jun 20, 2007 3:05 pm</h4>
+    <div class="postbody"><span class="postbody">That's a lot closer to what I had in mind. Couple of thoughts
+<br/>
+<br/>
+I don't think spinning on ewram variables is a good idea, even with delays and definitely not during an ISR.
+<br/>
+<br/>
+Using the current IPC struct for any purpose is not a good idea, I intend to remove it.
+<br/>
+<br/>
+I'm still not sure about the whole shared variable approach at all. In some cases it feels like shifting to a pure FIFO method would add complexity for no real gain yet I'm also inclined towards avoiding use of shared ram where possible.
+<br/>
+<br/>
+The main thing that's breaking my head is how to deal with nested interrupts with the FIFO system. Most commands should be dealt with quickly enough for it not to matter but there are some situations ( audio mixing springs to mind ) where the handler may take a significant period of time. In this case you obviously don't want your other interrupts blocked but you also don't want the FIFO handler to fall apart.
+<br/>
+<br/>
+I've thought about buffering into another queue while a packet is incomplete before handing off to the final handler. This handler should then read the packet from the queue before re-enabling interrupts to allow nesting.
+<br/>
+<br/>
+It's quite conceivable that I'm thinking about this way too much but I'd like to have a system which won't cause problems for most users.<br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#131899 - DekuTree64 - Thu Jun 21, 2007 5:47 am</h4>
+    <div class="postbody"><span class="postbody">Yeah, I debated sending a response message to inform the original sender when processing is done, but shared memory was easier, and probably faster in most cases since you don't have to go into another interrupt handler. Another idea was to use the IPC sync register for the reply, but that seems like a waste.
+<br/>
+<br/>
+As for nesting/not spinning in the receive interrupt, I think buffering would solve it. Read into a buffer, and process any complete messages before returning, leaving partial messages to be completed later. In the current version, it should only ever need to spin if the sender is interrupted anyway, so it would be nice for the receiver to return to normal processing until the sender can get the rest of the message down.
+<br/>
+<br/>
+Also, buffering would deal with the extremely unlikely, yet troublesome chance of both CPUs sending the first words of multi-word messages at the exact same time, and then both waiting for the other to send more data.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#131971 - DekuTree64 - Thu Jun 21, 2007 9:28 pm</h4>
+    <div class="postbody"><span class="postbody">Ok, buffered version is up (<a class="postlink" href="http://deku.gbadev.org/program/ipcfifo.zip" target="_blank">same place</a>), so no more spinning in the receiving handler.
+<br/>
+<br/>
+I'm fairly sure it will survive nesting now (that is, the user handler can enable interrupts again). I may try sending response messages instead of using shared memory to see if it doesn't complicate things too badly. 
+<br/>
+<br/>
+Other than that, the last problem to be solved is nesting in relation to sending multi-word messages. If you send half a message, get interrupted, and that interrupt sends a message, then the world will end. I'd rather not disable interrupts around the sending, since it can take a long time if the FIFO is full and the other CPU is in the middle of something.
+<br/>
+<br/>
+One possibility would be to wait for not-full when sending single word messages, and to wait for completely empty when sending multi-word. Then it could disable interrupts, since the entire message could be sent down at once. Of course, that would be less than optimal if you wanted to send a couple of of 2-word messages that take a long time to process.
+<br/>
+<br/>
+Another possibility would be to use more shared counters to track exactly how much space is available in the FIFO.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#131987 - masscat - Thu Jun 21, 2007 11:50 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>DekuTree64 wrote:</b></span></td> </tr> <tr> <td class="quote">One possibility would be to wait for not-full when sending single word messages, and to wait for completely empty when sending multi-word. Then it could disable interrupts, since the entire message could be sent down at once. Of course, that would be less than optimal if you wanted to send a couple of of 2-word messages that take a long time to process.</td> </tr></table><span class="postbody">
+<br/>
+Interrupts must be disabled around the fifo empty check for this to be safe. Otherwise there is a point where the empty check has passed and an interrupt can nip in and send something to the fifo without the interrupted code noticing.
+<br/>
+<br/>
+This could work if you use a fifo send empty interrupt handler.
+<br/>
+For example:
+<br/>
+In send function, disable interrupts and check send fifo status.
+<br/>
+If fifo empty send message, enable interrupts and return.
+<br/>
+Else buffer message, enable interrupts and return.
+<br/>
+<br/>
+In send empty interrupt handler, if buffered message then send message and release the buffer.
+<br/>
+<br/>
+This does present the problem of what happens if you run out of send buffers. Do you fail the send or do you spin waiting for a buffer to become free? In the wait spin case you would have to enable interrupts to avoid the situation where both ARMs are spinning waiting for free buffers with their interrupts disabled (deadlock).
+<br/>
+<br/>
+On the receive side, if you are worried about the situation where a message handler takes time to process a message and therefore stalls the fifo you could enable interrupts before calling the handler and disable them again upon its return. This could lead to messages appearing to arrive out of order at the application so that and the messages would have to be designed to cope with this. 
+<br/>
+<br/>
+With regard to the use of shared memory, why does one side care if the other side has processed a message? Is it not enough that the ARM knows that the message has been sent and therefore will be processed at some point? If so then there is no need for a confirmation/processed count mechanism.
+<br/>
+<br/>
+<span style="font-weight: bold">EDIT:</span> removed a 'send' from example program flow.</span><span class="gensmall"><br/><br/>Last edited by masscat on Fri Jun 22, 2007 9:42 am; edited 1 time in total</span></div>    
+</div>
+<div class="post">
+    <h4>#131995 - DekuTree64 - Fri Jun 22, 2007 1:59 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>masscat wrote:</b></span></td> </tr> <tr> <td class="quote">This could work if you use a fifo send empty interrupt handler.
+<br/>
+For example:
+<br/>
+In send function, disable interrupts and check send fifo status.
+<br/>
+If fifo empty send message, enable interrupts and return.
+<br/>
+Else buffer send message, enable interrupts and return.</td> </tr></table><span class="postbody">
+<br/>
+That could work. I would say make the send buffer the same size as the FIFO, and spin if it is full.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">With regard to the use of shared memory, why does one side care if the other side has processed a message?</td> </tr></table><span class="postbody">
+<br/>
+Hmm, maybe it would be better to just do it manually when needed. One example I can think of is the touch screen, where you'd generally want to request ARM7 to sample it, and wait until you get the result. But since ARM7 would be sending a reply message anyway, that message could set a flag, which you could spin on.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#132004 - HyperHacker - Fri Jun 22, 2007 6:59 am</h4>
+    <div class="postbody"><span class="postbody">I'm tempted to say just don't use FIFO during interrupts, but that may not be feasible. :-/
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>masscat wrote:</b></span></td> </tr> <tr> <td class="quote">This does present the problem of what happens if you run out of send buffers. Do you fail the send or do you spin waiting for a buffer to become free? In the wait spin case you would have to enable interrupts to avoid the situation where both ARMs are spinning waiting for free buffers with their interrupts disabled (deadlock).</td> </tr></table><span class="postbody">I'd say fail, then if the programmer wants to they can spin before retrying.<br/>_________________<br/>I'm a PSP hacker now, but I still &lt;3 DS.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#132008 - masscat - Fri Jun 22, 2007 10:12 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>DekuTree64 wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>masscat wrote:</b></span></td> </tr> <tr> <td class="quote">This could work if you use a fifo send empty interrupt handler.
+<br/>
+For example:
+<br/>
+In send function, disable interrupts and check send fifo status.
+<br/>
+If fifo empty send message, enable interrupts and return.
+<br/>
+Else buffer send message, enable interrupts and return.</td> </tr></table><span class="postbody">
+<br/>
+That could work. I would say make the send buffer the same size as the FIFO, and spin if it is full.</span></td> </tr></table><span class="postbody">
+<br/>
+I think that some profiling of the FIFO use in an application would help.
+<br/>
+If it turns out that in most cases there are only 1 (message in fifo) or 2 (message in fifo and a message in the send buffer) outstanding messages on the send side then a single send side buffer would be enough and the spin waiting for it to empty would not occur often.
+<br/>
+If it turns out that there is often 3 or more outstanding send messages then multiple send buffers would be useful.
+<br/>
+<br/>
+The FIFO usage will change depending on what the application is doing (for example if wifi and sound are being used the FIFO will be used more), but it should be enough to profile the busy case and assign send buffers based upon that.
+<br/>
+The profiling may also show that the FIFO usage is asymmetric with regard to the ARMs. For example the ARM9 to ARM7 may benefit from more send buffers than the ARM7 to ARM9 path.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#132172 - wintermute - Sun Jun 24, 2007 3:58 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>DekuTree64 wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">With regard to the use of shared memory, why does one side care if the other side has processed a message?</td> </tr></table><span class="postbody">
+<br/>
+Hmm, maybe it would be better to just do it manually when needed. One example I can think of is the touch screen, where you'd generally want to request ARM7 to sample it, and wait until you get the result. But since ARM7 would be sending a reply message anyway, that message could set a flag, which you could spin on.</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Something I'm considering doing is just having the touchscreen &amp; arm7 only keys sent via FIFO message. I believe official code works like that and it seems like a reasonable thing to do. Rather than requesting the co-ordinates when you need them, request a particular sampling rate on program start. This would allow for user supplied filtering later.
+<br/>
+<br/>
+I currently have code in CVS to track the time using the RTC irq which links into time() via some more newlib hackery. This seems reasonable to just stick with the value in shared memory approach rather than using a request mechanism.
+<br/>
+<br/>
+The main place I see a need for a return value would be for sound code where it might be necessary to know which channel was used for a particular effect. I've been thinking about some sort of callback mechanism for this - still not entirely sure.
+<br/>
+<br/>
+As Masscat says, some profiling might be in order here but I think that the vast majority of messages will be dealt with almost immediately.<br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#132183 - DekuTree64 - Sun Jun 24, 2007 10:29 am</h4>
+    <div class="postbody"><span class="postbody">Well, I gave the send buffer thing a try, but it started getting pretty hairy pretty quickly. I think the send buffer would have to be flushed out directly in the send function while waiting, rather than hoping the FIFO empty interrupt does it. Otherwise you'd be screwed if you tried to send a message while interrupts are disabled.
+<br/>
+<br/>
+I may try again tomorrow, or I could just go the easy/slow route of waiting until the FIFO is completely empty for sending multi-word messages.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>wintermute wrote:</b></span></td> </tr> <tr> <td class="quote">Something I'm considering doing is just having the touchscreen &amp; arm7 only keys sent via FIFO message. I believe official code works like that and it seems like a reasonable thing to do. Rather than requesting the co-ordinates when you need them, request a particular sampling rate on program start. This would allow for user supplied filtering later.</td> </tr></table><span class="postbody">
+<br/>
+Seems unnecessary to me. I would just have 2 options; VBlank update, and request (with a built in wait-for-complete option). Both send a FIFO message that writes to the same memory location on ARM9, and request would have an optional user callback when it's done. Then if you want higher frequency sampling, you can do it from ARM9, and if you don't care, it just works.
+<br/>
+<br/>
+Or if shared memory will be sticking around, they could write to that, since it's a bit faster than FIFO, and transparent to user code either way.
+<br/>
+<br/>
+As for sound, I probably wouldn't do any channel management on ARM7 at all. That should be left up to whatever sound library you're using.
+<br/>
+For simple programs that don't need a sound library, but still want to do basic "play on an idle channel", there could be a FIFO command to ask ARM7 what channels are currently active.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#132370 - DekuTree64 - Tue Jun 26, 2007 7:53 am</h4>
+    <div class="postbody"><span class="postbody">Ok, send buffer is working, but adds about 100 lines of code. Not too bad, but since it may not be necessary anyway, I made an interrupt-safe, non-buffered version too.
+<br/>
+<br/>
+<a class="postlink" href="http://deku.gbadev.org/program/ipcfifo_sendbuf.zip" target="_blank">Buffered version</a>
+<br/>
+<a class="postlink" href="http://deku.gbadev.org/program/ipcfifo_nosendbuf.zip" target="_blank">Unbuffered version</a>
+<br/>
+<br/>
+I think this should just about finish it. I'm still on the fence about wether to remove the shared memory command counters, but leaning a bit more toward removing them.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#132387 - masscat - Tue Jun 26, 2007 12:20 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>DekuTree64 wrote:</b></span></td> </tr> <tr> <td class="quote">I'm still on the fence about wether to remove the shared memory command counters, but leaning a bit more toward removing them.</td> </tr></table><span class="postbody">
+<br/>
+My opinion is that the fifo handler is just the message passing mechanism and does not care how many messages have been passed and if/when a message was processed.
+<br/>
+Any handshaking/replying required by a particular system that is using the fifo handler should be implemented on top of the message passing mechanism (or other means).
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>wintermute wrote:</b></span></td> </tr> <tr> <td class="quote">I currently have code in CVS to track the time using the RTC irq which links into time() via some more newlib hackery. This seems reasonable to just stick with the value in shared memory approach rather than using a request mechanism.</td> </tr></table><span class="postbody">
+<br/>
+Is/will the RTC value in shared memory be more than one word? If so using the FIFO to pass the data would avoid the situation where the ARM9 is mid way through reading the data and the ARM7 comes along and changes it.
+<br/>
+<br/>
+Similarly care maybe needed for the touchscreen/XY key data. That is, the values in memory used by the application should only ever be read and written by one of the ARMs (or their reading/writing coordinated by one of the ARMs).
+<br/>
+Also, if the ARM7 is pushing touchscreen data up through the FIFO (maybe on VBlank or similar) then the reading of the ARM9's copy of touchscreen values in memory must be protected by disabling interrupts otherwise the FIFO message processor could change the data mid read. If the ARM9 is instigating the transfer then the copy in memory can be protected using a "being updated" flag.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#133766 - wintermute - Sun Jul 08, 2007 3:06 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>masscat wrote:</b></span></td> </tr> <tr> <td class="quote">My opinion is that the fifo handler is just the message passing mechanism and does not care how many messages have been passed and if/when a message was processed.
+<br/>
+Any handshaking/replying required by a particular system that is using the fifo handler should be implemented on top of the message passing mechanism (or other means).
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I totally agree with this. I think you also mentioned earlier that the message system should be decoupled from the FIFO mechanism which I also think is the best course of action.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+Is/will the RTC value in shared memory be more than one word? If so using the FIFO to pass the data would avoid the situation where the ARM9 is mid way through reading the data and the ARM7 comes along and changes it.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Currently I have a single word being incremented once a second from the RTC interrupt. Right now I also have the RTC values in the old IPC struct but I'm not sure they're actually necessary.
+<br/>
+<br/>
+Code to read and display the time looks roughly like this
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+      time_t unixTime = time(NULL);
+<br/>
+      timeStruct = gmtime((const time_t *)&amp;unixTime);
+<br/>
+      printf("%s", ctime(&amp;unixTime));
+<br/>
+      printf("%02d:%02d:%02d\n\n", timeStruct-&gt;tm_hour, timeStruct-&gt;tm_min, timeStruct-&gt;tm_sec);
+<br/>
+      printf("\n%s %i %i", months[timeStruct-&gt;tm_mon], timeStruct-&gt;tm_mday, timeStruct-&gt;tm_year +1900);
+<br/>
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+Similarly care maybe needed for the touchscreen/XY key data. That is, the values in memory used by the application should only ever be read and written by one of the ARMs (or their reading/writing coordinated by one of the ARMs).
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+This was one of the reasons I started using the arm7 vcount irq for touchscreen reading - I think having the arm7 setting the values at some point during redraw but having the arm9 read the values at or around vblank achieves much the same thing.<br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#149323 - Dwedit - Fri Jan 18, 2008 1:13 pm</h4>
+    <div class="postbody"><span class="postbody">DekuTree64, what is the license on your IPC code?  Public domain?<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#149341 - DekuTree64 - Fri Jan 18, 2008 7:05 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Dwedit wrote:</b></span></td> </tr> <tr> <td class="quote">DekuTree64, what is the license on your IPC code?  Public domain?</td> </tr></table><span class="postbody">
+<br/>
+Yeah, public domain. Free to do whatever you want with, no need to credit me or anything.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

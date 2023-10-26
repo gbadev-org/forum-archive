@@ -1,0 +1,1002 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Optimization ideas, mapping from 320x200 to 512x256 screen - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>ASM > Optimization ideas, mapping from 320x200 to 512x256 screen</h2>
+<div id="posts">
+<div class="post">
+    <h4>#171165 - Pate - Wed Nov 04, 2009 6:04 am</h4>
+    <div class="postbody"><span class="postbody">Hi!
+<br/>
+<br/>
+In the emulator I am working on I need to map screen access from source screen of 320x200 to NDS VRAM organized as 512x256 pixels. The current code I use is OK, but I don't think it is as optimal as it could be, so I thought why not ask for help from you gurus? Do you have ideas for optimizing this screen coordinate translation?
+<br/>
+<br/>
+Current code is below, I especially don't like the extra lsl r1, #16 whose purpose is simply to clear the high halfword of r1. Can I get rid of that using eor or some such?
+<br/>
+<br/>
+The input "idx" register high halfword contains offset to 320x200x8bit screen, and the macro should return in r2 the corresponding address in VRAM.
+<br/>
+<br/>
+Thanks!
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+.macro r2_MCGA_from_idx idx
+<br/>
+   ldr      r1, =y320to512tbl
+<br/>
+   mov      r0, \idx, lsr #(16+6)   @ r0 = idx/64 = table index
+<br/>
+   ldr      r1,[r1, r0, lsl #2]    @ r1 high = 320*Y, r1 low = Y
+<br/>
+   mov      r0, \idx, lsr #16
+<br/>
+   sub      r0, r1, lsr #16         @ Now r0 = X coordinate on this screen row
+<br/>
+   lsl      r1, #16
+<br/>
+   add      r0, r1, lsr #(16-9)      @ Now r0 = X+512*Y = Screen address
+<br/>
+   add      r2, r0, #0x06000000
+<br/>
+.endm
+<br/>
+<br/>
+   .data
+<br/>
+   .align 2
+<br/>
+<br/>
+.macro y320to512x1 val
+<br/>
+   .word   ((320*(\val))&lt;&lt;16)+(\val), ((320*(\val))&lt;&lt;16)+(\val), ((320*(\val))&lt;&lt;16)+(\val), ((320*(\val))&lt;&lt;16)+(\val), ((320*(\val))&lt;&lt;16)+(\val)
+<br/>
+.endm
+<br/>
+.macro y320to512x10 val
+<br/>
+   y320to512x1 \val
+<br/>
+   y320to512x1 \val+1
+<br/>
+   y320to512x1 \val+2
+<br/>
+   y320to512x1 \val+3
+<br/>
+   y320to512x1 \val+4
+<br/>
+   y320to512x1 \val+5
+<br/>
+   y320to512x1 \val+6
+<br/>
+   y320to512x1 \val+7
+<br/>
+   y320to512x1 \val+8
+<br/>
+   y320to512x1 \val+9
+<br/>
+.endm
+<br/>
+<br/>
+y320to512tbl:
+<br/>
+   y320to512x10 0
+<br/>
+   y320to512x10 10
+<br/>
+   y320to512x10 20
+<br/>
+   y320to512x10 30
+<br/>
+   y320to512x10 40
+<br/>
+   y320to512x10 50
+<br/>
+   y320to512x10 60
+<br/>
+   y320to512x10 70
+<br/>
+   y320to512x10 80
+<br/>
+   y320to512x10 90
+<br/>
+   y320to512x10 100
+<br/>
+   y320to512x10 110
+<br/>
+   y320to512x10 120
+<br/>
+   y320to512x10 130
+<br/>
+   y320to512x10 140
+<br/>
+   y320to512x10 150
+<br/>
+   y320to512x10 160
+<br/>
+   y320to512x10 170
+<br/>
+   y320to512x10 180
+<br/>
+   y320to512x10 190
+<br/>
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Pate<br/>_________________<br/><ul><li>Now working on DSx86 <a href="http://dsx86.patrickaalto.com" target="_blank">http://dsx86.patrickaalto.com</a>
+<br/>
+</li><li>Get LineWarsDS from <a href="http://linewars.patrickaalto.com" target="_blank">http://linewars.patrickaalto.com</a></li></ul></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#171166 - Ruben - Wed Nov 04, 2009 6:23 am</h4>
+    <div class="postbody"><span class="postbody">Well, if this macro is called more than once, then preload the table address into r3 or ip (r12) and pass that as an argument to the macro.
+<br/>
+<br/>
+And I'm not entirely sure what it is you're doing exactly so I'm not really sure I can help much with the code, but it may help to look at your code visually, like so...
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">mov r0, \idx, lsr #16 @ 0000FEDC
+<br/>
+sub r0,   r1, lsr #16 @ 0000FEDC - 0000BA98
+<br/>
+mov r1,   r1, lsl #16 @ 44440000</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+EDIT:
+<br/>
+<br/>
+It may also help to make this macro cleaner
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">.macro y320to512x1 val
+<br/>
+  .word (320&lt;&lt;16) * \val + \val
+<br/>
+  .word (320&lt;&lt;16) * \val + \val
+<br/>
+  .word (320&lt;&lt;16) * \val + \val
+<br/>
+  .word (320&lt;&lt;16) * \val + \val
+<br/>
+  .word (320&lt;&lt;16) * \val + \val
+<br/>
+.endm
+<br/>
+<br/>
+@ since it's repeated, can be
+<br/>
+@ brought down to this
+<br/>
+<br/>
+.macro y320to512x1 val
+<br/>
+  .rept 5
+<br/>
+    .word (320&lt;&lt;16) * \val + \val
+<br/>
+  .endr
+<br/>
+.endm</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#171168 - Pate - Wed Nov 04, 2009 8:31 am</h4>
+    <div class="postbody"><span class="postbody">Thanks for the reply Ruben!
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Ruben wrote:</b></span></td> </tr> <tr> <td class="quote">Well, if this macro is called more than once, then preload the table address into r3 or ip (r12) and pass that as an argument to the macro.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Sadly, all other registers are in use for other things, only r0 and r1 (and r2 within the macro) are free to use. I plan to put the table in stack eventually so I can get rid of one ldr, but I am currently more interested in a better algorithm.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+And I'm not entirely sure what it is you're doing exactly ...
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Well, the macro just converts between 320 pixels per row and 512 pixels per row, so that for example input offset of 319 (meaning coordinates (319,0)) will map to output offset 319, but input 320 (0,1) will map to output offset 512 (again coordinates 0,1). 
+<br/>
+<br/>
+EDIT: In other words, I'm looking for the most efficient ASM solution for this C code:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+r2 = (idx/320)*512 + idx%320;
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+It may also help to make this macro cleaner
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Ah, I wasn't aware of ".rept", thanks for the info! The macro just builds the table, but in the future that rept will be useful!
+<br/>
+<br/>
+Pate<br/>_________________<br/><ul><li>Now working on DSx86 <a href="http://dsx86.patrickaalto.com" target="_blank">http://dsx86.patrickaalto.com</a>
+<br/>
+</li><li>Get LineWarsDS from <a href="http://linewars.patrickaalto.com" target="_blank">http://linewars.patrickaalto.com</a></li></ul></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#171169 - Ruben - Wed Nov 04, 2009 9:10 am</h4>
+    <div class="postbody"><span class="postbody">I'm not sure if I understand correctly, but if I do this should do it without look-up tables
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">.macro r2_MCGA_from_idx idx
+<br/>
+  mov     r2, \idx, lsr #16  @ get offset
+<br/>
+  ldr     r1, =0xCCCCCD      @ 1/320 (q32, rounded)
+<br/>
+  umull   r2, r1, r1, r2     @ r2 = idx/320 (this is y)
+<br/>
+  mov     r1, r2, lsl #6     @ x*64
+<br/>
+  add     r1, r1, r2, lsl #8 @ x*64 + x*256 = x*(64+256) = x*320
+<br/>
+  rsb     r1, r1, \idx       @ idx-(idx/320*320) = idx%320
+<br/>
+  add     r1, r1, r2, lsl #9 @ r1 = (idx%320) + (idx/320*512)
+<br/>
+  mov     r1, r1, lsl #1     @ (u16*)r1
+<br/>
+  add     r2, r1, #0x6000000 @ &amp;VRAM[idx%320 + idx/320*512]
+<br/>
+.endm </td> </tr></table><span class="postbody">
+<br/>
+What it does is that, every 320 'tiles', it jumps by 512 tiles, and then advances by x with idx%320.
+<br/>
+<br/>
+EDIT:
+<br/>
+Note that this frees up r0 so you can preload the reciprocal here and multiply by r0 instead of r1.
+<br/>
+<br/>
+EDIT 2:
+<br/>
+Changed code a bit so you don't have to sacrifice the \idx register.
+<br/>
+<br/>
+EDIT 3:
+<br/>
+Note that this is about 4 cycles slower, so if you need speed, I may not be the best person to ask. If you need space, use mine.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#171171 - FluBBa - Wed Nov 04, 2009 9:40 am</h4>
+    <div class="postbody"><span class="postbody">I have a faint memory of this already been discussed...
+<br/>
+Anyway, always try to combine shifts with actual logical operations.
+<br/>
+This:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+  mov     r1, r2, lsl #6     @ x*64 
+<br/>
+  add     r1, r1, r2, lsl #8 @ x*64 + x*256 = x*(64+256) = x*320 
+<br/>
+  rsb     r1, r1, \idx       @ idx-(idx/320*320) = idx%320
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+can easily be turned into:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+  add     r1, r2, r2, lsl #2     @ x*5
+<br/>
+  sub     r1, \idx, r1, lsl # 6       @ idx-((idx/320)*(5*64)) = idx%320
+<br/>
+</td> </tr></table><span class="postbody"><br/>_________________<br/>I probably suck, my not is a programmer.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#171172 - Cearn - Wed Nov 04, 2009 9:42 am</h4>
+    <div class="postbody"><span class="postbody">Is there any particular reason you're not using an affine background for this? You could use a 320x200 field on a 512x256 bitmap and let the hardware scale it for you.
+<br/>
+<br/>
+Also, what sort of access do you really need? Do you have an offscreen buffer that you need to scale to VRAM( so that you can read the pixels sequentially), or do you need random access?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#171173 - Pate - Wed Nov 04, 2009 10:08 am</h4>
+    <div class="postbody"><span class="postbody">Thanks for the replies all! I am rather new to ARM ASM, so all tricks you can show are always very interesting. :-)
+<br/>
+<br/>
+Cearn, I'm not quite sure I understand what you mean by an affine background? On input, I have just a pixel index into a 320x200 buffer, that is, an integer between 0 and 64000, and on output I need an index into VRAM, an integer between 0 and 102400 (plus 0x06000000).
+<br/>
+<br/>
+I need random access, as the software I emulate may write whatever number of pixels where ever it wants. Obviously, when storing a number of pixels at once (like in REP MOVSW), I can just calculate this original offset once. I tried with an offscreen 320x200 buffer that I copy to VRAM at 30fps, but that turned out to be much slower than attempting to emulate screen writes directly to NDS VRAM.
+<br/>
+<br/>
+Ruben, I need speed, I have a lot of RAM so space is not a concern (at least at the moment).
+<br/>
+<br/>
+Pate<br/>_________________<br/><ul><li>Now working on DSx86 <a href="http://dsx86.patrickaalto.com" target="_blank">http://dsx86.patrickaalto.com</a>
+<br/>
+</li><li>Get LineWarsDS from <a href="http://linewars.patrickaalto.com" target="_blank">http://linewars.patrickaalto.com</a></li></ul></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#171175 - Cearn - Wed Nov 04, 2009 3:04 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Pate wrote:</b></span></td> </tr> <tr> <td class="quote">Cearn, I'm not quite sure I understand what you mean by an affine background? </td> </tr></table><span class="postbody">Affine backgrounds are those that support hardware affine transformations like rotation and --more importantly in your case-- scaling (see <a class="postlink" href="http://www.coranac.com/tonc/text/affbg.htm" target="_blank">tonc:affbg</a>). If you're using an 512x256@8bpp bitmapped background, you're already using an affine BG.
+<br/>
+<br/>
+The idea here is that you can set the matrix (REG_BGnPA - REG_BGnPD) to the right scalings so that the hardware stretches the 320x200 bitmap you want to the screen's dimensions. Think of it as a post-processing step: you create a 320x200 in VRAM (or, rather, a 320x200 area on a 512x256 BG) and use the hardware scaling to make sure it looks right on the screen.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Pate wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+On input, I have just a pixel index into a 320x200 buffer, that is, an integer between 0 and 64000, and on output I need an index into VRAM, an integer between 0 and 102400 (plus 0x06000000).
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Hmm. I'd have thought you'd start with pixel coordinates, not a pixel index. This would complicate matters a little.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Pate wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+I need random access, as the software I emulate may write whatever number of pixels where ever it wants. Obviously, when storing a number of pixels at once (like in REP MOVSW), I can just calculate this original offset once. I tried with an offscreen 320x200 buffer that I copy to VRAM at 30fps, but that turned out to be much slower than attempting to emulate screen writes directly to NDS VRAM.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Remember that VRAM does not allow byte-writes. The extra work needed to do that might end up being slower than a RAM or a DTCM blit.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#171187 - Pate - Thu Nov 05, 2009 5:50 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Cearn wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Pate wrote:</b></span></td> </tr> <tr> <td class="quote">Cearn, I'm not quite sure I understand what you mean by an affine background? </td> </tr></table><span class="postbody">Affine backgrounds are those that support hardware affine transformations like rotation and --more importantly in your case-- scaling (see <a class="postlink" href="http://www.coranac.com/tonc/text/affbg.htm" target="_blank">tonc:affbg</a>). If you're using an 512x256@8bpp bitmapped background, you're already using an affine BG.
+<br/>
+</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Ah, okay. Yes, I'm using an affine background already. I don't currently scale the background, mainly so that I can see possible pixel errors, but I will certainly add scaling eventually. I plan to give the user choices whether to scale the screen or move a 256x192 window over the 320x200 screen area.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+Hmm. I'd have thought you'd start with pixel coordinates, not a pixel index. This would complicate matters a little.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Yeah.. Since the input is something like "mov es:[di],al" where I only have the di register value as input, I need to translate it to the 512x256 background bitmap.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+Remember that VRAM does not allow byte-writes. The extra work needed to do that might end up being slower than a RAM or a DTCM blit.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Yeah, I assumed it would be slower, too, but empirical testing proved me wrong. The software I am emulating already uses internally an offscreen buffer, and copies that buffer to the screen using "rep movsw", and then updates some extra screen pixels directly. If I use the blit I will in effect create an additional layer of offscreen buffers, which is probably what actually kills the performance.
+<br/>
+<br/>
+Anyways, in the final product I will again give the user a choice between offscreen blit and direct screen hardware emulation.
+<br/>
+<br/>
+Thanks for the replies, again!
+<br/>
+<br/>
+Pate<br/>_________________<br/><ul><li>Now working on DSx86 <a href="http://dsx86.patrickaalto.com" target="_blank">http://dsx86.patrickaalto.com</a>
+<br/>
+</li><li>Get LineWarsDS from <a href="http://linewars.patrickaalto.com" target="_blank">http://linewars.patrickaalto.com</a></li></ul></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#171190 - sverx - Thu Nov 05, 2009 9:15 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Pate wrote:</b></span></td> </tr> <tr> <td class="quote">Since the input is something like "mov es:[di],al" ...</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+... are you doing an 8086 emulator? 8|</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#171192 - Pate - Thu Nov 05, 2009 11:06 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sverx wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Pate wrote:</b></span></td> </tr> <tr> <td class="quote">Since the input is something like "mov es:[di],al" ...</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+... are you doing an 8086 emulator? 8|</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Yep. I've been rather silent about it until I was sure it will work, but now it is beginning to look pretty good so I might as well admit it. :-)
+<br/>
+<br/>
+Pate<br/>_________________<br/><ul><li>Now working on DSx86 <a href="http://dsx86.patrickaalto.com" target="_blank">http://dsx86.patrickaalto.com</a>
+<br/>
+</li><li>Get LineWarsDS from <a href="http://linewars.patrickaalto.com" target="_blank">http://linewars.patrickaalto.com</a></li></ul></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#171194 - sverx - Thu Nov 05, 2009 4:28 pm</h4>
+    <div class="postbody"><span class="postbody">Wow! :) I was also considering to do that since some time, but I lack of experience... is it a port of DosBox or a complete rewrite? :)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#171195 - Pate - Thu Nov 05, 2009 8:15 pm</h4>
+    <div class="postbody"><span class="postbody">I started from scratch, right after I got LineWarsDS finished last July, and have been working on it since. I hope to announce it properly in a few days, I'm currently making a web site for it. It is still *very* far from finished, but I have been putting together a sort of technology demo for the last couple of weeks that is almost ready for release.
+<br/>
+<br/>
+I trust you can wait a few days. :-)
+<br/>
+<br/>
+Pate<br/>_________________<br/><ul><li>Now working on DSx86 <a href="http://dsx86.patrickaalto.com" target="_blank">http://dsx86.patrickaalto.com</a>
+<br/>
+</li><li>Get LineWarsDS from <a href="http://linewars.patrickaalto.com" target="_blank">http://linewars.patrickaalto.com</a></li></ul></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#171208 - sverx - Fri Nov 06, 2009 10:48 am</h4>
+    <div class="postbody"><span class="postbody">I was wondering if it wouldn't be better to use a 15bpp 'direct color' bitmapped background instead of the 8bpp 'paletted' one...
+<br/>
+<br/>
+... this way you won't have to read the halfword/change the byte/write the halfword again for every pixel you want to set to the screen in your VGA mode 13h ...
+<br/>
+<br/>
+Of course that needs a memory to store RGB values, but you could already set it as an array of 256 halfword value in a fast memory (DTCM for instance?) thus making your byte (the pixel!) the index of the element of this array that should be copied to VRAM.
+<br/>
+You could also make gamma correction easily...
+<br/>
+<br/>
+Just a thought, btw I wanted to express it :)
+<br/>
+<br/>
+[oh, I noticed now you wrote that it's using a <span style="font-style: italic">rep movsw</span> instruction... well, so maybe a 8 bpp it's faster in that case, you just copy 4 pixel each time...]</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#171211 - Pate - Fri Nov 06, 2009 12:05 pm</h4>
+    <div class="postbody"><span class="postbody">Yeah, I thought about that, too, but then palette animation (fade-in/fade-out) would be REALLY expensive, so I thought it would be better to emulate the graphics using palettes.
+<br/>
+<br/>
+Pate<br/>_________________<br/><ul><li>Now working on DSx86 <a href="http://dsx86.patrickaalto.com" target="_blank">http://dsx86.patrickaalto.com</a>
+<br/>
+</li><li>Get LineWarsDS from <a href="http://linewars.patrickaalto.com" target="_blank">http://linewars.patrickaalto.com</a></li></ul></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#171212 - sverx - Fri Nov 06, 2009 1:50 pm</h4>
+    <div class="postbody"><span class="postbody">Yeah, you're right, I didn't think that much before writing... :|</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#171215 - Exophase - Fri Nov 06, 2009 6:40 pm</h4>
+    <div class="postbody"><span class="postbody">I assume that this is for capturing writes to the emulated framebuffer and converting them to the NDS framebuffer, correct? Actually, I'm surprised that the emulated framebuffer even has a pitch of 320, but I'll trust that you know what's going on with that.
+<br/>
+<br/>
+It should be possible to get a 320x200 framebuffer in DS using sprites instead of a bitmap BG. It's a little complex though. What you'd have to do is have five 64 wide sprites laid out next to each other (probably scaled) and setup HDMA or horizontal IRQs so that their tile positions are updated every line. It'd look like this:
+<br/>
+<br/>
+Line 0: 0, 1, 2, 3, 4
+<br/>
+Line 1: 5, 6, 7, 8, 9
+<br/>
+Line 2, 10, 11, 12, 13, 14
+<br/>
+<br/>
+Etc. The offsets would have to be done in sprite mapping modes using 64 pixel offsets. I do believe this would cost less than translating the framebuffer writes in most cases - especially if removing the burden of having to capture those writes might relieve you of having to emulate memory at that level entirely. I don't know what else is mapped to the address space, but I do know x86 has a port space so it could work out perhaps.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#171222 - Pate - Sat Nov 07, 2009 4:48 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">I assume that this is for capturing writes to the emulated framebuffer and converting them to the NDS framebuffer, correct?
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Yes, that is correct. Your idea for using sprites and IRQ sounds a bit scary, I have to admit! I haven't done anything with sprites yet, so I don't quite understand this method, but this is good to keep in mind.
+<br/>
+<br/>
+Btw, I announced my emulator now "officially" in the thread <a href="http://forum.gbadev.org/viewtopic.php?t=16956" target="_blank">http://forum.gbadev.org/viewtopic.php?t=16956</a>
+<br/>
+<br/>
+Pate<br/>_________________<br/><ul><li>Now working on DSx86 <a href="http://dsx86.patrickaalto.com" target="_blank">http://dsx86.patrickaalto.com</a>
+<br/>
+</li><li>Get LineWarsDS from <a href="http://linewars.patrickaalto.com" target="_blank">http://linewars.patrickaalto.com</a></li></ul></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#171224 - Exophase - Sat Nov 07, 2009 9:32 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Pate wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">I assume that this is for capturing writes to the emulated framebuffer and converting them to the NDS framebuffer, correct?
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Yes, that is correct. Your idea for using sprites and IRQ sounds a bit scary, I have to admit! I haven't done anything with sprites yet, so I don't quite understand this method, but this is good to keep in mind.
+<br/>
+<br/>
+Btw, I announced my emulator now "officially" in the thread <a href="http://forum.gbadev.org/viewtopic.php?t=16956" target="_blank">http://forum.gbadev.org/viewtopic.php?t=16956</a>
+<br/>
+<br/>
+Pate</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Congratulations on the release. If you ever feel like sharing source I can see if I have any ideas for optimizations. As far as the 320x200 sprite framebuffer idea goes, maybe if I finally install a DS toolchain I can throw together an example of it &gt;_&gt;
+<br/>
+<br/>
+UPDATE: Sorry, was talking to someone else and realized my suggestion only works for bitmap modes. Since I'm sure your framebuffer isn't 15bpp that's out. You can make it work with 8bpp or 4bpp, but it means using 40 8x8 sprites. While you'd still have more than enough hblank time for it I think this will start to cost you a lot in bus contention.
+<br/>
+<br/>
+There's another way to do it for 8bpp modes, I think. You can use two 512 wide bitmap layers. Basically, the problem you want to solve here is you want to draw 320 pixels starting at an arbitrary position in the layer. You can start at an arbitrary start position in the layer by using the horizontal and vertical offset registers, but the issue with using one layer is that you'll hit an edge every 512 pixels. To get around this, you can have another layer draw the rest of them by using negative horizontal offsets to make it start in the middle of the screen. You need to have wrapping off for both layers.
+<br/>
+<br/>
+Let me try to demonstrate. You have two bitmap layers, A and B. Note that I'll be describing this pretending that DS has a 320 wide display: in reality you'd have to use scaling to make it so. But it should still work.
+<br/>
+<br/>
+On scanline 0 you draw layer A using offset 0, 0 and layer B using something to make it fully offscreen like -320, 0.
+<br/>
+<br/>
+Then on scanline 1, layer A's offset is 320, 0. This means that it draws 192 pixels starting from the left edge of the screen until it hits the edge at 511, 0. If you make layer B's offset -192, 1 then it'll draw 128 pixels starting at pixel 192.
+<br/>
+<br/>
+This should repeat okay for all the layers.
+<br/>
+<br/>
+I think you don't even need to use HDMA, but can use dmx/dmy to change the offsets per line. Basically it ends up looking like two sheared layers aligned against each other.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#171243 - Pate - Mon Nov 09, 2009 5:51 am</h4>
+    <div class="postbody"><span class="postbody">Okay, I think I understand the method you are describing. But isn't having an IRQ triggered 192*60 times a second, with all the additional overhead it causes, a high price to pay just to get rid of a table lookup when changing a pixel on the screen?
+<br/>
+<br/>
+I am not very familiar with the IRQ overhead on ARM, but back in my x86 ASM days IRQs were pretty expensive...
+<br/>
+<br/>
+Pate<br/>_________________<br/><ul><li>Now working on DSx86 <a href="http://dsx86.patrickaalto.com" target="_blank">http://dsx86.patrickaalto.com</a>
+<br/>
+</li><li>Get LineWarsDS from <a href="http://linewars.patrickaalto.com" target="_blank">http://linewars.patrickaalto.com</a></li></ul></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#171259 - Exophase - Tue Nov 10, 2009 12:23 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Pate wrote:</b></span></td> </tr> <tr> <td class="quote">Okay, I think I understand the method you are describing. But isn't having an IRQ triggered 192*60 times a second, with all the additional overhead it causes, a high price to pay just to get rid of a table lookup when changing a pixel on the screen?
+<br/>
+<br/>
+I am not very familiar with the IRQ overhead on ARM, but back in my x86 ASM days IRQs were pretty expensive...
+<br/>
+<br/>
+Pate</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I suggest you study HDMA, it doesn't involve IRQs. And the method I described with the BG shearing can probably be done fully automatically using the affine transform registers.
+<br/>
+<br/>
+It's an awful lot more than just getting rid of a table lookup, it's getting rid of an entire class of memory accesses you have to trap. It might even simplify the memory emulation entirely, making it faster.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#171261 - Pate - Tue Nov 10, 2009 5:45 am</h4>
+    <div class="postbody"><span class="postbody">Ah okay, I think I need to look into HDMA. I still got a lot of things to learn about NDS, the good thing is that DSx86 is a project where I can most likely use a lot of the stuff I learn. :-)
+<br/>
+<br/>
+Pate<br/>_________________<br/><ul><li>Now working on DSx86 <a href="http://dsx86.patrickaalto.com" target="_blank">http://dsx86.patrickaalto.com</a>
+<br/>
+</li><li>Get LineWarsDS from <a href="http://linewars.patrickaalto.com" target="_blank">http://linewars.patrickaalto.com</a></li></ul></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#171297 - Exophase - Thu Nov 12, 2009 4:47 pm</h4>
+    <div class="postbody"><span class="postbody">I finally tried doing a demo of this. Unfortunately I found that my basic approach wouldn't work as-is because I incorrectly thought that you'd be able to offset into the middle of the DS scanline and the virtual framebuffer - you really only get one or the other, not both. What I said about 40 sprites would also never fly since you can't offset them in 8 pixel increments.
+<br/>
+<br/>
+It also probably wouldn't have worked w/o HDMA because you need to increment by more than the +/- 128 pixels per line that the built-in affine transformation can handle. You can probably still do it for the Y coordinate; I haven't tried it yet. This might not work anyway because writing to the X offset might reload the Y offset. It's something I'll need to look into.
+<br/>
+<br/>
+Fortunately, I did still find a way to make this work and I have actually verified it.
+<br/>
+<br/>
+As I mentioned, the basic problem with the 512-wide framebuffer is that when you offset into it in 320-wide increments you start hidding the edge of the screen at various points and get a bunch of transparent lines coming off the right edge of the display. You can make it so when it hits the edge it wraps around to the start instead of turning transparent, but what you really want is for it to "wrap" around to the NEXT scanline.
+<br/>
+<br/>
+After realizing this it was pretty obvious what you can do - have a non-wrapping layer on top and a wrapping layer on the bottom, where the wrapping layer is one scanline ahead of the non-wrapping one (achieved by setting the vertical offset one higher).
+<br/>
+<br/>
+This, however, poses a new problem: since you're relying on the two layers overlapping, the top layer will no longer have its 0 pixels go to background but instead will show throw to the (incorrect) pre-wrap data of the bottom layer.
+<br/>
+<br/>
+In my demo I avoided this by getting rid of 0 pixels altogether, but obviously that won't work for something you're emulating. I can think of a couple ways to handle this:
+<br/>
+<br/>
+- Use a window to clip the layer. This will need another HDMA channel, meaning you'd be using 3 every scanline with only one more available during the frame refresh. This isn't necessarily a big deal since you can use those HDMA channels for other things during vblank (so long as you set them back afterwards) but if you need significantly more HDMA or other things for DMA at any time you could find yourself pinched. It'll also use more bus cycles, but not an awful lot, just 16bits worth per line.
+<br/>
+<br/>
+- Put another layer inbetween the two layers that maskes off the parts of the bottom one you don't want to see. The only reasonable way to accomplish this would be to use extended palette BG or sprites. The extended palette only needs one color: the BG color (you can make it color 1, for instance). Copy the real BG color to it, and use it where you want to mask off the pre-wrap portions of the layer. Using a BG layer would probably be smarter than using sprites since the pattern for the mask repeats nicely and you should have enough space for the tilemap and tiles in the leftovers of the 512x256 framebuffer that you aren't using. You'd want to copy the BG color during vblank - this would cause problems if the game modified the color mid-frame, but if games do mid-frame effects you'll have bigger problems anyway, and I doubt an awful lot did. The only real downside to this approach is that it consumes a bank for extended palettes.
+<br/>
+<br/>
+You can also do it with 16bpp sprites, but you'd have to update them every time color 0 changes so it'd be a really bad idea. Personally I'd go for the second option I gave, since it doesn't waste any more bus time. I'll try to implement it then upload the demo later if you still want it.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#171311 - Pate - Fri Nov 13, 2009 7:12 am</h4>
+    <div class="postbody"><span class="postbody">Yes, a demo of your technique would be very interesting! Much of the stuff you describe goes somewhat over my head, so if you can show a source code that performs that it would be very useful!
+<br/>
+<br/>
+Thanks!
+<br/>
+<br/>
+Pate<br/>_________________<br/><ul><li>Now working on DSx86 <a href="http://dsx86.patrickaalto.com" target="_blank">http://dsx86.patrickaalto.com</a>
+<br/>
+</li><li>Get LineWarsDS from <a href="http://linewars.patrickaalto.com" target="_blank">http://linewars.patrickaalto.com</a></li></ul></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#171312 - Dwedit - Fri Nov 13, 2009 8:52 am</h4>
+    <div class="postbody"><span class="postbody">Here's some screenshots...
+<br/>
+<br/>
+Start with the Original Image <a href="http://www.dwedit.org/images/resizing/0-original.png">[Images not permitted - Click here to view it]</a>
+<br/>
+Reinterpret the 320x200 image as a 512x256 image <a href="http://www.dwedit.org/images/resizing/6-reinterpreted.png">[Images not permitted - Click here to view it]</a>
+<br/>
+<br/>
+So what we're doing is changing the origin at each scanline.  Only thing is that the DS does not wrap to the next line, instead it wraps to the same line.
+<br/>
+Anyway, you get two images that you need to put together:
+<br/>
+Top Layer <a href="http://www.dwedit.org/images/resizing/1-toplayer.png">[Images not permitted - Click here to view it]</a>
+<br/>
+Bottom Layer <a href="http://www.dwedit.org/images/resizing/2-bottomlayer.png">[Images not permitted - Click here to view it]</a>
+<br/>
+But the images will always wrap, so they really look like this:
+<br/>
+Top Layer with wrapping <a href="http://www.dwedit.org/images/resizing/4-toplayer_wrapping.png">[Images not permitted - Click here to view it]</a>
+<br/>
+Bottom Layer with wrapping <a href="http://www.dwedit.org/images/resizing/5-bottomlayer_wrapping.png">[Images not permitted - Click here to view it]</a>
+<br/>
+<br/>
+So you use the Window feature to hide the parts you don't want to see.
+<br/>
+The portions of the 'top' layer which should be shown are:
+<br/>
+320 (full row width)
+<br/>
+192
+<br/>
+320
+<br/>
+64
+<br/>
+256
+<br/>
+320
+<br/>
+128
+<br/>
+320
+<br/>
+and the pattern repeats every 8 scanlines.
+<br/>
+<br/>
+The DS window feature has a 'glitch' where horizontal window range can only be up to 255 pixels wide, so in addition to the window range, you also need to change which background layers are affected by the windows each scanline.
+<br/>
+<br/>
+Edit: Wait a minute, the Area Overflow feature might mean you don't need any windowing...  I'll look more into this tomorrow.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#171314 - Cydrak - Fri Nov 13, 2009 10:13 am</h4>
+    <div class="postbody"><span class="postbody">This is quite a nifty idea... I had a shot at it, turns out you can get it done with a single bitmap!
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">// HDMA list for affine settings
+<br/>
+struct {
+<br/>
+  s16 dx, ldx;  // ldx/dy aren't used, since we're resetting
+<br/>
+  s16 dy, ldy;  // the origin after each line.
+<br/>
+  s32  x;
+<br/>
+  s32  y;
+<br/>
+} lineTable[192];
+<br/>
+<br/>
+void buildVGALineList() {
+<br/>
+  const int dsWidth = 256, dsHeight = 192, bmWidth = 512;
+<br/>
+  const int vgaWidth = 320, vgaHeight = 200;
+<br/>
+  
+<br/>
+  for(int y = 0; y &lt; dsHeight; y++) {
+<br/>
+    // HDMA happens after each line, so the list needs to be ahead by one.
+<br/>
+    int dsLine    = y == 0? dsHeight-1 : y-1;
+<br/>
+    
+<br/>
+    int vgaLine   = y * vgaHeight/dsHeight;
+<br/>
+    int vgaOffset = vgaWidth * vgaLine;
+<br/>
+    int y         = vgaOffset / bmWidth;
+<br/>
+    int x         = vgaOffset % bmWidth;
+<br/>
+    
+<br/>
+    lineTable[dsLine].x  = 0x100 * x;
+<br/>
+    lineTable[dsLine].y  = 0x100 * y;
+<br/>
+    lineTable[dsLine].dx = 0x100 * vgaWidth/dsWidth;
+<br/>
+    lineTable[dsLine].dy = 0x001;
+<br/>
+    
+<br/>
+    int pixelsToEdge = bmWidth - x;
+<br/>
+    if(pixelsToEdge &lt; vgaWidth) {
+<br/>
+      lineTable[dsLine].y += 
+<br/>
+        -( (pixelsToEdge*dsWidth + vgaWidth-1) / vgaWidth ) &amp; 0xff;
+<br/>
+    }
+<br/>
+  }
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+The trick is to remember you're not <span style="font-style: italic">forced</span> to stay on the same line--after all, bitmaps are affine layers too. By setting DY to the smallest increment, you can use Y's fraction as an up-counter... and control the exact spot it will overflow. This code tracks the edge case and fills out suitable counter values for each line.
+<br/>
+<br/>
+I've set it up to fit the screen, though it should be possible to show any portion of the bitmap, scaled or not. Most fortunately, the screen is only 256 pixels wide, so there's no risk of Y rolling over twice. The only problem, really, is that pesky width of 512... (Hmm, but perhaps if you <span style="font-style: italic">reeeally</span> wanted 640, there's that large 1024x512 mode?)
+<br/>
+<br/>
+After setting up the list (and making sure your bitmap wraps of course), all you need to do is point the HDMA there. This needs to happen every vblank, since repeat-triggered DMAs will more than happily march into oblivion:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">  DMA_CR(0)   = 0;
+<br/>
+  DMA_SRC(0)  = (u32) &amp;lineTable[0];
+<br/>
+  DMA_DEST(0) = (u32) &amp;REG_BG3PA;
+<br/>
+  DMA_CR(0)   = DMA_ENABLE | DMA_REPEAT | DMA_START_HBL
+<br/>
+    | DMA_SRC_INC | DMA_DST_RESET | DMA_32_BIT | 4;</td> </tr></table><span class="postbody">
+<br/>
+I got away with a single channel, since all the registers are contiguous. The DMA_DST_RESET is very handy: it's similar to DMA_DST_FIX, except that it writes a whole group of registers each time, rather than just one of them... that's 4 words in this case.
+<br/>
+<br/>
+(Btw, the affine and window registers are all adjacent as well. I don't think Exo's solution needs more than one channel, either.)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#171321 - Exophase - Fri Nov 13, 2009 5:14 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Cydrak wrote:</b></span></td> </tr> <tr> <td class="quote">The trick is to remember you're not <span style="font-style: italic">forced</span> to stay on the same line--after all, bitmaps are affine layers too. By setting DY to the smallest increment, you can use Y's fraction as an up-counter... and control the exact spot it will overflow. This code tracks the edge case and fills out suitable counter values for each line.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Very smart idea. This is definitely the best solution so far.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Cydrak wrote:</b></span></td> </tr> <tr> <td class="quote">(Btw, the affine and window registers are all adjacent as well. I don't think Exo's solution needs more than one channel, either.)</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I thought about that, but I figured it wasn't worth the extra bandwidth to march over the stuff you don't actually need to change. The non-sequential overhead of starting the new transfers should be factored in too, though.
+<br/>
+<br/>
+All moot now since your solution only requires changing x and y of a single layer. In fact, it might be possible to strength reduce the changes of y into a fixed dmy. Sadly still can't get around changing x every line.
+<br/>
+<br/>
+This does mean your HDMA only needs to be 2, not 4. Just have to set dx and dy permanently beforehand.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#171332 - Cydrak - Fri Nov 13, 2009 9:29 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">I thought about that, but I figured it wasn't worth the extra bandwidth to march over the stuff you don't actually need to change. The non-sequential overhead of starting the new transfers should be factored in too, though.</td> </tr></table><span class="postbody">
+<br/>
+If you have 3 extra words, it breaks even I think. In my code I have a copy of the bitmap offset by 1/2 pixel and averaged in to try and get some smoothing, so it's faster to set both at once.
+<br/>
+<br/>
+On a side note: I would love to know where that overhead comes from. It's so crazy that it hits everything, even VRAM--I honestly didn't believe GBATEK until I measured it myself. x_x (Seriously, if the GPU had to wait around that much, a pair of affine maps alone would eat up all the bandwidth!)
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">This does mean your HDMA only needs to be 2, not 4.</td> </tr></table><span class="postbody">
+<br/>
+Fair enough. :-)
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">In fact, it might be possible to strength reduce the changes of y into a fixed dmy. Sadly still can't get around changing x every line.</td> </tr></table><span class="postbody">
+<br/>
+I looked at this and came to the conclusion that the scaling throws a wrench in it, maybe I missed something.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#171340 - Cearn - Sat Nov 14, 2009 10:56 am</h4>
+    <div class="postbody"><span class="postbody">Very pretty, Cydrak (though it'd probably be better not to have two different variables called 'y' in the loop &gt;_&gt;)
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Cydrak wrote:</b></span></td> </tr> <tr> <td class="quote">On a side note: I would love to know where that overhead comes from. It's so crazy that it hits everything, even VRAM--I honestly didn't believe GBATEK until I measured it myself. x_x (Seriously, if the GPU had to wait around that much, a pair of affine maps alone would eat up all the bandwidth!)
+<br/>
+</td> </tr></table><span class="postbody">Do you still have these tests somewhere? I've been considering to do these myself to get a better idea of all the instruction timings; this could save me some work.
+<br/>
+<br/>
+Since we're going to write directly to VRAM, here's a little code to write a single byte into VRAM.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">@ Memory in hwords looks like this:
+<br/>
+@   address | 0 1 | 2 3 | 4 5 | etc
+<br/>
+@   memory  | a b | a b | a b |
+<br/>
+@ If dst is odd : put value v into b; even: put value in a.
+<br/>
+@ if(addr &amp; 1)
+<br/>
+@   dst_h[addr&gt;&gt;1] = dst_b[addr-1]    | v&lt;&lt;8;
+<br/>
+@ else
+<br/>
+@   dst_h[addr&gt;&gt;1] = dst_b[addr+1]&lt;&lt;8 | v;
+<br/>
+<br/>
+    @ r0 = address.
+<br/>
+    @ r1 = value to write.
+<br/>
+    @ r2,r3 : temps
+<br/>
+    eor     r2, r0, #1              @ - read other byte.
+<br/>
+    ldrb    r2, [r2]                @ /
+<br/>
+    ands    r3, r0, #1
+<br/>
+    orrne   r1, r2, r1, lsl #8      @ Prep for odd write.   v&lt;&lt;8 | a
+<br/>
+    orreq   r1, r1, r2, lsl #8      @ Prep for even write.  b&lt;&lt;8 | v
+<br/>
+    strh    r1, [r0, -r3]           @ Write back
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#171343 - ninjalj - Sat Nov 14, 2009 3:17 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Cearn wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+Since we're going to write directly to VRAM, here's a little code to write a single byte into VRAM.
+<br/>
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">@ Memory in hwords looks like this:
+<br/>
+@   address | 0 1 | 2 3 | 4 5 | etc
+<br/>
+@   memory  | a b | a b | a b |
+<br/>
+@ If dst is odd : put value v into b; even: put value in a.
+<br/>
+@ if(addr &amp; 1)
+<br/>
+@   dst_h[addr&gt;&gt;1] = dst_b[addr-1]    | v&lt;&lt;8;
+<br/>
+@ else
+<br/>
+@   dst_h[addr&gt;&gt;1] = dst_b[addr+1]&lt;&lt;8 | v;
+<br/>
+<br/>
+    @ r0 = address.
+<br/>
+    @ r1 = value to write.
+<br/>
+    @ r2,r3 : temps
+<br/>
+    eor     r2, r0, #1              @ - read other byte.
+<br/>
+    ldrb    r2, [r2]                @ /
+<br/>
+    ands    r3, r0, #1
+<br/>
+    orrne   r1, r2, r1, lsl #8      @ Prep for odd write.   v&lt;&lt;8 | a
+<br/>
+    orreq   r1, r1, r2, lsl #8      @ Prep for even write.  b&lt;&lt;8 | v
+<br/>
+    strh    r1, [r0, -r3]           @ Write back
+<br/>
+</td> </tr></table><span class="postbody"></span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I may be missing something, but doesn't swpb solve this, as used on DSLinux for the GBA cartridge bus? Maybe it depends on buffer/cache bits on the MPU? (I see DSLinux apparently has both Bd and Cd set, maybe setting the VRAM as cachable is not such a hot idea).
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
++#ifdef CONFIG_NDS_ROM8BIT
+<br/>
++       add     r6, r6, r8, lsr #8
+<br/>
++       swpb    r5, r7, [r6]
+<br/>
++#else
+<br/>
+        strb    r7, [r6, r8, lsr #8]            @ set appropriate used_cp[]
+<br/>
++#endif
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#171346 - Ant6n - Sat Nov 14, 2009 10:31 pm</h4>
+    <div class="postbody"><span class="postbody">You could assume that 8bit writes into your video memory on the x86 almost never happen, but 8bit writes into main memory happen a lot.
+<br/>
+So you could protect your VRAM via the memory protection unit, and do all 8bit writes in user mode. all 16/32bit writes could be done in some privileged mode (i.e. run your emulator in privileged mode). You can force all 8bit writes to be a non-privileged access via the T flag for LDR, STR.
+<br/>
+Now you can access all memory with 16bit writes, and main memory with 8bit writes. If you do an 8bit write into VRAM (which is suppossed to happen seldomly), you can set up the exception to just do your 8bit write.
+<br/>
+That way 8byte writes into VRAM are really slow, but they don't slow down 8bit writes into normal memory (unless you are using VRAM as your x86 main memory, anyway)
+<br/>
+<br/>
+I think the protection unit could actually be used for all sorts of nifty things.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#171361 - Pate - Mon Nov 16, 2009 5:55 am</h4>
+    <div class="postbody"><span class="postbody">Thanks for the interesting ideas and discussion, guys!
+<br/>
+<br/>
+Cydrak, I think I almost understand your code, I'll have to test this out when I have the time. Thanks!
+<br/>
+<br/>
+Ant6n, 8bit writes to screen RAM on x86 are very common in 320x200 256-color mode (as 1 pixel is 1 byte), so I don't think making them really slow is a very good idea. Also, running in privileged mode sounds scary. :-)
+<br/>
+<br/>
+Last weekend I worked on emulating CGA display, with 2 bits per pixel, and interlaced memory (first 8KB in RAM are the even lines on screen, the other 8KB the odd line numbers). If you happen to have ideas about how to do this fast, I would be interested in those as well. I currently just use the same 512x256 8bpp bitmap, and expand all bytes to words (2 bits to a byte) when writing the data. 
+<br/>
+<br/>
+Thanks again!
+<br/>
+<br/>
+Pate<br/>_________________<br/><ul><li>Now working on DSx86 <a href="http://dsx86.patrickaalto.com" target="_blank">http://dsx86.patrickaalto.com</a>
+<br/>
+</li><li>Get LineWarsDS from <a href="http://linewars.patrickaalto.com" target="_blank">http://linewars.patrickaalto.com</a></li></ul></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#171373 - Exophase - Mon Nov 16, 2009 5:47 pm</h4>
+    <div class="postbody"><span class="postbody">CGA is effectively packed, right? I don't think that you'll get much leverage using any sub-8bpp graphics on DS, since you can't represent a contiguous framebuffer using them. And you only get 4bpp anyway, when you want 2bpp or 1bpp.
+<br/>
+<br/>
+I would use a 1KB LUT to expand 8bit writes to 32bit ones, and possibly a 2KB one for the high resolution mode, although I doubt it's that heavily used to begin with.
+<br/>
+<br/>
+Nice thing that the text modes use 8x8 tiles, those should be easy enough to emulate more directly.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#171469 - Ant6n - Sat Nov 21, 2009 10:00 pm</h4>
+    <div class="postbody"><span class="postbody">Btw, in order to crunch the 320x240 display into the DS display without having to use nearest neighbor resizing, you can add some slight high frequency jitter. I vaguely remember somebody used that in some demo to make textures look less blocky.
+<br/>
+Basically you can render every other frame with it's base position something like .25 or .5 pixel off. so displayed pixels that should really be the average of two original pixels display one and the other on alternating frames. at 60 HZ your eye averages that out.
+<br/>
+I wonder what the optimal jitter values are to get an image that most closely approximates useful resizing.
+<br/>
+(sorry if this was already mentioned)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#171472 - Lazy1 - Sun Nov 22, 2009 12:35 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Ant6n wrote:</b></span></td> </tr> <tr> <td class="quote">Btw, in order to crunch the 320x240 display into the DS display without having to use nearest neighbor resizing, you can add some slight high frequency jitter. I vaguely remember somebody used that in some demo to make textures look less blocky.
+<br/>
+Basically you can render every other frame with it's base position something like .25 or .5 pixel off. so displayed pixels that should really be the average of two original pixels display one and the other on alternating frames. at 60 HZ your eye averages that out.
+<br/>
+I wonder what the optimal jitter values are to get an image that most closely approximates useful resizing.
+<br/>
+(sorry if this was already mentioned)</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Yes, this method works fairly well and the thread with more info can be found <a class="postlink" href="http://forum.gbadev.org/viewtopic.php?t=12628" target="_blank">here</a>.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#171489 - Pate - Mon Nov 23, 2009 5:53 am</h4>
+    <div class="postbody"><span class="postbody">Exophase: Thanks for the idea, I hadn't thought of using a LUT. Strange that it hand't occurred to me, as I use a LUT for a lot of other things! :-)
+<br/>
+<br/>
+Ant6n &amp; Lazy1: Yes, I'm familiar with that method, I found the thread you linked to a while ago. I plan to at least try that method when adding scaling support.
+<br/>
+<br/>
+Thanks again for all your ideas!
+<br/>
+<br/>
+Pate<br/>_________________<br/><ul><li>Now working on DSx86 <a href="http://dsx86.patrickaalto.com" target="_blank">http://dsx86.patrickaalto.com</a>
+<br/>
+</li><li>Get LineWarsDS from <a href="http://linewars.patrickaalto.com" target="_blank">http://linewars.patrickaalto.com</a></li></ul></span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

@@ -1,0 +1,206 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>pure virtual method: problem with devkitadv ? - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>C/C++ > pure virtual method: problem with devkitadv ?</h2>
+<div id="posts">
+<div class="post">
+    <h4>#6045 - TheGreenFalcon - Thu May 15, 2003 8:05 pm</h4>
+    <div class="postbody"><span class="postbody">has anyone ever used pure virtual methods ?
+<br/>
+(with devkitadvance for windows)
+<br/>
+<br/>
+it seems to be buggy, but maybe i'm wrong,
+<br/>
+i get the following message when i try to use it:
+<br/>
+<br/>
+../../../../gcc-3.0.2/libstdc++-v3/libsupc++/pure.cc:49: undefined reference to `write'<br/>_________________<br/>-- 
+<br/>
+----------------------------
+<br/>
+..:: TheGreenFalcon :: ..
+<br/>
+----------------------------</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#6090 - Drago - Fri May 16, 2003 9:10 pm</h4>
+    <div class="postbody"><span class="postbody">AFAIK, DKA does not support pure virtual methods nor multiple inheritance. If you can live without abstract classes then use empty virtual methods instead.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#6103 - tepples - Sat May 17, 2003 4:32 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>TheGreenFalcon wrote:</b></span></td> </tr> <tr> <td class="quote">has anyone ever used pure virtual methods ?
+<br/>
+(with devkitadvance for windows)
+<br/>
+<br/>
+it seems to be buggy, but maybe i'm wrong,
+<br/>
+i get the following message when i try to use it:
+<br/>
+<br/>
+../../../../gcc-3.0.2/libstdc++-v3/libsupc++/pure.cc:49: undefined reference to `write'</td> </tr></table><span class="postbody">
+<br/>
+(the following paragraph is corrected)
+<br/>
+DKA's C library is newlib by Red Hat, and its C++ library is GNU libstdc++.  C++ libraries typically "implement" pure virtual methods by writing to the terminal and killing the program. Libstdc++ tries to write() to the terminal, but DKA R4 comes with no terminal implementation.
+<br/>
+<br/>
+You can fake a write() and get DKA's virtual methods to work by including the following in a .c file (you'll have to #include &lt;stddef.h&gt; for size_t):
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">int write(int filedes, const char *buf, size_t count)
+<br/>
+{
+<br/>
+  return 0;
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Or you can use <a class="postlink" href="http://www.pineight.com/gba/#agbtty" target="_blank">my AGBTTY package</a> and actually implement write() this way (you'll have to #include &lt;errno.h&gt; for errno and EBADF):
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">int write(int filedes, const char *buf, size_t count)
+<br/>
+{
+<br/>
+  if(filedes == 1)
+<br/>
+    return agbtty_write(buf, count);
+<br/>
+  errno = EBADF;
+<br/>
+  return -1;
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Both of these code fragments are untested.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"><br/><br/>Last edited by tepples on Tue Oct 14, 2003 8:07 pm; edited 1 time in total</span></div>    
+</div>
+<div class="post">
+    <h4>#6117 - Drago - Sat May 17, 2003 2:12 pm</h4>
+    <div class="postbody"><span class="postbody">Newlib is the <span style="font-weight: bold">C</span> library that comes with DKA and has nothing to do with <span style="font-weight: bold">C++</span>, so it can not have an <span style="font-style: italic">implementation of the virtual method.</span>
+<br/>
+The problem has to do with <span style="font-weight: bold">pure</span> virtual methods. These methods cannot be called by definition, moreover, a class containing pure virtual methods (an abstract class) cannot be instantiated. Normally the compiler prevents the instantiation of such classes by giving a compile-time error. But if for any reason a pure virtual method gets called in a program, then a runtime error is given and execution is aborted. The function that handles this operation is __cxa_pure_virtual(void) and is located inside the pure.cc module, wich is the module that generates the undefined reference to write and is part of libstdc++, not newlib. Usually this function outputs an error message to the terminal (something like 'pure virtual method called') and stops execution. As tepples said, DKA comes with no terminal implementation and this is the source of the error. The output to the terminal is done by calling to the write() function. This function is part of the interface between C and the OS, and is not implemented because the AGB has no OS. Then a workaround is needed, like those given by tepples.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#6383 - Jason Wilkins - Fri May 23, 2003 10:17 pm</h4>
+    <div class="postbody"><span class="postbody">I get this so many times, it is amazing that I have not added it to my FAQ yet!
+<br/>
+<br/>
+I'm in a bad mood today, so I am going to complain about how it is that people do not understand that they should provide their own implemenation of 'write'
+<br/>
+<br/>
+I'm tempted to just provide a stub and be done with it.  Actually, I could  provide a wrapper for _write.  This "error" will stop tormenting me, and we can be done with it.
+<br/>
+<br/>
+Draco, I'm not sure why you said that DKA 'doesn't support' pure virtual methods.  It supports them just fine.  The problem is that someone needs to provide an implementation for write.  I think that the function would be part of libgloss or newlib, but since they don't provide it, the programmer must.
+<br/>
+<br/>
+I could easily modify newlib to provide it, and I most probably will.<br/>_________________<br/><a href="http://devkitadv.sourceforge.net" target="_blank">http://devkitadv.sourceforge.net</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#6396 - tepples - Sat May 24, 2003 5:54 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Jason Wilkins wrote:</b></span></td> </tr> <tr> <td class="quote">I get this so many times, it is amazing that I have not added it to my FAQ yet!</td> </tr></table><span class="postbody">
+<br/>
+Thanks for the suggestion. I've added a note about pure virtual functions and write() to my FAQ in the beginners section.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#6466 - Drago - Mon May 26, 2003 3:50 pm</h4>
+    <div class="postbody"><span class="postbody">Jason, you're right. I wanted to say it does not support pvm out-of-the-box. In my second post I clarified that the problem has to do with the terminal implementation and not with C++.
+<br/>
+<br/>
+As a suggestion for modifying the newlib to provide a write() implementation: 
+<br/>
+You could provide a simple implementation to get things working out-of-the-box, for example redirecting the output to the VBA console or even a do-nothing function, and then provide a mean to change this behaviour at link time, to give the programmer a chance to use his own implementation.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#6473 - Jason Wilkins - Mon May 26, 2003 9:40 pm</h4>
+    <div class="postbody"><span class="postbody">Anything in libc or newlib, or any library, can be overridden simply by providing a symbol with the same name in a .o file.  The libraries are only used to find symbols which do not have definitions already, this is different from object files, whose definitions go into a program whether or not they are actually referenced by anything.
+<br/>
+<br/>
+So, providing the symbol 'write' as an alias for '_write' would not cause any problems for people who have already written their own 'write', as long as the object file for their own write appears on the comand line before -lc.<br/>_________________<br/><a href="http://devkitadv.sourceforge.net" target="_blank">http://devkitadv.sourceforge.net</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#8231 - mtkmarcos - Sat Jul 05, 2003 1:24 am</h4>
+    <div class="postbody"><span class="postbody">1) If DKA doesn't support multiple inheritance and pvm, i can suppose it does not support other things. Where can i find docs that tell you what DKA supports and what it doesn't? In fact, where can i find a good doc about DKA details?
+<br/>
+2) I got that annoying "unreferenced write" thing when i use std::cout "&lt;&lt;" operator, but cout is a concrete class, having no pvm, how can it be? Why that module pure.cc would say you there is an error calling a pvm in execution time, if it is supposed to do that only on compile time, like any other compiler ?
+<br/>
+3) if DKA hasn't multiple inheritance, how cout is implemented?
+<br/>
+4) If DKA hasn't terminal implementation, why it has printf in stdio.h?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#8237 - tepples - Sat Jul 05, 2003 2:30 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>mtkmarcos wrote:</b></span></td> </tr> <tr> <td class="quote">1) If DKA doesn't support multiple inheritance and pvm, i can suppose it does not support other things. Where can i find docs that tell you what DKA supports and what it doesn't? In fact, where can i find a good doc about DKA details?</td> </tr></table><span class="postbody">
+<br/>
+Jason Wilkins tells me that DevKit Advance R5 beta 4 will probably concentrate on expanded documentation.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">2) I got that annoying "unreferenced write" thing when i use std::cout "&lt;&lt;" operator, but cout is a concrete class, having no pvm, how can it be?</td> </tr></table><span class="postbody">
+<br/>
+File streams such as the 'cout' stream (which is hooked up to stdout) are C++'s interface to write() itself. You'll need to hook it up to an implementation of write() that prints either to the GBA's display (such as <a class="postlink" href="http://www.pineight.com/gba/#agbtty" target="_blank">AGBTTY</a>) or to the serial port.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">4) If DKA hasn't terminal implementation, why it has printf in stdio.h?</td> </tr></table><span class="postbody">
+<br/>
+printf(fmt, ...) calls fprintf(stdout, fmt, ...), which calls vsprintf() followed by write(). If you actually use printf(), it's your job to implement write().<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#8249 - torne - Sat Jul 05, 2003 11:29 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>mtkmarcos wrote:</b></span></td> </tr> <tr> <td class="quote">1) If DKA doesn't support multiple inheritance and pvm, i can suppose it does not support other things. Where can i find docs that tell you what DKA supports and what it doesn't? In fact, where can i find a good doc about DKA details?</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+DKA is missing a terminal implementation. That should be it. I can't think of a reason why multiple inheritance wouldn't work, and pvm works fine but requires you to provide a terminal as other people have said.
+<br/>
+<br/>
+DKA is a patched version of the GNU toolchain; the compiler supports everything GCC normally does. Its C library is RedHat's newlib; it supports everything newlib normally does.
+<br/>
+<br/>
+Torne</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#11802 - ltaloc - Sun Oct 19, 2003 5:48 pm</h4>
+    <div class="postbody"><span class="postbody">Just one more thing about write function. If you program in full C++, you may want to add this function in .cpp file. This will work only if you use extern "C" in front of the definition :
+<br/>
+<br/>
+extern "C" int write(...) {
+<br/>
+ return 0;
+<br/>
+}</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

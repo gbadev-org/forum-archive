@@ -1,0 +1,162 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Mixing code - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Audio > Mixing code</h2>
+<div id="posts">
+<div class="post">
+    <h4>#4616 - SmileyDude - Fri Apr 04, 2003 11:19 pm</h4>
+    <div class="postbody"><span class="postbody">Hi everyone,
+<br/>
+<br/>
+I'm currently trying to implement an efficient mixer.  My goal is to be able to play standard 4-track .mod files (2 left, 2 right), along with an additional 2 channels capable of panning left and right for sound effects.  The music channels will be playing samples at varying rates, while the sound effects channels will be playing samples at the same rate as the sound hardware is playing at.
+<br/>
+<br/>
+I've been reading some of the other posts on here, and I've seen references to being able to mix 3 and sometimes even 4 channels at one pass, but I can't figure out a way to mix more than 2 without re-loading registers during the mix loop.  Note, this is of course assuming that the samples being played back are at various rates.  If the sample rates are the same as the mix rate, then it's relatively easy to mix multiple channels at once.
+<br/>
+<br/>
+Another alternative is to loop through each channel, and mix them into the buffer -- but, as far as I can tell, this requires twice as many load/stores as opposed to doing it in one pass.  I do realise that I will need to break up into multiple passes for the sound effects, but that shouldn't be too much of a problem.
+<br/>
+<br/>
+So, what I have so far is a single optimised case for two samples playing on a channel at once, and both samples loop.  I only have 2 (3 if i use the SP) extra registers remaining after this -- here's what I have allocated:
+<br/>
+<br/>
+r0 - sample1 ptr
+<br/>
+r1 - sample1 offset (16.16)
+<br/>
+r2 - sample1 increment (16.16)
+<br/>
+r3 - sample1 volume
+<br/>
+r4 - sample1 loop len (16.16)
+<br/>
+<br/>
+r8 - r12 - same as r0-r4, but for sample2
+<br/>
+<br/>
+r5 - output value
+<br/>
+r6 - output ptr
+<br/>
+r7 - tmp
+<br/>
+r13 - sp
+<br/>
+r14 - tmp
+<br/>
+r15 - pc
+<br/>
+<br/>
+I can't think of anyway of squeezing out another register or 2 to get a third sample in the loop -- but, it seems like it should be able to be done based on the other posts in this forum.
+<br/>
+<br/>
+I still have to work out special case code for non-looping samples, no sample playing, 1 sample playing, etc, etc.  But that shouldn't be too big of a deal.
+<br/>
+<br/>
+Does anyone have any suggestions?  I plan on releasing whatever comes of this as an aid to anyone else working on adding sound support to their project.  Hopefully, we'll be able to come up with a really good mixer that could be used for projects that don't require a lot of complexity :)<br/>_________________<br/>dennis</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#4618 - DekuTree64 - Sat Apr 05, 2003 1:30 am</h4>
+    <div class="postbody"><span class="postbody">The way that's done is to have one register set to pos (24.8) + (data &lt;&lt; 8), one for the increment, and one for the volume. Then it takes 12 regs for 4 channels. I never did figure out a way to deal with only having 3 regs left though. I think it would only work with mono, so you don't need one for the source buffer (use SOUNDA for 4 channels, and SOUNDB for the rest (up to 8 total)). Also, you have to set a reg to 0x800000 (cause you shifted the upper byte off your data pointer), and use unsigned data so you can load a sample with the base reg + pos reg &gt;&gt; 8 (which you can't do with ldrsb). I eventually decided to just loop thorugh the channels one at a time cause I was sick of messing with it, but for the looping, the way I came up with was to set the sample counter to the smallest number of samples of any channel you're mixing, and when it hits the end, you have a looping stack, so you load some data from that (which channel it is and wether it's looping or ending or whatever), and then increment your looping stack pointer to the next lowest channel, and then loop for old channel - new channel samples again, and repeat until you've got a full buffer. It's just an idea though, I never worked out the specifics of it. 
+<br/>
+<br/>
+But you may be able to get away with mixing 2 constant-speed channels and 2 variable speed (one whole side) without too much trouble. Just use the register scheme I described before for the variable ones, and the for the sfx channels, you just need the data + pos reg, and the vol, so you have 2 more spares for temp stuff. That also means you can use ldrb rTemp, [rPos], #1, which would be quite fast. 
+<br/>
+For the sign adjustment, you need one register with the negative sum of all active channels' volumes * 128 / 64 (assuming you're using 64 vol levels), or just vol &lt;&lt; 1. Or just for each channel, sub rSign, rSign, rVol LSL #1. Then when you're mixing your first channel, use mla rMix, rSamp, rVol, rSign and then do all the other channels like mla rMix, rSamp, rVol, rMix, cause the sign adjustment for all channels is already done, almost for free^_^ Dont forget to ASR #6 for volume at the end though, but that can be done with a movs, which will tell you if you need to compare with 128 or -128 for clipping, which you'd need to know anyway. Oh, and the fastest way I know of to do clipping is 
+<br/>
+movs rMix, rMix, ASR #6
+<br/>
+cmpmi rMix, #-128
+<br/>
+movmi rMix, #-128
+<br/>
+cmppl rMix, #127
+<br/>
+movpl rMix, #127
+<br/>
+<br/>
+So, let's see if you have enough registers for all that...
+<br/>
+r0 = mod0 pos + (data &lt;&lt; 8)
+<br/>
+r1 = mod0 inc
+<br/>
+r2 = mod0 vol
+<br/>
+r3 = mod1 pos + (data &lt;&lt; 8)
+<br/>
+r4 = mod1 inc
+<br/>
+r5 = mod1 vol
+<br/>
+r6 = sfx0 data + pos (non-fixed)
+<br/>
+r7 = sfx0 vol (for this side)
+<br/>
+r8 = sfx1 data + pos
+<br/>
+r9 = sfx1 vol
+<br/>
+r10 = destBuf
+<br/>
+r11 = counter
+<br/>
+r12 = mix
+<br/>
+r13 = signAdjust
+<br/>
+r14 = temp (to load samples)
+<br/>
+<br/>
+You'll have to do a mov rTemp, #0x8000000 and the load into that same register for each sample though, unless you want to unroll the loop a lot and use the counter for 0x8000000, and just load/decrement/store it every 8 samlpes or something. That would cause trouble with looping though, but maybe if you like add (8-(samples left &amp; 7) &amp; 7) (I think that would be right) to the counter, so it's an even multiple of and will still end up at exactly 0 eventually. So you have your loop set, then branch to the (samples left &amp; 7)th sample in the unrolled loop, so you're acually doing the same number of samples. Then the time to do a mov rTemp, #0x300000, ldr rTemp, [rTemp, #whatever offset you stored the loop at], and then writing it back every 8 samples would probably be less than mov'ing 0x8000000 ever sample (plus then you have 1/8th as many subs/bne's to do).
+<br/>
+Also, you can only play samples from ROM using that technique though. Or I guess you could change the mixer to only play from EWRAM if you're decompressing them to it, which you probably aren't anyway, cause GBA ROMs are pretty big.
+<br/>
+<br/>
+Also, you'll need a place to store r13 (the SP) while you're using it. I just changed my linkscript so it doesn't use the first bit of IWRAM, so I can use use 0x3000000 to store SP. You could use 0x2000000 too, but it's a little slower. Probably wouldn't make much of a difference though.
+<br/>
+<br/>
+But I think the main challenge will be doing the looping stuff with only 5 registers (4 if you can, so you don't have to store/load the dest buf (or 3 wuold be even better, so you don't have to reload signAdjust either)). 
+<br/>
+<br/>
+Hope some of that helps, and let me know how it goes (actually I'm tempted to write it myself...)^_^</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#4623 - SmileyDude - Sat Apr 05, 2003 6:35 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>DekuTree64 wrote:</b></span></td> </tr> <tr> <td class="quote">The way that's done is to have one register set to pos (24.8) + (data &lt;&lt; 8)</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Hmm... could you explain this a bit more?  By pos, you mean location in the ROM... i get that... what is the + (data &lt;&lt; 8)?
+<br/>
+<br/>
+Right now, I've gotten it down to 2 loads, and 1 store per pass, and a total of 14 instructions.  That's mixing 2 channels into 1, at different rates, and allowing looping.  This loop won't work with non-looping samples... I plan on special casing these for speed.
+<br/>
+<br/>
+But, I still can't mix in the sound effects without making a second pass.  I only have one free register at the moment.  Even if I get rid of 2 registers, I still wouldn't have enough to do it all in one pass, so it looks like I have to do 2 passes no matter what.  Maybe I'll just move my buffers to IWRAM, but I'd really like to minimise IWRAM usage as much as possible.  It's bad enough my mixing code is sitting in there -- especially when I unroll it.<br/>_________________<br/>dennis</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#4626 - DekuTree64 - Sat Apr 05, 2003 7:43 am</h4>
+    <div class="postbody"><span class="postbody">That's just how you'd do it as an ARM instruction. It would be easier to read like (data &lt;&lt; 8) + pos. What I mean b ythat is the position is in 24.8 fixed point, but the data in ROM is just an address, which is not fixed point. But then when mixing, you convert the data pointer to fixed point as well, and add the position to that, so you have kind of a fixed point address. Think about it, if you shift it back 8 bits, you still have the same thing as adding pos &gt;&gt; 8 to the data pointer, except for the upper 8 bits are of course 0, and since that's where the 8 in 0x8000000 is, it gets chopped off, so you need to put it back on, which is done by simply adding it back, which can be done as part of the ldrb instruction. Does that make sense? 
+<br/>
+I'm 90% sure 2 mono (fully to one side) pitched channels + 2 panning, non-pitched channels can be done in one pass, at least while none of them are going to end on that pass, and possibly even if they are, depending on wether or not that looping strategy (or any better one you can think of) worked. The problem with having a special case for sounds ending is that you'd have to make a seprate buffer just for the special case, since mixed samples often add up to more than 127/less than -128, so you need to store them as 16 bit values until you do your clipping at the end, and 16bit samples wouldn't fit in your playing buffer. But if you do them all in one pass, you only need to clip once at the end, and then store it as a byte ready for playing. And then since you're only writing once (and reading with the FIFO DMA when playing), it's pretty much ok to put the buffer in EWRAM. 
+<br/>
+And about code location, ARM code does tend to take up a lot of space, especially when unrolled, but if you're planning to run it from ROM, it would be better to do it in THUMB. Then you get into a whole new world of optimizations that I haven't played around with yet, so you'll have to ask someone else about that^^
+<br/>
+Personally I'd go with ARM in IWRAM all the way. After all, what's IWRAM there for if you don't use it on speed-critical things?</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

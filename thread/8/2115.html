@@ -1,0 +1,218 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Digging deep - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>ASM > Digging deep</h2>
+<div id="posts">
+<div class="post">
+    <h4>#10975 - FluBBa - Mon Sep 22, 2003 4:04 pm</h4>
+    <div class="postbody"><span class="postbody">I'm off into deep water right now and wondering if anybody else has any experience with changing CPU mode?
+<br/>
+According to the ARM7 manual the FIQ mode switches regs r8-r14 &amp; r16, as the GBA can't make a FIQ from hardware this could be very useful for doing some hardcore stuff and not needing to put stuff on the stack.
+<br/>
+Is this feature at all implemented in the GBA's ARM?
+<br/>
+Is it safe to use it with other IRQ's?<br/>_________________<br/>I probably suck, my not is a programmer.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10976 - torne - Mon Sep 22, 2003 4:17 pm</h4>
+    <div class="postbody"><span class="postbody">Yes, you can safely switch to FIQ mode; the gameboy's FIQ pin is pulled high permanently. All same-model ARM cores are the same; the GBA's ARM7tdmi is exactly the same as every other ARM7tdmi, so anything that's documented by ARM should work (the GBA's core is missing coprocessor 15, but CP15 is not a *required* feature, only a common one).
+<br/>
+<br/>
+Remember, though, that you can only enter FIQ mode from IRQ mode on the GBA (since you need to be in a privileged mode to switch). One use is to make your IRQ handler immediately switch to FIQ, do the work, then switch back (it's important that you switch back, as the BIOS's interrupt handler won't be able to clean up properly after you if you leave the CPU in FIQ mode). This gives you those nice extra registers to play with. =)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10977 - DekuTree64 - Mon Sep 22, 2003 4:44 pm</h4>
+    <div class="postbody"><span class="postbody">Actually I was doing some tests on it to see about using those regs in a sound mixer a while back, and it seems GBA programs normally run in system mode, so you can switch to FIQ mode anytime you want. The docs say never to change any of the bits other than the mode/condition flags, but it seems to work fine to just use msr cpsr, #0x11 (FIQ mode) and then msr cpsr, #0x1f (system) to switch back for only 1 cycle each. I tried it on hardware and it did definately switch to the FIQ regs and back and didn't lock up or anything. You might want to use a full 
+<br/>
+mrs rTemp, cpsr
+<br/>
+bic rTemp, rTemp, #0x1f
+<br/>
+orr rTemp, rTemp, #0x11
+<br/>
+msr cpsr, rTemp
+<br/>
+if you're doing anything serious though, just to be sure nothing bad will happen. You could get rid of that orr by just doing a bic rTemp, rTemp, #0xe if you know you're in system mode (0x1f) to begin with. 
+<br/>
+But yes, it definately has some possibilities.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10981 - torne - Mon Sep 22, 2003 5:05 pm</h4>
+    <div class="postbody"><span class="postbody">Ah, yes, of course it does.. had supervisor and system mode mixed up. The reason ARM demand that you don't destroy the other bits is that they reserve the right to use them in future revisions of the chip. The chip version in the GBA, and indeed the current version of the ARM7tdmi, don't use the other bits, so it's ok to just nuke them (this is not the case when developing for 'normal' hardware where it might be desireable to have your code keep working on future chip revisions).</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10982 - tepples - Mon Sep 22, 2003 5:52 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>torne wrote:</b></span></td> </tr> <tr> <td class="quote">The reason ARM demand that you don't destroy the other bits is that they reserve the right to use them in future revisions of the chip. The chip version in the GBA, and indeed the current version of the ARM7tdmi, don't use the other bits, so it's ok to just nuke them (this is not the case when developing for 'normal' hardware where it might be desireable to have your code keep working on future chip revisions).</td> </tr></table><span class="postbody">
+<br/>
+The GBX (Game Boy Extreme, rumored successor to the GBA SP to compete with Sony's PSP) may in fact use such "future chip revisions."<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10985 - DekuTree64 - Mon Sep 22, 2003 7:06 pm</h4>
+    <div class="postbody"><span class="postbody">Yeah, but even so it would probably be a good idea to make sure you keep the ARM bit set if you're running in ARM mode, though I'm pretty sure I was and set it to 0 and still nothing bad happened. Bit with all those free regs, you could use one of your normal r8-r14 for the cpsr value to switch to FIQ, and one of your FIQ r8-r14 for the switch back value, that way you wouldn't have to worry about any future problems, and still have 5 more regs than normal. That might really work out well for a 4chn/side one-pass mixer. How 'bout this register layout...
+<br/>
+r0: temp to load samples
+<br/>
+r1: temp to hold 2 samples to multiply by vol
+<br/>
+r2: temp to mix samples into
+<br/>
+r3: 0x8000000 to add to pos&gt;&gt;8
+<br/>
+r4: c0 (data &lt;&lt; 8) + pos (24.8 fp, upper 8 bits is always 0x08000000, so it's shifted off)
+<br/>
+r5: c0 inc
+<br/>
+r6: c0 vol
+<br/>
+r7: c1 data
+<br/>
+r8: c1 inc
+<br/>
+r9: c1 vol
+<br/>
+f8: c2 data
+<br/>
+f9: c2 inc
+<br/>
+f10: c2 vol
+<br/>
+f11: c3 data
+<br/>
+f12: c3 inc
+<br/>
+f13: c3 vol
+<br/>
+r10: signAdjust (see *)
+<br/>
+r11: mixBuf
+<br/>
+r12: temp
+<br/>
+r13: stack
+<br/>
+r14: FIQ mode cpsr val
+<br/>
+f14: sys mode cpsr val
+<br/>
+<br/>
+*multiply channel volumes by -128 (128 is like 0 in 8-bit unsigned) and add them up to get this, corrects for using unsigned samples. Then clear the upper 16 bits and orr the lower 16 into the upper 16 to mix 2 samples at a time. Add samples to it and the result is signed
+<br/>
+<br/>
+Then use a loop like
+<br/>
+mixLoop:
+<br/>
+ldrb r0, [r3, r4, LSR #8]
+<br/>
+add r4, r4, r5, LSL #1
+<br/>
+ldrb r1, [r3, r4, LSR #8]
+<br/>
+sub r4, r4, r5
+<br/>
+orr r1, r0, r1, LSL #16
+<br/>
+mla r2, r1, r6, r10   @r2=samples*vol+signAdjust
+<br/>
+<br/>
+ldrb r0, [r3, r7, LSR #8]
+<br/>
+add r7, r7, r8, LSL #1
+<br/>
+ldrb r1, [r3, r7, LSR #8]
+<br/>
+sub r7, r7, r8
+<br/>
+orr r1, r0, r1, LSL #16
+<br/>
+mla r2, r1, r9, r2
+<br/>
+<br/>
+msr cpsr, r14
+<br/>
+<br/>
+mix c2
+<br/>
+mix c3
+<br/>
+<br/>
+msr cpsr, r14   @this is f14 now
+<br/>
+bic r2, r2, #0xff00
+<br/>
+bic r12, r2, #0xff000000
+<br/>
+<br/>
+repeat everything (we just did the even samples, now mix the odds), except bic to r2 instead of r12
+<br/>
+<br/>
+orr r12, r2, r12, LSR #8
+<br/>
+str r12, [r11], #4
+<br/>
+ldr r12, [sp, #mixBufEnd]
+<br/>
+cmp r11, r12
+<br/>
+blt mixLoop
+<br/>
+<br/>
+I think it would be pretty fast. Especially if you unroll it a few times so you don't have to load mixBufEnd every time. 
+<br/>
+But still, that's 6 cycles/sample + (2 for msr's, 4 for bic's, 1 for orr, and 2 for str) for every 4 samples, not including the looping, since it could be cut down to basically nothing with unrolling, that's about 6.56 cycles/sample. With a slower loop to deal with channels ending/looping, that ought to come pretty close to matching James Daniels' mixer, which is my bane^_^
+<br/>
+Still, I don't think it would quite match it, and even more so with a music player running at the same time.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10986 - torne - Mon Sep 22, 2003 7:06 pm</h4>
+    <div class="postbody"><span class="postbody">If it's going to compete with the PSP, it probably won't be an ARM7 any more. =)
+<br/>
+<br/>
+Even if it was, ARM don't revise their cores very often (we're talking about the same model here; different models already have slightly differing instruction sets and scheduling models), and none of their revisions to any code model so far have used additional CPSR bits. ARM are very cautious about changing their external interfaces; for example, there is an instruction set change in process which has been going for a number of years now (deprecating use of the 'never' conditional, thus freeing up all words which have the 'never' prefix for future instructions) - they seem pretty determined not to actually stop supporting 'never' until nobody who's writing ARM code can even remember a time when it was standard =)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10995 - tepples - Mon Sep 22, 2003 11:51 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>torne wrote:</b></span></td> </tr> <tr> <td class="quote">If it's going to compete with the PSP, it probably won't be an ARM7 any more. =)</td> </tr></table><span class="postbody">
+<br/>
+It'd probably be an ARM9 with an ARM7-cycle-accurate emulation mode.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

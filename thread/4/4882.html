@@ -1,0 +1,200 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>r5-beta3 bug (or am I just too new to this)? - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > r5-beta3 bug (or am I just too new to this)?</h2>
+<div id="posts">
+<div class="post">
+    <h4>#34611 - GOD - Sat Jan 22, 2005 10:39 am</h4>
+    <div class="postbody"><span class="postbody">    On the forum at the sourceforge project page for DevKitAdv I posted a message some time ago about a possible bug in the r5-beta3 release of the development kit. Being new to development on the GameBoy Advance I was perplexed as to whether or not I had found a bug, or if I was just too new to the development scene, thereby simply doing something wrong. Posting mainly for a response as to whether or not it was a problem with the compiler... or a problem with me - I was quite surprised to return months later to see no response to my question. So I post it again here, for all of you to read and comment on (having long since given up on a response from the sourceforge forum):
+<br/>
+<br/>
+By: Omnipotent GOD - godnyc
+<br/>
+ r5-beta3 bug (or am I just too new to this)? 2004-09-10 23:16
+<br/>
+    I've recently decided to give DevKitAdv-r5-beta3 a try (thankfully kept my r4 around just in case), and I've run into a snag.... I suppose a little emulator and compilation information is in order: VisualBoyAdvance Emulator Version 1.7.2 (in the event it is my emulator).
+<br/>
+<br/>
+&gt; gcc --version 
+<br/>
+GCC (GCC) 3.2.2 (DevKit Advance R5 Beta 3) 
+<br/>
+Copyright (C) 2002 Free Software Foundation, Inc. 
+<br/>
+This is free software; see the source for copying conditions. There is NO warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. 
+<br/>
+&gt; objcopy --version 
+<br/>
+GNU objcopy 2.13.2.1 
+<br/>
+Copyright 2002 Free Software Foundation, Inc. 
+<br/>
+This program is free software; you may redistribute it under the terms of the GNU General Public License. This program has absolutely no warranty. 
+<br/>
+<br/>
+    Both the gcc and objcopy mentioned were extracted from their respective packages from the r5-beta3 release on sourceforge. The following commands were used to generate the "faulty" results. 
+<br/>
+<br/>
+&gt; gcc -o hmm6.elf hmm6.c 
+<br/>
+&gt; objcopy -O binary hmm6.elf hmm6.bin 
+<br/>
+<br/>
+    I'm new to developing on the GBA, so I'm not sure if the issue lies with me or the latest release. I was going through my test files, making them more efficient after reading dovoto's reasoning for #define'ing most of the hardware registers (such as the VideoBuffer), happily recompiling, when I came to an example for ScreenMode4 found in a <a href="http://www.gamedev.net" target="_blank">http://www.gamedev.net</a> article (http://www.gamedev.net/references/programming/features/gba2/) that works fine under release4 and release5-beta3, but fails to draw the pixels correctly when the position is altered under release5-beta3. Fhew, little long winded there, sorry. 
+<br/>
+<br/>
+    When writing to the backbuffer (0x600A000), and setting the appropriate bit in REG_DISPCNT (0x4000000) to flip the buffer to the foreground, the y value isn't calculated properly using the y * 240 (VideoBuffer[x + y * 240] for example, although in this immediate example it would be BackBuffer[etc.]) method. Now, as I'm new to development on GBA, I don't know if this is the preffered method for aquiring the desired y position, though it certainly appears to be in all the tutorials I've read, and if there is a better method (that has been taken into consideration given the latest build to prevent the use of this "popular" ... possibly incorrect ... method) I would really appreciate knowing. 
+<br/>
+<br/>
+I suppose some example code would be pertinent: 
+<br/>
+<br/>
+[--------- SNIP: hmm6.c ---------] 
+<br/>
+<br/>
+#define VideoBuffer ((unsigned short*)0x6000000) 
+<br/>
+#define BackBuffer ((unsigned short*)0x600A000) 
+<br/>
+#define theScreenPalette ((unsigned short*)0x5000000) 
+<br/>
+#define REG_DISPCNT *((volatile unsigned long *)0x4000000) 
+<br/>
+#define ScanlineCounter *((volatile unsigned short*)0x4000006) 
+<br/>
+#define BACKBUFFER 0x10 
+<br/>
+<br/>
+int main() { 
+<br/>
+unsigned short x = 0, y = 0; 
+<br/>
+unsigned short colors = (( 1 &lt;&lt; 8 ) + 2); 
+<br/>
+REG_DISPCNT = ( 0x4 | 0x400 ); 
+<br/>
+<br/>
+theScreenPalette[1] = 31+(31&lt;&lt;5)+(31&lt;&lt;10); 
+<br/>
+theScreenPalette[2] = 31; 
+<br/>
+<br/>
+BackBuffer[x + y * 240] = colors; 
+<br/>
+while(ScanlineCounter&lt;160) {} // Waits for Verticle Blank 
+<br/>
+REG_DISPCNT ^= BACKBUFFER; // "Flips" the Video and Back buffers 
+<br/>
+return 0; 
+<br/>
+} 
+<br/>
+<br/>
+[--------- END SNIP ---------] 
+<br/>
+<br/>
+    The first thing you'll note if you compile this under r5-beta3 (at least on my computer, hehe) is that the pixels are drawn in the correct position: (0,0). However, if you change x and y to 10 (either by adding 10 to each in the BackBuffer subscript, or by initializing them) the screen will be blank. I messed around with the values a bit, and (leaving the initialization values at zero) changing the BackBuffer subscript to [(x+10) + (y+2) * 234] displays the pixels about as close as possible to the edge of the screen, but no where near position (10,2). Note, though, that drawing directly to the VideoBuffer with "obscure" subscripts works as expected... VideoBuffer[(x+10)+(y+10)*240] works fine.
+<br/>
+    Everything mentioned above that doesn't work (and, of course, everything that does) in release5-beta3 works flawlessly in release4, which prompted me to assume it was a bug in r5-beta3. As I've mentioned, however, I'm far from an expert on the subject and thought it best to hear from others before submitting a bug report (...and I don't really know how to go about doing so anyway). I was going to provide sample code that worked under r4 but not r5-beta3,  but I figured simply providing the above instances would prove more space efficient.... I also wanted to gripe about the code from <a href="http://www.gamedev.net," target="_blank">http://www.gamedev.net,</a> but I guess I should save that for the "General Discussion" section.
+<br/>
+<br/>
+    If there is any information I have left out that should be included, let  me know and I'll get it to you as soon as possible. This is my first post on this forum, not to mention my first post ever regarding a prospective bug that _I_ may have found... so I'm sure I've left something important out, my apologies. 
+<br/>
+<br/>
+I've changed my mind and decided to include some code that works in r4 and not r5-beta3: 
+<br/>
+<br/>
+[--------- SNIP: test6.c ---------] 
+<br/>
+<br/>
+#define DISPCNT *((volatile unsigned long *)0x4000000) 
+<br/>
+#define VCount *((volatile unsigned short *)0x4000006) 
+<br/>
+#define ScreenPalette ((unsigned short *)0x5000000) 
+<br/>
+#define VideoBuffer ((unsigned short *)0x6000000) 
+<br/>
+#define BackBuffer ((unsigned short *)0x600A000) 
+<br/>
+<br/>
+int main(void) { 
+<br/>
+unsigned short x = 0, y = 0, i, j, k; 
+<br/>
+DISPCNT = (0x4 | 0x400); 
+<br/>
+<br/>
+ScreenPalette[1] = 31&lt;&lt;10; 
+<br/>
+ScreenPalette[2] = 31; 
+<br/>
+ScreenPalette[10] = 31&lt;&lt;5; 
+<br/>
+ScreenPalette[11] = (31&lt;&lt;10)+(31&lt;&lt;5); 
+<br/>
+<br/>
+i = 2+(1&lt;&lt;8); 
+<br/>
+j = 1+(10&lt;&lt;8); 
+<br/>
+k = 2+(11&lt;&lt;8); 
+<br/>
+<br/>
+BackBuffer[x+10 + (y+9) * 240] = i; 
+<br/>
+BackBuffer[x+10 + (y+10) * 240] = j; 
+<br/>
+BackBuffer[x+10 + (y+11) * 240] = k; 
+<br/>
+<br/>
+while (VCount &lt; 160) {} 
+<br/>
+<br/>
+DISPCNT ^= 0x10; 
+<br/>
+return 0; 
+<br/>
+} 
+<br/>
+<br/>
+[--------- END SNIP ---------] 
+<br/>
+<br/>
+    If you think it is the code, please explaining why, and provide a working example that accomplishes the same task under the "questionable" release.
+<br/>
+<br/>
+Again, if there is any information I have left out that would be helpful, please don't hesitate to ask. 
+<br/>
+<br/>
+- O.O.G.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#34614 - Abscissa - Sat Jan 22, 2005 3:34 pm</h4>
+    <div class="postbody"><span class="postbody">I'm not sure if your specific problem is a DevKitAdvance bug or not, but DevKitAdvance definately does have some bugs in it.  It's been a dead project for a long time now (hence the lack of responces on its site).  You should be using DevKitARM (http://www.devkit.tk) instead.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#34691 - Cearn - Mon Jan 24, 2005 10:21 am</h4>
+    <div class="postbody"><span class="postbody">There are two issues that may play a role here. First, mode 4 is an 8bit mode, while the BackBuffer is still a u16 pointer. BackBuffer[x+y*240] won't point to pixel (x,y) at all, it will point to (2x, 2y) or maybe (x, 2y+1).  I'm actually surprised that some points plot correctly. Try BackBuffer[(x+y*240)&gt;&gt;1], maybe that'll help. Note that this will only give you the even pixels, though.
+<br/>
+Secondly, GBA programs aren't ever supposed to end. On a PC you have the OS to fall back on, on a GBA pretty much anything can happen. Well, technically you can see what happens by looking through the crt0.s file your devkit is using, but it's likely not to be what you had in mind.
+<br/>
+<br/>
+Aside from these points, Abscissa is right: go for devkitARM instead.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

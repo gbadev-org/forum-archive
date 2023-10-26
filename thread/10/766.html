@@ -1,0 +1,119 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>GBA Sound Interrupt Mode doubt : ( - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Audio > GBA Sound Interrupt Mode doubt : (</h2>
+<div id="posts">
+<div class="post">
+    <h4>#3904 - rome - Wed Mar 12, 2003 3:28 pm</h4>
+    <div class="postbody"><span class="postbody">My GBA Interrrput Engine works perfectly, but when i try use it with graphics, the screen stay blank....
+<br/>
+when i comment line "REG_IME = 1"
+<br/>
+the sound does not work, but graphics back to work...
+<br/>
+waht happening???
+<br/>
+my code:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+<br/>
+REG_INTERUPT = (u32)&amp;InterruptProcess;
+<br/>
+<br/>
+<br/>
+//******************************************************
+<br/>
+void InterruptProcess(void)
+<br/>
+{
+<br/>
+   Game.pr_SoundDevice-&gt;HandleSound();
+<br/>
+}
+<br/>
+//******************************************************
+<br/>
+<br/>
+//******************************************************
+<br/>
+void WGBASoundDevice::Initialize()
+<br/>
+{
+<br/>
+<br/>
+... (init other things)
+<br/>
+<br/>
+<br/>
+   REG_SGCNT0_H = *(u16*) &amp;snd_ctrl; 
+<br/>
+    REG_SGCNT1   = SND_ENABLED;  //turn sound chip on
+<br/>
+<br/>
+   // Clear the FIFO 
+<br/>
+   REG_SGFIF0A = 0;
+<br/>
+    
+<br/>
+   // Enable IRQ for timer 0
+<br/>
+   REG_IE |= 0x8;   
+<br/>
+<br/>
+    //enable interrupts (comment it and graphics will be showed!!!!)
+<br/>
+    REG_IME=1; 
+<br/>
+<br/>
+    //enable timer at CPU freq/1024 +irq =16384Khz sample rate
+<br/>
+    REG_TM0D   =0xffff; 
+<br/>
+    REG_TM0CNT =0x00C3;
+<br/>
+<br/>
+    return;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#3905 - DekuTree64 - Wed Mar 12, 2003 4:49 pm</h4>
+    <div class="postbody"><span class="postbody">So HandleSound just writes one sample to the FIFO, right? That's very slow. If you just want to play a single sound, set SOUNDA_FIFORESET (bit11) in SGCNT0_H, and use DMA1 with dest FIFOA, src is your sample, and then set the mode to 0xb640. Count is ignored in sound mode (bits 12 and 13 set (included in 0xb640)), so set it to 0. But before that, set TM0D to 65536 - ((1 &lt;&lt; 24) / sndFreq) (1 &lt;&lt; 24 is the CPU frequency). Actually for 16384 hz, setting it to 0xffff with the divide by 1024 bit set like you have it will work ust the same. Also, you'll need another timer to count samples played so you don't keep playing data past the end of your sample. The easiest way to do it is set TM1D to 65536 - sampleCount, and set the cascade and IRQ bits in TM1CNT. Then make a little IRQ function that turns the DMA of when TM1 overflows.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#3908 - rome - Wed Mar 12, 2003 5:12 pm</h4>
+    <div class="postbody"><span class="postbody">you are completely right! i know : )
+<br/>
+<br/>
+but my problem continues yet...
+<br/>
+<br/>
+i dont know why my game just not render when enable the Interrupt Enable Register (REG_IE) and set 0x8 to Interrrupt Flags Register (REG_IF)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#3909 - DekuTree64 - Wed Mar 12, 2003 5:55 pm</h4>
+    <div class="postbody"><span class="postbody">Hmm, yea, I guess it would still have plenty of time to render.
+<br/>
+Ah, I think I found it. REG_INTERUPT = (u32)&amp;InterruptProcess; shouldn't have that &amp; in there. The name of the function is its address, so I don't know what the address of its adress would be, and I doubt the compiler does either^^ Probably just returns a 0 or something, so when your interrupt is triggered, it goes into nowhere and never comes back.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

@@ -1,0 +1,679 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Clip matrix - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Clip matrix</h2>
+<div id="posts">
+<div class="post">
+    <h4>#154069 - Rajveer - Thu Apr 10, 2008 2:06 pm</h4>
+    <div class="postbody"><span class="postbody">I'm doing frustum culling and when creating the frustum I need to multiply the 4x4 projection matrix against the 4x4 modelview matrix. I can't find how to retrieve the whole 4x4 modelview matrix, however what is the clip matrix? Is it the projection * modelview, so I can just retrieve this matrix and extract the frustum planes from it?
+<br/>
+<br/>
+EDIT: Some research here 
+<br/>
+<br/>
+<a href="http://meraman.dip.jp/index.php?M3DSS_GBATEK_NDS" target="_blank">http://meraman.dip.jp/index.php?M3DSS_GBATEK_NDS</a>
+<br/>
+<br/>
+shows that the ClipMatrix = PositionMatrix*ProjectionMatrix. Now what's the position matrix, is it the whole 4x4 modelview matrix? If it is, shouldn't the ClipMatrix be Projection * Position since OpenGL is column major, and aren't the matrices in that link row-major?</span><span class="gensmall"><br/><br/>Last edited by Rajveer on Thu Apr 10, 2008 2:29 pm; edited 1 time in total</span></div>    
+</div>
+<div class="post">
+    <h4>#154070 - a128 - Thu Apr 10, 2008 2:28 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">glGetFixed(GL_GET_MATRIX_CLIP,&amp;clip[0]) ;</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I did this in my frustum code
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+void CFrustum::CalculateFrustum()
+<br/>
+{
+<br/>
+int32 clip[4*4];
+<br/>
+<br/>
+    glGetFixed(GL_GET_MATRIX_CLIP,&amp;clip[0]) ;
+<br/>
+<br/>
+<br/>
+    // Now we actually want to get the sides of the frustum.  To do this we take
+<br/>
+    // the clipping planes we received above and extract the sides from them.
+<br/>
+<br/>
+    // This will extract the RIGHT side of the frustum
+<br/>
+<br/>
+    //Y+ up, X+ right, Z+ in screen
+<br/>
+    m_Frustum[RIGHT][A] = clip[ 3] - clip[ 0];
+<br/>
+    m_Frustum[RIGHT][B] = clip[ 7] - clip[ 4];
+<br/>
+    m_Frustum[RIGHT][C] = clip[11] - clip[ 8];
+<br/>
+    m_Frustum[RIGHT][D] = clip[15] - clip[12];
+<br/>
+<br/>
+<br/>
+    // Now that we have a normal (A,B,C) and a distance (D) to the plane,
+<br/>
+    // we want to normalize that normal and distance.
+<br/>
+<br/>
+    // Normalize the RIGHT side
+<br/>
+    NormalizePlane(m_Frustum, RIGHT);
+<br/>
+<br/>
+    // This will extract the LEFT side of the frustum
+<br/>
+    m_Frustum[LEFT][A] = clip[ 3] + clip[ 0];
+<br/>
+    m_Frustum[LEFT][B] = clip[ 7] + clip[ 4];
+<br/>
+    m_Frustum[LEFT][C] = clip[11] + clip[ 8];
+<br/>
+    m_Frustum[LEFT][D] = clip[15] + clip[12];
+<br/>
+<br/>
+<br/>
+    // Normalize the LEFT side
+<br/>
+    NormalizePlane(m_Frustum, LEFT);
+<br/>
+<br/>
+    // This will extract the BOTTOM side of the frustum
+<br/>
+    m_Frustum[BOTTOM][A] = clip[ 3] + clip[ 1];
+<br/>
+    m_Frustum[BOTTOM][B] = clip[ 7] + clip[ 5];
+<br/>
+    m_Frustum[BOTTOM][C] = clip[11] + clip[ 9];
+<br/>
+    m_Frustum[BOTTOM][D] = clip[15] + clip[13];
+<br/>
+    //
+<br/>
+<br/>
+    // Normalize the BOTTOM side
+<br/>
+    NormalizePlane(m_Frustum, BOTTOM);
+<br/>
+<br/>
+    // This will extract the TOP side of the frustum
+<br/>
+    m_Frustum[TOP][A] = clip[ 3] - clip[ 1];
+<br/>
+    m_Frustum[TOP][B] = clip[ 7] - clip[ 5];
+<br/>
+    m_Frustum[TOP][C] = clip[11] - clip[ 9];
+<br/>
+    m_Frustum[TOP][D] = clip[15] - clip[13];
+<br/>
+<br/>
+<br/>
+    // Normalize the TOP side
+<br/>
+    NormalizePlane(m_Frustum, TOP);
+<br/>
+<br/>
+    // This will extract the BACK side of the frustum
+<br/>
+    m_Frustum[BACK][A] = clip[ 3] - clip[ 2];
+<br/>
+    m_Frustum[BACK][B] = clip[ 7] - clip[ 6];
+<br/>
+    m_Frustum[BACK][C] = clip[11] - clip[10];
+<br/>
+    m_Frustum[BACK][D] = clip[15] - clip[14];
+<br/>
+    //
+<br/>
+    // Normalize the BACK side
+<br/>
+    NormalizePlane(m_Frustum, BACK);
+<br/>
+<br/>
+    // This will extract the FRONT side of the frustum
+<br/>
+    m_Frustum[FRONT][A] = clip[ 3] + clip[ 2];
+<br/>
+    m_Frustum[FRONT][B] = clip[ 7] + clip[ 6];
+<br/>
+    m_Frustum[FRONT][C] = clip[11] + clip[10];
+<br/>
+    m_Frustum[FRONT][D] = clip[15] + clip[14];
+<br/>
+    //
+<br/>
+<br/>
+    // Normalize the FRONT side
+<br/>
+    NormalizePlane(m_Frustum, FRONT);
+<br/>
+<br/>
+}
+<br/>
+<br/>
+inline void NormalizePlane(myf32 frustum[6][4], int side)
+<br/>
+{
+<br/>
+    // Here we calculate the magnitude of the normal to the plane (point A B C)
+<br/>
+    // Remember that (A, B, C) is that same thing as the normal's (X, Y, Z).
+<br/>
+    // To calculate magnitude you use the equation:  magnitude = sqrt( x^2 + y^2 + z^2)
+<br/>
+<br/>
+    int32 magnitude=    sqrtf32(mulf32(frustum[side][A], frustum[side][A] )+
+<br/>
+                              mulf32(frustum[side][B] , frustum[side][B]) +
+<br/>
+                              mulf32(frustum[side][C], frustum[side][C] ));
+<br/>
+<br/>
+    // Then we divide the plane's values by it's magnitude.
+<br/>
+    // This makes it easier to work with.
+<br/>
+    frustum[side][A]=   divf32(frustum[side][A], magnitude);
+<br/>
+    frustum[side][B]=   divf32(frustum[side][B], magnitude);
+<br/>
+    frustum[side][C]=   divf32(frustum[side][C], magnitude);
+<br/>
+    frustum[side][D]=   divf32(frustum[side][D], magnitude);
+<br/>
+}</td> </tr></table><span class="postbody"></span><span class="gensmall"><br/><br/>Last edited by a128 on Thu Apr 10, 2008 2:38 pm; edited 1 time in total</span></div>    
+</div>
+<div class="post">
+    <h4>#154071 - Rajveer - Thu Apr 10, 2008 2:37 pm</h4>
+    <div class="postbody"><span class="postbody">Great post! Also I didn't know that normalizing a plane meant normalizing it's distance too, so thanks for everything :)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#154073 - silent_code - Thu Apr 10, 2008 3:23 pm</h4>
+    <div class="postbody"><span class="postbody">but it has to - plane equation (with normalized 'abc'):
+<br/>
+<br/>
+0 = ax + by + cz + d
+<br/>
+<br/>
+or
+<br/>
+<br/>
+d = -ax - by - cz
+<br/>
+<br/>
+so you need to treat both sides equally, or else it'll get messed up. ;^D
+<br/>
+<br/>
+ps: check: <a class="postlink" href="http://mathworld.wolfram.com/Plane.html" target="_blank">http://mathworld.wolfram.com/Plane.html</a> and also, more specific: <a class="postlink" href="http://mathworld.wolfram.com/HessianNormalForm.html" target="_blank">http://mathworld.wolfram.com/HessianNormalForm.html</a> (where you see that "p = d / magnitude(abc)") ;^)</span><span class="gensmall"><br/><br/>Last edited by silent_code on Thu Apr 10, 2008 3:36 pm; edited 5 times in total</span></div>    
+</div>
+<div class="post">
+    <h4>#154074 - Rajveer - Thu Apr 10, 2008 3:31 pm</h4>
+    <div class="postbody"><span class="postbody">D'uh! *smacks head*
+<br/>
+<br/>
+:D</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#154094 - Rajveer - Thu Apr 10, 2008 11:41 pm</h4>
+    <div class="postbody"><span class="postbody">I guess it doesn't make sense to start a new topic as this question is about frustum culling.
+<br/>
+<br/>
+I'm recursively culling my octree AABB nodes, so what's the most efficient way to draw node triangles? I'm thinking of creating a large array of size POLYGON_DRAW_LIMIT (I'll define to be around 2000) which will store the model and triangle numbers to be drawn, and once I've completed culling I'll draw this list. Maybe I'll quickly sort the list according to the model number so I only have to call model texture and other calls once. Is this generally how it's done?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#154098 - elhobbs - Fri Apr 11, 2008 12:34 am</h4>
+    <div class="postbody"><span class="postbody">I think the answer really depends on the data. Are you switching textures a lot? Is the overhead of building a list and sorting it going to worth the savings gained by limiting the texture changes? sorting probably isn't needed, just a list for each texture. maybe a surf/model pointer on the texture and a next pointer on each surf/object that is cleared each frame. other threads indicate that the overhead of touching each object multiple times will probably slow things down - only testing will show which is best for your situation.
+<br/>
+<br/>
+if you have not already done it you may want to take look at optimizing your frustum culling code. like only testing sides that need to be tested and optimizing your box side detection - like special cases for each of the 8 directions that your normal vectors may be pointing</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#154104 - TwentySeven - Fri Apr 11, 2008 2:21 am</h4>
+    <div class="postbody"><span class="postbody">For a great example of optimized bbox culling, check the q3 source.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#154122 - M3d10n - Fri Apr 11, 2008 5:09 pm</h4>
+    <div class="postbody"><span class="postbody">I added boxtest()-based culling to my current project (angled overhead view) and it just made it slower. Maybe my scene isn't big enough to benefit from culling yet, but is boxtest() the fastest way to check a box against the frustum, or would be doing it by hand faster?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#154123 - silent_code - Fri Apr 11, 2008 7:12 pm</h4>
+    <div class="postbody"><span class="postbody">remember that boxtest() needs a few (few, ha!) cycles, so try to use this time and compute something *else*, while waiting for boxtest() to finish - that means between invoking it and retrieving the result. boxtest() runs in parallel, although i would check what restrictions (what hw can't be used while boxtesting) need to be kept in mind in that case.
+<br/>
+<br/>
+such tests are best applicable on large scenes. if you have a rather small scene and everything is visible, you're just adding more instructions, thus reducing performance.
+<br/>
+<br/>
+happy coding!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#154129 - Rajveer - Fri Apr 11, 2008 7:50 pm</h4>
+    <div class="postbody"><span class="postbody">My levels are huge compared to the player, they're all scaled down to fit -7.99 - 7.99 but I scale them up during calculations and rendering. Since my octree nodes are larger than v16 I can't use boxtest (hmm unless I scale my octree down too, then do my frustum culling and drawing within -7.99 - 7.99 and only do calculations and stuff scaled up for accuracy).
+<br/>
+<br/>
+At the moment (and it's probably going to stay this way) each model can only have 1 texture, and levels are made up of multiple models. Taking your idea elhobbs of multiple lists, maybe I should make a list for each model...hmm thinking of ways I can do that.
+<br/>
+<br/>
+OT: Ahh man, between how addictive Mario Kart Wii is and preparing for my damn job interviews next week, I shouldn't be thinking of this right now!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#154132 - a128 - Fri Apr 11, 2008 8:29 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Rajveer wrote:</b></span></td> </tr> <tr> <td class="quote">My levels are huge compared to the player, they're all scaled down to fit -7.99 - 7.99 but I scale them up during calculations and rendering. Since my octree nodes are larger than v16 I can't use boxtest (hmm unless I scale my octree down too, then do my frustum culling and drawing within -7.99 - 7.99 and only do calculations and stuff scaled up for accuracy).
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+so if you scale the max. coord with 7.99f then the widht of the box is 7.99f*2 ....or is this wrong?
+<br/>
+<br/>
+You must scale to 7.99/2 for boxtest because you have to push the width,heigt and depth into boxtest?!!!!!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#154137 - elhobbs - Fri Apr 11, 2008 9:33 pm</h4>
+    <div class="postbody"><span class="postbody">I render objects in texture order by having an object pointer on each texture and a next pointer on each object. I insert new objects at the head of the object list on each texture list as they pass visibilty tests. I then loop through the textures and render the objects then clear the object pointer on the texture for the next frame. I essentially stole the code from glquake1 which used this technique to deal with slow texture state changes on old 3d cards. I am not sure that it makes a big difference in rendering speed by not changing textures. The main benefit for me is that I am loading textures and objects from disk as needed into a cache. this way I only need to load each object or texture once per frame in the worst case.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#154164 - silent_code - Sat Apr 12, 2008 2:20 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Rajveer wrote:</b></span></td> </tr> <tr> <td class="quote">OT: Ahh man, between how addictive Mario Kart Wii is and preparing for my damn job interviews next week, I shouldn't be thinking of this right now!</td> </tr></table><span class="postbody">
+<br/>
+good luck with your job interviews! :^D</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#154390 - Rajveer - Tue Apr 15, 2008 4:31 pm</h4>
+    <div class="postbody"><span class="postbody">Cheers, both interviews went well :)
+<br/>
+<br/>
+Now that I have some time I think I'm going to try a large array and changing the texture for every triangle, at least I can determine how quick this method will be. If not, then I'll implement something similar to your method elhobbs!
+<br/>
+<br/>
+a128: Hmm, yeah you're right!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#154441 - TwentySeven - Wed Apr 16, 2008 9:44 am</h4>
+    <div class="postbody"><span class="postbody">Generally you're going to have CPU to burn, even if you're in the pathological worst case of needing to change texture every triangle.
+<br/>
+<br/>
+I draw about 14 250 triangle models using about 5-10% cpu.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#154510 - M3d10n - Thu Apr 17, 2008 2:55 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Rajveer wrote:</b></span></td> </tr> <tr> <td class="quote">My levels are huge compared to the player, they're all scaled down to fit -7.99 - 7.99 but I scale them up during calculations and rendering. Since my octree nodes are larger than v16 I can't use boxtest (hmm unless I scale my octree down too, then do my frustum culling and drawing within -7.99 - 7.99 and only do calculations and stuff scaled up for accuracy).</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+The nice thing about the box test is that you can perform any scaling (and also translation and rotation) you would do to your models to it, that's what I do. All my meshes are normalized and store the scale values needed to render them at their original size. I just load that scale into the modelview matrix and do the boxtest() using a normalized box.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#154533 - Rajveer - Thu Apr 17, 2008 4:40 pm</h4>
+    <div class="postbody"><span class="postbody">So for each octree node I could transform and scale the modelview matrix according to the node's AABB, then perform the boxtest? That's cool, I'll look into using that! I'll have to do some testing between that method and my current one!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#154552 - Fling - Thu Apr 17, 2008 11:55 pm</h4>
+    <div class="postbody"><span class="postbody">Little bit of a problem here. I've taken the frustum calculation code that a128 posted but it doesn't quite work for me.. that is, when I try to test if say, a point, is inside the viewing frustum, the results are completely off. I feel like I'm pretty close, probably something really silly that I've missed.
+<br/>
+<br/>
+Here's the relevant bits from the code I've got at the moment:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">enum PLANE_SIDES
+<br/>
+{
+<br/>
+   RIGHT = 0,
+<br/>
+   LEFT = 1,
+<br/>
+   BOTTOM = 2,
+<br/>
+   TOP = 3,
+<br/>
+   FAR = 4,
+<br/>
+   NEAR = 5
+<br/>
+};
+<br/>
+<br/>
+#define NUM_FRUSTUM_PLANES 6
+<br/>
+<br/>
+typedef struct Plane
+<br/>
+{
+<br/>
+   f32 a;
+<br/>
+   f32 b;
+<br/>
+   f32 c;
+<br/>
+   f32 d;
+<br/>
+};
+<br/>
+<br/>
+void Frustum::Calculate()
+<br/>
+{
+<br/>
+   STACK_TRACE;
+<br/>
+   m4x4 clipMatrix;
+<br/>
+<br/>
+   glGetFixed(GL_GET_MATRIX_CLIP, &amp;clipMatrix.m[0]);
+<br/>
+<br/>
+viewing frustum
+<br/>
+   m_planes[RIGHT].a = clipMatrix.m[3] - clipMatrix.m[0];
+<br/>
+   m_planes[RIGHT].b = clipMatrix.m[7] - clipMatrix.m[4];
+<br/>
+   m_planes[RIGHT].c = clipMatrix.m[11] - clipMatrix.m[8];
+<br/>
+   m_planes[RIGHT].d = clipMatrix.m[15] - clipMatrix.m[12];
+<br/>
+<br/>
+   m_planes[LEFT].a = clipMatrix.m[3] + clipMatrix.m[0];
+<br/>
+   m_planes[LEFT].b = clipMatrix.m[7] + clipMatrix.m[4];
+<br/>
+   m_planes[LEFT].c = clipMatrix.m[11] + clipMatrix.m[8];
+<br/>
+   m_planes[LEFT].d = clipMatrix.m[15] + clipMatrix.m[12];
+<br/>
+<br/>
+   m_planes[BOTTOM].a = clipMatrix.m[3] + clipMatrix.m[1];
+<br/>
+   m_planes[BOTTOM].b = clipMatrix.m[7] + clipMatrix.m[5];
+<br/>
+   m_planes[BOTTOM].c = clipMatrix.m[11] + clipMatrix.m[9];
+<br/>
+   m_planes[BOTTOM].d = clipMatrix.m[15] + clipMatrix.m[13];
+<br/>
+<br/>
+   m_planes[TOP].a = clipMatrix.m[3] - clipMatrix.m[1];
+<br/>
+   m_planes[TOP].b = clipMatrix.m[7] - clipMatrix.m[5];
+<br/>
+   m_planes[TOP].c = clipMatrix.m[11] - clipMatrix.m[9];
+<br/>
+   m_planes[TOP].d = clipMatrix.m[15] - clipMatrix.m[13];
+<br/>
+<br/>
+   m_planes[FAR].a = clipMatrix.m[3] - clipMatrix.m[2];
+<br/>
+   m_planes[FAR].b = clipMatrix.m[7] - clipMatrix.m[6];
+<br/>
+   m_planes[FAR].c = clipMatrix.m[11] - clipMatrix.m[10];
+<br/>
+   m_planes[FAR].d = clipMatrix.m[15] - clipMatrix.m[14];
+<br/>
+<br/>
+   m_planes[NEAR].a = clipMatrix.m[3] + clipMatrix.m[2];
+<br/>
+   m_planes[NEAR].b = clipMatrix.m[7] + clipMatrix.m[6];
+<br/>
+   m_planes[NEAR].c = clipMatrix.m[11] + clipMatrix.m[10];
+<br/>
+   m_planes[NEAR].d = clipMatrix.m[15] + clipMatrix.m[14];
+<br/>
+<br/>
+   NormalizePlane(&amp;m_planes[RIGHT]);
+<br/>
+   NormalizePlane(&amp;m_planes[LEFT]);
+<br/>
+   NormalizePlane(&amp;m_planes[BOTTOM]);
+<br/>
+   NormalizePlane(&amp;m_planes[TOP]);
+<br/>
+   NormalizePlane(&amp;m_planes[FAR]);
+<br/>
+   NormalizePlane(&amp;m_planes[NEAR]);
+<br/>
+}
+<br/>
+<br/>
+BOOL Frustum::Test(Vector3 *vertex)
+<br/>
+{
+<br/>
+   STACK_TRACE;
+<br/>
+   for (int p = 0; p &lt; NUM_FRUSTUM_PLANES; ++p)
+<br/>
+   {
+<br/>
+      // Negative = behind plane, Positive = in front of plane
+<br/>
+      if ((mulf32(m_planes[p].a, vertex-&gt;x) + 
+<br/>
+         mulf32(m_planes[p].b, vertex-&gt;y) + 
+<br/>
+         mulf32(m_planes[p].c, vertex-&gt;z) + 
+<br/>
+         (m_planes[p].d))
+<br/>
+         &lt; inttof32(0))
+<br/>
+         return FALSE;
+<br/>
+   }
+<br/>
+<br/>
+   return TRUE;
+<br/>
+}
+<br/>
+<br/>
+inline void NormalizePlane(Plane *plane)
+<br/>
+{
+<br/>
+   f32 length = sqrtf32(
+<br/>
+      mulf32(plane-&gt;a, plane-&gt;a) + 
+<br/>
+      mulf32(plane-&gt;b, plane-&gt;b) + 
+<br/>
+      mulf32(plane-&gt;c, plane-&gt;c)
+<br/>
+      );
+<br/>
+   plane-&gt;a = divf32(plane-&gt;a, length);
+<br/>
+   plane-&gt;b = divf32(plane-&gt;b, length);
+<br/>
+   plane-&gt;c = divf32(plane-&gt;c, length);
+<br/>
+   plane-&gt;d = divf32(plane-&gt;d, length);
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I'm guessing I've made a silly typo or something in one of the calculations that I'm just not seeing for whatever reason, but if anyone could provide any help I'd very much appreciate it!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#154562 - silent_code - Fri Apr 18, 2008 3:57 am</h4>
+    <div class="postbody"><span class="postbody">not a fix, but an idea: how about computing the reciprocal of the sqrt and multiplying instead of diving? i haven't tried it with fixed point, yet, so i'm just curious. ;^)
+<br/>
+if you make some tests, please share the results! thanks!
+<br/>
+<br/>
+also, that typedefine looks totally unnecessary, but i'm not a c/c++ lawyer. ;^) try giving the struct a typedef name, instead it being anonymous like this:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+typedefine struct PLANE_STRUCT // PLANE_STRUCT isn't needed in that case
+<br/>
+{
+<br/>
+// ... data
+<br/>
+} Plane; // here we go
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+or am i wrong and too much used to a certain practice? ("typedef old new;") i'm confued right now and it's 5:04 am... help please?
+<br/>
+i remember it being the way around c's "struct Plane some_plane;", so one could declare variables in c++'s way "Plane some_plane;".
+<br/>
+this means your version wouldn't be a problem in c++, but in c! iirc, that is. ;^)</span><span class="gensmall"><br/><br/>Last edited by silent_code on Fri Apr 18, 2008 4:16 am; edited 5 times in total</span></div>    
+</div>
+<div class="post">
+    <h4>#154563 - M3d10n - Fri Apr 18, 2008 4:04 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Rajveer wrote:</b></span></td> </tr> <tr> <td class="quote">So for each octree node I could transform and scale the modelview matrix according to the node's AABB, then perform the boxtest? That's cool, I'll look into using that! I'll have to do some testing between that method and my current one!</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Just setup things as if you were going to draw the AABB, but use boxtest() instead (you can even rotate the boxes if you want). I think boxtest() actually sends a box made of quads down to the geometry pipeline and just checks if they are clipped or not, instead of drawing them.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#154586 - a128 - Fri Apr 18, 2008 4:10 pm</h4>
+    <div class="postbody"><span class="postbody">it must be &lt;= 0
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+BOOL Frustum::Test(Vector3 *vertex)
+<br/>
+{
+<br/>
+   STACK_TRACE;
+<br/>
+   for (int p = 0; p &lt; NUM_FRUSTUM_PLANES; ++p)
+<br/>
+   {
+<br/>
+      // Negative = behind plane, Positive = in front of plane
+<br/>
+      if ((mulf32(m_planes[p].a, vertex-&gt;x) + 
+<br/>
+         mulf32(m_planes[p].b, vertex-&gt;y) + 
+<br/>
+         mulf32(m_planes[p].c, vertex-&gt;z) + 
+<br/>
+         (m_planes[p].d))
+<br/>
+         &lt;= inttof32(0))  //&lt;= 0!!!!!!!!!!!!!!!!
+<br/>
+         return FALSE;
+<br/>
+   }
+<br/>
+<br/>
+   return TRUE;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+What does STACK_TRACE?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#155098 - Fling - Fri Apr 25, 2008 12:13 am</h4>
+    <div class="postbody"><span class="postbody">Unfortunately that didn't do the trick. :(
+<br/>
+<br/>
+STACK_TRACE is a macro that adds functions to my software debug stack tracing which gets displayed if an ASSERT fails. It actually doesn't do anything at the moment (the required #define isn't enabled, so it gets pre-processed to nothing), so that isn't affecting the results. It realistically isn't needed at all in that function, but is there more because it's become a habit of mine in my current project to immediately add it at the start of every function.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#155128 - a128 - Fri Apr 25, 2008 8:46 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Fling wrote:</b></span></td> </tr> <tr> <td class="quote">Unfortunately that didn't do the trick. :(
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Here is my code...I have tested it some month ago...and it worked!
+<br/>
+<a class="postlink" href="http://www.freewebtown.com/festival2005/frustumNDS.tgz" target="_blank">http://www.freewebtown.com/festival2005/frustumNDS.tgz</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#155130 - a128 - Fri Apr 25, 2008 10:06 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Fling wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+STACK_TRACE is a macro that adds functions to my software debug stack tracing which gets displayed if an ASSERT fails. It actually doesn't do anything at the moment (the required #define isn't enabled, so it gets pre-processed to nothing), so that isn't affecting the results. It realistically isn't needed at all in that function, but is there more because it's become a habit of mine in my current project to immediately add it at the start of every function.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Oh yes thats a great idea
+<br/>
+<br/>
+here is my implementation of STACK_TRACE....it just records the file+linenr. and prints the last traces if you call MY_ASSERT
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+<br/>
+#define DEPTH 8
+<br/>
+char stacktrace[80*DEPTH];
+<br/>
+unsigned stacktrace_counter=-1;
+<br/>
+<br/>
+#include &lt;string.h&gt;
+<br/>
+<br/>
+#define THIS_FILE ((strrchr(__FILE__, '/') ?: __FILE__ - 1) + 1)
+<br/>
+<br/>
+#define STACK_TRACE    \
+<br/>
+if(stacktrace_counter&lt;DEPTH) stacktrace_counter++; else stacktrace_counter=0;\
+<br/>
+         sprintf((char*)&amp;stacktrace[stacktrace_counter*80],"%s %d\n",THIS_FILE,__LINE__);\
+<br/>
+   
+<br/>
+#define MY_ASSERT for(int i=0;i&lt;=stacktrace_counter;i++) iprintf("%d.%s\n",i+1,(char*)&amp;stacktrace[i*80]);assert(0);
+<br/>
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Example : 
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+void foo(){
+<br/>
+STACK_TRACE;
+<br/>
+//do some code here or even more STACK_TRACE
+<br/>
+if(error)
+<br/>
+MY_ASSERT;
+<br/>
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+NODE:
+<br/>
+sprintf((char*)&amp;stacktrace[stacktrace_counter*80],"%s %d\n",THIS_FILE,__LINE__);\
+<br/>
+<br/>
+is bad code. it prevents iprintf() to work after you have called this method ...no idea why?!</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

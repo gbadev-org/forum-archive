@@ -1,0 +1,470 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Reducing dswifi latency when using FIFO ARM to ARM sync - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Reducing dswifi latency when using FIFO ARM to ARM sync</h2>
+<div id="posts">
+<div class="post">
+    <h4>#105650 - masscat - Tue Oct 10, 2006 4:21 pm</h4>
+    <div class="postbody"><span class="postbody">When playing around with my gdb debugger stub I discovered that there was often a ~50ms gap between packets being sent out.
+<br/>
+After some investigation I determined that the ARM9 to ARM7 fifo "not empty" interrupt was not getting generated. This happens because the ARM9 places a second sync message into the fifo before the ARM7 has read the first one. Since the ARM7 code only reads one value from the fifo on an interrupt, the fifo never becomes empty and therefore no more interrupts get generated.
+<br/>
+<br/>
+To overcome this, change the fifo interrupt handler, on both the ARM7 and ARM9 for completeness, to something like the following:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void fifo_handler() { // check incoming fifo messages
+<br/>
+  int syncd = 0;
+<br/>
+  while ( !(REG_IPC_FIFO_CR &amp; IPC_FIFO_RECV_EMPTY)) {
+<br/>
+    u32 value = REG_IPC_FIFO_RX;
+<br/>
+    if ( value == 0x87654321 &amp;&amp; !syncd) {
+<br/>
+      syncd = 1;
+<br/>
+      Wifi_Sync();
+<br/>
+    }
+<br/>
+  }
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#105657 - OOPMan - Tue Oct 10, 2006 5:31 pm</h4>
+    <div class="postbody"><span class="postbody">Nice catch masscat :-)<br/>_________________<br/>"My boot, your face..." - Attributed to OOPMan, Emperor of Eroticon VI
+<br/>
+<br/>
+You can find my NDS homebrew projects <a class="postlink" href="http://blog.dev-scene.com/oopman/" target="_blank">here...</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#105666 - Lick - Tue Oct 10, 2006 7:08 pm</h4>
+    <div class="postbody"><span class="postbody">Could you post the original function as well? Thankks and nice catch!
+<br/>
+<br/>
+- Lick<br/>_________________<br/><a class="postlink" href="http://licklick.wordpress.com" target="_blank">http://licklick.wordpress.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#105667 - masscat - Tue Oct 10, 2006 7:28 pm</h4>
+    <div class="postbody"><span class="postbody">The original fifo handler from the ARM7 template.c file from the dswifi example (the ARM9 is similar):
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">// interrupt handler to allow incoming notifications from arm9
+<br/>
+void arm7_fifo() { // check incoming fifo messages
+<br/>
+   u32 msg = REG_IPC_FIFO_RX;
+<br/>
+   if(msg==0x87654321) Wifi_Sync();
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+This is installed as the handler for the IRQ_FIFO_NOT_EMPTY interrupt.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#105669 - Lick - Tue Oct 10, 2006 7:55 pm</h4>
+    <div class="postbody"><span class="postbody">Someone told me that the IRQ puts any other incoming data on hold (and thus, each message 'calls' the IRQ handler), so arm7_fifo is indeed called <span style="font-weight: bold">twice</span>. 
+<br/>
+How did you check that it isn't?<br/>_________________<br/><a class="postlink" href="http://licklick.wordpress.com" target="_blank">http://licklick.wordpress.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#105674 - masscat - Tue Oct 10, 2006 9:19 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Lick wrote:</b></span></td> </tr> <tr> <td class="quote">Someone told me that the IRQ puts any other incoming data on hold (and thus, each message 'calls' the IRQ handler), so arm7_fifo is indeed called <span style="font-weight: bold">twice</span>. 
+<br/>
+How did you check that it isn't?</td> </tr></table><span class="postbody">
+<br/>
+To be honest I just assumed, it fitted the behaviour and the operation of hardware fifos I have seen.
+<br/>
+But I have just done a quick test and you only get the NOT_EMPTY interrupt when the fifo goes from empty to not empty, you will not get the interrupt for additional writes until the fifo has been drained. So if you get an interrupt you must drain the FIFO to ensure you will get another one.
+<br/>
+<br/>
+The test was:
+<br/>
+The ARM7 writes to its FIFO on vblank.
+<br/>
+<br/>
+The ARM9 records how many times its NOT_EMPTY handler is called.
+<br/>
+Pressing B drains the FIFO.
+<br/>
+Pressing X reads one fifo entry and print how many time the handler has been called.
+<br/>
+<br/>
+Results:
+<br/>
+Pressing X repeatedly - the number of handler calls remains constant.
+<br/>
+Pressing B n times followed by X - the number of handler calls increases by n.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#105676 - Lick - Tue Oct 10, 2006 9:29 pm</h4>
+    <div class="postbody"><span class="postbody">Could it not have to do with <a class="postlink" href="http://licklick.wordpress.com/2006/10/08/interesting-fifo-fact-might-save-you-some-debugging/" target="_blank">this fifo fact?</a> I dunno. Hmm..<br/>_________________<br/><a class="postlink" href="http://licklick.wordpress.com" target="_blank">http://licklick.wordpress.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#105680 - masscat - Tue Oct 10, 2006 9:46 pm</h4>
+    <div class="postbody"><span class="postbody">The fifo does indeed become full (I cannot tap the X button quickly enough).
+<br/>
+But if that was the problem then by pressing X you would see the number of handler calls increase. The fifo read allows a write to happen which, if an interrupt is generated per fifo write, would cause the handler call.
+<br/>
+<br/>
+But no increase in handler calls means interrupt does not occur per write.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#105681 - sgstair - Tue Oct 10, 2006 9:59 pm</h4>
+    <div class="postbody"><span class="postbody">that's probably not the problem you're making it out to be - please note that wifi_update (which should be called in the vblank handler, every 16.6ms) does the same sort of thing as wifi_sync as far as sending unsent packets out. a 50ms delay is more likely on the arm9 size (where there's a 25/50ms timer)
+<br/>
+<br/>
+-Stephen<br/>_________________<br/><a class="postlink" href="http://blog.akkit.org/" target="_blank">http://blog.akkit.org/</a> - <a class="postlink" href="http://www.akkit.org/dswifi/" target="_blank">http://www.akkit.org/dswifi/</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#105682 - masscat - Tue Oct 10, 2006 10:08 pm</h4>
+    <div class="postbody"><span class="postbody">Fortunately I did the fix on both ARMs so the problem was solved, but from those timings, as you say, it would have been the ARM7 to ARM9 FIFO.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#105683 - sgstair - Tue Oct 10, 2006 10:21 pm</h4>
+    <div class="postbody"><span class="postbody">Quite the opposite - I was stating that because of the timings it couldn't possibly have been the FIFO, is very likely the TCP resend or delayed send (nagle)
+<br/>
+<br/>
+-Stephen<br/>_________________<br/><a class="postlink" href="http://blog.akkit.org/" target="_blank">http://blog.akkit.org/</a> - <a class="postlink" href="http://www.akkit.org/dswifi/" target="_blank">http://www.akkit.org/dswifi/</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#105700 - DekuTree64 - Wed Oct 11, 2006 7:47 am</h4>
+    <div class="postbody"><span class="postbody">Ok, this got me curious about the exact behavior of the FIFO, so I ran a few tests of my own. Here is what I found out:
+<br/>
+<br/>
+1. FIFO Not Empty interrupt is generated ONLY when transitioning from empty to not empty. If your handler doesn't loop until the FIFO is empty again, then the rest of the data will just sit there and the interrupt will never be generated again. In other words, masscat's original post is correct.
+<br/>
+<br/>
+2. Using my interrupt code, it takes about 160 cycles (33MHz) from the time of ARM9 writing a word to the FIFO, until ARM7 has executed its interrupt handler and read that value (ARM9 just does a while(!fifoempty) loop after sending the word). A bit slower than I would expect actually, but not too bad.
+<br/>
+<br/>
+3. Depending on how the FIFO is used, there may be an extremely rare potential for missed not-empty interrupts using the libnds interrupt dispatcher.
+<br/>
+<br/>
+If you always write a word and then spin until the other processor replies, it should be fine. But if you just write and move on, potentially writing more before the other processor has finished with the first, it could be bad.
+<br/>
+<br/>
+The problem is that the dispatcher calls the user handler function (which in this case will empty the FIFO), and then clears the bit for that interrupt in REG_IF after that user handler returns. But there are a few sneaky cycles between the FIFO being for sure empty, and the IF bit being cleared. Consider this sequence of events:
+<br/>
+<br/>
+ARM9 writes word to FIFO.
+<br/>
+ARM7 fires interrupt, reads FIFO, sees that it is empty, breaks from its loop, and...
+<br/>
+ARM9 writes another word to the FIFO.
+<br/>
+ARM7 (still in interrupt code, with interrupts blocked) clears the bit in IF.
+<br/>
+<br/>
+Bam, data in ARM7's receive buffer, but the IF bit has been cleared before it was processed.
+<br/>
+<br/>
+Sooo, the solution is to clear the IF bit BEFORE calling the user handler. That way when ARM9 sends the second word, the IF bit will be left on in the end and trigger another not-empty interrupt as soon as the first one returns. But that will involve fiddling with assembly code in the libnds source.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#105702 - sgstair - Wed Oct 11, 2006 8:08 am</h4>
+    <div class="postbody"><span class="postbody">AFAIK, the devkitpro interrupt handler does indeed clear IF before calling the user interrupt handler (IE is disabled for that bit, and multiple interrupts are also enabled)
+<br/>
+<br/>
+I don't think it's generally a problem - and there are many other paths that lead to reading the next entry in the fifo
+<br/>
+Both the wifi_update call (which should be called every vblank) and the wifi's "transmit complete" interrupt check the incoming wifi data fifo for more information to transmit. 2 consecutive fifo messages not triggering the second interrupt will hardly be a problem.
+<br/>
+<br/>
+(ok, I do now see the possibility that the interrupts will cease entirely if a dual-fifo interrupt event is missed; so it is probably a good idea to clear out the fifo every vblank or so if it isn't empty. - this point I will accept and I should probably correct this in my next version of the lib examples)
+<br/>
+<br/>
+-Stephen<br/>_________________<br/><a class="postlink" href="http://blog.akkit.org/" target="_blank">http://blog.akkit.org/</a> - <a class="postlink" href="http://www.akkit.org/dswifi/" target="_blank">http://www.akkit.org/dswifi/</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#105703 - Lick - Wed Oct 11, 2006 8:47 am</h4>
+    <div class="postbody"><span class="postbody">So the interrupt is running asynch with the FIFO hardware that calls the interrupt? Ooo..<br/>_________________<br/><a class="postlink" href="http://licklick.wordpress.com" target="_blank">http://licklick.wordpress.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#105710 - masscat - Wed Oct 11, 2006 12:04 pm</h4>
+    <div class="postbody"><span class="postbody">After further investigation:
+<br/>
+The ARM9 to ARM7 fifo alone can go full which leads to ~16ms inter packet timings. In this case the ARM9 to ARM7 packet transfer is being performed by the call to Wifi_Update() in the Vblank handler.
+<br/>
+Both the ARM9 to ARM7 and ARM7 to ARM9 fifo can go full which leads to ~50ms inter packet timings. The ARM9 to ARM7 packet transfer is being performed by the call to Wifi_Update() in the Vblank handler. The ARM7 to ARM9 packet transfer is being performed by the call to Wifi_Timer() from the 50ms timer handler.
+<br/>
+Since the ARM sync mechanism is external to dswifi, without the drain the FIFOs never recover and the latency remains.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#105711 - wintermute - Wed Oct 11, 2006 12:23 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sgstair wrote:</b></span></td> </tr> <tr> <td class="quote">AFAIK, the devkitpro interrupt handler does indeed clear IF before calling the user interrupt handler (IE is disabled for that bit, and multiple interrupts are also enabled)
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Actually it was modified quite some time ago to clear the IF bit on return from the user handler. IIRC you told me that the wifi interrupts would lose data if IF was cleared prior to reading data.
+<br/>
+<br/>
+I did some experiments with FIFO transfer a couple of months ago which indicated that a FIFO irq is only generated on transition from an empty queue and it must be cleared before subsequent interrupts are generated.
+<br/>
+<br/>
+I was using a FIFO command system in the OPL emulator I was trying to get working on the DS. The FIFO code looked like this.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+//---------------------------------------------------------------------------------
+<br/>
+// callback to allow wifi library to notify arm9
+<br/>
+//---------------------------------------------------------------------------------
+<br/>
+void arm7_synctoarm9() { // send fifo message
+<br/>
+//---------------------------------------------------------------------------------
+<br/>
+   REG_IPC_FIFO_TX = 0x87654321;
+<br/>
+}
+<br/>
+<br/>
+enum {
+<br/>
+   CMD_WAIT,
+<br/>
+   WIFI_INIT,
+<br/>
+   MUS_INIT
+<br/>
+};
+<br/>
+   
+<br/>
+u32 fifo_status = CMD_WAIT;
+<br/>
+<br/>
+//---------------------------------------------------------------------------------
+<br/>
+// interrupt handler to allow incoming notifications from arm9
+<br/>
+//---------------------------------------------------------------------------------
+<br/>
+void arm7_fifo() { // check incoming fifo messages
+<br/>
+//---------------------------------------------------------------------------------
+<br/>
+   while ( !(REG_IPC_FIFO_CR &amp; (IPC_FIFO_RECV_EMPTY)) ) {
+<br/>
+      u32 msg = REG_IPC_FIFO_RX;
+<br/>
+<br/>
+      switch (fifo_status) {
+<br/>
+      case WIFI_INIT:
+<br/>
+         Wifi_Init(msg);
+<br/>
+         Wifi_SetSyncHandler(arm7_synctoarm9); // allow wifi lib to notify arm9
+<br/>
+         fifo_status = CMD_WAIT;
+<br/>
+         break;
+<br/>
+      case MUS_INIT:
+<br/>
+         MusRegisterFile((unsigned char*)msg);
+<br/>
+         fifo_status = CMD_WAIT;
+<br/>
+         break;
+<br/>
+<br/>
+      case CMD_WAIT:
+<br/>
+         if(msg==0x87654321) Wifi_Sync();
+<br/>
+<br/>
+         if(msg==0x12345678) {
+<br/>
+            REG_IME = 1;   // allow other interrupts
+<br/>
+            fifo_status = WIFI_INIT;
+<br/>
+         }
+<br/>
+<br/>
+         if( msg &gt;&gt; 24 == 0x88) {
+<br/>
+            switch ((msg &gt;&gt; 16)&amp; 0xff) {
+<br/>
+            case 0:
+<br/>
+               fifo_status = MUS_INIT;
+<br/>
+               break;
+<br/>
+            case 1:
+<br/>
+               MusPlay(msg &amp; 0xff);
+<br/>
+               break;
+<br/>
+            case 2:
+<br/>
+               MusStop();
+<br/>
+               break;
+<br/>
+            }
+<br/>
+         }
+<br/>
+      }
+<br/>
+   }
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody"><br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#105752 - masscat - Wed Oct 11, 2006 6:45 pm</h4>
+    <div class="postbody"><span class="postbody">I have been looking at the libnds interrupt dispatcher and I feel it has a some issues:
+<br/>
+<ol type="a">
+<br/>
+<li>As DekuTree64 said, in order to avoid missing interrupts and therefore not handling them, the acknowledgement (write to REG_IF) must be before the hand off to the user installed handler (or left up to the user handler).
+<br/>
+<br/>
+</li><li>At the moment the dispatcher saves the value of REG_IE, disables the interrupt being handled, calls the user handler and restores the original REG_IE value on the user handler's return. This means that any interrupts that have been enabled or disabled during the user handler are lost.
+<br/>
+Possible solutions could be:
+<br/>
+<ol type="1">
+<br/>
+<li>Leave REG_IE alone: nested interrupt handling is left to the user handler. All current user code would need rewriting. A bit more complexity for the user but gives them full control. The acknowledgement of the interrupt would also be handled by user handler. I prefer this approach as I like to have control over the behaviour.
+<br/>
+</li><li>Disable the interrupt being handled and then only restore this interrupt on the user handler's return: the interrupt source currently being serviced cannot be disabled but there is no change to current user code.
+<br/>
+</li><li>Disable the interrupt being handled and then only restore this interrupt based on the return value from the user handler: all current user code will require changing (the compiler can warn that the function passed to irqSet is not compatible). Allows similar control to solution 1 without the need for handling acknowledgement and nested interrupts.
+<br/>
+</li></ol>
+<br/>
+</li><li>Last and by all means least, when reading from and writing to REG_IME it is done as a 32bit value. Not really a problem as there is nothing at 0x040020a but I thought I would mention it.
+<br/>
+</li></ol></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#105759 - DekuTree64 - Wed Oct 11, 2006 7:21 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>masscat wrote:</b></span></td> </tr> <tr> <td class="quote">At the moment the dispatcher saves the value of REG_IE, disables the interrupt being handled, calls the user handler and restores the original REG_IE value on the user handler's return.</td> </tr></table><span class="postbody">
+<br/>
+Maybe leave IE as-is, and IME disabled, but still do the CPSR fiddling. Then the user handler can reenable interrupts if it wants to, but by default there will be no nesting.
+<br/>
+<br/>
+Another option (somewhat of a tangent here) would be to add a global u32, with each bit saying wether that interrupt should enable nesting. That way for fast non-interruptable things like HBlank, the dispatcher could just jump straight to the user handler without touching CPSR. Doesn't really solve the interrupt-disables-itself problem, but does give the user control over when nesting is allowed without having to mess with IE and IME in user handlers.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#105766 - wintermute - Wed Oct 11, 2006 8:02 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>masscat wrote:</b></span></td> </tr> <tr> <td class="quote">I have been looking at the libnds interrupt dispatcher and I feel it has a some issues:
+<br/>
+<ol type="a">
+<br/>
+<li>As DekuTree64 said, in order to avoid missing interrupts and therefore not handling them, the acknowledgement (write to REG_IF) must be before the hand off to the user installed handler (or left up to the user handler).
+<br/>
+</li></ol></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Untrue.
+<br/>
+<br/>
+Clearing the irq before handoff to the user handler will have zero effect on whether or not interrupts are missed. If an interrupt of the same kind occurs during the user handler then there is a problem elsewhere, possibly in the time taken by the user handler.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+<li>At the moment the dispatcher saves the value of REG_IE, disables the interrupt being handled, calls the user handler and restores the original REG_IE value on the user handler's return. This means that any interrupts that have been enabled or disabled during the user handler are lost.
+<br/>
+</li></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+REG_IE should generally not be manipulated during interrupt code. If you need this kind of complexity you should be writing your own dispatcher. Personally, I can't think of many situations where this might be necessary.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+<li>Last and by all means least, when reading from and writing to REG_IME it is done as a 32bit value. Not really a problem as there is nothing at 0x040020a but I thought I would mention it.
+<br/>
+</li></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Perfectly safe and done this way to simplify code.
+<br/>
+<br/>
+I'm not saying the current dispatcher is perfect but it has been quite well tested and was provided to simplify irq handling as much as possible for the end user.<br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#105776 - masscat - Wed Oct 11, 2006 8:58 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>wintermute wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>masscat wrote:</b></span></td> </tr> <tr> <td class="quote">As DekuTree64 said, in order to avoid missing interrupts and therefore not handling them, the acknowledgement (write to REG_IF) must be before the hand off to the user installed handler (or left up to the user handler).
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Untrue.
+<br/>
+<br/>
+Clearing the irq before handoff to the user handler will have zero effect on whether or not interrupts are missed. If an interrupt of the same kind occurs during the user handler then there is a problem elsewhere, possibly in the time taken by the user handler.
+<br/>
+</span></td> </tr></table><span class="postbody">
+<br/>
+Between the interrupt being raised and the bit in REG_IF being cleared zero or more interrupt conditions may occur on the source hardware, none of which will cause an interrupt on the ARM. This is not what I mean by a missed interrupt and the user interrupt handler should be written to handle all present causes of the interrupt to cover this.
+<br/>
+<br/>
+The problem is that if the REG_IF bit is cleared after the user interrupt handler then an interrupt condition may occur between the code of the handler that scans the hardware for causes of interrupts and the REG_IF write. This interrupt condition will be missed and the user handler has no method to detect and handle it.
+<br/>
+<br/>
+If the REG_IF bit clear is before the user interrupt handler call then any occurance of an interrupt condition on the hardware after the REG_IF write will cause the corresponding REG_IF bit to go high and an ARM interrupt to happen when the interrupt is enabled again. Therefore the user handler has the opertunity to handle all interrupt conditions raised by the hardware. The only downside of this approach is that an interrupt may be raised for a condition that has been cleared during the previous handler call.
+<br/>
+<br/>
+DekuTree64 illustrated the case for the inter ARM FIFO but interrupts from any source could be missed.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#105803 - sgstair - Wed Oct 11, 2006 11:47 pm</h4>
+    <div class="postbody"><span class="postbody">Wintermute: if I did say so I was mistaken; IF should indeed be cleared before handling the interrupt or else there is a window in which an interrupt could occur and not be handled (after the interrupt handler is "complete" and before IF is cleared) - and there is quite nothing the user code can do about it.
+<br/>
+<br/>
+-Stephen<br/>_________________<br/><a class="postlink" href="http://blog.akkit.org/" target="_blank">http://blog.akkit.org/</a> - <a class="postlink" href="http://www.akkit.org/dswifi/" target="_blank">http://www.akkit.org/dswifi/</a></span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

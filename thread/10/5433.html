@@ -1,0 +1,106 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Krawall with swi_vblank - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Audio > Krawall with swi_vblank</h2>
+<div id="posts">
+<div class="post">
+    <h4>#39890 - gauauu - Wed Apr 13, 2005 6:24 am</h4>
+    <div class="postbody"><span class="postbody">So I am trying to add music to my game using Krawall, but I'm a little bit stuck on one point.
+<br/>
+<br/>
+I have currently been using the swi_vblank bios call to shudown the cpu between frames, waking it back up on vblank.  This all worked fine.
+<br/>
+<br/>
+But when I try to do this with Krawall, it doesn't seem to work.  Is this because Krawall's timer interrupt could fire while the CPU is asleep, and thus not get serviced?  Or should it supposedly work, and I'm just doing something stupid? 
+<br/>
+<br/>
+I've done a few tests, and my interrupts seem to be set up properly (if I don't call swi_vblank, both my vblank interrupt, and Krawall's timer interrupt are working correctly)  
+<br/>
+<br/>
+Anyway, I know my statement of "it doesn't work" is vague.....I just wanted to see if I should quit trying to make Krawall and swi_vblank work together before I spend a lot of time diagnosing the problem.
+<br/>
+<br/>
+Thanks!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#39909 - Lord Graga - Wed Apr 13, 2005 12:49 pm</h4>
+    <div class="postbody"><span class="postbody">I have the same problem with the registered version aswell. I have implemented a horrible workaround which is based on a counter which I have in the VBlank interrupt after kramWorker();. Then I make a loop where I use SystemCall(2) instead and compare the counter to it's value when I started the function.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#75100 - gauauu - Fri Mar 10, 2006 3:04 am</h4>
+    <div class="postbody"><span class="postbody">Hey, I finally figured this out.  Yeah, it's been a year, I had given up on it for awhile.  But I want to post it in case someone else ever has the same issues
+<br/>
+<br/>
+Krawall comes with its own customized interrupt dispatching code.  It's supposed to be able to do multiple interrupts just fine and dandy, but to make it work with the vblank IntrWait, you have to modify it.  (It's originally part of the crt0.s that comes with Krawall, unless you moved it somewhere else)
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+.....
+<br/>
+<br/>
+  .ifdef __MultipleInterrupts
+<br/>
+intr_main:
+<br/>
+<br/>
+<br/>
+                                         @ Multiple interrupts support
+<br/>
+        mov     r2, #0x4000000           @ REG_BASE
+<br/>
+<br/>
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+<br/>
+@NLT - added this for VblankIntrwait support....
+<br/>
+   ldr   r1, [r2, #0x208]   
+<br/>
+   ldrh    r3, [r2, #-8]           @\mix up with BIOS irq flags at 3007FF8h,
+<br/>
+   orr     r3, r3, r1              @ aka mirrored at 3FFFFF8h, this is required
+<br/>
+   strh    r3, [r2, #-8]           @/when using the (VBlank)IntrWait functions
+<br/>
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+<br/>
+<br/>
+<br/>
+        ldr     r3, [r2,#0x200]!         @ r2 = IE : r3 = IF|IE
+<br/>
+        ldrh    r1, [r2, #0x8]           @ r1 = IME
+<br/>
+        mrs     r0, spsr
+<br/>
+        stmfd   sp!, {r0-r2,lr}          @ {spsr, IME, REG_IE, lr}  // IF|IE
+<br/>
+......
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I'm sure somebody smarter than me can explain why this extra chunk of code is needed....I'm honestly not sure how it works, but I was comparing the working interrupt handling code from devkitArm with Krawall's version, and found that this was missing (and had to modify it slightly to match krawall's registers).
+<br/>
+<br/>
+When I added it, everything started working just fine.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#75101 - nmain - Fri Mar 10, 2006 3:25 am</h4>
+    <div class="postbody"><span class="postbody">explaining it is simple: the only way the bios knows whether an interrupt was signaled is if the interrupt handler writes to [03fffff8] - it checks this memory location for flags that have 1s and breaks out when the appropriate interrupt has occured.  But of course the hardware doesn't automatically signal anything to [03fffff8] when an interrupt happens; the interrupt routine (or dispatcher) must handle it.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

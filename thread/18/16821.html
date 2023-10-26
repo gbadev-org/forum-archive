@@ -1,0 +1,175 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Screen edge is funky when drawing quads using glOrtho - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Screen edge is funky when drawing quads using glOrtho</h2>
+<div id="posts">
+<div class="post">
+    <h4>#169941 - DiscoStew - Mon Aug 17, 2009 4:41 am</h4>
+    <div class="postbody"><span class="postbody">Rather than using the BGs for drawing tiled layers, I wanted to try using 3D under glOrtho and using quads. I got it working, but I've run into a graphic glitch. I don't see it on emulators, but on hardware, when a quad is lined up against an edge of the screen, that area on the edge will either not draw that part of the quad (a single column or row), or it draws another section of the quad along that edge. The glitch goes away if the quads sinks into the edge or away from it.
+<br/>
+<br/>
+Anyone else get this?<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#169942 - TwentySeven - Mon Aug 17, 2009 6:06 am</h4>
+    <div class="postbody"><span class="postbody">Yep.
+<br/>
+<br/>
+Theres some quirks on the DS hardware when trying to map quads/glortho pixels 1:1 with the screen.
+<br/>
+<br/>
+Specifically what Ive encountered is that the hardware triangle clipper lacks precision and you get some UV "swimming" as quads slide off the screen.
+<br/>
+<br/>
+The fix was to clip my quads manually, don't ever draw quads in such a way as they'll get clipped by hardware.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#169944 - sverx - Mon Aug 17, 2009 10:00 am</h4>
+    <div class="postbody"><span class="postbody">I also had a similar problem once... I was trying to map a single quad having a 256x256 texture on it with glortho so that I could map 1 texel to 1 pixel on the whole 256x192 screen... well, I coulnd't make it perfectly so I gave up using glortho... so I finally ended up leaving it with 'approximate' 1:1 mapping.
+<br/>
+<br/>
+Now I think it'll remain as it is... :|</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#169947 - DiscoStew - Mon Aug 17, 2009 7:00 pm</h4>
+    <div class="postbody"><span class="postbody">I've never dealt with manual clipping, so I'm not sure how to work that, especially now that I know that it's a texturing problem (I disabled texturing, made each layer it's own color, and saw that the problems were not showing up anymore).
+<br/>
+<br/>
+I did have an idea though, and that is to use windowing to just cover those areas up, but I only want to use that if I have no other alternative.
+<br/>
+<br/>
+EDIT:
+<br/>
+<br/>
+Just to make sure that the option is available, I implemented the windowing idea, along with taking care of the windowing glitch of setting WIN0_Y0 to a value between 0 and 6. It works, but in the process, I lost touchscreen input. This is the code I used...
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+<br/>
+void irqFixWindowY_HBlank()
+<br/>
+{
+<br/>
+   if( REG_VCOUNT == 0 )
+<br/>
+   {
+<br/>
+      WIN0_Y0 = 1;
+<br/>
+      WIN_IN = 1;
+<br/>
+   }
+<br/>
+}
+<br/>
+<br/>
+void irqFixWindowY_VBlank()
+<br/>
+{
+<br/>
+   WIN_IN = 0;
+<br/>
+}
+<br/>
+<br/>
+<br/>
+int main( void) {
+<br/>
+<br/>
+   irqInit();
+<br/>
+   irqSet( IRQ_HBLANK, irqFixWindowY_HBlank );
+<br/>
+   irqSet( IRQ_VBLANK, irqFixWindowY_VBlank );
+<br/>
+   irqEnable( IRQ_HBLANK | IRQ_VBLANK );
+<br/>
+   .
+<br/>
+   .
+<br/>
+   .
+<br/>
+   return 1;
+<br/>
+}</td> </tr></table><span class="postbody">...but to state again, I lost touchscreen support for my application. Is there a better way of doing this, and not create extra problems?<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#169951 - TwentySeven - Tue Aug 18, 2009 4:43 am</h4>
+    <div class="postbody"><span class="postbody">Well clipping is pretty easy.
+<br/>
+<br/>
+First thing to do is make sure that glortho is set up so that you can supply your vertex positions directly with glvertex16 calls without having to scale anything.
+<br/>
+<br/>
+Then, because you're using screen aligned quads, its just a matter of bounds checking each edge of the quad.
+<br/>
+<br/>
+something akin to:  
+<br/>
+<br/>
+if (leftedge&lt; 0) 
+<br/>
+{
+<br/>
+    delta = 0-leftedge;
+<br/>
+    leftedge+=delta;
+<br/>
+    leftedgeUvs+=UvsPerPixel * delta;
+<br/>
+}
+<br/>
+<br/>
+if (rightedge &gt; 255) 
+<br/>
+{
+<br/>
+    delta = 255-rightedge;
+<br/>
+    rightedge-=delta;
+<br/>
+    rightedgeUvs-=UvsPerPixel * delta;
+<br/>
+}
+<br/>
+<br/>
+(omitting all the fixed point math conversions)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#169954 - DiscoStew - Tue Aug 18, 2009 5:43 am</h4>
+    <div class="postbody"><span class="postbody">I feel like such a fool. The problem isn't with quads that are visible, even a little by being clipped by the hardware. It's the quads that are meant to not be visible, but are right on the edge of the clipping area, just outside of it. They are "leaking" in.
+<br/>
+<br/>
+Ex: a quad that is 16x16 pixels, which is drawn (in relation to the screen) at a vertical position of -16, but the bottom of the quad would be at a vertical position of 0, technically inside the clip matrix, even though the quad (from a visual standpoint involving pixels) does not extend that far out.
+<br/>
+<br/>
+I meant to change my code at some point in the future, as it currently just draws all quads for tiles, inside or outside of the clipping matrix. Now I have a reason to incorporate a position check. Thx for nudging me in the right direction.<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#169955 - sverx - Tue Aug 18, 2009 8:10 am</h4>
+    <div class="postbody"><span class="postbody">wasn't that
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>DiscoStew wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">irqInit();</td> </tr></table><span class="postbody"></span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+pre-1.3.1 btw? 8|</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

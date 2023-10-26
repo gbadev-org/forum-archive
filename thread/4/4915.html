@@ -1,0 +1,168 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Memory Usage - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > Memory Usage</h2>
+<div id="posts">
+<div class="post">
+    <h4>#34870 - gadget - Thu Jan 27, 2005 4:03 pm</h4>
+    <div class="postbody"><span class="postbody">Is there anyone to detect memory usage? I'm trying to keep the number of uninitialized variables down as well as avoiding use of malloc/free because there's no way I've found to track the amount of memory i'm allocating at runtime. 
+<br/>
+<br/>
+Has anyone found a way to track this, or is creating my own memory manager the only way to go?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#34876 - poslundc - Thu Jan 27, 2005 5:26 pm</h4>
+    <div class="postbody"><span class="postbody">If you're using GCC, then you can use the nm utility with the "-n" switch on your .elf file to display all of your globally allocated variables along with their addresses, in the order they appear in memory. Using this you can roughly tabulate how much IWRAM you are using.
+<br/>
+<br/>
+Dynamically-allocated memory is much more difficult to track. There are tricks you can use such as putting a conspicuous pattern at a certain memory location and checking to see if it's still there during runtime, or you can override malloc/new/whatever with a debug mode that lets you track memory usage. On the whole it's usually more trouble than it's worth, I find.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#34917 - Joat - Fri Jan 28, 2005 6:02 am</h4>
+    <div class="postbody"><span class="postbody">The linker option map will generate a map of where all the compiled stuff goes, including code, uninitialized data, and initialized data.
+<br/>
+<br/>
+Err, it something along the lines of adding -Wl,-Map,filename.map
+<br/>
+<br/>
+Check your build directory, most of the standard makefiles floating around should already generate a map file (and if not, why not!)
+<br/>
+<br/>
+For malloc/free, you can wrap them (and it makes it easier to create your own memory manager later, which you may want to do).  Something along the lines:
+<br/>
+<br/>
+size_t dynamicMemoryUsage;
+<br/>
+<br/>
+void * engineMalloc(size_t size) {
+<br/>
+  dynamicMemoryUsage += size;
+<br/>
+  return malloc(size);
+<br/>
+}
+<br/>
+<br/>
+engineFree is a bit harder to do, you can either pass in the size (which could complicate your calling code if you don't normally keep the size around), or do some non-portable code to look at the allocation record (if someone knows a portable way of getting the size of malloc'd memory, I'd love to know).  I'm drawing a blank right now as to how newlib manages its allocation records, but it could be something as simple as:
+<br/>
+dynamicMemoryUsage -= *(((uint32 *)ptr) - 1);  // THEORETICAL
+<br/>
+<br/>
+This will give you an *idea* of dynamic memory usage.  Memory managers involve overhead in the form of allocation records, and wasted space in the form of fragmentation from repeated allocs/frees, so this count isn't perfect (another reason why your own memory manager can be good, since you can track exact usage, and fragmentation, and could e.g. do a full reset at certain points, like between levels, where you copy any really needed information to a static buffer, and kill all of the alloc records, to prevent a potential eventual crash).
+<br/>
+<br/>
+Writing your own memory manager certainly isn't necessary, just something to keep in mind.<br/>_________________<br/>Joat
+<br/>
+<a href="http://www.bottledlight.com" target="_blank">http://www.bottledlight.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#34932 - sasq - Fri Jan 28, 2005 9:11 am</h4>
+    <div class="postbody"><span class="postbody">Checking memory used by the elf is simple, just do:
+<br/>
+<br/>
+arm-elf-objdump -t myprogram.elf | sort &gt; memory.txt
+<br/>
+<br/>
+from a dos-prompt and you have a sorted list of all static memory usage.
+<br/>
+<br/>
+For a malloc wrapper something like this is pretty convinient;
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+int alloc_total = 0;
+<br/>
+<br/>
+typedef struct
+<br/>
+{
+<br/>
+   int line;
+<br/>
+   char *file;
+<br/>
+   int size;
+<br/>
+   int padding; // Make sure its 16bytes long = aligns well
+<br/>
+} AllocInfo;
+<br/>
+<br/>
+void *debug_malloc2(int size, char *file, int line)
+<br/>
+{
+<br/>
+   AllocInfo *a = malloc(i+sizeof(AllocInfo));
+<br/>
+   
+<br/>
+   a-&gt;line = line;
+<br/>
+   a-&gt;file = file;   // Safe because indata is always static
+<br/>
+   a-&gt;size = size;
+<br/>
+   
+<br/>
+   alloc_total += size;
+<br/>
+   
+<br/>
+   return (void *)&amp;a[1];
+<br/>
+}
+<br/>
+<br/>
+void *debug_free(void *p);
+<br/>
+{
+<br/>
+   AllocInfo *a = &amp;((AllocInfo *)p)[-1]
+<br/>
+   
+<br/>
+   alloc_total -= size;
+<br/>
+   
+<br/>
+   free((void*)a);
+<br/>
+<br/>
+}
+<br/>
+<br/>
+#define debug_malloc(i) debug_malloc2(i, __FILE__, __LINE__)
+<br/>
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+You should also add and remove the AllocInfo-structures to a list so you can dump the current memory usage at any time in the program, and keep track of memory leeks, and exactly where they occured.
+<br/>
+<br/>
+Or instead of a list you could make a hash-value from the filename and line-number and have an array of memory allocated for each file/line.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#35168 - gadget - Mon Jan 31, 2005 4:56 pm</h4>
+    <div class="postbody"><span class="postbody">Thanks, i'll try these suggestions and see what I can do with them. :)</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

@@ -1,0 +1,253 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Timers, etc. - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>ASM > Timers, etc.</h2>
+<div id="posts">
+<div class="post">
+    <h4>#29478 - AlbaTalpa - Sat Nov 20, 2004 11:27 pm</h4>
+    <div class="postbody"><span class="postbody">Hi guys,
+<br/>
+<br/>
+I'm a student at UMass Amherst, and I'm programming the GBA as a project for an architecture and assembly course I'm taking this semester. It has to be entirely in assembly, but the usual tutorials for beginners are in C, so it's been a little difficult to find information. Right now, the GBAGuy tutorial and the Cowbite spec are my main sources.
+<br/>
+<br/>
+Anyway, I've managed to print pixels to the screen and read buttons in. What I'm working on right now is timers, and it's not going so well. Here's my code:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+.arm
+<br/>
+.text
+<br/>
+<br/>
+;=====================================================
+<br/>
+; Place a pixel on screen every second (give or take).
+<br/>
+;=====================================================
+<br/>
+<br/>
+countStore   @DCD   0
+<br/>
+<br/>
+main:
+<br/>
+;------------------
+<br/>
+;Black out screen
+<br/>
+;------------------
+<br/>
+      mov   r0, #0x4000000
+<br/>
+      mov   r1, #0x400
+<br/>
+      add   r1, r1, #3
+<br/>
+      str   r1, [r0]
+<br/>
+      mov   r0, #0x6000000
+<br/>
+      mov   r1, #0x0000   ;color = black
+<br/>
+      mov   r2, #0x9600
+<br/>
+loop1:
+<br/>
+      strh   r1, [r0], #2
+<br/>
+      subs   r2, r2, #1
+<br/>
+      bne   loop1
+<br/>
+<br/>
+;------------------------
+<br/>
+;Prepare Interrupt Regs
+<br/>
+;------------------------
+<br/>
+<br/>
+      ldr   r0,=0x4000208      ;0x4000208 is REG_IME
+<br/>
+      mov   r1,#0x1
+<br/>
+      str   r1,[r0]         ;enable interrupt master
+<br/>
+<br/>
+      ldr   r0,=0x3007FFC      ;0x3007FFC is REG_INTADDR, mem to jump to
+<br/>
+      ldr   r1,=doPixel      ;get address of doPixel
+<br/>
+      str   r1,[r0]         ;jump to doPixel on interrupt
+<br/>
+<br/>
+      ldr   r0,=0x4000200      ;0x4000200 is REG_IE
+<br/>
+      mov   r1,#0x20      ;bit 5 is Timer 2
+<br/>
+      str   r1,[r0]         ;Select Timer 2 Interrupt
+<br/>
+<br/>
+      ldr   r0,=0x400010A      ;0x400010A is REG_TM2CNT
+<br/>
+      mov   r1,#0x82      ;Pattern 1000 0010
+<br/>
+      str   r1,[r0]         ;freq about 1 sec, enable
+<br/>
+<br/>
+      mov   r1,#0
+<br/>
+      mov   r2,#0
+<br/>
+      mov   r3,#0xFF      ;reddish color
+<br/>
+<br/>
+      b   infin
+<br/>
+<br/>
+;-------------------
+<br/>
+;Interrupt Code
+<br/>
+;-------------------
+<br/>
+doPixel:   ldr   r4,=0x4000208
+<br/>
+      mov   r5,#0
+<br/>
+      str   r5,[r4]         ;disable interrupt master
+<br/>
+<br/>
+      bl   pixel
+<br/>
+      add   r1,r1,#1
+<br/>
+      ldr   r4,=countStore
+<br/>
+      str   r1,[r4]         ;save changes in r1
+<br/>
+<br/>
+      ldr   r4,=0x4000208
+<br/>
+      mov   r5,#1
+<br/>
+      str   r5,[r4]         ;re-enable interrupt master
+<br/>
+<br/>
+      bx   lr
+<br/>
+<br/>
+;----------------------
+<br/>
+;Loop Until Interrupt
+<br/>
+;----------------------
+<br/>
+infin:
+<br/>
+      ldr   r0,=countStore
+<br/>
+      ldr   r1,[r0]         ;preserve any changes in r1 during interrupt
+<br/>
+      b   infin
+<br/>
+<br/>
+;----------------------------------
+<br/>
+;Place a color (r3) at x=r1, y=r2
+<br/>
+;----------------------------------
+<br/>
+<br/>
+pixel:
+<br/>
+      str   r0,[sp,#-4]!
+<br/>
+      str   r1,[sp,#-4]!
+<br/>
+      str   r2,[sp,#-4]!
+<br/>
+      mov   r0, #0x6000000      ;start of buffer
+<br/>
+      rsb   r2,r2,r2,LSL #4      ;pos = 16y - y
+<br/>
+      mov   r2,r2,LSL #5      ;pos = 2*16(16y - y) = 2*240y
+<br/>
+      add   r2,r2,r1,LSL #1      ;pos = 2*240y + 2*x
+<br/>
+      add   r0,r0,r2
+<br/>
+      strh   r3,[r0]
+<br/>
+      ldr   r2,[sp],#4
+<br/>
+      ldr   r1,[sp],#4
+<br/>
+      ldr   r0,[sp],#4
+<br/>
+      mov   pc,lr
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+This is supposed to  fill in the screen, from top left to bottom right, one pixel at a time. Nothing happens.  It's probably just a stupid mistake somewhere. I hope you guys can help me out.
+<br/>
+<br/>
+You might also notice something weird about my pixel subroutine. I figured the formula for the offset to place a pixel would just be 240y+x. When I coded it that way, though, the co-ordinates were half what they were supposed to be. If I told it x=80, y=120, it would end up at (40,60). I multiplied everything by two to fix it, but that's kind of hackish. What's the deal? :-/
+<br/>
+<br/>
+Thanks, and please forgive my n00bery.
+<br/>
+-AlbaTalpa</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#29484 - getch - Sun Nov 21, 2004 12:13 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>AlbaTalpa wrote:</b></span></td> </tr> <tr> <td class="quote">You might also notice something weird about my pixel subroutine. I figured the formula for the offset to place a pixel would just be 240y+x. When I coded it that way, though, the co-ordinates were half what they were supposed to be. If I told it x=80, y=120, it would end up at (40,60). I multiplied everything by two to fix it, but that's kind of hackish. What's the deal? :-/
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Sorry, I dont know a think about ASM, but I think the reason your coords are halved might be because each 16-bit word in VRAM has 2 pixels stored in little-endian (?) mode.<br/>_________________<br/>-pb</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#29490 - keldon - Sun Nov 21, 2004 1:30 am</h4>
+    <div class="postbody"><span class="postbody">if you're in 16-bit BG mode then screenX = x*2 because each pixel is 2 bytes.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#29529 - poslundc - Sun Nov 21, 2004 4:21 pm</h4>
+    <div class="postbody"><span class="postbody">With regards to why your interrupt doesn't work:
+<br/>
+<br/>
+1. doPixel (and its subroutine pixel) needs to behave like a proper subroutine. This means you can't expect any of the registers to contain values from your main program, and you need to preserve any register changes you make across the function call (with some exceptions). To share data between your program and your ISR or to preserve the state of your pixel program you need to store those values in a global memory location that both the main program and your interrupt can access. The only registers you can freely modify are r0-r3 and r12; any other registers must be saved to the stack at the beginning of your routine and popped off the stack at the end.
+<br/>
+<br/>
+2. At the end of the ISR you need to acknowledge that the interrupt has been completed by writing to the appropriate bit in REG_IF.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#29610 - ozahid - Mon Nov 22, 2004 4:05 pm</h4>
+    <div class="postbody"><span class="postbody">Yah VERTS! WHOOOO!
+<br/>
+<br/>
+... i'm in his class<br/>_________________<br/><a href="http://people.umass.edu/ozahid" target="_blank">http://people.umass.edu/ozahid</a></span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

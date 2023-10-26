@@ -1,0 +1,940 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Need help in fixing bugged ISR - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > Need help in fixing bugged ISR</h2>
+<div id="posts">
+<div class="post">
+    <h4>#45541 - DiscoStew - Sat Jun 11, 2005 9:27 pm</h4>
+    <div class="postbody"><span class="postbody">Right now I'm at a point in my GBA project that I'd like to start cleaning up my code for bugs and errors, but before I can do that, I have to fix whatever is the problem with the ISR that I'm working with. It works fine, but when I activate the VBlank, I get almost 60 errors a second, and tons more when I activate the HBlank. I used the ISR example that Cearn used for his demos, which was taken from wintermute's "libgba". I've stripped everything down to just setting up the ISR. Here are the files with the code, both C\C++ and Assembly
+<br/>
+<br/>
+"single_ints.s"
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">@
+<br/>
+@ Interrupt switch block
+<br/>
+@ Taken from wintermute's libgba (www.devkit.tk)
+<br/>
+@
+<br/>
+@---------------------------------------------------------------------------------
+<br/>
+   .section   .iwram,"ax",%progbits
+<br/>
+   .extern   IntrTable
+<br/>
+   .code 32
+<br/>
+<br/>
+   .global   IntrMain
+<br/>
+@---------------------------------------------------------------------------------
+<br/>
+IntrMain:
+<br/>
+@---------------------------------------------------------------------------------
+<br/>
+                           @ Single interrupts support
+<br/>
+   mov      r3, #0x4000000         @ REG_BASE
+<br/>
+   ldr      r2, [r3, #0x200]      @ Read REG_IE and REG_IF
+<br/>
+   and      r1, r2, r2, lsr #16      @ r1 =   REG_IE &amp; REG_IF
+<br/>
+<br/>
+   ldrh   r2, [r3, #-8]         @\mix up with BIOS irq flags at 3007FF8h,
+<br/>
+   orr      r2, r2, r1            @ aka mirrored at 3FFFFF8h, this is required
+<br/>
+   strh   r2, [r3, #-8]         @/when using the (VBlank)IntrWait functions
+<br/>
+<br/>
+   add      r3, r3, #0x200
+<br/>
+   ldr      r2, =IntrTable
+<br/>
+<br/>
+   ands   r0, r1, #1            @ V-Blank Interrupt
+<br/>
+   bne      jump_intr
+<br/>
+   add      r2, r2, #4
+<br/>
+<br/>
+   ands   r0, r1, #2            @ H-Blank Interrupt
+<br/>
+   bne      jump_intr
+<br/>
+   add      r2, r2, #4
+<br/>
+<br/>
+   ands   r0, r1, #4            @ V Counter Interrupt
+<br/>
+   bne      jump_intr
+<br/>
+   add      r2, r2, #4
+<br/>
+<br/>
+   ands   r0, r1, #8            @ Timer 0 Interrupt
+<br/>
+   bne      jump_intr
+<br/>
+   add      r2,   r2,   #4
+<br/>
+<br/>
+   ands   r0, r1, #0x10         @ Timer 1 Interrupt
+<br/>
+   bne      jump_intr
+<br/>
+   add      r2, r2, #4
+<br/>
+<br/>
+   ands   r0, r1, #0x20         @ Timer 2 Interrupt
+<br/>
+   bne      jump_intr
+<br/>
+   add      r2, r2, #4
+<br/>
+<br/>
+   ands   r0, r1, #0x40         @ Timer 3 Interrupt
+<br/>
+   bne      jump_intr
+<br/>
+   add      r2, r2, #4
+<br/>
+<br/>
+   ands   r0, r1, #0x80         @ Serial Communication   Interrupt
+<br/>
+   bne      jump_intr
+<br/>
+   add      r2, r2, #4
+<br/>
+<br/>
+   ands   r0, r1, #0x100         @ DMA0 Interrupt
+<br/>
+   bne      jump_intr
+<br/>
+   add      r2, r2, #4
+<br/>
+<br/>
+   ands   r0, r1, #0x200         @ DMA1 Interrupt
+<br/>
+   bne      jump_intr
+<br/>
+   add      r2, r2, #4
+<br/>
+<br/>
+   ands   r0, r1, #0x400         @ DMA2 Interrupt
+<br/>
+   bne      jump_intr
+<br/>
+   add      r2, r2, #4
+<br/>
+<br/>
+   ands   r0, r1, #0x800         @ DMA3 Interrupt
+<br/>
+   bne      jump_intr
+<br/>
+   add      r2, r2, #4
+<br/>
+<br/>
+   ands   r0, r1, #0x1000         @ Key Interrupt
+<br/>
+   bne      jump_intr
+<br/>
+   add      r2, r2, #4
+<br/>
+<br/>
+   ands   r0, r1, #0x2000         @ Cart Interrupt
+<br/>
+<br/>
+   strneb   r0, [r3, #0x84 - 0x200]   @ Stop   sound if cart removed (REG_SOUNDCNT_X)
+<br/>
+loop:
+<br/>
+   bne      loop               @ Infinite   loop if   cart removed
+<br/>
+<br/>
+@---------------------------------------------------------------------------------
+<br/>
+jump_intr:
+<br/>
+@---------------------------------------------------------------------------------
+<br/>
+   strh   r0, [r3, #2]         @ Acknowlegde int (will clear REG_IF)
+<br/>
+   ldr      r0, [r2]            @ Jump   to user   IRQ   process
+<br/>
+   bx      r0
+<br/>
+@ required for assembling on dkAdv (but not dkARM)
+<br/>
+   .align
+<br/>
+   .pool
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+"interrupt.h"
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">// interrupt.h: 
+<br/>
+// interrupt header file
+<br/>
+//
+<br/>
+// (Created: 2003-11, Modified: 2004-05-21, Cearn)
+<br/>
+<br/>
+#ifndef GBA_INTERRUPT
+<br/>
+#define GBA_INTERRUPT
+<br/>
+<br/>
+#include "gba.h"
+<br/>
+<br/>
+// === CONSTANTS ======================================================
+<br/>
+<br/>
+// interrupt enums
+<br/>
+enum eIntrIndex
+<br/>
+{
+<br/>
+   INT_VBLANK=0, INT_HBLANK, INT_VCOUNT, INT_TM0, 
+<br/>
+   INT_TM1,      INT_TM2,    INT_TM3,    INT_COM, 
+<br/>
+   INT_DMA0,     INT_DMA1,   INT_DMA2,   INT_DMA3, 
+<br/>
+   INT_KEYS,     INT_CART
+<br/>
+};
+<br/>
+<br/>
+// === GLOBALS ========================================================
+<br/>
+<br/>
+extern fnptr IntrTable[];
+<br/>
+// === PROTOTYPES =====================================================
+<br/>
+<br/>
+// default interrupts
+<br/>
+<br/>
+void IntrMain();   // see single_ints.s for definition
+<br/>
+<br/>
+void int_init();   // Must be called for interrupts to work
+<br/>
+<br/>
+<br/>
+// advanced interrupt en/disable
+<br/>
+// NOTE: uses the II_xx enums, not the INT_xx flags
+<br/>
+void int_enable(enum eIntrIndex eii);
+<br/>
+void int_disable(enum eIntrIndex eii);
+<br/>
+<br/>
+#endif // GBA_INTERRUPT
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+"interrupt.c"
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">// interrupt.c: 
+<br/>
+// interrupt implementation file
+<br/>
+//
+<br/>
+// (Created: 2003-11, Modified: 2004-05-21, Cearn)
+<br/>
+<br/>
+#include "interrupt.h"
+<br/>
+<br/>
+<br/>
+void VBlankInterruptHandler()
+<br/>
+{
+<br/>
+};
+<br/>
+<br/>
+void HBlankInterruptHandler()
+<br/>
+{
+<br/>
+};
+<br/>
+<br/>
+void UnusedInterruptHandler()
+<br/>
+{
+<br/>
+};
+<br/>
+<br/>
+<br/>
+// === CLASSES ========================================================
+<br/>
+<br/>
+// used for int_enable_ex and int_disable_ex
+<br/>
+typedef struct tagINT_SENDER
+<br/>
+{
+<br/>
+   u16 reg_ofs, flag;
+<br/>
+}   INT_SENDER;
+<br/>
+<br/>
+// === GLOBALS ========================================================
+<br/>
+<br/>
+fnptr IntrTable[] = 
+<br/>
+{
+<br/>
+   VBlankInterruptHandler,      // INT_VBLANK
+<br/>
+   HBlankInterruptHandler,      // INT_HBLANK
+<br/>
+   UnusedInterruptHandler,      // INT_VCOUNT
+<br/>
+   UnusedInterruptHandler,      // INT_TM0
+<br/>
+   UnusedInterruptHandler,      // INT_TM1
+<br/>
+   UnusedInterruptHandler,      // INT_TM2
+<br/>
+   UnusedInterruptHandler,      // INT_TM3
+<br/>
+   UnusedInterruptHandler,      // INT_COM
+<br/>
+   UnusedInterruptHandler,      // INT_DMA0
+<br/>
+   UnusedInterruptHandler,      // INT_DMA1
+<br/>
+   UnusedInterruptHandler,      // INT_DMA2
+<br/>
+   UnusedInterruptHandler,      // INT_DMA3
+<br/>
+   UnusedInterruptHandler,      // INT_KEYS
+<br/>
+   UnusedInterruptHandler,      // INT_CART
+<br/>
+};
+<br/>
+<br/>
+// yeah, yeah, I really should use the registers and defines
+<br/>
+// I have else where.
+<br/>
+// NOTE: haven't really tested this very much; if inaccurate, 
+<br/>
+// plz tell me
+<br/>
+static const INT_SENDER _int_senders[] = 
+<br/>
+{
+<br/>
+   { 0x0004, 0x0008 },      // REG_DISPSTAT, VID_INT_VB
+<br/>
+   { 0x0004, 0x0010 },      // REG_DISPSTAT, VID_INT_VH
+<br/>
+   { 0x0004, 0x0020 },      // REG_DISPSTAT, VID_INT_VC
+<br/>
+   { 0x0102, 0x0040 },      // REG_TM0CNT, TM_INT
+<br/>
+   { 0x0106, 0x0040 },      // REG_TM1CNT, TM_INT
+<br/>
+   { 0x0108, 0x0040 },      // REG_TM2CNT, TM_INT
+<br/>
+   { 0x0102, 0x0040 },      // REG_TM3CNT, TM_INT
+<br/>
+   { 0x0128, 0x4000 },      // REG_SCCNT_L{14}         // unsure
+<br/>
+   { 0x00ba, 0x4000 },      // REG_DMA0CNT_H, DMA_INT_ON&gt;&gt;16
+<br/>
+   { 0x00c6, 0x4000 },      // REG_DMA1CNT_H, DMA_INT_ON&gt;&gt;16
+<br/>
+   { 0x00d2, 0x4000 },      // REG_DMA2CNT_H, DMA_INT_ON&gt;&gt;16
+<br/>
+   { 0x00de, 0x4000 },      // REG_DMA3CNT_H, DMA_INT_ON&gt;&gt;16
+<br/>
+   { 0x0132, 0x4000 },      // REG_P1CNT, KEY_CNT_INT
+<br/>
+   { 0x0000, 0x0000 },      // none
+<br/>
+};
+<br/>
+// === PROTOTYPES =====================================================
+<br/>
+<br/>
+// === FUNCTIONS ======================================================
+<br/>
+<br/>
+// IntrMain is an asm function in single_ints.s
+<br/>
+void int_init()
+<br/>
+{
+<br/>
+   REG_INTMAIN = IntrMain;
+<br/>
+}
+<br/>
+<br/>
+void int_enable(enum eIntrIndex eii)
+<br/>
+{
+<br/>
+   REG_IME=0;
+<br/>
+<br/>
+   const INT_SENDER *is= &amp;_int_senders[eii];
+<br/>
+   *(u16*)(0x04000000+is-&gt;reg_ofs) |= is-&gt;flag;
+<br/>
+<br/>
+   REG_IE |= 1 &lt;&lt; eii;
+<br/>
+   REG_IME= 1;
+<br/>
+}
+<br/>
+<br/>
+void int_disable(enum eIntrIndex eii)
+<br/>
+{
+<br/>
+   u16 tmp= REG_IME;
+<br/>
+   REG_IME= 0;
+<br/>
+<br/>
+   const INT_SENDER *is= &amp;_int_senders[eii];
+<br/>
+   *(u16*)(0x04000000+is-&gt;reg_ofs) &amp;= ~is-&gt;flag;
+<br/>
+<br/>
+   REG_IE &amp;= ~(1 &lt;&lt; eii);
+<br/>
+   REG_IME= tmp;
+<br/>
+}
+<br/>
+<br/>
+void int_setvcount(u8 Scanline)
+<br/>
+{
+<br/>
+   u16 tmp = REG_IME;
+<br/>
+   REG_IME = 0;
+<br/>
+   if(REG_DISPSTAT &amp; 0x0020)
+<br/>
+   {
+<br/>
+      REG_DISPSTAT &amp;= ~0xFF00;
+<br/>
+      REG_DISPSTAT |= Scanline;
+<br/>
+   }
+<br/>
+   REG_IME = tmp;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+"main.c"
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#include "gba.h"
+<br/>
+#include "interrupt.h"
+<br/>
+<br/>
+int main()
+<br/>
+{
+<br/>
+   int_init();
+<br/>
+   int_enable(INT_VBLANK);
+<br/>
+   int_enable(INT_HBLANK);
+<br/>
+<br/>
+   while(1);
+<br/>
+   return (0);
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+The "gba.h" file is just the header that contains all the normal memory registers and stuff. I'm assuming it is a single line in the "single_ints.s" file that is bring up the error, since I get an average of 58 errors a second with just the VBlank interrupt enabled. I've been meaning to work with Assembly more, but things happen, so I haven't a clue abuot what the problem is.
+<br/>
+Anyone have any thoughts?<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#45605 - DiscoStew - Sun Jun 12, 2005 5:57 pm</h4>
+    <div class="postbody"><span class="postbody">Well, I've been tinkering with this problem for a bit, and I've got some progress on it. I went and commented out the line "int_enable(INT_HBLANK);" just so that I get only the VBlank interrupt with the approximate 58 errors per second, and I placed a "while(1);" line into the "void VBlankInterruptHandler() " function, just to see if the errors were coming before that function was called or after
+<br/>
+<br/>
+My test shows that there are no errors before the "while(1);" line. So the errors are being brought up after it, but there is nothing after that line except for the function ending. So my guess from this is that although the code works as it should, there is a problem with the interrupts ending and resuming normal execution of code.
+<br/>
+<br/>
+Any other thoughts?<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#45876 - DiscoStew - Wed Jun 15, 2005 11:33 pm</h4>
+    <div class="postbody"><span class="postbody">I'm guessing that no one here at the moment know what to do with what I currently have set up to make it error-free. So...
+<br/>
+Does anyone have an error-free Interrupt Handler that is set up similarly to what I have here?<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#45878 - DekuTree64 - Wed Jun 15, 2005 11:38 pm</h4>
+    <div class="postbody"><span class="postbody">Yeah, it all looks fine to me. Try commenting things one bit at a time until you find the exact point that the error happens. Like, first try skipping the branch to the user handler at jump_intr (just return there without doing anything) to see if the problem is in the main ISR code, or in jumping to the user handler.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#45922 - DiscoStew - Thu Jun 16, 2005 7:04 pm</h4>
+    <div class="postbody"><span class="postbody">Hmmm, I tried what you advised me to do, but by doing that, I get 1 of either 2 results. First, I either get a butt-load of errors in the 100,000+ (even with skipping the branch), or, Second, the ROM crashing in NO$GBA.
+<br/>
+<br/>
+This is just bugging the heck out of me, cause I was looking forward to my program having not 1 single error some time in the future, but I can't even get past this hurdle. I've thought about not worrying about it, but I'm also using the HBlank interrupt, and that brings up 10,000+ errors per second, so it's just really hard to debug errors when these others get in the way.
+<br/>
+<br/>
+I had the sudden feeling that maybe my "interrupt.c" file should be in IWRAM (since I feel the error lies around the C function ending), but when I renamed it to "interrupt.iwram.c" (which with my makefile would place it as ARM code into IWRAM), my ROM crashes, so that didn't work.
+<br/>
+I was also thinking that just MAYBE it has something to do with my Makefile, so I'll post that up too for everyone's viewing pleasure. It's obviously an edit from another person's makefile, but arranged to my use.
+<br/>
+"Makefile"
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#---------------------------------------------------------------------------------
+<br/>
+.SUFFIXES:
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+# TARGET is the name of the output, if this ends with _mb generates a multiboot image
+<br/>
+# BUILD is the directory where object files &amp; intermediate files will be placed
+<br/>
+# SOURCES is a list of directories containing source code
+<br/>
+# INCLUDES is a list of directories containing extra header files
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+TARGET      :=   BGTest
+<br/>
+BUILD      :=   build
+<br/>
+SOURCES      :=   src
+<br/>
+INCLUDES   :=   header
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+# options for code generation
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+<br/>
+CFLAGS   :=   -mthumb-interwork -Wall -mcpu=arm7tdmi -mtune=arm7tdmi \
+<br/>
+         -ffast-math -mapcs-32 -fno-exceptions -std=c99 -fomit-frame-pointer
+<br/>
+         
+<br/>
+THUMB   :=   -mthumb -O3 -ffixed-r14 -funroll-loops
+<br/>
+ARM      :=   -marm -O3 -mlong-calls
+<br/>
+ASFLAGS   :=   -mthumb-interwork
+<br/>
+<br/>
+LDFLAGS   =   -mthumb-interwork
+<br/>
+<br/>
+<br/>
+LIBAAS      :=   ../LibAAS
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+# any extra libraries we wish to link with the project
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+LIBS   :=   -lAAS
+<br/>
+<br/>
+LIBDIRS   :=   $(LIBAAS)
+<br/>
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+# path to tools - this can be deleted if you set the path in windows
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+export PATH      :=   /c/GBA/DevKitARM/bin:/bin:/c/bin
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+# the prefix on the compiler executables
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+PREFIX         :=   arm-elf-
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+# no real need to edit anything past this point unless you need to add additional
+<br/>
+# rules for different file extensions
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+ifneq ($(BUILD),$(notdir $(CURDIR)))
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+<br/>
+export OUTPUT   :=   $(CURDIR)/$(TARGET)
+<br/>
+<br/>
+export VPATH   :=   $(foreach dir,$(SOURCES),$(CURDIR)/$(dir))
+<br/>
+<br/>
+export CC      :=   $(PREFIX)gcc
+<br/>
+export CXX      :=   $(PREFIX)g++
+<br/>
+export AR      :=   $(PREFIX)ar
+<br/>
+export AS      :=  $(PREFIX)as
+<br/>
+export OBJCOPY   :=   $(PREFIX)objcopy
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+# use CXX for linking C++ projects, CC for standard C
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+#export LD      :=   $(CXX)
+<br/>
+export LD      :=   $(CC)
+<br/>
+<br/>
+BINFILES   :=   $(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.bin)))
+<br/>
+CFILES      :=   $(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.c)))
+<br/>
+SFILES      :=   $(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.s)))
+<br/>
+<br/>
+<br/>
+BINOBJS   := $(BINFILES:.bin=.o)
+<br/>
+COBJS   := $(CFILES:.c=.o)
+<br/>
+SOBJS   := $(SFILES:.s=.o)
+<br/>
+<br/>
+<br/>
+export OFILES   :=   $(BINOBJS) $(COBJS) $(SOBJS)
+<br/>
+<br/>
+export INCLUDE   :=   $(foreach dir,$(INCLUDES),-I$(CURDIR)/$(dir)) \
+<br/>
+               $(foreach dir,$(LIBDIRS),-I$(dir))   \
+<br/>
+               -I$(CURDIR)/$(BUILD)
+<br/>
+<br/>
+export LIBPATHS   :=   $(foreach dir,$(LIBDIRS),-L$(dir))
+<br/>
+<br/>
+.PHONY: $(BUILD) clean
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+$(BUILD):
+<br/>
+   @[ -d $@ ] || mkdir -p $@
+<br/>
+   @make --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile
+<br/>
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+clean:
+<br/>
+   @echo clean ...
+<br/>
+   @rm -fr $(BUILD) *.elf
+<br/>
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+else
+<br/>
+<br/>
+DEPENDS   :=   $(OFILES:.o=.d)
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+# main targets
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+$(OUTPUT).gba   :   $(OUTPUT).elf
+<br/>
+<br/>
+$(OUTPUT).elf   :   $(OFILES)
+<br/>
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+%.gba: %.elf
+<br/>
+   @echo built ... $(notdir $@)
+<br/>
+   @$(OBJCOPY) -O binary $&lt; $@
+<br/>
+   @gbafix $@
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+%_mb.elf:
+<br/>
+   @echo linking multiboot
+<br/>
+   @$(LD) -specs=gba_mb.specs $(LDFLAGS) $(OFILES) $(LIBPATHS) $(LIBS) -o $@
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+%.elf:
+<br/>
+   @echo linking cartridge
+<br/>
+   @$(LD)  -specs=gba.specs $(LDFLAGS) $(OFILES) $(LIBPATHS) $(LIBS) -o $@
+<br/>
+<br/>
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+# Compile Targets for C/C++
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+%.iwram.o : %.iwram.c
+<br/>
+   @echo $(notdir $&lt;)
+<br/>
+   @$(CC) $(ARM) $(CFLAGS) $(INCLUDE) -c $&lt; -o $@
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+%.o : %.c
+<br/>
+   @echo $(notdir $&lt;)
+<br/>
+   @$(CC) $(THUMB) $(CFLAGS) $(INCLUDE) -c $&lt; -o $@
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+%.o : %.s
+<br/>
+   @echo $(notdir $&lt;)
+<br/>
+   @$(AS) $(ASFLAGS) $&lt; -o $@
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+<br/>
+define bin2o
+<br/>
+   cp $(&lt;) $(*).tmp
+<br/>
+   $(OBJCOPY) -I binary -O elf32-littlearm -B arm \
+<br/>
+   --rename-section .data=.rodata,readonly,data,contents \
+<br/>
+   --redefine-sym _binary_$*_tmp_start=$*\
+<br/>
+   --redefine-sym _binary_$*_tmp_end=$*_end\
+<br/>
+   --redefine-sym _binary_$*_tmp_size=$*_size\
+<br/>
+   $(*).tmp $(@)
+<br/>
+   echo "extern const u8" $(*)"[];" &gt; $(*).h
+<br/>
+   echo "extern const u32" $(*)_size[]";" &gt;&gt; $(*).h
+<br/>
+   rm $(*).tmp
+<br/>
+endef
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+%.o : %.bin
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+   @echo $(notdir $&lt;)
+<br/>
+   @$(bin2o)
+<br/>
+<br/>
+-include $(DEPENDS)
+<br/>
+<br/>
+#---------------------------------------------------------------------------------------
+<br/>
+endif
+<br/>
+#---------------------------------------------------------------------------------------
+<br/>
+<br/>
+</td> </tr></table><span class="postbody"><br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#45924 - Quirky - Thu Jun 16, 2005 7:45 pm</h4>
+    <div class="postbody"><span class="postbody">If it's on no$gba, then guessing where the errors are is a bit hit and miss, I'd suggest running the SDL version of VBA with the -v flag, like this
+<br/>
+<br/>
+/path/to/VisualBoyAdvance -v 767 mygame.gba
+<br/>
+<br/>
+This will produce a file trace.log that contains any errors. It'll hopefully give you a big hint. If, for example you are reading or writing to misaligned addresses, this is the most likely problems I've seen, then the address off the misreading instruction will be shown together with where you misread from/write to. 
+<br/>
+<br/>
+If you link with the flag (when building the elf file) -Wl,-Map,mygame.map or use objdump then you can more or less see where abouts the address is, in which function I mean. From there you can debug (compile your asm files with -g) or take a more educated guess at the problem.
+<br/>
+<br/>
+<br/>
+EDIT: Hmm, forget that. I've just compiled and tried it and no errors are produced in VBA.
+<br/>
+EDIT2: And neither are they produced in no$gba.... what exactly are the 58 errors per second and how are you measuring them? I'm a bit lost!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#45927 - DiscoStew - Thu Jun 16, 2005 8:24 pm</h4>
+    <div class="postbody"><span class="postbody">I'm assuming that if through this process with the SDL version of VBA, if there is not a trace.log file made, then my program had no errors?
+<br/>
+<br/>
+Because I did it, and no log was made, I should be happy, right?
+<br/>
+<br/>
+But if VBA-SDL shows no errors, then why does No$GBA? One of these days I may go purchase the Debug version of No$GBA so that I can clearly see what the dang problem is.
+<br/>
+<br/>
+EDIT:
+<br/>
+The ~58 errors per second that I'm getting is when I only call the "int_init()" function, and enable just the VBlank using the "int_enable(INT_VBLANK)" function. I'm <span style="text-decoration: underline">assuming</span> there is ~1 error per interrupt call because of the VBlank being enabled, and occuring ~60 time a second. My explanation of the "while(1);" debugging is in the previous posts.
+<br/>
+<br/>
+Did you use my code/makefile to compile your own test program, and you came out with no errors in No$GBA? How is that possible if I'm using the exact same code/makefile, and I get errors? What compiler you using? I'm currently using DevKitARM r11.
+<br/>
+<br/>
+EDIT #2:
+<br/>
+I think I may have found the culprit. It's a file called "NO$GBA.ROM" (the dumped GBA BIOS I made) for use with No$GBA. After having removed that file from the folder, and rerunning No$GBA, my program now has NO errors. But still, since this BIOS file is exactly (I hope) what's in the GBA, would it be a good idea to keep it unused? Maybe I should try and re-dump the BIOS again.<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#45931 - strager - Thu Jun 16, 2005 9:06 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>DiscoStew wrote:</b></span></td> </tr> <tr> <td class="quote">I'm assuming that if through this process with the SDL version of VBA, if there is not a trace.log file made, then my program had no errors?
+<br/>
+<br/>
+Because I did it, and no log was made, I should be happy, right?</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Did you download the developer's version?  It will show errors in the log that the "Gamer's" version doesn't.  Be sure to enable logging, or you will not get any output either way.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#45992 - Quirky - Fri Jun 17, 2005 6:57 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>DiscoStew wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+Did you use my code/makefile to compile your own test program, and you came out with no errors in No$GBA? How is that possible if I'm using the exact same code/makefile, and I get errors? What compiler you using? I'm currently using DevKitARM r11.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+You seem to have found the 'problem' now but fwiw I copy pasted your code from here, built it using a generic Makefile and my own opy of gba.h which I guessed would match, and it did except for the REG_INTMAIN define, which I altered.
+<br/>
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Did you download the developer's version? It will show errors in the log that the "Gamer's" version doesn't. Be sure to enable logging, or you will not get any output either way.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+How do you know if it's the developers verison or not? I think the SDL versions are all pre-compiled with the relevent DEV flags defined.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#45993 - DiscoStew - Fri Jun 17, 2005 7:26 pm</h4>
+    <div class="postbody"><span class="postbody">Yeah, it was the BIOS file that was the problem. Although everything was working as it should have been, I'm glad to at least know that what I had coded wasn't actually giving any errors (as far as I know =P).
+<br/>
+Thanks everyone for all your help with this dang problem.<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

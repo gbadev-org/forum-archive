@@ -1,0 +1,638 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>GBA Mode 2 Issue: Rotation and Scaling - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Beginners > GBA Mode 2 Issue: Rotation and Scaling</h2>
+<div id="posts">
+<div class="post">
+    <h4>#84122 - Jwraith - Sat May 20, 2006 5:13 pm</h4>
+    <div class="postbody"><span class="postbody">Okay, so I've been working through the "Programming the Gameboy Advance" book upto chapter 6, Dealing with Tiled Backgrounds.
+<br/>
+<br/>
+Specifically, rotation backgrounds. Now, my tile data/map/palette are all loaded into memory and can be drawn without transformations (yay).
+<br/>
+<br/>
+However, when I try and use the rotate method (as provided in the book). It doesn't work.
+<br/>
+<br/>
+I've searched just about ever tutorial and forum on GBA dev and cannot find anywhere that explains what I need to do to rotate the image. 
+<br/>
+<br/>
+Code provided :
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+/*********************************************************************************
+<br/>
+ * Includes
+<br/>
+ ********************************************************************************/
+<br/>
+ #include &lt;math.h&gt;
+<br/>
+ #include "tile.raw.c"
+<br/>
+ #include "tiles.pal.c"
+<br/>
+ #include "tilemap.h"
+<br/>
+ 
+<br/>
+//prototype functions
+<br/>
+ void DMAFastCopy(void*,void*,unsigned int,unsigned int);
+<br/>
+ void WaitVBlank(void);
+<br/>
+ void RotateBackground(int,int,int,int);
+<br/>
+<br/>
+ //DMA defines
+<br/>
+ #define REG_DMA3SAD *(volatile unsigned int*)0x40000D4
+<br/>
+ #define REG_DMA3DAD *(volatile unsigned int*)0x40000D8
+<br/>
+ #define REG_DMA3CNT *(volatile unsigned int*)0x40000DC
+<br/>
+ #define DMA_ENABLE 0x80000000
+<br/>
+ #define DMA_TIMING_IMMEDIATE 0x00000000
+<br/>
+ #define DMA_16 0x00000000
+<br/>
+ #define DMA_32 0x04000000
+<br/>
+ #define DMA_32NOW (DMA_ENABLE | DMA_TIMING_IMMEDIATE | DMA_32)
+<br/>
+ #define DMA_16NOW (DMA_ENABLE | DMA_TIMING_IMMEDIATE | DMA_16)
+<br/>
+<br/>
+ //scrolling registers for bg_0
+<br/>
+ #define REG_BG0HOFS *(volatile unsigned short*)0x4000010
+<br/>
+ #define REG_BG0VOFS *(volatile unsigned short*)0x4000012
+<br/>
+ 
+<br/>
+ //bg2 registers
+<br/>
+ #define REG_BG2X *(volatile unsigned int*)0x4000028
+<br/>
+ #define REG_BG2Y *(volatile unsigned int*)0x400002C
+<br/>
+ #define REG_BG2PA *(volatile unsigned int*)0x4000020
+<br/>
+ #define REG_BG2PB *(volatile unsigned int*)0x4000022
+<br/>
+ #define REG_BG2PC *(volatile unsigned int*)0x4000024
+<br/>
+ #define REG_BG2PD *(volatile unsigned int*)0x4000026
+<br/>
+<br/>
+ //background setup registers
+<br/>
+ #define REG_BG0CNT *(volatile unsigned short*)0x4000008
+<br/>
+ #define REG_BG1CNT *(volatile unsigned short*)0x400000A
+<br/>
+ #define REG_BG2CNT *(volatile unsigned short*)0x400000C
+<br/>
+ #define REG_BG3CNT *(volatile unsigned short*)0x400000E
+<br/>
+ #define BG_COLOR256 0x80
+<br/>
+ #define CHAR_SHIFT 2
+<br/>
+ #define SCREEN_SHIFT 8
+<br/>
+ #define WRAPAROUND 0x1
+<br/>
+ #define BG_MOSAIC_ENABLE 0x40
+<br/>
+<br/>
+ //background tile bitmap sizes
+<br/>
+ #define TEXTBG_SIZE_256x256 0x0
+<br/>
+ #define TEXTBG_SIZE_256x512 0x8000
+<br/>
+ #define TEXTBG_SIZE_512x256 0x4000
+<br/>
+ #define TEXTBG_SIZE_512x512 0xC000
+<br/>
+ #define ROTBG_SIZE_128x128 0x0
+<br/>
+ #define ROTBG_SIZE_256x256 0x4000
+<br/>
+ #define ROTBG_SIZE_512x512 0x8000
+<br/>
+ #define ROTBG_SIZE_1024x1024 0xC000
+<br/>
+<br/>
+ //background memory offset macros
+<br/>
+#define CharBaseBlock(n) (((n)*0x4000)+0x6000000)
+<br/>
+#define ScreenBaseBlock(n) (((n)*0x800)+0x6000000)
+<br/>
+//background mode identifiers
+<br/>
+#define BG0_ENABLE 0x100
+<br/>
+#define BG1_ENABLE 0x200
+<br/>
+#define BG2_ENABLE 0x400
+<br/>
+#define BG3_ENABLE 0x800
+<br/>
+//video identifiers
+<br/>
+#define REG_DISPCNT *(unsigned int*)0x4000000
+<br/>
+#define BGPaletteMem ((unsigned short*)0x5000000)
+<br/>
+#define SetMode(mode) REG_DISPCNT = (mode)
+<br/>
+//vertical refresh register
+<br/>
+#define REG_DISPSTAT *(volatile unsigned short*)0x4000004
+<br/>
+//button identifiers
+<br/>
+#define BUTTON_A 1
+<br/>
+#define BUTTON_B 2
+<br/>
+#define BUTTON_RIGHT 16
+<br/>
+#define BUTTON_LEFT 32
+<br/>
+#define BUTTON_UP 64
+<br/>
+#define BUTTON_DOWN 128
+<br/>
+#define BUTTON_R 256
+<br/>
+#define BUTTON_L 512
+<br/>
+#define BUTTONS (*(volatile unsigned int*)0x04000130)
+<br/>
+<br/>
+ //wait for v blank
+<br/>
+ void WaitVBlank(void)
+<br/>
+ {
+<br/>
+     while((REG_DISPSTAT &amp; 1));
+<br/>
+ }
+<br/>
+ 
+<br/>
+//math values needed for rotation
+<br/>
+#define PI 3.14159265
+<br/>
+#define RADIAN(n) (((float)n) / (float)180 * PI)
+<br/>
+<br/>
+//precomputed sine and cosine arrays
+<br/>
+signed int SIN[360];
+<br/>
+signed int COS[360];
+<br/>
+ 
+<br/>
+ //rotation variables
+<br/>
+ int x_scroll=0,y_scroll=0;
+<br/>
+ int DX=0,DY=0;
+<br/>
+ int PA,PB,PC,PD;
+<br/>
+ int zoom = 2;
+<br/>
+ int angle = 0;
+<br/>
+ int center_y,center_x;
+<br/>
+ 
+<br/>
+int main(void)
+<br/>
+{
+<br/>
+    int n;
+<br/>
+    int charbase = 0;
+<br/>
+    int screenbase = 31;
+<br/>
+    
+<br/>
+    for(n = 0; n &lt; 360; n++)
+<br/>
+    {
+<br/>
+        SIN[n] = (signed int)(sin(RADIAN(n)) * 256);
+<br/>
+        COS[n] = (signed int)(cos(RADIAN(n)) * 256);
+<br/>
+    }
+<br/>
+    
+<br/>
+    unsigned short * bg2map = (unsigned short *)ScreenBaseBlock(screenbase);
+<br/>
+    
+<br/>
+    //set up bg0
+<br/>
+    REG_BG2CNT = BG_COLOR256 | ROTBG_SIZE_128x128 | (charbase &lt;&lt; CHAR_SHIFT) | (screenbase &lt;&lt; SCREEN_SHIFT);
+<br/>
+    
+<br/>
+    //set up display mode
+<br/>
+    SetMode(2 | BG2_ENABLE);
+<br/>
+    
+<br/>
+    //set the palette
+<br/>
+    DMAFastCopy((void*)tiles_Palette, (void*)BGPaletteMem, 256, DMA_16NOW);
+<br/>
+    
+<br/>
+    //set the tile images
+<br/>
+    DMAFastCopy((void*)tile_Tiles, (void*)CharBaseBlock(0), 64, DMA_32NOW);
+<br/>
+    
+<br/>
+    //copy the tile map to bg0
+<br/>
+    DMAFastCopy((void*)tiles_Map, (void*)bg2map, 64, DMA_32NOW);
+<br/>
+    
+<br/>
+   while(1)
+<br/>
+   {
+<br/>
+       WaitVBlank();
+<br/>
+       
+<br/>
+       //use the hardware to scroll around some
+<br/>
+        if(!(BUTTONS &amp; BUTTON_LEFT)) x_scroll--;
+<br/>
+        if(!(BUTTONS &amp; BUTTON_RIGHT)) x_scroll++;
+<br/>
+        if(!(BUTTONS &amp; BUTTON_UP)) y_scroll--;
+<br/>
+        if(!(BUTTONS &amp; BUTTON_DOWN)) y_scroll++;
+<br/>
+        if(!(BUTTONS &amp; BUTTON_A)) zoom--;
+<br/>
+        if(!(BUTTONS &amp; BUTTON_B)) zoom++;
+<br/>
+        if(!(BUTTONS &amp; BUTTON_L)) angle--;
+<br/>
+        if(!(BUTTONS &amp; BUTTON_R)) angle++;
+<br/>
+<br/>
+    if(angle &gt; 359)
+<br/>
+        angle = 0;
+<br/>
+    if(angle &lt; 0)
+<br/>
+        angle = 359;
+<br/>
+    //rotate the background
+<br/>
+    RotateBackground(angle,64,64,zoom);
+<br/>
+     WaitVBlank();
+<br/>
+    //update the background
+<br/>
+    REG_BG2X = DX;
+<br/>
+    REG_BG2Y = DY;
+<br/>
+    REG_BG2PA = PA;
+<br/>
+    REG_BG2PB = PB;
+<br/>
+    REG_BG2PC = PC;
+<br/>
+    REG_BG2PD = PD;
+<br/>
+    WaitVBlank();
+<br/>
+    for(n = 0; n &lt; 100000; n++);
+<br/>
+<br/>
+    }
+<br/>
+   return 0;
+<br/>
+}
+<br/>
+<br/>
+//other methods
+<br/>
+void RotateBackground(int ang, int cx, int cy, int zoom)
+<br/>
+{
+<br/>
+<br/>
+DX= cx - ( (PA*cx + PC*cy)&gt;&gt;8 );
+<br/>
+DY= cy - ( (PC*cx + PD*cy)&gt;&gt;8 );
+<br/>
+<br/>
+PA = (COS[ang] * zoom) &gt;&gt; 8;
+<br/>
+PB = (SIN[ang] * zoom) &gt;&gt; 8;
+<br/>
+PC = -PB;
+<br/>
+PD = PA;
+<br/>
+<br/>
+}
+<br/>
+<br/>
+//other functions
+<br/>
+void DMAFastCopy(void* source,void* dest,unsigned int count, unsigned int mode)
+<br/>
+{
+<br/>
+    if(mode == DMA_16NOW || mode == DMA_32NOW)
+<br/>
+    {
+<br/>
+        REG_DMA3SAD = (unsigned int)source;
+<br/>
+        REG_DMA3DAD = (unsigned int)dest;
+<br/>
+        REG_DMA3CNT = count | mode;
+<br/>
+    }
+<br/>
+}
+<br/>
+<br/>
+/* END OF FILE */
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Please help me! Otherwise I think I'm just going to have to quit because I am too stupid to understand.<br/>_________________<br/>"All Your Megadrive Are Belong to Us"</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#84128 - wintermute - Sat May 20, 2006 5:42 pm</h4>
+    <div class="postbody"><span class="postbody">Throw away the book, burn it if you have to.
+<br/>
+<br/>
+Go <a class="postlink" href="http://user.chem.tue.nl/jakvijn/tonc/index.htm" target="_blank">Here</a> and start at the beginning, and hopefully forget everything that book taught you.<br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#84139 - Jwraith - Sat May 20, 2006 6:32 pm</h4>
+    <div class="postbody"><span class="postbody">That was the answer I was afraid of, lol. While I'm sure you find that site easy enough to follow, it confuses the hell out of me on any of the complex sections.<br/>_________________<br/>"All Your Megadrive Are Belong to Us"</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#84450 - thegamefreak0134 - Mon May 22, 2006 5:22 pm</h4>
+    <div class="postbody"><span class="postbody">Rotation and scailng isn't as hard as people make it out to be. If you have the math down for it, actually putting it into the registers is a breeze. Go to the TONC tutorials for the proper math and stuff you need. He'll even give you the function to do it. The Rotation backgrounds have pa-pd registers just like the OAM registers, with the exception that you have one per BG. 
+<br/>
+<br/>
+What really threw me (and some other people) is the way the hardware handles the math. Since the GBA has no support for floating point math at all, it uses a number format to compensate. This basically means that 256 in the register is equal to 1. To scale 2x it's 128, to scale .5x it's 512, etc. (I think, can't remember but that might be reversed.) Anyway, starting with 256 in the scaling registers (PA and PD) and 0 in the rotation registers (PB and PC) should get you a plain picture you can play with from there.
+<br/>
+<br/>
+-thegamefreak0134<br/>_________________<br/>What if the hokey-pokey really is what it's all about?
+<br/>
+<br/>
+[url=http:/www.darknovagames.com/index.php?action=recruit&amp;clanid=1]Support Zeta on DarkNova![/url]</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#85028 - Jwraith - Fri May 26, 2006 3:37 pm</h4>
+    <div class="postbody"><span class="postbody">Man, I really am stupid. I got back and took a quick look over the rotation
+<br/>
+code and figured it out.
+<br/>
+<br/>
+I was assigning PA through PD with signed int values rather than u16. The bit shifting was right, but the number format wasn't! Now I just need to figure out why it doesn't scroll horizontally :/<br/>_________________<br/>"All Your Megadrive Are Belong to Us"</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#85063 - tepples - Fri May 26, 2006 9:33 pm</h4>
+    <div class="postbody"><span class="postbody">Scrolling "text" backgrounds is done with the offset registers (called BGOFFSET[] in libgba).
+<br/>
+<br/>
+Scrolling "rotation" (mode 1-2 BG2 and mode 2 BG3) and "extended rotation" (mode 3-5 BG2) backgrounds isn't done with the offset registers. It's done with the affine origin registers (called REG_BG2X and REG_BG2Y in libgba), which specify the (fixed point) texek position in the upper left corner.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#85076 - Cearn - Fri May 26, 2006 10:22 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Jwraith wrote:</b></span></td> </tr> <tr> <td class="quote">Man, I really am stupid. I got back and took a quick look over the rotation code and figured it out.
+<br/>
+<br/>
+I was assigning PA through PD with signed int values rather than u16. The bit shifting was right, but the number format wasn't! Now I just need to figure out why it doesn't scroll horizontally :/</td> </tr></table><span class="postbody">
+<br/>
+Actually, the variables PA-PD should be signed ints. Ints because ints are better than the other types, signed int because negative values are to be expected. If you work with unsigned shorts here, the arithmetic will go haywire as soon as there are negative values somewhere, which should be almost immediately.
+<br/>
+The <span style="font-style: italic">IO-registers</span> REG_BG2PA-REG_BG2PD are another matter. These are defined by Nintendo to be shorts, preferably signed shorts but as they are write only that doesn't really matter here. I guess this is what you meant to say anyway, but the distinction between REG_BG2PA and PA is important. 
+<br/>
+I suppose this could serve as an example of why long identifiers are not always a good thing: with a shorthand like u16 or u32 the mistake is easier to spot because you can just 'see' the datatype immediately instead of having to actually read what it says.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+// Typedefs, yes please.
+<br/>
+typedef unsigned char  u8;
+<br/>
+typedef unsigned short u16;
+<br/>
+typedef unsigned int   u32;
+<br/>
+<br/>
+typedef signed char  s8;
+<br/>
+typedef signed short s16; 
+<br/>
+typedef signed int   s32;
+<br/>
+<br/>
+#define REG_BG2PA *(volatile s16*)0x04000020
+<br/>
+#define REG_BG2PB *(volatile s16*)0x04000022
+<br/>
+#define REG_BG2PC *(volatile s16*)0x04000024
+<br/>
+#define REG_BG2PD *(volatile s16*)0x04000026
+<br/>
+#define REG_BG2X  *(volatile s32*)0x04000028
+<br/>
+#define REG_BG2Y  *(volatile s32*)0x0400002C
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+But even with this fixed, the code shouldn't run properly, because the shifts <span style="font-style: italic">are</span> the problem. Well, part of it anyway.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Jwraith wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+int x_scroll=0,y_scroll=0;
+<br/>
+int zoom = 2; 
+<br/>
+<br/>
+// &lt;main&gt;
+<br/>
+        if(!(BUTTONS &amp; BUTTON_LEFT)) x_scroll--;
+<br/>
+        if(!(BUTTONS &amp; BUTTON_RIGHT)) x_scroll++;
+<br/>
+        if(!(BUTTONS &amp; BUTTON_UP)) y_scroll--;
+<br/>
+        if(!(BUTTONS &amp; BUTTON_DOWN)) y_scroll++;
+<br/>
+        if(!(BUTTONS &amp; BUTTON_A)) zoom--;
+<br/>
+        if(!(BUTTONS &amp; BUTTON_B)) zoom++;
+<br/>
+        RotateBackground(angle,64,64,zoom);
+<br/>
+// &lt;/main&gt;
+<br/>
+<br/>
+void RotateBackground(int ang, int cx, int cy, int zoom)
+<br/>
+{
+<br/>
+<br/>
+DX= cx - ( (PA*cx + PC*cy)&gt;&gt;8 );
+<br/>
+DY= cy - ( (PC*cx + PD*cy)&gt;&gt;8 );
+<br/>
+<br/>
+PA = (COS[ang] * zoom) &gt;&gt; 8;
+<br/>
+PB = (SIN[ang] * zoom) &gt;&gt; 8;
+<br/>
+PC = -PB;
+<br/>
+PD = PA;
+<br/>
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody"></span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+RotateBackground() expects <span style="font-style: italic">cx</span>, <span style="font-style: italic">cy</span>, and <span style="font-style: italic">zoom</span> to be fixed point numbers, but if you look at the rest of the code you'll see that they are not. As a result, they are off by a factor of 256. Something like this would be better:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+// Yes, BUTTONS is a halfword too
+<br/>
+#define BUTTONS (*(volatile u16*)0x04000130)
+<br/>
+<br/>
+#define DZOOM     2    // zoom speed
+<br/>
+#define DSCROLL  64    // scroll speed
+<br/>
+int zoom= 256;         // Start with scale of 1 (.8 fixed point)
+<br/>
+<br/>
+// &lt;main&gt;
+<br/>
+// Load button states once instead of repeatedly due to it being volatile,
+<br/>
+//   this allows better code
+<br/>
+// Inver bits too to make things easier to code
+<br/>
+u32 buttons= ~BUTTONS; 
+<br/>
+if(buttons &amp; BUTTON_LEFT)    x_scroll -= DSCROLL;
+<br/>
+if(buttons &amp; BUTTON_RIGHT)   x_scroll += DSCROLL;
+<br/>
+if(buttons &amp; BUTTON_UP)      y_scroll -= DSCROLL;
+<br/>
+if(buttons &amp; BUTTON_DOWN)    y_scroll += DSCROLL;
+<br/>
+if(buttons &amp; BUTTON_A)       zoom -= DZOOM;
+<br/>
+if(buttons &amp; BUTTON_B)       zoom += DZOOM;
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+But even with these improvement you'd still not be getting a decent picture (at least not if you have any level of compiler optimisations, which you should) because there is no VBlank synchronisation. At least, not anything proper. You may have noticed that there are a lot of different versions of WaitVBlank in the book, and most of them are wrong. This:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>JWraith wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+//wait for v blank
+<br/>
+void WaitVBlank(void)
+<br/>
+{
+<br/>
+    while((REG_DISPSTAT &amp; 1));
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody"></span></td> </tr></table><span class="postbody">
+<br/>
+Actually waits not until, but <span style="font-style: italic">during</span> the VBlank period, meaning that all the update-code is inside the VDraw period. And because there is no waiting while inside the VDraw, the timing of the main loop will be completely snackered. And because the BG registers are now written to at least once every scanline, the resulting picture will make no sense whatsoever.
+<br/>
+I think the frequent use of WaitVBlank() and the 100000x loop at the end are supposed to cover for it. It doesn't.
+<br/>
+<br/>
+Correcting for this mistake, you'll still get weird results because the RotateBackground function is incorrect. It uses PC twice (the first should be PB), and uses PA-PD before they're set, so you'll use the things from the last scanline.
+<br/>
+However, fixing that <span style="font-style: italic">still</span> won't scroll the background, because its called with constants ( (64,64) in this case, or rather (?,?) because they're supposed to be fixed point numbers). And, more importantly, because the RotateBackground doesn't do scrolling -- all it does is change the rotation point.
+<br/>
+<br/>
+<br/>
+A number of these bugs were in the book to begin with, so what you started out with wouldn't work in the first place. That's always a bad place to start learning. But in attempting to fix this and cleaning it up, you also added a few more bugs. Consider starting from scratch and work your way up.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

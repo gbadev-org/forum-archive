@@ -1,0 +1,153 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Multiply 2 N.M fixedpoint values without needing 2N+2M bits? - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>C/C++ > Multiply 2 N.M fixedpoint values without needing 2N+2M bits?</h2>
+<div id="posts">
+<div class="post">
+    <h4>#120591 - sammyjojo - Sun Mar 04, 2007 10:35 pm</h4>
+    <div class="postbody"><span class="postbody">Okay so from the way I understand it, if you have a two fixed-point numbers in N.M format (we'll just assume that the N and M are the same for both numbers) and you mutiply them together, you'll get a fixed-point number in 2N.2M format. For example if I have a 16.16 number and I multiply it with another 16.16 number I'll get a 32.32 number.
+<br/>
+<br/>
+I figured out a way to multiple two N.M numbers without needed a 32.32 inbetween number, but it takes too many operations...
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+int fractionalMask   = ~(~0 &lt;&lt; M);
+<br/>
+int magnitude      = value0 &gt;&gt; M;
+<br/>
+int rightMagnitude   = value1 &gt;&gt; M;
+<br/>
+int fractional      = value0 &amp; fractionalMask;
+<br/>
+int rightFractional   = value1 &amp; fractionalMask;
+<br/>
+<br/>
+int result = ((magnitude * rightMagnitude) &lt;&lt; M)
+<br/>
+          + (magnitude * rightFractional)
+<br/>
+          + (fractional * rightMagnitude)
+<br/>
+          + ((fractional * rightFractional) &gt;&gt; M);
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+or I can cast the variable to a 8-byte one for the multiplication and then shift down and cast it back to 4-bytes...
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+int result = static_cast&lt;int&gt;((static_cast&lt;long long&gt;(value0) * static_cast&lt;long long&gt;(value1)) &gt;&gt; M);
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Are these my only alternatives or is a there a better way that I'm just thinking of to where I don't need an intermediate 8-byte value?
+<br/>
+<br/>
+This is for some fixed-point stuff that I working on the for the DS, so I was also wondering casting to a long long for intermediate step even work on that system?  Being a 32-bit system would that just mean it could access a 64-bit value by taking 2 accesses to get 2 32-bit values that it would magically combine and figure out a way to work with it as a 64-bit value internally? So roughly working with 8-byte values instead of 4-byte ones would take twice as long or am I just completely thinking about this in the wrong way?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#120593 - keldon - Sun Mar 04, 2007 10:56 pm</h4>
+    <div class="postbody"><span class="postbody">Casting to a long long is fine in this case.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#120637 - Ant6n - Mon Mar 05, 2007 3:12 am</h4>
+    <div class="postbody"><span class="postbody">i.e. like
+<br/>
+static inline fixed fmul(fixed a,fixed b){
+<br/>
+	return (((long long)a * (long long)b)&gt;&gt;16);
+<br/>
+}</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#120644 - tepples - Mon Mar 05, 2007 3:49 am</h4>
+    <div class="postbody"><span class="postbody">But if you put that into Thumb code, it will expand horribly. Thumb doesn't have the extra instructions for long long, as I found out while optimizing the graphics engine in TOD.
+<br/>
+<br/>
+On the DS, you can use ARM instructions for a lot more code than you could on the GBA due to the cache.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#120708 - poslundc - Mon Mar 05, 2007 6:43 pm</h4>
+    <div class="postbody"><span class="postbody">You can use regular 32-bit multiply so long as you're careful not to overflow your values and can handle the loss in precision.
+<br/>
+<br/>
+Say for example you have two numbers A and B that are both 16.16.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">result = (A &gt;&gt; 8) * (B &gt;&gt; 8);</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+This will provide you with a 16.16 result, with no risk of overflow, but loss of half the precision in both terms.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">result = ((A &gt;&gt; 4) * (B &gt;&gt; 4)) &gt;&gt; 8;</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+This provides you with a 16.16 result with only a loss of a quarter of precision of the terms, but can overflow if either term is larger than 256.
+<br/>
+<br/>
+Obviously wrangling these various possible combinations can be a headache and lead to all kinds of obfuscation of code.
+<br/>
+<br/>
+For most gaming applications, I'd say loss of half your precision in the terms (especially if your numbers are 16.16) is preferable most of the time to running the risk of overflow, so for a general fixed multiply operation I'd be more likely to go with something like the former, and special case the few instances where loss of precision is a noticeable detriment to gameplay.
+<br/>
+<br/>
+(And as was already mentioned, on the DS you're probably better off staying in ARM and just doing 64-bit multiply on account of the cache.)
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#120773 - Ant6n - Tue Mar 06, 2007 12:38 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote">But if you put that into Thumb code, it will expand horribly. Thumb doesn't have the extra instructions for long long, as I found out while optimizing the graphics engine in TOD.
+<br/>
+<br/>
+On the DS, you can use ARM instructions for a lot more code than you could on the GBA due to the cache.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+ok, then how about
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+static inline u32 mul(u32 a, u32 b) {
+<br/>
+   #if   defined   ( __thumb__ )
+<br/>
+       do 4 multiplies
+<br/>
+   #else
+<br/>
+       do long long multiply
+<br/>
+   #endif
+<br/>
+} </td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

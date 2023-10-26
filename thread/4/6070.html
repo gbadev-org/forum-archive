@@ -1,0 +1,142 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Strange Pixel Glitching - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > Strange Pixel Glitching</h2>
+<div id="posts">
+<div class="post">
+    <h4>#45894 - AkumaATR - Thu Jun 16, 2005 4:11 am</h4>
+    <div class="postbody"><span class="postbody">-- Immese appreciation to anyone who helps me det. what is causing this issue --
+<br/>
+<br/>
+I have uploaded the Visual HAM project folder I am discussing to:
+<br/>
+<br/>
+<a href="http://home.insightbb.com/~cecil.jason/files/wtf.zip" target="_blank">http://home.insightbb.com/~cecil.jason/files/wtf.zip</a>
+<br/>
+<br/>
+I have NO clue what's going on with this strange glitch. My program simply displays an image (bitmap mode, software) and scrolls some pixels over it (typical scrolling star program).
+<br/>
+<br/>
+The weird thing is that there is a strange pixel glitch on the screen. I edited the source image I use as my background, adding a square so that the glitch would stand out more.
+<br/>
+<br/>
+Weird things about this glitch:
+<br/>
+<br/>
+If you swap line x and y (commented as such), the glitch goes away. the reason i don't want to keep it this way is that i would rather load the image from some ram that's faster than game rom (i was also using DMA earlier (why i need the image in something other than game rom)),  but stripped down my code to try and pinpoint the cause of this glitch).
+<br/>
+<br/>
+Basically, I have an array that I fill to mirror the image from game rom (i believe these structures are mirrored properly in memory as the code that fills them up is quite basic).
+<br/>
+<br/>
+If I display from the array in faster memory, the glitch occurs. If I display from game rom, it doesn't. I suspect the glitch *may* have something to do with double buffering. Another strange thing is that if I change the number of stars, the location of the glitch onscreen moves. Total strangeness.
+<br/>
+<br/>
+Also, sorry for posting so much the last few days. I am working on this stuff pretty much 10 hours a day as of a few weeks ago, so I have plenty of time to run into problems. Hopefully I'll be over the learning curve soon.
+<br/>
+<br/>
+Jason</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#45900 - Cearn - Thu Jun 16, 2005 9:27 am</h4>
+    <div class="postbody"><span class="postbody">I'm not exactly sure, but this may be it. Whenever you create a static array of global function, it goes into IWRAM. And you're trying to put a 38400 byte array (the image buffer) into 32kb or IWRAM. I'm a little surprised that you get anything at all. If you must have a second buffer in RAM, put it in EWRAM instead. There should be defines like IN_EWRAM or something to do that (I think it's MEM_IN_EWRAM in HAM)
+<br/>
+<br/>
+Also if you need speed, it is advised that you compile in THUMB mode, not ARM, and if you must copy large arrays don't do it in 16bit chunks as that's about as slow as you can get. Casting to u32 and looping over that is about twice as fast, and using DMA about 7x (at least in THUMB, in ARM code it's about 15x). Oh, and don't include data files; data/code should be compiled separately and then linked, not included.
+<br/>
+<br/>
+Most of these things are covered in the <a class="postlink" href="http://forum.gbadev.org/viewtopic.php?t=418" target="_blank">FAQ</a>. If you haven't read it yet, now might be a good time.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#45916 - AkumaATR - Thu Jun 16, 2005 5:53 pm</h4>
+    <div class="postbody"><span class="postbody">Yes, I was blowing the IWRAM space. Thanks for pointing that out... I made the silly mistake of thinking 19200 &lt; 32768 (my array was actually 38400 bytes long, however).
+<br/>
+<br/>
+Making the image array global, and declaring it with:
+<br/>
+<br/>
+__attribute__((section (".ewram"))) ushort16 image[19200];
+<br/>
+<br/>
+fixed the problem. However, I also read in these forums that this should work:
+<br/>
+<br/>
+__attribute__((section (".sbss"))) ushort16 image[19200];
+<br/>
+<br/>
+as well as result in a smaller ROM size (since the array will be zero-filled before main() is called, rather than initialized in the ROM space). I also read that .sbss resides in EWRAM, so I would think the above would be functionally the same in a program?
+<br/>
+<br/>
+Using ".sbss" results in this:
+<br/>
+<br/>
+<a href="http://home.insightbb.com/~cecil.jason/files/ryu.jpg" target="_blank">http://home.insightbb.com/~cecil.jason/files/ryu.jpg</a>
+<br/>
+<br/>
+The stars (which are supposed to scroll over the image) also are cmpletely non-functional as a result. Any ideas as to why ".sbss" causes this issue? I am using the build tools that come with Visual HAM 2.4.2.
+<br/>
+<br/>
+Just for kicks I tried declaring the array as
+<br/>
+<br/>
+__attribute__((aligned(4))) __attribute__((section (".sbss"))) ushort16 image[19200];
+<br/>
+<br/>
+but it still experienced the same issue.
+<br/>
+<br/>
+Thanks,
+<br/>
+Jason</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#45932 - AkumaATR - Thu Jun 16, 2005 9:28 pm</h4>
+    <div class="postbody"><span class="postbody">Apparently the linker isn't aware of ".sbss" in the toolchain that comes with the latest Visual HAM (theory).
+<br/>
+<br/>
+The compiler doesn't complain, for ex., if I enter
+<br/>
+<br/>
+__attribute__((section (".meh"))) ushort16 image[19200];
+<br/>
+<br/>
+However whatever I put there (other than ".ewram", which works), including ".iwram", behaves the same (displays corrupted image/pixels). So my theory is that if section isn't known by the linker, it defaults to IWRAM. Anyone else have any other information on this, or ideas on how I could fix it without changing environments?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#45946 - tepples - Fri Jun 17, 2005 12:49 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>AkumaATR wrote:</b></span></td> </tr> <tr> <td class="quote">Apparently the linker isn't aware of ".sbss" in the toolchain that comes with the latest Visual HAM (theory).</td> </tr></table><span class="postbody">
+<br/>
+A section needs support in the link script and the startup code. Only recent devkitARM comes with a link script and startup code that knows of .sbss. I seem to remember that you can change some setting in Visual HAM and it'll use your installation of devkitARM.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#47542 - Peter - Sun Jul 10, 2005 6:34 pm</h4>
+    <div class="postbody"><span class="postbody">Hi,
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote"> I seem to remember that you can change some setting in Visual HAM and it'll use your installation of devkitARM.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+not sure if it really helps, but <a class="postlink" href="http://j-gbadev.hp.infoseek.co.jp/vham/vham.htm" target="_blank">here</a> is a document which describes how to setup VisualHAM with DevKitAdv.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

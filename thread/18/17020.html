@@ -1,0 +1,467 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>large scrolling backgrounds - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > large scrolling backgrounds</h2>
+<div id="posts">
+<div class="post">
+    <h4>#171754 - radiodee1 - Tue Dec 22, 2009 1:23 am</h4>
+    <div class="postbody"><span class="postbody">HI,
+<br/>
+<br/>
+Is it anywhere discussed how to use maps for backgrounds that are bigger than your "official" background dimensions? I want to place a 64x64 tile map on a 64x32 background. I want to allow the player to scroll around the screen and see areas that were previously not mapped into vram by copying in the values as needed from the larger map. Obviously I'm having problems. I can place my map on the screen, scroll around, but when I try to copy from the larger map I have trouble. What's the preferred method? do you use the built in scroll registers and then copy only areas that you feel are about to be visited, or do you not use the scroll registers and copy a whole 32x24 chunk every time the user moves? I could see how the 'whole chunk' method could work but it would be very jerky, wouldn't it?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#171771 - sverx - Tue Dec 22, 2009 4:13 pm</h4>
+    <div class="postbody"><span class="postbody">Actually in my only test program with a larger (say 150x150) map I'm using two 32x32 map and refilling the whole of the hidden one (the one I'm not showing on screen) every frame. May not be the best way but it's simple.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#171773 - gauauu - Tue Dec 22, 2009 5:28 pm</h4>
+    <div class="postbody"><span class="postbody">This has been discussed a number of times here.  Do a search for scrolling backgrounds.  
+<br/>
+<br/>
+This thread, in particular, looks like it might be helpful:
+<br/>
+<a class="postlink" href="http://forum.gbadev.org/viewtopic.php?t=16730&amp;highlight=scrolling+backgrounds" target="_blank">http://forum.gbadev.org/viewtopic.php?t=16730&amp;highlight=scrolling+backgrounds</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#171784 - radiodee1 - Wed Dec 23, 2009 12:37 pm</h4>
+    <div class="postbody"><span class="postbody">Thanks alot.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#171822 - sgeos - Sun Dec 27, 2009 12:53 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sverx wrote:</b></span></td> </tr> <tr> <td class="quote">Actually in my only test program with a larger (say 150x150) map I'm using two 32x32 map and refilling the whole of the hidden one (the one I'm not showing on screen) every frame. May not be the best way but it's simple.</td> </tr></table><span class="postbody">
+<br/>
+Wow.  And I futzed around with trying to figure out what to refresh when the viewport moved.  I hail your unoptimized simplicity.
+<br/>
+<br/>
+Using this method, you can split the screen into five regions.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+11111111
+<br/>
+22000033
+<br/>
+22000033
+<br/>
+44444444
+<br/>
+<br/>
+0- The viewport (everything on screen).
+<br/>
+1- Everything above the viewport.
+<br/>
+2- Everything level with the viewport, but offscreen to the left.
+<br/>
+3- Everything level with the viewport, but offscreen to the right.
+<br/>
+4- Everything below the viewport.</td> </tr></table><span class="postbody">
+<br/>
+Every frame, update your viewport position and then copy what you need from your logical map into physical memory.
+<br/>
+Regions 1 and 4 can be efficiently copied into place.
+<br/>
+Regions 2 and 3 are less efficient, but the principle is the same; I suppose you could combine them into one loop the skips over the viewport.
+<br/>
+If you use a 64x32 sized map, you will have enough space unless your metatiles are huge.
+<br/>
+Unless you are moving really fast, this system should be pretty solid.
+<br/>
+The optimizations are to shrink regions 1 ~ 4, and to only update when the viewport moves.
+<br/>
+<br/>
+Keep in mind that all of this is going on in modular space, so your physical ram could have any of these layouts at any given time:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">00003322
+<br/>
+00003322
+<br/>
+44444444
+<br/>
+11111111
+<br/>
+<br/>
+00332200
+<br/>
+44444444
+<br/>
+11111111
+<br/>
+00332200
+<br/>
+<br/>
+44444444
+<br/>
+11111111
+<br/>
+03322000
+<br/>
+03322000</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#171825 - radiodee1 - Sun Dec 27, 2009 3:50 pm</h4>
+    <div class="postbody"><span class="postbody">HI,
+<br/>
+<br/>
+I've been trying to work out a solution similar to sgeos post. Here's a function. believe it or not, this is pared down. The original is larger.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+/* level            a global struct
+<br/>
+ * level.scrollX    the current contents of the scroll H register
+<br/>
+ * level.scrollY    the current contents of the scroll V register
+<br/>
+ * scrollX          what I am going to set the scroll H register to next
+<br/>
+ * scrollY          what I am going to set the scroll V register to next
+<br/>
+ * level.level1[][] the larger map that I have stored in memory (75w x 40h)
+<br/>
+ * level.mapH       75
+<br/>
+ * level.mapV       40
+<br/>
+ * SCREEN_TILES_V   32
+<br/>
+ * SCREEN_TILES_H   64
+<br/>
+ *
+<br/>
+ * This function is called every time the character moves, and just before the 
+<br/>
+ * background is scrolled with bgSetScroll(). The problem I'm having is that if
+<br/>
+ * the character moves quickly around the edges of the screen, especially the 
+<br/>
+ * bottom edge, junk appears at the bottom edge of the screen. This happens if
+<br/>
+ * the character's movement makes the screen scroll away from and then back to
+<br/>
+ * an item on the map very quickly.
+<br/>
+ */
+<br/>
+<br/>
+void bgMapScroll(int scrollX, int scrollY) {
+<br/>
+  int topArea, bottomArea, leftArea, rightArea;
+<br/>
+  int mapCheat = 1;
+<br/>
+  int i,j,k, p, m;
+<br/>
+  
+<br/>
+  topArea = (level.scrollY / 8) - 1;
+<br/>
+  bottomArea = (level.scrollY / 8) + (24 ) - 1 ;
+<br/>
+  leftArea = (level.scrollX / 8) - 1;
+<br/>
+  rightArea = (level.scrollX / 8) + (32  ) - 1 ;
+<br/>
+  
+<br/>
+  u16* mapMemory = (u16*)BG_MAP_RAM(16 );
+<br/>
+  
+<br/>
+  // left/right
+<br/>
+  if (scrollX &gt; level.scrollX ) {
+<br/>
+    //scroll right... replace at right.
+<br/>
+    if ( (scrollX &amp; 7) == 0 ) { 
+<br/>
+      for(i = level.scrollY / 8 - 4; i&lt; (level.scrollY/8) + SCREEN_TILES_V + 4 ; i ++) { // V 
+<br/>
+        for ( j = rightArea; j &lt; rightArea + 4; j ++) {        
+<br/>
+          if (i &lt; level.mapV &amp;&amp; j &lt; level.mapH &amp;&amp; i &gt;= 0 &amp;&amp; j &gt;= 0) { 
+<br/>
+<br/>
+            if ( (( j)&amp; 63 ) &gt;= 32) p = 32 * 32;
+<br/>
+            else p = 0;
+<br/>
+            k = p + ((i &amp; 31) * 32 ) + ((j) &amp; 31);
+<br/>
+            m = level.level1[i][j];
+<br/>
+            mapMemory[k] = m;
+<br/>
+          } 
+<br/>
+        } 
+<br/>
+      } 
+<br/>
+    } 
+<br/>
+  }
+<br/>
+  else if (scrollX &lt; level.scrollX ) {
+<br/>
+    //scroll left... replace at left.
+<br/>
+    if ((scrollX &amp; 7) == 0 ) { 
+<br/>
+      for(i = level.scrollY / 8 - 4; i&lt; (level.scrollY/8) + SCREEN_TILES_V + 4; i ++) { 
+<br/>
+        for ( j = leftArea - 4; j &lt; leftArea ; j ++) {
+<br/>
+          if (i &lt; level.mapV &amp;&amp; j &lt; level.mapH &amp;&amp; i &gt;= 0 &amp;&amp; j &gt;= 0) { 
+<br/>
+<br/>
+            if (( (j) &amp; 63) &gt;= 32) p = 32 * 32;
+<br/>
+            else p = 0;
+<br/>
+            k = p + ((i &amp; 31) * 32 ) + (j &amp; 31);
+<br/>
+            m = level.level1[i ][j];
+<br/>
+            mapMemory[k] = m;
+<br/>
+          }
+<br/>
+        }
+<br/>
+      }
+<br/>
+    } 
+<br/>
+  }
+<br/>
+  
+<br/>
+  // up/down
+<br/>
+  if (scrollY &gt; level.scrollY) {
+<br/>
+    //scroll down... replace at bottom.
+<br/>
+    if ((scrollY &amp; 7) == 0  ) {
+<br/>
+      for(j = level.scrollY / 8 - 4; j &lt; (level.scrollY/8) + SCREEN_TILES_H + 4; j ++) { 
+<br/>
+        for ( i = bottomArea; i &lt; bottomArea + 4; i ++) {
+<br/>
+          if (i &lt; level.mapV &amp;&amp; j &lt; level.mapH &amp;&amp; i &gt;= 0 &amp;&amp; j &gt;= 0) {
+<br/>
+<br/>
+            if (( (j) &amp; 63) &gt;= 32) p = 32 * 32;
+<br/>
+            else p = 0;
+<br/>
+            k = p + ((i&amp;31) * 32 ) + (j &amp; 31);
+<br/>
+            m = level.level1[i ][j];
+<br/>
+            mapMemory[k] = m;
+<br/>
+          } 
+<br/>
+        } 
+<br/>
+      } 
+<br/>
+    }
+<br/>
+  }
+<br/>
+  else if (scrollY &lt; level.scrollY) {
+<br/>
+    //scroll up... replace at top.
+<br/>
+    if ((scrollY &amp; 7) == 0 ) { 
+<br/>
+      for(j = level.scrollY / 8 - 4 ; j &lt; (level.scrollY/8) + SCREEN_TILES_H + 4; j ++) { 
+<br/>
+        for ( i = topArea - 4; i &lt; topArea ; i ++) {
+<br/>
+          if (i &lt; level.mapV &amp;&amp; j &lt; level.mapH &amp;&amp; i &gt;= 0 &amp;&amp; j &gt;= 0) {   
+<br/>
+<br/>
+            if (( (j) &amp; 63) &gt;= 32) p = 32 * 32;
+<br/>
+            else p = 0;
+<br/>
+            k = p + ((i &amp; 31 ) * 32 ) + (j &amp; 31);
+<br/>
+            m = level.level1[i ][j];
+<br/>
+            mapMemory[k] = m;
+<br/>
+          } 
+<br/>
+        } 
+<br/>
+      } 
+<br/>
+    } 
+<br/>
+  }
+<br/>
+    
+<br/>
+  return;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+I'm obviously still having problems with this. If anyone can spot a glaring error, please drop me a line. My coding style may leave a little to be desired also. Thanks in advance.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#171833 - sverx - Mon Dec 28, 2009 2:14 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sgeos wrote:</b></span></td> </tr> <tr> <td class="quote">I hail your unoptimized simplicity.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+lol! :) I think it's because I'm a beginner almost completely self-taught, which shows its limits quite often... you know...
+<br/>
+<br/>
+For instance I'm not sure I really understood your explanation. In the code I'm talking about I'm doing something really really simple: showing just a part of the 'big' map (say 150x150) on a 32x32 (well, only 24 lines out of 32 actually...) writing to each of these locations the value found at (x+dx,y+dy) of the 'big' map. Or a specific value (say zero) if x+dx or y+dy is out of bounds.
+<br/>
+All this on a bg map not accessed by the 2D core, so that I'll be sure what's onscreen doesn't change because I'm late in the VBlank...
+<br/>
+<br/>
+(btw I'm also not using scrolling at all, because I didn't need it, so I didn't use larger bg maps like 64x32 ... and it was just a test program, also)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#171853 - radiodee1 - Tue Dec 29, 2009 10:17 pm</h4>
+    <div class="postbody"><span class="postbody">well, I've determined that the code that read (in two places)
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">      for(j = level.scrollY / 8 - 4; j &lt; (level.scrollY/8) + SCREEN_TILES_H + 4; j ++) { </td> </tr></table><span class="postbody">
+<br/>
+should probably read
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">      for(j = level.scrollX / 8 - 4; j &lt; (level.scrollX/8) + SCREEN_TILES_H + 4; j ++) { </td> </tr></table><span class="postbody">
+<br/>
+and this solves some of my problems. Now, when I move directly in any given direction the screen scrolls properly, but I seem to still have some problems. I know from observation that the screen doesn't scroll properly <span style="font-style: italic">all</span> the time, and I think it's from when I'm moving in two directions at once. Has anyone ever done this before? I mean, I know it's possible, but is it possible by me? I seem to see a lot of discussion about scrolling in one direction, but not two.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#171864 - wintermute - Wed Dec 30, 2009 12:43 pm</h4>
+    <div class="postbody"><span class="postbody">You just need to update the corner when you're moving diagonally - you have one 32 tile row updated for the vertical scroll and one 24 tile column for the horizontal scroll.<br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#171868 - sverx - Wed Dec 30, 2009 2:52 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>radiodee1 wrote:</b></span></td> </tr> <tr> <td class="quote">I seem to see a lot of discussion about scrolling in one direction, but not two.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+well, basically you're scrolling left or right and after that -but in the same frame- you also scroll up or down, so I don't see what could be wrong...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#171869 - Dwedit - Wed Dec 30, 2009 3:04 pm</h4>
+    <div class="postbody"><span class="postbody">Yeah, you'd need to update a 33 length row, or a 25 length column in order to handle diagonal scrolling.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#171880 - radiodee1 - Thu Dec 31, 2009 12:42 am</h4>
+    <div class="postbody"><span class="postbody">I got it to work finally. I had to remove the code that checked in this way:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">if ((scrollX &amp; 7) == 0) {</td> </tr></table><span class="postbody">
+<br/>
+and
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">if ((scrollY &amp; 7) == 0) {</td> </tr></table><span class="postbody">
+<br/>
+in all the places that it showed up, along with the closing "<span style="font-weight: bold">}</span>" marks. I think this is because the angle and speed of the diagonal movement wasn't always the same. I think I also set SCREEN_TILES_V to 24 and SCREEN_TILES_H to 32. Thanks for all the help. It finally worked. :)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#171932 - sgeos - Sun Jan 03, 2010 6:02 am</h4>
+    <div class="postbody"><span class="postbody"><span style="font-weight: bold">Re: sverx</span>
+<br/>
+So you are double buffering your map and refreshing the whole visible part of the back buffer each frame.  I hail your even more unoptimized simplicity.  Having a picture of "the solution" in your head is not always a good thing.
+<br/>
+<br/>
+<span style="font-weight: bold">Re: radiodee1</span>
+<br/>
+Here is a visual representation of diagonal movement.  As sverx said, you update in one direction at a time, so it is no different from updating a single direction.  Note that update order is unimportant, but pay close attention to the location of the second update in each case.  One off screen diagonal is updated and one is not.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">-X First-   -Y First-
+<br/>
+<br/>
+1111*000    11110000
+<br/>
+1111*000    11110000
+<br/>
+00000000    ****0000
+<br/>
+00000000    00000000
+<br/>
+<br/>
+12222000    11110000
+<br/>
+12222000    2222*000
+<br/>
+0****000    2222*000
+<br/>
+00000000    00000000
+<br/>
+<br/>
+12222000    11110000
+<br/>
+13333000    23333000
+<br/>
+03333000    23333000
+<br/>
+00000000    00000000
+<br/>
+<br/>
+* = Updated Locations
+<br/>
+0 = Off Screen
+<br/>
+1 = On Screen Last Frame
+<br/>
+2 = On Screen After Intermediate Update
+<br/>
+3 = On Screen Next Frame</td> </tr></table><span class="postbody">
+<br/>
+As for style, when and if you refactor your code, I'd break the large routine up into a few smaller ones.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#172100 - dovoto - Thu Jan 14, 2010 11:53 pm</h4>
+    <div class="postbody"><span class="postbody">Not sure if it is useful but there are examples included with libnds which demonstrate scrolling, one in particular does just about every sort of simple 2/4 way scrolling.
+<br/>
+<br/>
+<a class="postlink" href="http://libnds.devkitpro.org/a00003.html" target="_blank">http://libnds.devkitpro.org/a00003.html</a>
+<br/>
+<br/>
+each function is a self contained demo, i recommend:
+<br/>
+<br/>
+void scroll4wayText(void)
+<br/>
+<br/>
+and
+<br/>
+<br/>
+void scroll4wayExRotation(void)
+<br/>
+<br/>
+The DS is more than capable of doing all 4 backgrounds by a simple brute force "redraw the entire background map each frame" which is what i recommend as a first time approach.  The above only draws the part of the background that is about to be on screen which is more efficient but somewhat of a headache to visualize.<br/>_________________<br/><a href="http://www.drunkencoders.com" target="_blank">www.drunkencoders.com</a></span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

@@ -1,0 +1,169 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>devkitARM r3 and static constructors - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>C/C++ > devkitARM r3 and static constructors</h2>
+<div id="posts">
+<div class="post">
+    <h4>#16755 - dushan42 - Tue Feb 24, 2004 2:51 pm</h4>
+    <div class="postbody"><span class="postbody">Hi,
+<br/>
+<br/>
+I'm trying (and failing) to get static constructors to work in the latest devkitARM (<a class="postlink" href="http://homepage.ntlworld.com/wintermute2002/" target="_blank">http://homepage.ntlworld.com/wintermute2002/</a>)
+<br/>
+<br/>
+I'm using Jeff's lnkscript and crt0.s (1.28) with '__CPPSupport' uncommented and '__MultiBootInclude' commented out.
+<br/>
+<br/>
+I can compile and link if I don't try to link in crtbegin.o/crtend.o - but then none of the constructors for global objects get called. 
+<br/>
+If I link crtbegin.o and crtend.o, I get the following link error:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+d:/gba/dkarm/bin/arm-agb-elf-g++ -mthumb-interwork -mthumb -O2 -Wall -T lnkscript -nostartfiles crt0.o crtbegin.o crtend.o test.o -o test.elf
+<br/>
+d:\gba\dkarm\bin\..\lib\gcc-lib\arm-agb-elf\3.3.3\..\..\..\..\arm-agb-elf\bin\ld.exe: section .data [08000330 -&gt; 0800033b] overlaps section .dtors [08000330 -&gt; 08000337]
+<br/>
+collect2: ld returned 1 exit status
+<br/>
+d:\gba\dkarm\bin\..\lib\gcc-lib\arm-agb-elf\3.3.3\..\..\..\..\arm-agb-elf\bin\ld.exe: section .data [08000330 -&gt; 0800033b] overlaps section .dtors [08000330 -&gt; 08000337]
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Any ideas?
+<br/>
+<br/>
+I've got a fairly minimal makefile:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+DKARM=d:/gba/dkarm
+<br/>
+<br/>
+GCC_BIN      =$(DKARM)/bin
+<br/>
+GCC_PREFIX   =arm-agb-elf-
+<br/>
+<br/>
+CXX          =$(GCC_BIN)/$(GCC_PREFIX)g++
+<br/>
+OBJCOPY      =$(GCC_BIN)/$(GCC_PREFIX)objcopy
+<br/>
+<br/>
+CFLAGS       =-mthumb-interwork -mthumb -O2 -Wall
+<br/>
+<br/>
+LDFLAGS      =-T lnkscript -nostartfiles
+<br/>
+<br/>
+all:
+<br/>
+   $(CXX) $(CFLAGS) -c test.cpp -o test.o
+<br/>
+   $(CXX) -c crt0.s -o crt0.o
+<br/>
+   $(CXX) $(CFLAGS) $(LDFLAGS) crt0.o crtbegin.o crtend.o test.o -o test.elf
+<br/>
+   $(OBJCOPY) -O binary test.elf test.gba
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+And even more minimal test program (test.cpp):
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+class Test
+<br/>
+{
+<br/>
+public:
+<br/>
+   Test(int value) : mValue(value) {}
+<br/>
+<br/>
+private:
+<br/>
+   int mValue;
+<br/>
+};
+<br/>
+<br/>
+Test gTest1(1);
+<br/>
+Test gTest2(2);
+<br/>
+int gInt = 3;
+<br/>
+<br/>
+int main()
+<br/>
+{
+<br/>
+   Test test(4);
+<br/>
+   gTest1 = test;
+<br/>
+<br/>
+   while(true); // Halt
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+thanks,
+<br/>
+<br/>
+Dushan</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#17388 - dushan42 - Sun Mar 07, 2004 5:10 am</h4>
+    <div class="postbody"><span class="postbody">The problem is actually a bit more generic - I couldn't get global constructors to work at all with Jeff's crt0s/lnscript (I tried dka, devkitarm and my own build).
+<br/>
+<br/>
+I did a bit of googling, and it seems that gcc has two ways of invoking the constructors:
+<br/>
+<br/>
+ - if it doesn't find .init section, the compiler automatically generates function _main which invokes all the constructors, and inserts a call to it in main()
+<br/>
+ - if .init exists, crt0.s should call _init / _fini, defined in crt[i|n|begin|end].o
+<br/>
+<br/>
+This is of course vastly simplified - check out <a class="postlink" href="http://www.delorie.com/gnu/docs/gcc/gccint_149.html" target="_blank">http://www.delorie.com/gnu/docs/gcc/gccint_149.html</a> for more detail.
+<br/>
+<br/>
+For some reason the first method doesn't work - if anyone knows why no _main is generated even though there clearly isn't any .init section, please enlighten me.
+<br/>
+<br/>
+The second method involves linking in the various crt* files, which as I pointed out in the previous message caused various linker errors. These, after a bit more googling about linker scripts, turned out to be quite easy to fix - simply add .init, .fini and the somewhat mysterious .jcr sections to the lnkscript. With the crt[i|n|begin|end].o linked in, you just have to insert a call to _init in your crt0.s (I didn't bother with _fini) and voil? - the global constructors get called..
+<br/>
+<br/>
+Finally I can use custom crt0/lnscript and have my project compile with all the various gcc builds out there *and* have global constructors working. I know it's probably not a big deal for most of you out there (judging by the lack of responses), but it's been bugging me ever since I started coding for GBA :-).
+<br/>
+<br/>
+If this is at all useful to anyone, let me know and I'll clean up &amp; post the hacked crt0.s/lnscript.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#26678 - DialogPimp - Wed Sep 22, 2004 11:44 pm</h4>
+    <div class="postbody"><span class="postbody">I'd be interested in the crt0/lnkscript.  The same problem had me stuffed for 3 nights this week and I never understood what the problem was (although I knew it was something in that area).</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

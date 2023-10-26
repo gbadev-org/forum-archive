@@ -1,0 +1,141 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Help with sprite and background - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > Help with sprite and background</h2>
+<div id="posts">
+<div class="post">
+    <h4>#111584 - Vengyr - Fri Dec 08, 2006 1:03 am</h4>
+    <div class="postbody"><span class="postbody">I'm trying to get a double background. One thats pretty much static that maybe scrolls a little. And one that is actually the map you play on. I know you need several backgrounds to be able ro realize this.
+<br/>
+<br/>
+But for some reason I can't get a double background to work. And after that I will get a second problem wich I already have with one background right now...
+<br/>
+<br/>
+I can't seem to get a sprite and a background on my screen. I already tried to logical or the BG1_ENABLE with it. But still it will only show the sprite. Could anyone please help me.
+<br/>
+<br/>
+Here are my header files and the code I have thus far
+<br/>
+<a class="postlink" href="http://schoolshit.servehttp.com/sprite%20+%20BG.rar" target="_blank">source</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#111598 - DiscoStew - Fri Dec 08, 2006 4:52 am</h4>
+    <div class="postbody"><span class="postbody">From the source, I see you trying to set Mode 2, which is 2 affine backgrounds. Note however, that these 2 backgrounds for this mode are BG2 and BG3, so whatever you do with the other 2 backgrounds, BG0 and BG1, nothing will happen. Other than that, you need to set up those backgrounds.
+<br/>
+<br/>
+One thing you'd should do, imo, is update the headers that you have. There are headers out there that show a lot more of what's available.<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#111605 - Vengyr - Fri Dec 08, 2006 7:16 am</h4>
+    <div class="postbody"><span class="postbody">Thanks for the info and we use limited header files seeing it's a school project. And dont need everything thats availible</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#111617 - gmiller - Fri Dec 08, 2006 1:48 pm</h4>
+    <div class="postbody"><span class="postbody">Your sprite movement function:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+void InputKey()
+<br/>
+<br/>
+{
+<br/>
+<br/>
+if(keyDown(KEY_DOWN))
+<br/>
+   {
+<br/>
+      sprites[0].attribute0 = sprites[0].attribute0 + 1;
+<br/>
+   }
+<br/>
+<br/>
+if(keyDown(KEY_UP))
+<br/>
+   {
+<br/>
+      sprites[0].attribute0 = sprites[0].attribute0 - 1;
+<br/>
+   }
+<br/>
+<br/>
+if(keyDown(KEY_LEFT))
+<br/>
+   {
+<br/>
+      sprites[0].attribute1 = sprites[0].attribute1 - 1;
+<br/>
+   }
+<br/>
+<br/>
+if(keyDown(KEY_RIGHT))
+<br/>
+   {
+<br/>
+      sprites[0].attribute1 = sprites[0].attribute1 + 1;
+<br/>
+   }
+<br/>
+<br/>
+}
+<br/>
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Is dangerous in its manipulation of the attributes.  You should be using bitwise operators not arithmetic one.  Bit limiting the fields is also a requirement to keep from setting bits in other fields.
+<br/>
+<br/>
+for example:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+u32 holder;
+<br/>
+u32 value;
+<br/>
+<br/>
+// to increment the current x value in attribute 0
+<br/>
+value = (u32)sprites[0].attribute1; // copy to 32bit value
+<br/>
+holder = value &amp; 0x1FF; // Get the low order 9 bits
+<br/>
+holder++;  // do 32 bit math (native for ARM
+<br/>
+value &amp;= ~(0x1FF); //clear the current low order 9 bits
+<br/>
+value |= (holder &amp; 0x1FF); // put in the new 9 bit value
+<br/>
+sprites[0].attribute1 = (short) value; // save the new value
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Note: since the native registers of the ARM are 32 bit doing manipulation of shorts (or chars) creates extra ARM instruction to force 16 bit values in the 32 bit registers so doing the manipulation in 32 bit "holders" is more efficient.  The load from shorts (or chars) to 32 bit and the store from 32 bit to short (or chars) can be done in the load and store assembly instruction so it is generally no cost (to performance and size).
+<br/>
+<br/>
+Generally the extraction, manipulation and insertion of the OAM fields can be cumbersome for some fields.  But to insert a new bit value requires a clear of the current value using '&amp;' 'and' and an appropriate bit mask (to clear just the selected bits) and then '|' 'or' in the new value bit limited to avoid setting unintentional bits.  You should never use the math operators on bit fields because of the dangers to other bits outside of the range of the field you are trying to change.
+<br/>
+<br/>
+This is an issue that students struggle with all of the time and it burns them frequently.
+<br/>
+<br/>
+Also your copy of data into OAM is not using DMA and it should.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

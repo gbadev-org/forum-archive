@@ -1,0 +1,367 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Drawing an .nds banner's icon - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Drawing an .nds banner's icon</h2>
+<div id="posts">
+<div class="post">
+    <h4>#163794 - yellowstar - Sun Oct 12, 2008 2:15 am</h4>
+    <div class="postbody"><span class="postbody">I'm attempting to draw an .nds banner's icon on the main screen, Mode 5, on BG3 with 256x256 16-bit settings. I have a console on BG0 for displaying the banner description and other information. I'm using the console on both screens. Since I'm working on WMB Host RSA Mod, I'm using Juglak's 2D initialization code, which I modified slightly. However, this isn't working correctly. There's a blue horizontal line across the screen. This doesn't appear when I disable usage of the main screen console. The icon doesn't display correctly either. Where the icon is supposed to be displayed, there's a 32x16 rectangle starting at 1x16. This rectangle appears in the bottom half of the "icon". I'm not using double-buffers, however I am using swiWaitForVBlank before drawing the icon. <a class="postlink" href="http://members.iglide.net/ticeandsons/yellowstar/bannersht.bmp" target="_blank">Screenshot</a>
+<br/>
+<br/>
+display.cpp:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+void R_InitDisplay2D() {
+<br/>
+<br/>
+   // basic double buffer main display and single buffer sub
+<br/>
+   videoSetMode(DISPLAY_BG0_ACTIVE | MODE_5_2D | DISPLAY_BG3_ACTIVE);
+<br/>
+   videoSetModeSub(MODE_5_2D | DISPLAY_BG3_ACTIVE); //sub bg 0 will be used to print text
+<br/>
+   vramSetMainBanks(   VRAM_A_MAIN_BG_0x06000000, VRAM_B_MAIN_BG_0x06020000, VRAM_C_SUB_BG, VRAM_D_LCD);
+<br/>
+   BG3_CR = BG_BMP16_256x256;
+<br/>
+   BG3_XDX = 1 &lt;&lt; 8;
+<br/>
+   BG3_XDY = 0;
+<br/>
+   BG3_YDX = 0;
+<br/>
+   BG3_YDY = 1 &lt;&lt; 8;
+<br/>
+   BG3_CX = 0;
+<br/>
+   BG3_CY = 0;
+<br/>
+   SUB_BG3_CR = BG_BMP16_256x256;
+<br/>
+   SUB_BG3_XDX = 256;
+<br/>
+   SUB_BG3_XDY = 0;
+<br/>
+   SUB_BG3_YDX = 0;
+<br/>
+   SUB_BG3_YDY = 256;
+<br/>
+   SUB_BG3_CY = 0;
+<br/>
+   SUB_BG3_CX = 0;
+<br/>
+   ... //Right here in display.cpp, there's some of Juglak's code which sets some variables, which are never used outside of this function.
+<br/>
+   BG3_CR |= BG_BMP_BASE( 2 );
+<br/>
+}
+<br/>
+<br/>
+void R_SubDebug() {
+<br/>
+   videoSetModeSub(MODE_0_2D|DISPLAY_BG0_ACTIVE);
+<br/>
+   vramSetBankC(VRAM_C_SUB_BG);
+<br/>
+   SUB_BG0_CR = BG_MAP_BASE(31);
+<br/>
+   BG_PALETTE_SUB[255] = RGB15(31,31,31);
+<br/>
+   consoleInitDefault((u16*)SCREEN_BASE_BLOCK_SUB(31), (u16*)CHAR_BASE_BLOCK_SUB(0), 16);
+<br/>
+   consoleClear();
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+main.cpp:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+struct sNdsInfo
+<br/>
+{
+<br/>
+    tNDSBanner banner;
+<br/>
+    ...
+<br/>
+};
+<br/>
+sNdsInfo NDSInfo;
+<br/>
+<br/>
+//This is only temporarily loading the banner from a .nds buffer, other means of loading the banner will be used in the future, once these problems are fixed.
+<br/>
+void LoadBanner(unsigned char *nds_data)
+<br/>
+{
+<br/>
+    unsigned int *bannerOffset = (unsigned int*)&amp;nds_data[0x68];
+<br/>
+    if(*bannerOffset)
+<br/>
+    {
+<br/>
+        memcpy(&amp;NDSInfo.banner, &amp;nds_data[*bannerOffset], sizeof(tNDSBanner));
+<br/>
+    }
+<br/>
+}
+<br/>
+<br/>
+void HideBanner()
+<br/>
+{
+<br/>
+    memset(&amp;NDSInfo, 0, sizeof(sNdsInfo));
+<br/>
+    memset(&amp;NDSInfo.banner.icon, 1, 512);
+<br/>
+    NDSInfo.banner.palette[1] = 0x0000;//Black
+<br/>
+<br/>
+    swiWaitForVBlank();
+<br/>
+    DrawBanner();
+<br/>
+}
+<br/>
+<br/>
+void DrawBanner()
+<br/>
+{
+<br/>
+    u16 *video_buffer = (u16*)BG_BMP_RAM(2);
+<br/>
+    u16 color;
+<br/>
+    int x, y, ti;
+<br/>
+    x = 0;
+<br/>
+    y = 0;
+<br/>
+    ti = 0;
+<br/>
+<br/>
+    for(int tiley=0; tiley&lt;4; tiley++)
+<br/>
+    {
+<br/>
+        for(int tilex=0; tilex&lt;4; tilex++)
+<br/>
+        {
+<br/>
+            for(int ty=0; ty&lt;8; ty++)
+<br/>
+            {
+<br/>
+                for(int tx=0; tx&lt;8; tx++)
+<br/>
+                {
+<br/>
+                    x = (tilex * 8) + tx;
+<br/>
+                    y = (tiley * 8) + ty;
+<br/>
+<br/>
+                    if(NDSInfo.banner.icon[ti]!=0)
+<br/>
+                    {
+<br/>
+                        color = NDSInfo.banner.palette[NDSInfo.banner.icon[ti]];
+<br/>
+                    }
+<br/>
+                    else
+<br/>
+                    {
+<br/>
+                        color = 0xFFFF;//White
+<br/>
+                        //color = 0x0000;
+<br/>
+                    }
+<br/>
+<br/>
+                    video_buffer[((y + 16) * SCREEN_WIDTH) + (x + 16)] = color;
+<br/>
+<br/>
+                    ti++;
+<br/>
+                }
+<br/>
+            }
+<br/>
+        }
+<br/>
+    }
+<br/>
+}
+<br/>
+<br/>
+//This is called when we want to print on the sub screen.
+<br/>
+void SwitchPrintSub()
+<br/>
+{
+<br/>
+    R_SubDebug();
+<br/>
+}
+<br/>
+<br/>
+//This is called when we want to print on the main screen.
+<br/>
+void SwitchPrintMain()
+<br/>
+{
+<br/>
+    BG0_CR = BG_MAP_BASE(31);
+<br/>
+   BG_PALETTE[255] = RGB15(31,31,31);   //by default font will be rendered with color 255
+<br/>
+    consoleInitDefault((u16*)SCREEN_BASE_BLOCK(31), (u16*)CHAR_BASE_BLOCK(0), 16);
+<br/>
+}
+<br/>
+<br/>
+int main(void) {
+<br/>
+<br/>
+   irqInitHandler(MY_IRQ);
+<br/>
+   irqEnable(IRQ_VBLANK);
+<br/>
+<br/>
+   R_InitDisplay2D();
+<br/>
+   SwitchPrintSub();
+<br/>
+<br/>
+    SwitchPrintMain();
+<br/>
+<br/>
+    defaultExceptionHandler();
+<br/>
+<br/>
+   ...
+<br/>
+<br/>
+        consoleClear();
+<br/>
+    HideBanner();//Supposed to hide the banner by clearing the description and writing some values into the palette and icon so the icon becomes all black, however only the top half of the icon is black, the rest still appears. The bottom half is filled, unlike what happens when a banner from a .nds is loaded.
+<br/>
+<br/>
+    ...
+<br/>
+}
+<br/>
+<br/>
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#163812 - yellowstar - Sun Oct 12, 2008 10:04 pm</h4>
+    <div class="postbody"><span class="postbody">I tried flushing the cache and using DMA, but I still got the same result. For the indexing in the icon, when the index is not zero for transparent, is it really the index in the icon data, like 1 for palette index 1, or minus one, for palette index zero? More pixels appear when I subtract the index, but the the displayed image still doesn't look anything like the icon from the banner.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#163816 - spinal_cord - Sun Oct 12, 2008 11:14 pm</h4>
+    <div class="postbody"><span class="postbody">I'm using the following to draw an nds icon onto a bitmap array, the icon data is read from temp_tex[], which is copied straight from the file.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+   int temp=0, xx=0, yy=0, x=0, y=0, x1=0, y1=0;
+<br/>
+   char temp_array[32*32];
+<br/>
+   char tx=0, ty=0, tc=0; // temp xmy colour for pasting icon
+<br/>
+   for(yy=0; yy&lt;=3; yy++)
+<br/>
+   {
+<br/>
+      for(xx=0; xx&lt;=3; xx++)
+<br/>
+      {
+<br/>
+         x=0; y=0;
+<br/>
+         while(y&lt;8)
+<br/>
+         {
+<br/>
+            x1 = (xx*8+x);
+<br/>
+            y1 = (yy*8+y);
+<br/>
+            temp_array[x1   +(32*y1)] = temp_tex[temp]&amp;15;
+<br/>
+            temp_array[x1+1 +(32*y1)] = (temp_tex[temp] &gt;&gt; 4)&amp;15;
+<br/>
+            temp+=1;
+<br/>
+            x+=2;
+<br/>
+            if(x==8){x=0; y++;}
+<br/>
+           } // while
+<br/>
+       } // xx
+<br/>
+   } // yy
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+It might not be the best, but it works for me.<br/>_________________<br/>I'm not a boring person, it's just that boring things keep happening to me.
+<br/>
+<a class="postlink" href="http://spinal.dizidesigns.co.uk/" target="_blank">Homepage</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#163824 - yellowstar - Mon Oct 13, 2008 12:19 am</h4>
+    <div class="postbody"><span class="postbody">Ah, so the banner uses 4-bit indexing, not 8-bit indexing. Thanks spinal_cord. I adapted my code to use 4-bit indexing, and the icon is now displayed correctly. Hiding the banner also works correctly now. But there's still that blue horizontal line across the screen... I changed the char block used for BG3 from 2 to 4, and the bar doesn't appear on-screen anymore. But when I use DeSmuME to view VRAM, I can still see this bar. Why is this bar in VRAM? The default console font only takes up 1 char block... And the map used for the console is block 31...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#164581 - SteveH - Sat Nov 08, 2008 3:56 am</h4>
+    <div class="postbody"><span class="postbody">That blue bar is actually the font data for the console.
+<br/>
+<br/>
+Remember the char blocks for tile mode and the bitmap image for the frame buffer use the same address space.
+<br/>
+<br/>
+If you want to prove it's the font data, swap the screens, add some code to draw a dot on the screen with the stylus, and remove it and draw across the blue bar, your text characters will distort, will disappear.
+<br/>
+<br/>
+I wish I could remember the link to the table view of the layout of the GBA's screens, as the DS uses a similar / exactly the same memory layout system.
+<br/>
+<br/>
+Since each map block is 2048 bytes, and each bitmap screen is 131072 bytes (per 256x256x16 bpp area) your first screen bank will have the bar across, in fact (and if I'm reading the specifications correctly) you will have to use bank 4 as the first real bank to start the storage of bitmap images / map layouts as banks 0-3 are mapped to the same memory space as the tile data.
+<br/>
+<br/>
+I found the link - <a class="postlink" href="http://www.dev-scene.com/NDS/Tutorials_Day_3" target="_blank">here</a> scroll down to the section that's got an image with "BACKGROUND MEMORY LAYOUT" in the top.  I would put a direct link, but the last time I did that I got a warning from WinterMute about it as I had linked direct to his site.
+<br/>
+<br/>
+Hope this helps, and thanks for the code as I'm starting to get sick of the R4 screen, and I've been looking into the possibility of writing my own, but using the touch screen to select the icon instead of the top screen.  So you have given me a leg up on the start of my little project thanks.[/url]</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

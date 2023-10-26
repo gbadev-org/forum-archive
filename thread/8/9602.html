@@ -1,0 +1,281 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Constant values break assembly! - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>ASM > Constant values break assembly!</h2>
+<div id="posts">
+<div class="post">
+    <h4>#83648 - devmelon - Wed May 17, 2006 5:58 pm</h4>
+    <div class="postbody"><span class="postbody"><span style="font-weight: bold">Hello everyone. </span>
+<br/>
+<br/>
+I've just picked up arm coding and I like it, though it puzzles me at times. This is one of them times. When I wrote my program, I came to understanding that not all constants are valid to use. For example, if I want to move 0x00000415 to some register, I'd write:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">mov r8, #0x415</td> </tr></table><span class="postbody">
+<br/>
+But for some strange reason, that doesn't work!
+<br/>
+I get the error message <span style="text-decoration: underline"><span style="font-style: italic"><span style="font-weight: bold">Error: invalid constant -- `mov r8,#0x415'</span></span></span>. 
+<br/>
+However; this code works just fine! </span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">mov r8,     #0x400
+<br/>
+orr r8, r8, #0x010
+<br/>
+orr r8, r8, #0x005</td> </tr></table><span class="postbody">
+<br/>
+I tested around a little and thought maybe you can only set a nibble at a time but then I saw some other constants that had different nibbles set, and that was working. Does anyone know what's up? Is it the assembler, me, or something truly magical happening here? Are there papers on constant formats that mov takes? How can I reduce three lines into one? :p 
+<br/>
+<br/>
+Thanks in advance.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#83652 - DekuTree64 - Wed May 17, 2006 6:10 pm</h4>
+    <div class="postbody"><span class="postbody">Constants are stored as an 8-bit value and a shift amount (actually I think it's a rotate right amout, but same concept). So something like 0xff000 is fine, because it can be stored as 0xff &lt;&lt; 12. But then 0xff800 does not work, because it would be stored as 0x1ff &lt;&lt; 11, but 0x1ff doesn't fit in 8 bits.
+<br/>
+<br/>
+Check out the <a class="postlink" href="http://www.gbadev.org/docs.php?showinfo=17" target="_blank">ARM7TDMI data sheet</a> for all the info you need on the instruction set.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#83655 - poslundc - Wed May 17, 2006 6:25 pm</h4>
+    <div class="postbody"><span class="postbody">If you want to load complicated constants, try the following:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">     ldr     r0, =0x12345678
+<br/>
+     ldr     r1, =0x98765432</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+This will put the constants in an area of nearby memory called the "constant pool" (close enough that the location is relative to the PC, but out of the range of executable code). The values are then loaded from there.
+<br/>
+<br/>
+If you want to control where the constant pool is, you can do so by putting the .pool directive (somewhere relative to your code, but unbranchable to; typically after your function terminates).
+<br/>
+<br/>
+Of course, loading from memory takes more cycles than a mov instruction, and each constant takes 4 bytes which can be undesirable when working in fast RAM, so whenever you can use mov it's a good idea to do so.
+<br/>
+<br/>
+<span style="font-weight: bold">Edit:</span> anyone know if the assembler is smart enough to replace those ldr statements with mov if it sees the constant is a candidate for direct assembly?
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#83661 - DekuTree64 - Wed May 17, 2006 7:02 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>poslundc wrote:</b></span></td> </tr> <tr> <td class="quote">anyone know if the assembler is smart enough to replace those ldr statements with mov if it sees the constant is a candidate for direct assembly?</td> </tr></table><span class="postbody">
+<br/>
+I think I remember testing this before and it does use mov if possible. 
+<br/>
+<br/>
+The only case I know of where it's better to do mov and then orr is for 16-bit values. mov-orr takes 8 bytes, and 2 cycles. ldr reg, =constant also takes 8 bytes (4 for the ldr, 4 for the constant), but takes 3 cycles. Pretty insignificant unless you're in some inner loop that's called a LOT of times, and by then you should be caching the constant in a register anyway :)
+<br/>
+<br/>
+So generally you can just use ldr.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#83662 - Cearn - Wed May 17, 2006 7:09 pm</h4>
+    <div class="postbody"><span class="postbody">The data processing ARM instructions have 4 rotate bits (<span style="font-style: italic">r</span>) and 8 bits for the immediate value (<span style="font-style: italic">d</span>), allowing the numbers <span style="font-style: italic">x</span> = ROR(<span style="font-style: italic">d</span>, 2*<span style="font-style: italic">r</span>). I had a link that explained this, but it's long since departed. Re-eject's quick references are still active though, and you can get this and other info from it at a glance: <a class="postlink" href="http://re-eject.gbadev.org/files/armref.pdf" target="_blank">ARM</a>/<a class="postlink" href="http://re-eject.gbadev.org/files/ThumbRefV2-beta.pdf" target="_blank">THUMB</a> quickrefs.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>poslundc wrote:</b></span></td> </tr> <tr> <td class="quote">Of course, loading from memory takes more cycles than a mov instruction, and each constant takes 4 bytes which can be undesirable when working in fast RAM, so whenever you can use mov it's a good idea to do so.</td> </tr></table><span class="postbody">
+<br/>
+Each extra instructions for piecing it together from bytes also takes a word, so using loads isn't completely without merit.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>poslundc wrote:</b></span></td> </tr> <tr> <td class="quote"><span style="font-weight: bold">Edit</span>: anyone know if the assembler is smart enough to replace those ldr statements with mov if it sees the constant is a candidate for direct assembly? </td> </tr></table><span class="postbody">
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">// ARM asm:
+<br/>
+    ldr r0, =4
+<br/>
+    ldr r0, =256
+<br/>
+    ldr r0, =257
+<br/>
+<br/>
+// VBA disassembly:
+<br/>
+E3A0 0000 mov     r0, #0x4
+<br/>
+E3A0 0c01 mov     r0, #0x100
+<br/>
+E51F 0004 ldr     r0, [$0200077C] (=$00000101)
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Guess so.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#83667 - tepples - Wed May 17, 2006 7:44 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Cearn wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>poslundc wrote:</b></span></td> </tr> <tr> <td class="quote">Of course, loading from memory takes more cycles than a mov instruction, and each constant takes 4 bytes which can be undesirable when working in fast RAM, so whenever you can use mov it's a good idea to do so.</td> </tr></table><span class="postbody">
+<br/>
+Each extra instructions for piecing it together from bytes also takes a word, so using loads isn't completely without merit.</span></td> </tr></table><span class="postbody">
+<br/>
+It becomes more complicated in Thumb. When you piece a constant together from bytes, you use a MOV followed by an ORR (with shifts in the middle if you're using Thumb), and these are read sequentially. When you read from a constant pool, you get two seek penalties (2 cycles in ROM, 0 cycles elsewhere). In 16-bit ROM without prefetch: <ul><li>MOV, LSL, MOV, ORR is 4 instructions that take 8 cycles: wait, read instruction, wait, read instruction, wait, read instruction, wait, read instruction. </li><li>LDR from pool is 1 instruction and 2 data that takes 11 cycles: wait, read instruction, generate effective address, seek, wait, wait, read data, wait, read data, seek, wait. </li></ul><br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#83675 - Cearn - Wed May 17, 2006 8:23 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote"><ul><li>LDR from pool is 1 instruction and 2 data that takes 11 cycles: wait, read instruction, generate effective address, seek, wait, wait, read data, wait, read data, seek, wait. </li></ul></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Shouldn't that be 9 cycles? 1S+1I for the instruction itself, and 1N+1S for the dataload itself (32bit from ROM = 2 16bit reads). Assuming you meant ROM in 3,1 wait, that would come down to (S+I)+(N+S) = (2+1)+(4+2)= 9 cycles. Or am I missing something?
+<br/>
+<br/>
+It's still slower than piecing it together, of course, just not by as much. But if you need 3 or more bytes, then ldr wins out again. Argh, initializing large numbers sucks &gt;_&lt;</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#83699 - poslundc - Wed May 17, 2006 10:35 pm</h4>
+    <div class="postbody"><span class="postbody">I should clarify that when I said "use mov whenever possible" I actually meant "use mov when you have a valid constant to do it in a single instruction."
+<br/>
+<br/>
+Although now that I see the ldr/pool format is at least intelligent enough to recognize that scenario (if not intelligent enough to know your memory access waitstates and bus width!) it now seems to me to be the preferable candidate in perhaps all but the most rigorously coded assembly.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#83701 - tepples - Wed May 17, 2006 10:52 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Cearn wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote">LDR from pool is 1 instruction and 2 data that takes 11 cycles: wait, read instruction, generate effective address, seek, wait, wait, read data, wait, read data, seek, wait.</td> </tr></table><span class="postbody">
+<br/>
+Shouldn't that be 9 cycles? 1S+1I for the instruction itself, and 1N+1S for the dataload itself (32bit from ROM = 2 16bit reads). Assuming you meant ROM in 3,1 wait, that would come down to (S+I)+(N+S) = (2+1)+(4+2)= 9 cycles. Or am I missing something?</span></td> </tr></table><span class="postbody">
+<br/>
+Yeah, you're missing the non-sequential penalty (N-S = 2) for the next instruction.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#83808 - Cearn - Thu May 18, 2006 6:32 pm</h4>
+    <div class="postbody"><span class="postbody">Just did some tests with different waitstates and data in different sections and indeed ldr seems to account for 1Ndata + 1Ncode + 1I cycles. So why does every document I've seen list ldr as 1N+1S+1I ?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#83861 - poslundc - Fri May 19, 2006 1:07 am</h4>
+    <div class="postbody"><span class="postbody">Arguably the 1S comes from the understanding that most instructions are being loaded sequentially from memory, and if you do a non-sequential read in a load instruction the 1N isn't from the load instruction, but it's from the 1S of the next instruction actually becoming 1N because what is assumed to be a sequential read is instead non-sequential.
+<br/>
+<br/>
+In other words, the timing formats in the ARM specs account for a non-sequential generated from a branch by making a branch take extra cycles, but other than that they don't presume to be aware of any waitstate penalties you may suffer from if a data load causes your next read to be non-sequential.
+<br/>
+<br/>
+Cearn, did you test ROM reading from RAM as well as ROM reading from ROM? Were the results the same in both case?
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#83974 - tepples - Sat May 20, 2006 12:02 am</h4>
+    <div class="postbody"><span class="postbody">Reading a 32 bit value in ROM from EWRAM: 10 cycles
+<br/>
+wait, wait, read instruction, compute address, wait, wait, wait, read low bits, wait, read high bits
+<br/>
+<br/>
+Reading a 32 bit value in EWRAM from EWRAM: 10 cycles
+<br/>
+wait, wait, read instruction, compute address, wait, wait, read low bits, wait, wait, read high bits
+<br/>
+<br/>
+Loading a 16 bit value using mov/lsl/mov/orr: 12 cycles
+<br/>
+(wait, wait, read instruction) * 3<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#83995 - Cearn - Sat May 20, 2006 1:56 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>poslundc wrote:</b></span></td> </tr> <tr> <td class="quote">Arguably the 1S comes from the understanding that most instructions are being loaded sequentially from memory, and if you do a non-sequential read in a load instruction the 1N isn't from the load instruction, but it's from the 1S of the next instruction actually becoming 1N because what is assumed to be a sequential read is instead non-sequential.
+<br/>
+<br/>
+In other words, the timing formats in the ARM specs account for a non-sequential generated from a branch by making a branch take extra cycles, but other than that they don't presume to be aware of any waitstate penalties you may suffer from if a data load causes your next read to be non-sequential.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+I thought of that, so I also ran tests with either a mov,str (for 1S,2N) and str,mov (2N,1S). I figured that if the extra non-sequential penalty was applied to the next instruction, then if it's already a non-sequential cycle  nothing extra would happen. However, there is no difference between ldr,mov,str and ldr,str,mov in terms of cycles, so there goes that idea. Unless, the str <span style="font-style: italic">also</span> has a similar penalty, I suppose. 
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>poslundc wrote:</b></span></td> </tr> <tr> <td class="quote">Cearn, did you test ROM reading from RAM as well as ROM reading from ROM? Were the results the same in both case?</td> </tr></table><span class="postbody">
+<br/>
+I tried code in ROM and reads from ROM and IWRAM for 4,2 / 4,1 / 3,2 / 3,1 waitstates, no prefetch. In all cases it was 1Ndata+1Ncode+1I.
+<br/>
+<br/>
+tepples, since you know what's actually going on, where did you get this information from?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#84006 - tepples - Sat May 20, 2006 4:27 am</h4>
+    <div class="postbody"><span class="postbody">I mentally map out the sequence of addresses that the CPU accesses. If they're sequential, I add sequential wait states (1 in ROM, 2 in EWRAM), and if they're non-sequential, I add non-sequential wait states (3 in ROM, 2 in EWRAM). (Here, "sequential" is defined not by the ARM spec but by accesses within an address range; for example, code in ROM that LDR's from RAM will still access ROM itself sequentially.) If an instruction causes the <span style="font-style: italic">next</span> instruction to be non-sequential when it would otherwise be sequential, I add extra wait states to make up for the difference.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#142490 - Aeneas - Tue Oct 09, 2007 4:37 pm</h4>
+    <div class="postbody"><span class="postbody">I would be interested to know where these cycle timing data originate ?
+<br/>
+Which document is this in, or if you measured this, which hardware or software was used to measure this data ?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#142501 - Dwedit - Tue Oct 09, 2007 6:38 pm</h4>
+    <div class="postbody"><span class="postbody">I'm pretty sure you can find it if you google 'arm7tdmi pdf'<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#142503 - Aeneas - Tue Oct 09, 2007 6:45 pm</h4>
+    <div class="postbody"><span class="postbody">Would ARM7 clock cycle counts be consistent with ARM9 counts, which are my particular application (ARM926EJ-S) ?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#142508 - tepples - Tue Oct 09, 2007 9:03 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Aeneas wrote:</b></span></td> </tr> <tr> <td class="quote">I would be interested to know where these cycle timing data originate ?
+<br/>
+Which document is this in</td> </tr></table><span class="postbody">
+<br/>
+Wait state info is in GBATEK.
+<br/>
+<br/>
+And no, ARM9 timings aren't necessarily consistent with ARM7 timings.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

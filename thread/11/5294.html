@@ -1,0 +1,300 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Seeking programmer to find bug. - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Help Wanted > Seeking programmer to find bug.</h2>
+<div id="posts">
+<div class="post">
+    <h4>#38443 - cesium - Sun Mar 27, 2005 9:41 pm</h4>
+    <div class="postbody"><span class="postbody">I have developed an example program that illustrates some problems I am having with devkitarm-r11. If you are interested in solving this problem, I'd gladly pay you to do so. Let me know your price and payment terms. The makefile is available if needed.
+<br/>
+cesium
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+//main.cpp
+<br/>
+/*
+<br/>
+   This code illustrates a problem I'm having with devkitarm-r11.
+<br/>
+   I don't know if it is a bug in the compiler, or a bug in my code.
+<br/>
+   I have distilled my code into the following templated class: DataSet,
+<br/>
+   and a templated function: genDataSet.
+<br/>
+   I think these are the bare minimum structures that produce the problems.
+<br/>
+   I have observed this problem on actual hardware and in VisualBoyAdvance-SDL-1.7.2.
+<br/>
+<br/>
+   The problem seemed to morph as I was chopping down the code. Here is a
+<br/>
+   description of the current form as I have seen it using the Insight debugger
+<br/>
+   connecting to VisualBoyAdvance-SDL-1.7.2.
+<br/>
+<br/>
+   First off, a few definitions:
+<br/>
+      I'll use the term "Step into" to refer to Insight's Step(S) function.
+<br/>
+      I'll use the term "Step over" to refer to Insight's Next(N) function.
+<br/>
+      I'll use the term "Step out of" to refer to Insight's Finish(F) function.
+<br/>
+      
+<br/>
+   -Compile and load up the code in VisualBoyAdvance and Insight.
+<br/>
+   -Have Insight connect to VBA and run up until the line commented as: POINT A.
+<br/>
+   -This is an assignment statement that calls the genDataSet function.
+<br/>
+      The strange stuff happens during this assignment. The way I watch this
+<br/>
+      assignment happen is to step into the function and then "step into the
+<br/>
+      return process." That sounds odd, but I'll describe it.
+<br/>
+   -Step into the function genDataSet. Run up until the line: POINT B.
+<br/>
+   -Step into this return.
+<br/>
+      You'll end up in a DataSet destructor. Step out of this destructor.
+<br/>
+   -You're back at POINT B. Step into it again.
+<br/>
+      You'll be in some odd looking code that says Unwind. Step out.
+<br/>
+   -You're back at POINT B. Step in again.
+<br/>
+      Now we're someplace interesting, the assignment function DataSet&lt;T&gt;::operator=()
+<br/>
+   -Step over twice so that you get to POINT C, where the new operator is called.
+<br/>
+   -Step into the new operator.
+<br/>
+      Something odd happens, we end up at the bottom of main(). Is this bad? A debugger flaw?
+<br/>
+      Step out of this point at the end of main.
+<br/>
+   -We're back at POINT C. Step into the new operator again.
+<br/>
+   -Now we get to the good part. Here we are at POINT D in the DataSet constructor.
+<br/>
+      Step over the assignment: m_allocUnit=10
+<br/>
+      I find that m_allocUnit now contains 0, not 10.
+<br/>
+   -Step into POINT E, the call to NEW.
+<br/>
+   -I get a SIGTRAP message from the debugger. I have no idea what's going on.
+<br/>
+   -Step into the NEW function. n is not 0, it is not 10, it is 2560!! huh?
+<br/>
+<br/>
+  If you can help me determine if this is a compiler or a programmer problem,
+<br/>
+  I'd be very grateful.
+<br/>
+<br/>
+  I'm interested in solutions like:
+<br/>
+   "Hey, you dummy, you can't to that in C++, it's not allowed, here's why..."
+<br/>
+   or
+<br/>
+   "Yea, this is a known bug in gcc ver x.y.z, here's a workaround.
+<br/>
+<br/>
+  I'm not interested in solutions like:
+<br/>
+   "Why don't you just write your code like this, &lt;snip&gt; and then the
+<br/>
+   problem goes away!"
+<br/>
+<br/>
+  I'd like to know the root cause of this problem, since I have a few
+<br/>
+  thousand lines of code that "boil down" to this example.
+<br/>
+<br/>
+  Thanks,
+<br/>
+  cesium
+<br/>
+<br/>
+*/
+<br/>
+<br/>
+//templated NEW function to help debug strange values passed to new.
+<br/>
+template&lt;class T&gt; T* NEW(unsigned int n);
+<br/>
+//templated container class.
+<br/>
+template &lt;class T&gt; class DataSet  {
+<br/>
+public:
+<br/>
+   DataSet();
+<br/>
+   DataSet(const DataSet&amp; x);
+<br/>
+   DataSet&lt;T&gt;&amp; operator=(const DataSet&lt;T&gt;&amp; x);
+<br/>
+   ~DataSet();
+<br/>
+private:
+<br/>
+   unsigned int m_allocUnit;
+<br/>
+   T* mp_data;
+<br/>
+};
+<br/>
+template &lt;class T&gt; DataSet&lt;T&gt;::DataSet() {
+<br/>
+   m_allocUnit=10;//POINT D
+<br/>
+               //1 to 9 seem to work, but 10 and above do not.
+<br/>
+               //If this value is 10, the debugger shows it getting a
+<br/>
+               //value of 0, but the call to NEW below gets 2560. doh!
+<br/>
+<br/>
+   //mp_data=new T[m_allocUnit];//Usual way of allocating RAM,
+<br/>
+                        
+<br/>
+   mp_data=NEW&lt;T&gt;(m_allocUnit);//I used my NEW function to see what's happening.
+<br/>
+}
+<br/>
+template &lt;class T&gt; DataSet&lt;T&gt;::DataSet(const DataSet&lt;T&gt;&amp; x) {
+<br/>
+   m_allocUnit=x.m_allocUnit;
+<br/>
+   mp_data=new T[m_allocUnit];
+<br/>
+}
+<br/>
+template&lt;class T&gt; DataSet&lt;T&gt;&amp; DataSet&lt;T&gt;::operator=(const DataSet&lt;T&gt;&amp; x) {
+<br/>
+    if (&amp;x != this) {
+<br/>
+      m_allocUnit=x.m_allocUnit;
+<br/>
+      T* p_t=new T[m_allocUnit];//POINT C
+<br/>
+      delete mp_data;
+<br/>
+      mp_data=p_t;
+<br/>
+   }
+<br/>
+   return *this;
+<br/>
+}
+<br/>
+template &lt;class T&gt; DataSet&lt;T&gt;::~DataSet() {
+<br/>
+   delete mp_data;
+<br/>
+}
+<br/>
+<br/>
+//A templated function that returns a DataSet.
+<br/>
+template&lt;class T&gt; DataSet&lt;T&gt; genDataSet(void);
+<br/>
+<br/>
+int main(void) {
+<br/>
+   //set is a DataSet of DataSets. You might do this to create a 2 dimensional vector.
+<br/>
+   DataSet&lt;DataSet&lt;unsigned int&gt; &gt; set;
+<br/>
+   set=genDataSet&lt;DataSet&lt;unsigned int&gt; &gt;();//POINT A
+<br/>
+   return 0;
+<br/>
+}
+<br/>
+template&lt;class T&gt; DataSet&lt;T&gt; genDataSet(void) {
+<br/>
+   DataSet&lt;T&gt; ret;
+<br/>
+   DataSet&lt;T&gt; tSet;
+<br/>
+   ret=tSet;
+<br/>
+   return ret;   //POINT B
+<br/>
+}
+<br/>
+//Diagnostic routine to look at value passed to new.
+<br/>
+template&lt;class T&gt; T* NEW(unsigned int n) {
+<br/>
+   if (n==2560) {   //sometimes wierd values get passed to NEW.
+<br/>
+      unsigned int dummy=0;
+<br/>
+      while (1) {
+<br/>
+         dummy++;   //trap for goofy value, when m_allocUnit was supposed to be 10.
+<br/>
+      }
+<br/>
+   }
+<br/>
+   return new T[n];
+<br/>
+}
+<br/>
+<br/>
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#44108 - fstark - Mon May 30, 2005 12:18 pm</h4>
+    <div class="postbody"><span class="postbody">(Okay, this looks like an old post, so it is probably already fixed, but as I was reading this post and it compelled me into registering, I may as welll answer it...)
+<br/>
+<br/>
+No need to pay, dude. Just use delete[] instead of delete and you problem will go away...
+<br/>
+<br/>
+Allocated by new[] =&gt; free'd by delete[].
+<br/>
+<br/>
+(Btw, that's IMHO some seriously ugly code, but hey, you didn't ask for that kind of info :-) )
+<br/>
+<br/>
+Cheers,
+<br/>
+<br/>
+--fred</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#44155 - sajiimori - Mon May 30, 2005 6:45 pm</h4>
+    <div class="postbody"><span class="postbody">Yes, it was solved shortly after being posted in another section. :)</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

@@ -1,0 +1,845 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Anti-Gameshark Coding - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > Anti-Gameshark Coding</h2>
+<div id="posts">
+<div class="post">
+    <h4>#165343 - sgeos - Wed Dec 17, 2008 4:14 pm</h4>
+    <div class="postbody"><span class="postbody">I have not tested this on hardware, but I was wondering if something like the following could prevent a gameshark system from messing with my cheese:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">/*** Types
+<br/>
+ */
+<br/>
+typedef struct
+<br/>
+{
+<br/>
+   int   cheese;
+<br/>
+} gamestate_t;
+<br/>
+<br/>
+<br/>
+/*** Globals
+<br/>
+ */
+<br/>
+int gBrokenProgram = FALSE;
+<br/>
+<br/>
+<br/>
+/*** Setters, etc
+<br/>
+ */
+<br/>
+void addCheese(int pBonus, gamestate_t *pGameState)
+<br/>
+{
+<br/>
+   int newCheese = (volatile int)(pGameState-&gt;cheese) + pBonus;
+<br/>
+   pGameState-&gt;cheese += pBonus;
+<br/>
+   if ((volatile int)(pGameState-&gt;cheese) != newCheese)
+<br/>
+   {
+<br/>
+      (volatile int)gBrokenProgram = TRUE;
+<br/>
+      if ((volatile int)gBrokenProgram != TRUE)
+<br/>
+      {
+<br/>
+         resetGame();
+<br/>
+      }
+<br/>
+   }
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+<span style="font-weight: bold">EDIT:</span>  Having a failed assertion do the following in production code was another idea:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">gBrokenProgram = TRUE;</td> </tr></table><span class="postbody">
+<br/>
+If gBrokenProgram == TRUE, then you do friendly things like fail to update ingame flags, etc.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#165345 - Maxxie - Wed Dec 17, 2008 5:48 pm</h4>
+    <div class="postbody"><span class="postbody">This would only detect manipulation between those lines:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+   int newCheese = (volatile int)(pGameState-&gt;cheese) + pBonus;
+<br/>
+   pGameState-&gt;cheese += pBonus;
+<br/>
+   if ((volatile int)(pGameState-&gt;cheese) != newCheese)
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+And if the manipulation does happen that fast after the change, it would be easy to set the gBrokenProgram to TRUE again also. It's just a constant to write there.
+<br/>
+<br/>
+I'd suggest using set functions for vital game data that calls a hash function over the complete dataset. You can read it out as fast as before (alltho writing will be slower) and can detect manipulation on all vital data. Hash is not constant and not only dependend on the cheese, so that it's difficult (as it needs the hash function) that GameShark is likely to not work on it. (Without knowing Gameshark i think it's just a hook and write value cheat system)<br/>_________________<br/><a class="postlink" href="http://nintendods.desperate-programmers.com/doku.php?id=wireless_io_map" target="_blank">Trying  to bring more detail into understanding the wireless hardware</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#165347 - sgeos - Wed Dec 17, 2008 6:21 pm</h4>
+    <div class="postbody"><span class="postbody">Hashed cheese... just for kicks clearly some browns need to be in there too.  Thank you for your insight.  It's nice to know that there is a solution that can protect not only my cheese, but my other valuables as well.  =P</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#165360 - Dwedit - Thu Dec 18, 2008 1:20 am</h4>
+    <div class="postbody"><span class="postbody">I'd expect cheat devices to rewrite a value every vblank or so.  That's where you'd need to detect tampering.  So keeping an 'encrypted' copy of the value and checking against that may be enough.  Such as XORING the cheese with two other variables (such as the frame counter), and updating the 'hash' whenever any of the three variables are modified.
+<br/>
+<br/>
+<br/>
+Also, on a DS, code is in RAM, so any code that does anticheating could be patched out.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#165366 - sgeos - Thu Dec 18, 2008 6:30 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Dwedit wrote:</b></span></td> </tr> <tr> <td class="quote">I'd expect cheat devices to rewrite a value every vblank or so.</td> </tr></table><span class="postbody">
+<br/>
+Two things come to mind.  The first is this:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">checksum = validateData();...
+<br/>
+vsync();
+<br/>
+// ...perhaps wait a while...
+<br/>
+if (validateData() != checksum)
+<br/>
+{
+<br/>
+        protectTheCheese();
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+The second... if updates only happen every frame, it seems like there is plenty of time to react.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Dwedit wrote:</b></span></td> </tr> <tr> <td class="quote">Also, on a DS, code is in RAM, so any code that does anticheating could be patched out.</td> </tr></table><span class="postbody">
+<br/>
+So a constant write to a string of opcodes, NOPing them away, sounds like it could defeat "simple" anticheating routines.
+<br/>
+<br/>
+Well, here is round two.
+<br/>
+What is the best way to mess with this cheese?
+<br/>
+Patch the return line in valueCheck()?
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void valueAdd(int pBonus, int pIndex, int pSize, int *pValueSet)
+<br/>
+{
+<br/>
+        int i;
+<br/>
+<br/>
+        for (i = 0; i &lt; pSize; i++)
+<br/>
+        {
+<br/>
+                pValueSet[i] += pBonus;
+<br/>
+        }
+<br/>
+        pValueSet[pIndex] += pBonus;
+<br/>
+}
+<br/>
+<br/>
+int valueGet(int pIndex, int pChecksum, int *pValueSet)
+<br/>
+{
+<br/>
+        return pValueSet[pIndex] - pValueSet[pChecksum];
+<br/>
+}
+<br/>
+<br/>
+void valueSet(int pValue, int pIndex, int pChecksum, int pSize, int *pValueSet)
+<br/>
+{
+<br/>
+        int bonus = pValue - valueGet(pIndex, pChecksum, pValueSet);
+<br/>
+        valueAdd(bonus, pIndex, pSize, pValueSet);
+<br/>
+}
+<br/>
+<br/>
+int valueCheck(int pChecksum, int pSize, int *pValueSet)
+<br/>
+{
+<br/>
+        int checksum = pValueSet[pChecksum];
+<br/>
+        int sum = 0;
+<br/>
+        int i;
+<br/>
+<br/>
+        for (i = 0; i &lt; pSize; i++)
+<br/>
+        {
+<br/>
+                sum += pValueSet[i] - checksum;
+<br/>
+        }
+<br/>
+        return sum == checksum;
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">// --- Testing Code --- //
+<br/>
+#include &lt;stdio.h&gt;
+<br/>
+<br/>
+#define DATA_CHEESE     0
+<br/>
+#define DATA_BROWN      1
+<br/>
+#define DATA_CHECKSUM   2
+<br/>
+#define DATA_TABLE      3
+<br/>
+#define DATA_SIZE       4
+<br/>
+<br/>
+#define PRINT_DATA(a,b,c)       printf(#a"\t=%02d(%02d)\n",valueGet(a,b,c),c[a])
+<br/>
+<br/>
+void printData(int *pData)
+<br/>
+{
+<br/>
+        PRINT_DATA(DATA_CHEESE,   DATA_CHECKSUM, pData);
+<br/>
+        PRINT_DATA(DATA_BROWN,    DATA_CHECKSUM, pData);
+<br/>
+        PRINT_DATA(DATA_TABLE,    DATA_CHECKSUM, pData);
+<br/>
+        PRINT_DATA(DATA_CHECKSUM, DATA_CHECKSUM, pData);
+<br/>
+        printf("check()\t\t=%d\n", valueCheck(DATA_CHECKSUM,DATA_SIZE,pData));
+<br/>
+}
+<br/>
+<br/>
+int main(void)
+<br/>
+{
+<br/>
+        int myData[DATA_SIZE] = {0};
+<br/>
+<br/>
+        // initialize data
+<br/>
+        valueSet(17, DATA_CHEESE, DATA_CHECKSUM, DATA_SIZE, myData);
+<br/>
+        valueSet(22, DATA_BROWN,  DATA_CHECKSUM, DATA_SIZE, myData);
+<br/>
+        valueSet(33, DATA_TABLE,  DATA_CHECKSUM, DATA_SIZE, myData);
+<br/>
+        valueAdd(-6, DATA_CHEESE, DATA_SIZE, myData);
+<br/>
+        printData(myData);
+<br/>
+<br/>
+        // non-api modification
+<br/>
+        myData[DATA_CHEESE] += 5;
+<br/>
+        printData(myData);
+<br/>
+<br/>
+        return 0;
+<br/>
+}</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#165426 - wintermute - Sat Dec 20, 2008 2:22 am</h4>
+    <div class="postbody"><span class="postbody">It's pretty much impossible to create an effective anti cheating system on a platform where the code is not encypted or signed. Even on systems where the code does happen to be well protected it's only a matter of time before hackers gain access ( referring specifically to mainstream game consoles here ).
+<br/>
+<br/>
+Something else you may not have considered is that games with available cheats tend to sell more units than games with none. This can probably be attributed to the viral effects of cheat database updates - where the latest game cheats are listed prominently on a cheat site you basically get free advertising.
+<br/>
+<br/>
+I've written about half a dozen custom protection systems over the years and <span style="font-weight: bold">all</span> of them were compromised eventually. The time periods varied from a few weeks to a few months but they were <span style="font-weight: bold">always</span> compromised.I even had emails from some crackers with a detailed breakdown of how they managed to get there :p
+<br/>
+<br/>
+One thing I will say, you'll <span style="font-weight: bold">never</span> write an effective protection or anti cheat system in a high level language. Compiler output is easy to RE, not to mention giving you a bit of extra space by simply optimising the code where the compiler gets a bit pessimistic.
+<br/>
+<br/>
+Not that I ever cracked protection systems at all ever. No sir, not me.<br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#165436 - sgeos - Sat Dec 20, 2008 7:22 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>wintermute wrote:</b></span></td> </tr> <tr> <td class="quote">Even on systems where the code does happen to be well protected it's only a matter of time before hackers gain access ( referring specifically to mainstream game consoles here ).</td> </tr></table><span class="postbody">
+<br/>
+Anything that can be engineered can be reverse engineered.  It's impossible to create an uncrackable anti cheating system.  All you can do is slow people down.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>wintermute wrote:</b></span></td> </tr> <tr> <td class="quote">Something else you may not have considered is that games with available cheats tend to sell more units than games with none.</td> </tr></table><span class="postbody">
+<br/>
+I had not considered that, but this has no bearing on my reasons for being interested in this topic.  I read <a class="postlink" href="http://www.gamasutra.com/features/20011017/dodd_01.htm" target="_blank">this article</a> years ago, and I thought it was interesting.
+<br/>
+<br/>
+If you are worried about your cheat-protected game being unpopular, you could always feed cheats to the public.  Afterall, you know what debug code lives in the game, and you could always make the engine cheat friendly.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>wintermute wrote:</b></span></td> </tr> <tr> <td class="quote">The time periods varied from a few weeks to a few months but they were <span style="font-weight: bold">always</span> compromised.</td> </tr></table><span class="postbody">
+<br/>
+Not encouraging.  Do you think the timeframe to break the anti-cheating was influenced more by the popularity of the title, or the sophistication of the anti-cheat scheme you implemented?
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>wintermute wrote:</b></span></td> </tr> <tr> <td class="quote">I even had emails from some crackers with a detailed breakdown of how they managed to get there :p</td> </tr></table><span class="postbody">
+<br/>
+My email address is sgeos[splats]hotmail[cots]com if you feel like sharing.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>wintermute wrote:</b></span></td> </tr> <tr> <td class="quote">One thing I will say, you'll <span style="font-weight: bold">never</span> write an effective protection or anti cheat system in a high level language.</td> </tr></table><span class="postbody">
+<br/>
+I believe you.  I'm more interested in the effectiveness of the underlying concepts than the effectiveness of any example I put on public display.  Thank you for your opinion though.  It confirms the suspicion I've had that anything vaguely effective would require breaking out black magic voodoo ASM.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Not that I ever cracked protection systems at all ever. No sir, not me.</td> </tr></table><span class="postbody">
+<br/>
+You've had your systems cracked complete with post mortems.  What more could I ask for?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#165468 - keldon - Mon Dec 22, 2008 10:19 am</h4>
+    <div class="postbody"><span class="postbody">I haven't cracked a system, but I was once asked to do so and given a nice little starter pack. If you've done asm coding and are used to debugging asm for bugs then believe it or not you are already capable of cracking a system (it's basically the same task of finding properties IMO).
+<br/>
+<br/>
+I've just mailed you two of the documents from the starter pack, that should give you an idea of how they operate (and might help you in coming up with a way to make it difficult to do so). Password for the archived document is sgeos.
+<br/>
+<br/>
+Maybe an excessive use of 'clever' code would make it harder to debug; so instead of simply incrementing, let the code do some obscure algorithm that looks like it's doing lots of stuff, but eventually the result of the method is that 'i' has just incremented (sort of like those games where you ask someone for their age, double it, add 9, etc.). Now I don't mean just have it add one at the end (otherwise that would be obvious), but the rest of the code relying on one would want to correspond to the change, almost like changing signs / scale.
+<br/>
+<br/>
+Modulo's of particular numbers multiplied also have interesting properties like that, for example if you have a set (S) of numbers, you can generate a set (U) of numbers that are unreachable by S. The cardinality of U (|U|) is equal to the product of S - (|S| * (|S|-1)), or something like that. Now multiply any combination of numbers from U, modulo by the product of S, and you have yourself a number in U! iirc, this property is used in RSA encryption...
+<br/>
+<br/>
+... so, in short, combined properties are probably harder to figure out (unless they appear frequently) ... you might even call it an obfuscation of some sort if the interpretation of your value and encoding of it changes - either way, making it harder to crack.
+<br/>
+<br/>
+EDIT: oops, wrote it down wrong</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#165595 - sgeos - Mon Dec 29, 2008 11:22 am</h4>
+    <div class="postbody"><span class="postbody">Security through obscurity is not really security.  Eventually somebody will figure it out.  However, if the goal is just to slow people down, it might work.  I guess it depends on which guy happens to be attacking your program.  If you get the loser with the mad skills and no life, you are probably just out of luck.
+<br/>
+<br/>
+Any software security is a matter of developer human resource efforts against cracker human resource efforts.  After skimming your pack, my gut reaction is that the number of sophisticated crackers (knowledgable people who set aside the time required to actually do this stuff) is probably rather limited.  I suspect something non-trivial could be implemented that would foil all but the most talented crackers, but it would be a custom solution that would require talented developer(s).
+<br/>
+<br/>
+An idea I has was using your compiled program (or a section of it) as a key to decrypt in game graphics.  It would not prevent tampering, but the game would look ugly unless someone completely RE'ed the decryption and coded a workaround for it.
+<br/>
+<br/>
+Another idea was to load an instructions and execute them in a loop.  Ie, load, execute, load, execute, load, execute, until the routine is done.  Code that self modifies.  I suppose the next instruction the be executed could be XORed into RAM and/or not not stored in order.  You would need to know the hex values your code compiles to to do this.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#165598 - Maxxie - Mon Dec 29, 2008 12:38 pm</h4>
+    <div class="postbody"><span class="postbody">Well it's the good old Alice=Mallory Situation. Security can't be established in any way.
+<br/>
+<br/>
+So "security through obscurity" might be a choice. Just because it is as you already noticed no security but a pile of work to be done. However the above it's do not really that of an increase on the workload. It's just a little bit change: instead of skipping the check you skip some init code and prepare the registers/ram as a previous capture identified it as regular.
+<br/>
+<br/>
+An approach is to get the vulnerability down into the hardware by a chain of trust. But then we know that this doesn't stop ppl, as some hacks on protected mensa and railway digital ticket systems have shown in the last year. RE of chips needs some additional skills but in the end it's just a bit chem to get the circuit, a good optical system to get images and a pattern recognition program to regenerate the circuit-print.
+<br/>
+<br/>
+<br/>
+In the end you need to set your project some limits it should withstand. A simple TSeach like engine can be secured against (It's just a big software baseball bat), against intelligent approaches it's not.<br/>_________________<br/><a class="postlink" href="http://nintendods.desperate-programmers.com/doku.php?id=wireless_io_map" target="_blank">Trying  to bring more detail into understanding the wireless hardware</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#165613 - chishm - Tue Dec 30, 2008 12:17 am</h4>
+    <div class="postbody"><span class="postbody">If there's a specific cheat device you want to block, you can target it with your anti-manipulation code. For example, the Action Replay typically runs at 0x023FE000 (IIRC) in RAM so if you put critical code or data there it will be overwritten and no longer work. There are ways around this from the AR's point of view (relocating the cheat engine).
+<br/>
+<br/>
+However my point is if you know what you are up against (there are a limited number of cheat devices/programs), you can target your protection against it instead of a generic threat.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sgeos wrote:</b></span></td> </tr> <tr> <td class="quote"> If you get the loser with the mad skills and no life, you are probably just out of luck.</td> </tr></table><span class="postbody">That person sounds like a real winner to me ;-)<br/>_________________<br/><a class="postlink" href="http://chishm.drunkencoders.com" target="_blank">http://chishm.drunkencoders.com</a>
+<br/>
+<a class="postlink" href="http://dldi.drunkencoders.com" target="_blank">http://dldi.drunkencoders.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#165619 - sgeos - Tue Dec 30, 2008 7:56 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Maxxie wrote:</b></span></td> </tr> <tr> <td class="quote">Well it's the good old Alice=Mallory Situation. Security can't be established in any way.</td> </tr></table><span class="postbody">
+<br/>
+Sure.  Different details (flash carts/emulators + gameshark copy protection cracks VS legit hardware), same principle.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Maxxie wrote:</b></span></td> </tr> <tr> <td class="quote">So "security through obscurity" might be a choice. Just because it is as you already noticed no security but a pile of work to be done. However the above it's do not really that of an increase on the workload. It's just a little bit change: instead of skipping the check you skip some init code and prepare the registers/ram as a previous capture identified it as regular.</td> </tr></table><span class="postbody">
+<br/>
+If you know what to capture, this is "simple" enough, but the question is, how long does it take to figure out what to capture and finish the scaffolding?  The "security" only needs to last long enough to move most of your retail (e-tail?) units.  I think this timing holds whether you sincerely believe attacking piracy is worth the trouble, or you are simply contractually bound to fight it.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Maxxie wrote:</b></span></td> </tr> <tr> <td class="quote">An approach is to get the vulnerability down into the hardware by a chain of trust.</td> </tr></table><span class="postbody">
+<br/>
+And then wait for some alternative execution environment to breach that trust?  (Of course, if the wait is long enough, this is a win.)
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Maxxie wrote:</b></span></td> </tr> <tr> <td class="quote">In the end you need to set your project some limits it should withstand.</td> </tr></table><span class="postbody">
+<br/>
+I think this is the correct approach.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>chishm wrote:</b></span></td> </tr> <tr> <td class="quote">If there's a specific cheat device you want to block, you can target it with your anti-manipulation code. For example, the Action Replay typically runs at 0x023FE000 (IIRC) in RAM so if you put critical code or data there it will be overwritten and no longer work. There are ways around this from the AR's point of view (relocating the cheat engine).</td> </tr></table><span class="postbody">
+<br/>
+Could you manually clear RAM and then manually reload your program from the cart to make sure that you get an unhooked copy of your program in RAM?
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>chishm wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sgeos wrote:</b></span></td> </tr> <tr> <td class="quote"> If you get the loser with the mad skills and no life, you are probably just out of luck.</td> </tr></table><span class="postbody">That person sounds like a real winner to me ;-)</span></td> </tr></table><span class="postbody">
+<br/>
+Depends on your point of view.  Cracking games strikes me as a waste of talent, given the general shortage of skilled labor in the world.  If the individual uses their mad skills for productive ends and trades the hobby for a life, then they strike me as a real winner.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#165624 - nanou - Tue Dec 30, 2008 11:16 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sgeos wrote:</b></span></td> </tr> <tr> <td class="quote">Could you manually clear RAM and then manually reload your program from the cart to make sure that you get an unhooked copy of your program in RAM?</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+A lot of the older devices don't even work this way, though it's probably not relevant now. Instead, they'd more or less physically update the RAM themselves. But wouldn't your manual clearing procedure be circumvented by a very simple cheat (unless you took lengths to convolute it)?
+<br/>
+<br/>
+This topic reminds me of an "anti-debugging" thread I read at least 10-15 years ago. The situation was very similar: it's difficult to stop people who are roughly as intelligent as you are from taking your things apart.<br/>_________________<br/>- nanou</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#165626 - chishm - Tue Dec 30, 2008 12:25 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sgeos wrote:</b></span></td> </tr> <tr> <td class="quote">Could you manually clear RAM and then manually reload your program from the cart to make sure that you get an unhooked copy of your program in RAM?</td> </tr></table><span class="postbody">Not on the DS. The Action Replay typically hooks the ARM7 binary, which Nintendo conveniently keeps homogeneous and unmodifiable by commercial developers (the memory occupied by the AR is also assigned to the ARM7, but there are still cases where it is used, like in Animal Crossing: Wild World). 
+<br/>
+<br/>
+Assuming you could reload the ARM7 binary, you still cannot reload the NDS header nor secure area, so either of those could be permanently hooked. Of course, you could try reloading a different copy of these regions, but even then the AR only has to nullify the reload code to negate the security, as nanou mentions.
+<br/>
+<br/>
+Basically, the AR has more control over the system than your code does.<br/>_________________<br/><a class="postlink" href="http://chishm.drunkencoders.com" target="_blank">http://chishm.drunkencoders.com</a>
+<br/>
+<a class="postlink" href="http://dldi.drunkencoders.com" target="_blank">http://dldi.drunkencoders.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#165628 - tepples - Tue Dec 30, 2008 4:10 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sgeos wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Maxxie wrote:</b></span></td> </tr> <tr> <td class="quote">It's just a little bit change: instead of skipping the check you skip some init code and prepare the registers/ram as a previous capture identified it as regular.</td> </tr></table><span class="postbody">
+<br/>
+If you know what to capture, this is "simple" enough, but the question is, how long does it take to figure out what to capture and finish the scaffolding?</span></td> </tr></table><span class="postbody">
+<br/>
+Once "Press Start" is up, you've probably captured enough.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sgeos wrote:</b></span></td> </tr> <tr> <td class="quote">The "security" only needs to last long enough to move most of your retail (e-tail?) units.  I think this timing holds whether you sincerely believe attacking piracy is worth the trouble, or you are simply contractually bound to fight it.</td> </tr></table><span class="postbody">
+<br/>
+Unless the contract makes some provision to cover the entire 95 years of a corporate copyright in the United States. What digital restrictions management scheme can resist that long?
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sgeos wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>chishm wrote:</b></span></td> </tr> <tr> <td class="quote">If there's a specific cheat device you want to block, you can target it with your anti-manipulation code. For example, the Action Replay typically runs at 0x023FE000 (IIRC) in RAM so if you put critical code or data there it will be overwritten and no longer work. There are ways around this from the AR's point of view (relocating the cheat engine).</td> </tr></table><span class="postbody">
+<br/>
+Could you manually clear RAM and then manually reload your program from the cart to make sure that you get an unhooked copy of your program in RAM?</span></td> </tr></table><span class="postbody">
+<br/>
+A cheat program could hook clearing RAM, performing the software equivalent of the "tweezer attack".
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sgeos wrote:</b></span></td> </tr> <tr> <td class="quote">Cracking games strikes me as a waste of talent, given the general shortage of skilled labor in the world.</td> </tr></table><span class="postbody">
+<br/>
+Does the creative destruction of DRM strike you as a waste of talent any more than the escalation of DRM measures? Considering that much the skills used in cracking game DRM transfer fairly well to cracking peripherals so that they'll work with a Linux driver, I wouldn't think so.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#165636 - sgeos - Wed Dec 31, 2008 8:36 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>nanou wrote:</b></span></td> </tr> <tr> <td class="quote">A lot of the older devices don't even work this way, though it's probably not relevant now. Instead, they'd more or less physically update the RAM themselves.</td> </tr></table><span class="postbody">
+<br/>
+I'm curious why they stopped using the manual write strategy.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>nanou wrote:</b></span></td> </tr> <tr> <td class="quote">But wouldn't your manual clearing procedure be circumvented by a very simple cheat (unless you took lengths to convolute it)?</td> </tr></table><span class="postbody">
+<br/>
+Probably.  Just throwing ideas on the table.  I suspect randomly writing to unused memory could be defeated just as easily.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>nanou wrote:</b></span></td> </tr> <tr> <td class="quote">This topic reminds me of an "anti-debugging" thread I read at least 10-15 years ago. The situation was very similar: it's difficult to stop people who are roughly as intelligent as you are from taking your things apart.</td> </tr></table><span class="postbody">
+<br/>
+Labor versus labor.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>chishm wrote:</b></span></td> </tr> <tr> <td class="quote">The Action Replay typically hooks the ARM7 binary,</td> </tr></table><span class="postbody">
+<br/>
+Interesting.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>chishm wrote:</b></span></td> </tr> <tr> <td class="quote">Assuming you could reload the ARM7 binary, you still cannot reload the NDS header nor secure area, so either of those could be permanently hooked.</td> </tr></table><span class="postbody">
+<br/>
+So a hooked version can be loaded but not unloaded?  If that is the case, it sounds like a checksum could be used to detect a patched program.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>chishm wrote:</b></span></td> </tr> <tr> <td class="quote">Of course, you could try reloading a different copy of these regions, but even then the AR only has to nullify the reload code to negate the security, as nanou mentions.</td> </tr></table><span class="postbody">
+<br/>
+Doesn't AR usually hook vblank code?  Could you reload before the AR gets a chance to run?
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>chishm wrote:</b></span></td> </tr> <tr> <td class="quote">Basically, the AR has more control over the system than your code does.</td> </tr></table><span class="postbody">
+<br/>
+FWIW, an emulator has even more control over the environment.  I'm curious how much environmental control AR has.  Does anybody know where the AR technical docs are offhand?  (I've done a little looking and I found some info a while back but I can't find it again.)
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote">Once "Press Start" is up, you've probably captured enough.</td> </tr></table><span class="postbody">
+<br/>
+I was really asking, "How many people days does it take for a person to get into the system and figure it out enough to defeat it?"  I realize that that depends on who the person is and what the system is, among other factors.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote">Unless the contract makes some provision to cover the entire 95 years of a corporate copyright in the United States. What digital restrictions management scheme can resist that long?</td> </tr></table><span class="postbody">
+<br/>
+No anti tampering scheme can honestly be guaranteed to last 95 years, given Moore's law and all.  The protection side of the contract would be unenforceable.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote">A cheat program could hook clearing RAM, performing the software equivalent of the "tweezer attack".</td> </tr></table><span class="postbody">
+<br/>
+I suppose it could.  That would amount to an extra call during initialization.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sgeos wrote:</b></span></td> </tr> <tr> <td class="quote">Cracking games strikes me as a waste of talent, given the general shortage of skilled labor in the world.</td> </tr></table><span class="postbody">
+<br/>
+Does the creative destruction of DRM strike you as a waste of talent any more than the escalation of DRM measures?</span></td> </tr></table><span class="postbody">
+<br/>
+When you put it that way, they are much the same, except that one party is more likely to be collecting a pay check in the process than the other.  One could argue about one party potentially supporting pirates and the other party potentially undermining freedom, but that is a different conversation for another day.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote">Considering that much the skills used in cracking game DRM transfer fairly well to cracking peripherals so that they'll work with a Linux driver, I wouldn't think so.</td> </tr></table><span class="postbody">
+<br/>
+For some people it is a hobby and for others it is a religion.  I draw the line at undermining people's livelihoods.  Again, this is a different conversation for another day.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#165640 - nanou - Wed Dec 31, 2008 5:19 pm</h4>
+    <div class="postbody"><span class="postbody">IIRC, the RAM value-locking types were commonly defeated at some point. Since they physically hooked into hardware they were a bit easier to detect when enabled (via 'artifacts' in its interactions with the hardware.) Granted, that could have been remedied with a compensatory design, and it probably wasn't the case for all systems.
+<br/>
+<br/>
+I think it's more likely that they were more easily designed to intercept cart&lt;-&gt;system interactions after a while.
+<br/>
+<br/>
+I'm not too clear on how AR works these days, but it occurred to me that if you simply set enough booby traps in the middle of functional code so it can't be skipped in bulk (maybe even complicate it by using overlays) you might just out-resource the device. The fact is that any device that uses the system's resources in proportion to the amount of work it has to do would be defeated by forcing it to require more resources than it can get away with stealing from the system. Either it will simply fail, and therefore fail, or it will impinge on the game's resources and fail by breaking the game.
+<br/>
+<br/>
+I'm not sure how well that describes the AR, or whether enough booby traps can realistically be implemented to create the conditions described, but it's an idea.
+<br/>
+<br/>
+A lot of programming virtues are going to work against you. If you develop a general solution like a magic function it only needs to be defeated once. Poorly designed code (I'm, thinking BFI and things like it) on the other hand needs to be defeated in every instance.<br/>_________________<br/>- nanou</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#165642 - sgeos - Wed Dec 31, 2008 10:14 pm</h4>
+    <div class="postbody"><span class="postbody">I like the too many booby traps strategy, but am also unsure about how practical it is.  I suppose you could throw timer traps in.  Even if you can't outstrip resources, you could probably detect wild changes in timing.  The problem with going wild with the booby traps is that you risk tripping them as bugs later.
+<br/>
+<br/>
+The Spyro team (article posted earlier) used macros (and inline functions IIRC) to make the protection more tedious to defeat.  They also set booby traps that ranged in difficulty and effect, simply to play on the psychology of the crackers.  It the cracker thinks the system is working, they will move on, so you want both blaring sirens (insta-crash) and silent internal alarms (set internal game flags via scripted events).
+<br/>
+<br/>
+With the right memory management system, it seems like you could randomly locate code and data in memory.  Defeating this system requires preseeding the RNG, unless I missed a solution.
+<br/>
+<br/>
+I suppose you could also make a game that uses all the RAM on the system.  Ie, spawn critters in arrays instead of using dynamic memory allocation.
+<br/>
+<br/>
+I suppose anti-cheating traps could be measured both in terms of time to RE, and resources required to AR patch the game.  I'd be curious to see up to date AR docs if anyone knows where they live.
+<br/>
+<br/>
+I was also wondering if it might not be beneficial to try to force hooks into the non-reloadable regions of RAM.  That way the AR system is leaving a cookie in a known location, kind of like a reverse mouse-trap.
+<br/>
+<br/>
+<span style="font-weight: bold">EDIT:</span>  You might able to find macro/inline booby traps using some kind of a pattern search.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#165644 - nanou - Thu Jan 01, 2009 12:45 am</h4>
+    <div class="postbody"><span class="postbody">Yeah, I was thinking of inline/macro functions, but then there's the possibility of making search &amp; destroy easy. OTOH, if they're patching the binary outside of the system it's probably all over. 
+<br/>
+<br/>
+You could use the game state instead of random numbers to determine random locations. A nice thing to try might be relocating the game state itself upon update. This is where you'd use your macro/inline to perform the relocation then call the update procedure on the new address. AR can probably follow this, but then you have another set of macros/inlines that do the checking. 
+<br/>
+<br/>
+Taking the thought too far:
+<br/>
+<br/>
+<span style="font-weight: bold">Assuming the macros/inlines aren't neutered</span>, the AR code can mess up in two ways: 1. write a state that isn't valid for the current location of that state and 2. if you keep references to the last n state instances around (even just one), they can be checked for valid state progressions (record the change you're about to make as part of the state.)
+<br/>
+<br/>
+#2 seems to be easy enough to defeat. I really like #1 though. It can probably still be solved by the AR, but it will take some time to compute. If I understand AR correctly, this would be a burdensome task for it and you could easily get your check in before it's done. You can extend it in a number of other ways too.
+<br/>
+<br/>
+(This can still be defeated by writing out the desired state in AR code, allocating it in a valid area and keeping the state reference at that area. If you can assume frequent state updates, then you can use the current time as part of the check and blow the whistle if it hasn't been moved recently enough. You can even be mean and relocate some important code to the last state location every time you move it. This messes with #2, but #2 isn't all that great anyway.)
+<br/>
+<br/>
+The part in bold is a huge assumption. I can't say much about it except: make it as hard as possible to detect and write the code so that constantly breaking the macro/inlines when they're not in use will break something else and crash the game. You can also write a few variations that work in completely different ways to the same end. Eventually you'll still have to worry about how much you 'litter' though.
+<br/>
+<br/>
+I think the hardware is also a good idea. Timer based checks, cache behavior, etc. are all likely sources of information about an altered environment. I personally like pushing against the resources available to the AR, or using code that if successful will expose tampering and if not will leave some kind of measurable consequence. The unfortunate part is that you'd have to place this all over your code so that it does not get intercepted. Relocating code like you say might work if it can be reliably done, but I'm not sure that's possible. I think AR can be programmed to dereference the locations and make hell for you from there (unless you can just NOP everything and let your program eventually arrive at the right location instead of using direct references... which isn't really a bad idea provided it doesn't waste too much time. I'm not too good with ASM so I've no idea whether that really works though.)<br/>_________________<br/>- nanou</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#165656 - sgeos - Fri Jan 02, 2009 4:26 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>nanou wrote:</b></span></td> </tr> <tr> <td class="quote">Yeah, I was thinking of inline/macro functions, but then there's the possibility of making search &amp; destroy easy.</td> </tr></table><span class="postbody">
+<br/>
+I think the correct way to play this is like a game of Go.  Ie, I know you can strip inline/macro functions, but I'm going to make you do it anyway.  I'll also make a bunch of moves you can counter, some more easily than others, but I'm going to make you do all the work anyway.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>nanou wrote:</b></span></td> </tr> <tr> <td class="quote">OTOH, if they're patching the binary outside of the system it's probably all over.</td> </tr></table><span class="postbody">
+<br/>
+Depends on how long it takes them to release the patch.  Stalling for long enough is a win condition.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>nanou wrote:</b></span></td> </tr> <tr> <td class="quote">You could use the game state instead of random numbers to determine random locations.</td> </tr></table><span class="postbody">
+<br/>
+That is an interesting thought, but it still seems like it would be easy enough to pull the seed to a fixed value.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>nanou wrote:</b></span></td> </tr> <tr> <td class="quote">A nice thing to try might be relocating the game state itself upon update.</td> </tr></table><span class="postbody">
+<br/>
+As in...?
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">game_state_t *moveGameState(game_state_t *pOldState)
+<br/>
+{
+<br/>
+   game_state_t *newState = (game_state_t *)rand_malloc(sizeof(game_state_t));
+<br/>
+   copyGameState(pOldState, newState);
+<br/>
+   free(pOldState);
+<br/>
+   return newState;
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>nanou wrote:</b></span></td> </tr> <tr> <td class="quote"><span style="font-weight: bold">Assuming the macros/inlines aren't neutered</span></td> </tr></table><span class="postbody">
+<br/>
+The cute thing about using a filter to neutralize macros/inlines is that by default it is going to catch everything that looks exactly like the macro/inline, so you could set up an anti-filter booby trap.  You encrypt something game critical using the macro/inline code as the key.  It shouldn't matter if the copy of the key is live or a set of identical values, because a naive neutralizer should find and destroy it either way.  If you want to put anti-neutralization code in the game, I think you want to be overzelous with your macro/inline to the extent it just becomes obvious to use a filter to get rid of it all.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>nanou wrote:</b></span></td> </tr> <tr> <td class="quote">the AR code can mess up in two ways: 1. write a state that isn't valid for the current location of that state</td> </tr></table><span class="postbody">
+<br/>
+If you split your game state into sections and randomly placed/shuffled the sections in slots periodically, then writes to fixed addresses cause serious game state corruption.  It seems like the easiest way to defeat this system would be to make sure the shuffling never happens at all.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>nanou wrote:</b></span></td> </tr> <tr> <td class="quote">2. if you keep references to the last n state instances around (even just one), they can be checked for valid state progressions (record the change you're about to make as part of the state.)</td> </tr></table><span class="postbody">
+<br/>
+Couldn't you just shark the pointer so that states [n] and [n-1] point to the same location?
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>nanou wrote:</b></span></td> </tr> <tr> <td class="quote">I really like #1 though. It can probably still be solved by the AR, but it will take some time to compute. If I understand AR correctly, this would be a burdensome task for it</td> </tr></table><span class="postbody">
+<br/>
+I think "you don't to run at all" is the easiest way to defeat any system.  If a portion of the memory randomization code never runs at all, will your game break?  If things run from their current locations, failing to move them seems like the obvious counter measure.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>nanou wrote:</b></span></td> </tr> <tr> <td class="quote">You can even be mean and relocate some important code to the last state location every time you move it.</td> </tr></table><span class="postbody">
+<br/>
+Relocation could be deactivated and an imaginary location could be used for the last state.  There might be conflicts with the memory allocation system if things are allocated dynamically.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>nanou wrote:</b></span></td> </tr> <tr> <td class="quote">The part in bold is a huge assumption. I can't say much about it except: make it as hard as possible to detect and write the code so that constantly breaking the macro/inlines when they're not in use will break something else and crash the game.</td> </tr></table><span class="postbody">
+<br/>
+See the part about the anti neutralization booby trap, above.  I basically agree.  I think the macros/inlines need to do both a sanity check, and also some other sort of update that the game assumes will get done.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>nanou wrote:</b></span></td> </tr> <tr> <td class="quote">You can also write a few variations that work in completely different ways to the same end.</td> </tr></table><span class="postbody">
+<br/>
+I think so too.  A 10 minute "solution" is going to requrie a comparable amount of time to counter.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>nanou wrote:</b></span></td> </tr> <tr> <td class="quote">Eventually you'll still have to worry about how much you 'litter' though.</td> </tr></table><span class="postbody">
+<br/>
+Unless something assumption based can be set up, the litter could become a problem.  I wonder if somehow a LCG couldn't be used.  So long as your LCG takes the form of <span style="font-weight: bold">f(n+1) = f(n)*m</span>, you can set up a LCG in the form <span style="font-weight: bold">f(n+x) = f(n)*M</span>, for any value of x.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>nanou wrote:</b></span></td> </tr> <tr> <td class="quote">I think the hardware is also a good idea. Timer based checks, cache behavior, etc. are all likely sources of information about an altered environment.</td> </tr></table><span class="postbody">
+<br/>
+Anything you can do to get a tip off.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">I personally like pushing against the resources available to the AR,</td> </tr></table><span class="postbody">
+<br/>
+You might get this for free in very high end games.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">or using code that if successful will expose tampering and if not will leave some kind of measurable consequence.</td> </tr></table><span class="postbody">
+<br/>
+Trapped traps.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">The unfortunate part is that you'd have to place this all over your code so that it does not get intercepted.</td> </tr></table><span class="postbody">
+<br/>
+I think you need to do this anyway.  Did you read the Spyro article?  If your game takes 100 times as much effort to crack as anything else out there, a fair number of the would be crackers will give up.  I'm don't know much about cracker culture, but I don't have the impression of a unified group that shares all information.  I think if some people give up your game will remain uncracked for much longer because due to lack of information sharing.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Relocating code like you say might work if it can be reliably done, but I'm not sure that's possible. I think AR can be programmed to dereference the locations and make hell for you from there</td> </tr></table><span class="postbody">
+<br/>
+I have two thoughts on this.  The first one is, make them do it.  The second one is, study how they broke it and cover that next time.  I think the strategy needs to be iterative.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">(unless you can just NOP everything and let your program eventually arrive at the right location instead of using direct references... which isn't really a bad idea provided it doesn't waste too much time. I'm not too good with ASM so I've no idea whether that really works though.)</td> </tr></table><span class="postbody">
+<br/>
+It might not be such a big deal.  You can't do any of this in time critical code anyway.  I do think that at some point you really need to consciously figure out your what your trade off between copy protection and battery life (and a other concerns) is.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#165660 - nanou - Fri Jan 02, 2009 5:30 am</h4>
+    <div class="postbody"><span class="postbody">I think you're right about the Go approach. Playing all-or-nothing against the crackers is probably just going to end in tears.
+<br/>
+<br/>
+In relocating the game state, you have the right idea but I was thinking more specifically of using the contents of the state to generate the next location to use--like indexing available memory with the value of a checksum on game state. This, of course, would have to be taken in context of available memory, so the exact computation might get a bit messy.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sgeos wrote:</b></span></td> </tr> <tr> <td class="quote">Couldn't you just shark the pointer so that states [n] and [n-1] point to the same location?</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+You could, but its easy to see that happening. Plus, if you validate the progression of state changes, or just check to make sure they are all allocated in the correct position based on their contents then the jig is up.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sgeos wrote:</b></span></td> </tr> <tr> <td class="quote">If a portion of the memory randomization code never runs at all, will your game break? If things run from their current locations, failing to move them seems like the obvious counter measure.</td> </tr></table><span class="postbody">
+<br/>
+Well, the idea is it that since the game state determines its location in memory, failing to move it to the correct location will cause a check to fail.
+<br/>
+<br/>
+I can also think of a few dozen problems, like the fact that jumping into update code -- even that which is "in situ" -- could be used to change the state. Sure, you'd end up at some specific location in code after that, but that can be dealt with, or might not even be a problem. You could start relocating that too, I suppose.
+<br/>
+<br/>
+I'm tempted to say that the best method, if you really want to have hope for it, is to write the whole thing in self-modifying code with little distinction between data and code. I wouldn't want to crack that. (I wouldn't want to write it either.)
+<br/>
+<br/>
+About cracker culture... I believe there's a  "scene" environment to it, so there is localized sharing. If one person/group only makes modest progress, though, they might publish what they had done and another might get farther. I haven't really gone looking for evidence of this, but that's what my intuition tells me.<br/>_________________<br/>- nanou</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#165833 - sgeos - Thu Jan 08, 2009 9:35 am</h4>
+    <div class="postbody"><span class="postbody">Taking a step back, it seems there are a few memory games that can be played:
+<br/>
+<ul>Hide from/confuse the AR system.
+<br/>
+Step on/corrupt the AR system.
+<br/>
+Resource exhaustion.</ul>Likewise, traps also fall into a few categories:
+<br/>
+<ul>System breaks in an "illegit" environment (hardware detail black magic).
+<br/>
+Detect an "illegit" environment and react.
+<br/>
+Anti-crack traps.</ul></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>nanou wrote:</b></span></td> </tr> <tr> <td class="quote">I'm tempted to say that the best method, if you really want to have hope for it, is to write the whole thing in self-modifying code with little distinction between data and code. I wouldn't want to crack that. (I wouldn't want to write it either.)</td> </tr></table><span class="postbody">
+<br/>
+This sounds about right to me.
+<br/>
+<br/>
+As you mentioned, you can't protect yourself from someone as good as yourself.  Based on this principle, I think you need to raise the bar and have a person (or people) who do nothing but copy protection.  I suspect this person would live by the Art of Computer Programming, various technical docs, white papers, algorithm books and other highly technical resources.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>nanou wrote:</b></span></td> </tr> <tr> <td class="quote">About cracker culture... I believe there's a  "scene" environment to it, so there is localized sharing.</td> </tr></table><span class="postbody">
+<br/>
+Fair enough.  Most games don't have a whole lot of resources put into protection, so I don't image your run of the mill cracker actually needs to be very good.  I wonder how many of them <span style="font-weight: bold">are</span> actually any good.  (And what their demographic is, if there is one.)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#165838 - nanou - Fri Jan 09, 2009 2:16 am</h4>
+    <div class="postbody"><span class="postbody">I'm reminded of Core War in many ways. If only the hardware would randomly locate your code for you, it would really start to look that way.
+<br/>
+<br/>
+The anti-cracker has to solve for the general case, and the cracker does not. It's unfair from the beginning. I would say that being a successful cracker does require quite a bit of skill. At least, they have to be past the initial learning curve and are at the point where they can learn incrementally. I am making some assumptions about what they're up against and I could be wrong. 
+<br/>
+<br/>
+I knew a few people in school that thought modifying .ini files and registry settings was something to boast about. I think we're talking about people who use debuggers and probably have a basic, if not better, understanding of ASM and programming in general. I know a lot do not, but I wonder how successful they are. Maybe things that need cracking are only token efforts at best and any idiot with a copy of "HowTo: Crack The Gibson, Illustrated" can get past most of it. But most games don't implement anti-cheating functionality, and I suspect most software makes no effort to safeguard against runtime cracks.
+<br/>
+<br/>
+Near the end of the DOS games era, I remember a few titles with copy protection schemes that would trigger a false-positive AV warning. I was told this was a consequence of using self-modifying code, but I'm not sure. I assume these have been cracked anyway, but I never really felt the urge to check.<br/>_________________<br/>- nanou</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#165842 - sgeos - Fri Jan 09, 2009 7:40 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>nanou wrote:</b></span></td> </tr> <tr> <td class="quote">I'm reminded of Core War in many ways.</td> </tr></table><span class="postbody">
+<br/>
+I've never played Core War, but one of my friends in high school talked about it a lot.  I suspect a Core War junkie would enjoy being an anti-cracker.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>nanou wrote:</b></span></td> </tr> <tr> <td class="quote">If only the hardware would randomly locate your code for you, it would really start to look that way.</td> </tr></table><span class="postbody">
+<br/>
+I suspect some sort of special code loader could be created.  All of the executable code would have to be made to be run from an arbitrary address (or it would need to be patched as loaded).
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>nanou wrote:</b></span></td> </tr> <tr> <td class="quote">The anti-cracker has to solve for the general case, and the cracker does not. It's unfair from the beginning.</td> </tr></table><span class="postbody">
+<br/>
+The crackers will win in the end.  The have infinite time and they do not need to worry about budgets.  They do not have access to the source, so they need to figure everything out.  I think this is the biggest (only?) advantage the anti-cracker has.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>nanou wrote:</b></span></td> </tr> <tr> <td class="quote">I would say that being a successful cracker does require quite a bit of skill.</td> </tr></table><span class="postbody">
+<br/>
+A real cracker does.  I suspect many of the real crackers make tools and train push button kiddie crackers to help, although even being magic tool user requires a certain level of technical comfort.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>nanou wrote:</b></span></td> </tr> <tr> <td class="quote">At least, they have to be past the initial learning curve and are at the point where they can learn incrementally.</td> </tr></table><span class="postbody">
+<br/>
+Not only that, they need to have time to do the cracking.  Full time jobs and marriage take a lot of time.  (At least, they ought to take much time.)
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>nanou wrote:</b></span></td> </tr> <tr> <td class="quote">I am making some assumptions about what they're up against and I could be wrong.</td> </tr></table><span class="postbody">
+<br/>
+I'm sure it depends on the platform.  Given the general lack of anti-piracy/anti-cheating in DS games, I suspect the tools are probably run of the mill debuggers and such.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>nanou wrote:</b></span></td> </tr> <tr> <td class="quote">I think we're talking about people who use debuggers and probably have a basic, if not better, understanding of ASM and programming in general.</td> </tr></table><span class="postbody">
+<br/>
+Agree.  I suspect the better people are industry people, people from related industries, or unemployed tech academics, although I don't think there are a whole lot them going after the same platform all at once.  I may be completely wrong.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>nanou wrote:</b></span></td> </tr> <tr> <td class="quote">But most games don't implement anti-cheating functionality, and I suspect most software makes no effort to safeguard against runtime cracks.</td> </tr></table><span class="postbody">
+<br/>
+Hence any vaguely competent person with a little persistence should be able to figure something out eventually.
+<br/>
+<br/>
+I suspect the DOS games were eventually cracked.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#169639 - Karatorian - Mon Jul 27, 2009 6:44 pm</h4>
+    <div class="postbody"><span class="postbody">Well, I've done some romhacking myself (not for piracy, for modding) and I can say at least some people in the scene (which has overlaps with the cracking and piracy scene) really do know their stuff. These guys, the really good ones anyway, are ASM phreaks.
+<br/>
+<br/>
+If you crack stuff or rom hack, the code you deal with day in and day out is machine code or opaque dissassembler dumps. Some of these guys know more about the hardware than I ever will. I've seen people bypass checksums, fix bugs (even fixed a few myself), reverse engineer proprietary compression algorithms, rewrite code to be more efficient than the original (so as to use the extras space or time for thier own stuff) and convert games to the point where you wouldn't be able to deduce the original game without busting out the hexeditor yourself if they didn't mention it in thier docs.
+<br/>
+<br/>
+However, the crowd I hang out with is mostly likely only going to be interesting in your game if it's an old school classic or something Japanese that never got (offically) translated. But the point is, some of these people have the skills to take on practially anything.
+<br/>
+<br/>
+Furthermore, copy protection is impossible. Pretty much by definition.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#169666 - sgeos - Tue Jul 28, 2009 4:36 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Karatorian wrote:</b></span></td> </tr> <tr> <td class="quote">These guys, the really good ones anyway, are ASM phreaks.</td> </tr></table><span class="postbody">
+<br/>
+Yes, the really good one are unstoppable, but how many of them are out there?
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Karatorian wrote:</b></span></td> </tr> <tr> <td class="quote">Furthermore, copy protection is impossible. Pretty much by definition.</td> </tr></table><span class="postbody">
+<br/>
+Correct.  The question is, how long can you delay a crack?  Also, at what point are you facing diminishing returns?  For most projects, the respective answers are "not long enough" and "right away".
+<br/>
+<br/>
+Spore had a huge copy-protection budget, but it is cracked.  High profile games get cracked fast because they attract top talent.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

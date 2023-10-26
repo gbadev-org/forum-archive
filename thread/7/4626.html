@@ -1,0 +1,217 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Can I actually do this? Struct with const variables - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>C/C++ > Can I actually do this? Struct with const variables</h2>
+<div id="posts">
+<div class="post">
+    <h4>#31784 - identitycrisisuk - Tue Dec 14, 2004 3:37 pm</h4>
+    <div class="postbody"><span class="postbody">Bit of a syntax question this, what I'm trying to do is collect together all of my data that is output into files for background maps, tiles etc. I'm starting to think that this may not be a very good way of doing it but I just wanted to create a struct I'd call LevelInfo, which would have pointers to and information about tile data etc. Then I could have an array of these for my levels and point to the relevant entry for the current level. I thought this would help clean up my code which currently has a lot of BG0[i+32*j] = SkyMap[i+Sky_WIDTH*j], if(pos.x &gt; Level_WIDTH) etc. as I'm just using the data output by MapEd directly. As long as each background always works the same (BG0 is normal scroll, BG1 is 0.5 paralax) I could always use the same basic functions for moving around the level etc.
+<br/>
+<br/>
+Here's the struct that I made to hold pointers to the data:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">typedef struct
+<br/>
+{
+<br/>
+   const u16 *CollisionMap, *BG0Map, *BG1Map, *BG2Map, *BG3Map;
+<br/>
+   const int BG0Width, BG0Height, BG1Width, BG1Height, BG2Width, BG2Height, BG3Width, BG3Height;
+<br/>
+   const u16 *BGPalette, *BGTiles;
+<br/>
+   const int BGPalettes, BGTileNum;
+<br/>
+}LevelInfo, *LevelInfoPtr;</td> </tr></table><span class="postbody">
+<br/>
+I then tried to initialise it like this:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">LevelInfo Level[] =
+<br/>
+{
+<br/>
+   {
+<br/>
+      bgCollision, bgMapLevel, bgMapFog, bgMapSky, 0,
+<br/>
+      Level_WIDTH, Level_HEIGHT, Fog_WIDTH, Fog_HEIGHT, Sky_WIDTH, Sky_HEIGHT, 0, 0,
+<br/>
+      bgPalette, bgTiles,
+<br/>
+      BG_PALETTES, BG_TILES
+<br/>
+   },
+<br/>
+};</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+from that I'm getting errors like: "error C2440: 'initializing' : cannot convert from 'const unsigned short [6400]' to 'LevelInfo'" making me think it's trying to make each variable a LevelInfo struct rather than a member of the struct. Are you allowed to put consts in a struct and if so how do you initialise them?
+<br/>
+<br/>
+I tried taking away the consts in the struct definition and that gives errors like: "error C2440: 'initializing' : cannot convert from 'const unsigned short [6400]' to 'unsigned short *'", which makes more sense than the above one - it's at least trying to put the variables in properly but recognising that I'd be taking away the const nature of the original pointers by putting their address in a non const pointer. I'd never modify the content of these LevelInfo structs so is there some way I can get around this issue? Or anyone want to tell me I'm an idiot and suggest something completely different ;)<br/>_________________<br/></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">CanIKickIt(YES_YOU_CAN);</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#31786 - poslundc - Tue Dec 14, 2004 5:29 pm</h4>
+    <div class="postbody"><span class="postbody">It will probably work if you typecast the inner braces as a LevelInfo and declare the array as const, ie:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">const LevelInfo Level[] =
+<br/>
+{
+<br/>
+   (LevelInfo) {
+<br/>
+      bgCollision, bgMapLevel, bgMapFog, bgMapSky, 0,
+<br/>
+      Level_WIDTH, Level_HEIGHT, Fog_WIDTH, Fog_HEIGHT, Sky_WIDTH, Sky_HEIGHT, 0, 0,
+<br/>
+      bgPalette, bgTiles,
+<br/>
+      BG_PALETTES, BG_TILES
+<br/>
+   }
+<br/>
+};</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+If that doesn't work, you can try defining your levels piecemeal:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">const LevelInfo level1 = {
+<br/>
+   bgCollision, bgMapLevel, bgMapFog, bgMapSky, 0,
+<br/>
+   Level_WIDTH, Level_HEIGHT, Fog_WIDTH, Fog_HEIGHT, Sky_WIDTH, Sky_HEIGHT, 0, 0,
+<br/>
+   bgPalette, bgTiles,
+<br/>
+   BG_PALETTES, BG_TILES
+<br/>
+};
+<br/>
+<br/>
+const LevelInfo *levels[] = {&amp;level1};</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+(Although in this case your levels array contains pointers to LevelInfos rather than the actual data.)
+<br/>
+<br/>
+I personally prefer the second method because it's more practical if you write a map editor to be able to have it output the entire thing in a single structure (which you can then place a reference to in your array of levels), but there is no single "correct" way and whatever works best for your project is fine.
+<br/>
+<br/>
+You must define the arrays as const if you don't want to provide an array size and deal with some other general ickiness. Removing the const qualifier can be done if you typecast away the const-ness, but it's unsafe and unrecommended to do so if you can at all avoid it, which you easily can.
+<br/>
+<br/>
+<span style="font-weight: bold">Edit:</span> Various corrections made.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#31793 - identitycrisisuk - Tue Dec 14, 2004 8:03 pm</h4>
+    <div class="postbody"><span class="postbody">Oh for the love of....
+<br/>
+<br/>
+I was trying all this out in VC++ and nothing was working, your first suggestion moaned at me about braces and the second one said that: "non-aggregates cannot be initialized with initializer list", which I looked up on MSDN and makes no sense whatsoever.
+<br/>
+<br/>
+However I just thought I'd try compiling it as GBA code with DevKitARM and away it went with no complaints &gt;:( I'm guessing it's maybe to do with the difference between the effect of const on the GBA (where in memory it goes) and a straight C++ program.
+<br/>
+<br/>
+Still a little annoying though, I'd like to know why VC++ thinks that my LevelInfo struct must contain one of the following:
+<br/>
+<br/>
+* The type has one or more user-defined constructors.
+<br/>
+* The type has one ore more non-static, private data members.
+<br/>
+* The type has one or more virtual functions.
+<br/>
+* The type has a base class.
+<br/>
+* The type is a __gc class or __gc interface.
+<br/>
+* The type is a scalar (int i = {};)
+<br/>
+* The type has a non-fixed dimension array (zero-array) whose elements have destructors.<br/>_________________<br/></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">CanIKickIt(YES_YOU_CAN);</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#31795 - sajiimori - Tue Dec 14, 2004 8:23 pm</h4>
+    <div class="postbody"><span class="postbody">You're on the right track, and I'd suggest going even further.  For instance, rather than having 8 seperate width and height variables, create a Size struct with x and y components and use an array of 4 of those.
+<br/>
+<br/>
+In VC6 and prior, all bets are off.  It was never meant to meet standards besides Microsoft's own.  VC.NET is much improved in that respect.  The differences you're seeing are not due to the GBA, but GCC's better support of C and C++.
+<br/>
+<br/>
+A couple other notes:
+<br/>
+<br/>
+In C, there's no point in declaring a particular struct member const (as opposed to the target of a pointer in that struct).  So having 'const int' members doesn't make much sense, but having 'const u16*' members does.
+<br/>
+<br/>
+Also in C, you can never cast anything to a struct type -- only to a pointer to a struct of that type.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#31796 - identitycrisisuk - Tue Dec 14, 2004 8:38 pm</h4>
+    <div class="postbody"><span class="postbody">:o Damn you Microsoft! Even if I wouldn't be able to get my computer working without them... but at least I'm using Firefox, ha! ;)
+<br/>
+<br/>
+I think I might take the struct further again now that you mention it, an array of 4 dimension structs and an array of 4 *u16's so that I can reference them all with a number, could well come in useful. Thanks for the other pointers, that'll help tidy things up I think.
+<br/>
+<br/>
+*goes away muttering under his breath about Bill Gates*<br/>_________________<br/></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">CanIKickIt(YES_YOU_CAN);</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#31804 - sgeos - Tue Dec 14, 2004 9:53 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">const u16 *data;</td> </tr></table><span class="postbody">
+<br/>
+This points to const u16.  The pointer can be changed, but the <span style="font-weight: bold">data it points to can not be changed</span>.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">u16 * const data;</td> </tr></table><span class="postbody">
+<br/>
+This points to u16.  The <span style="font-weight: bold">pointer can not be changed</span>, but the data it points to can.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">u16 const * data;</td> </tr></table><span class="postbody">
+<br/>
+I forget what this is.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">const u16 * const data;</td> </tr></table><span class="postbody">
+<br/>
+This points to const u16.  <span style="font-weight: bold">Neither the pointer nor the data it points to can be changed</span>.
+<br/>
+<br/>
+-Brendan</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#31819 - tepples - Tue Dec 14, 2004 11:52 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sgeos wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">u16 const * data;</td> </tr></table><span class="postbody">
+<br/>
+I forget what this is.</span></td> </tr></table><span class="postbody">
+<br/>
+This is the same as const u16 *data; as qualifiers such as const and volatile can be moved around as long as they don't cross a *.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

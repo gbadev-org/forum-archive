@@ -1,0 +1,179 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>clearing a tilemap with DMA - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Graphics > clearing a tilemap with DMA</h2>
+<div id="posts">
+<div class="post">
+    <h4>#68580 - nmain - Wed Jan 25, 2006 9:02 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+  // priority 0, tile base: 0600c000
+<br/>
+  // 16 color, map base: 06005000
+<br/>
+  // 512x256
+<br/>
+  REG_BG1CNT = 0x4a0c;
+<br/>
+  u32 scratch = 0;
+<br/>
+  DMA3COPY (&amp;scratch, 0x06005000, DMA_IMMEDIATE | DMA32 | DMA_SRC_FIXED | (4096 / 4));
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+This should set every entry in the BG1 tilemap to tile 0, palette 0, and no h or vflip.  But it doesn't; instead the tilemap is populated by a repeating 32 bit non-zero value.  Debugging it; the DMA registers appear to be populated properly, but derefrencing the pointer for source address leads to a iwram memory location whose value is not 0.  So the DMA is doing exactly what I expect it to, but scratch isn't 0?
+<br/>
+<br/>
+edit:  this is what gcc generates.  I can't write assembly and can barely read it, but as best as I can tell scratch never seems to be initialized?  The first strh is BG1CNT; the second is BG1HOFS (not in the C fragment; but just set to 0), and the three str are the three DMA3 registers.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+   .file   "menu.c"
+<br/>
+   .text
+<br/>
+   .align   2
+<br/>
+   .global   clearmenubg
+<br/>
+   .type   clearmenubg, %function
+<br/>
+clearmenubg:
+<br/>
+   @ args = 0, pretend = 0, frame = 4
+<br/>
+   @ frame_needed = 0, uses_anonymous_args = 0
+<br/>
+   @ link register save eliminated.
+<br/>
+   mov   r3, #18944
+<br/>
+   mov   r1, #67108864
+<br/>
+   add   r3, r3, #12
+<br/>
+   strh   r3, [r1, #10]   @ movhi
+<br/>
+   mov   r3, #100663296
+<br/>
+   add   r3, r3, #20480
+<br/>
+   sub   sp, sp, #4
+<br/>
+   mov   r2, #-2063597568
+<br/>
+   str   sp, [r1, #212]
+<br/>
+   add   r2, r2, #1024
+<br/>
+   str   r3, [r1, #216]
+<br/>
+   mov   r3, #0   @ movhi
+<br/>
+   str   r2, [r1, #220]
+<br/>
+   @ lr needed for prologue
+<br/>
+   strh   r3, [r1, #20]   @ movhi
+<br/>
+   add   sp, sp, #4
+<br/>
+   bx   lr
+<br/>
+   .size   clearmenubg, .-clearmenubg
+<br/>
+   .ident   "GCC: (GNU) 4.0.2"
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#68584 - Cearn - Wed Jan 25, 2006 9:41 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>nmain wrote:</b></span></td> </tr> <tr> <td class="quote">edit: this is what gcc generates. I can't write assembly and can barely read it, but as best as I can tell scratch never seems to be initialized?
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+It's something like that yeah. The problem is that variables usually go directly into registers, which do not have addresses. What you can take the address of is the stack, which is also a place variables sometimes go. The code you quoted makes a place on the stack, and even puts its address into REG_DMA3SAD, but for some reason the actual value is never actually put there.
+<br/>
+<br/>
+A solution to this is to make the scratch variable or the DMA3COPY argument volatile. 
+<br/>
+This is what I use (well I don't because I have a faster fill, but this is what I would use if I wanted to do it with DMA), feel free to modify for your own purposes:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">INLINE void DMA_FILL(void *dst, volatile u32 src, u32 count, u32 ch, u32 mode)
+<br/>
+{
+<br/>
+   dma_mem[ch].cnt= 0;   
+<br/>
+   dma_mem[ch].src= (const void*)&amp;src;
+<br/>
+   dma_mem[ch].dst= dst;
+<br/>
+   dma_mem[ch].cnt= count | mode | DMA_SRC_FIX;   
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+<span style="font-style: italic">NOTE</span>: the exact same thing happens with CpuSet and CpuFastSet if you want to use those for fills.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#68589 - nmain - Wed Jan 25, 2006 10:52 pm</h4>
+    <div class="postbody"><span class="postbody">Thanks.  :)  As you suggested, declaring scratch as volatile fixed the problem.
+<br/>
+<br/>
+I understand local variables can be just put into registers without ever giving them memory, but if I use the &amp; operator it should put the variable on the stack somewhere, and if I initialize that variable to something the copy on the stack should get that value.  The optimizer should be smart enough to know that if I use &amp;var, I might dereference it later and expect it to have the right value!  Maybe because DMA3COPY isn't a function call but just an macro that expands to placing &amp;var in another memory location, gcc doesn't "catch" that the value of var on the stack needs to be updated?  It works as is with -O0..
+<br/>
+<br/>
+edit: Thinking about it a little more, gcc did do the right thing.  Even if I store &amp;scratch elsewhere, it shouldn't legally be valid after returning from this function, and gcc has no way to know that the write will cause a DMA transfer of that variable to occur *before* this function even returns.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#68596 - Cearn - Wed Jan 25, 2006 11:41 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>nmain wrote:</b></span></td> </tr> <tr> <td class="quote">I understand local variables can be just put into registers without ever giving them memory, but if I use the &amp; operator it should put the variable on the stack somewhere, and if I initialize that variable to something the copy on the stack should get that value.  The optimizer should be smart enough to know that if I use &amp;var, I might dereference it later and expect it to have the right value!  Maybe because DMA3COPY isn't a function call but just an macro that expands to placing &amp;var in another memory location, gcc doesn't "catch" that the value of var on the stack needs to be updated? It works as is with -O0.
+<br/>
+<br/>
+edit: Thinking about it a little more, gcc did do the right thing.  Even if I store &amp;scratch elsewhere, it shouldn't legally be valid after returning from this function, and gcc has no way to know that the write will cause a DMA transfer of that variable to occur *before* this function even returns.</td> </tr></table><span class="postbody">
+<br/>
+You can't store &amp;scratch elsewhere, because it's a local variable so it doesn't even exist anywhere else. Also, GCC has no knowledge of what DMA does. All it sees is that you put the address of a variable somewhere in memory, which it dutifully does, and because the DMA regs are volatile, it expects it to be used somewhere, whether the variable <span style="font-style: italic">itself</span> exists by that time is none of GCC's concern: if you're stupid enough to use local variables outside of the function it's defined in, that's your problem. This is in the C spec, btw, not my own opinion and I've made the mistake many a times myself. 
+<br/>
+<br/>
+You do have a point though. While it's true that the address is used, the actual <span style="font-style: italic">value</span> of scratch isn't. So GCC figures that that can be removed. So what you're left with could be expected by some form of logic: the <span style="font-style: italic">space</span> of the variable is made and used, but you never inform GCC you want to use the variable itself, so it dikes that out of the function like any other non-volatile thing. While this is very annoying, I guess it does make sense. 
+<br/>
+<br/>
+Hm, never thought of it that way before. Thanks!
+<br/>
+<br/>
+<span style="font-size: 7px; line-height: normal">PONDER: now, I wonder if you can modify the DMA definition in such a way that they can be used as we'd like ... </span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#68999 - RickA - Fri Jan 27, 2006 9:34 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Cearn wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+This is what I use (well I don't because I have a faster fill, but this is what I would use if I wanted to do it with DMA)</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Would you mind sharing how you do your fill?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#69100 - Cearn - Sat Jan 28, 2006 2:01 pm</h4>
+    <div class="postbody"><span class="postbody">The memset16() and memset32() that come with <a class="postlink" href="http://user.chem.tue.nl/jakvijn/tonc/toc.htm" target="_blank">tonc</a>'s code. Essentially they do what CpuFastSet does, but without its alignment/size restrictions. The difference in speed isn't necessarily that great (~15%), but the fact that DMA can screw up interrupts while CpuFastSet doesn't is also important.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

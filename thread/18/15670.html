@@ -1,0 +1,128 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>libfat/dldi corrupting memory - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > libfat/dldi corrupting memory</h2>
+<div id="posts">
+<div class="post">
+    <h4>#158487 - ingramb - Thu Jun 12, 2008 5:19 am</h4>
+    <div class="postbody"><span class="postbody">I have code (more or less) like this:
+<br/>
+<br/>
+***
+<br/>
+NeoSystem.h
+<br/>
+<br/>
+typedef struct {
+<br/>
+   u32 val0;
+<br/>
+   u32 val1;
+<br/>
+   u32 val2;
+<br/>
+   ...
+<br/>
+} TNeoContext;
+<br/>
+<br/>
+register TNeoContext* g_neo asm("r7");
+<br/>
+<br/>
+***
+<br/>
+NeoSystem.c
+<br/>
+<br/>
+TNeoContext g_neoContext;
+<br/>
+<br/>
+//call this at program start
+<br/>
+void init() { g_neo = &amp;g_neoContext; }
+<br/>
+<br/>
+int systemOpen(const char* szFile)
+<br/>
+{
+<br/>
+   u32 testVal = g_neo-&gt;val0;
+<br/>
+   int fd = open(szFile, O_RDONLY);
+<br/>
+   ASSERT(testVal == g_neo-&gt;val0); //!!!!!!! this fails!
+<br/>
+   return fd;
+<br/>
+}
+<br/>
+<br/>
+<br/>
+On my max media dock, everything is fine.  On my ninjapass x9, the above ASSERT fails.  Somewhere inside open, the value of g_neoContext is changing.  I've moved g_neoContext back and forth between DTCM and main ram, and get the exact same behavior.  So the value getting corrupted does not depend on a specific memory address.  What else could be going wrong?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#158488 - eKid - Thu Jun 12, 2008 6:15 am</h4>
+    <div class="postbody"><span class="postbody">You're code confuses me. :\
+<br/>
+Why are you using "r7" ?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#158489 - ingramb - Thu Jun 12, 2008 6:28 am</h4>
+    <div class="postbody"><span class="postbody">This is code from NeoDS which interfaces with the Cyclone cpu core.  Cyclone uses r7 as a pointer to its context.  In the actual NeoDS codebase, the first element of TNeoContext is the cyclone context.  So memory handlers written in assembly called from cyclone can acces g_neo via r7 without having to grab the pointer from memory.
+<br/>
+<br/>
+But none of this is important to the issue at hand =)  The only thing that matters is that g_neo is a global register variable stored in r7.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#158490 - Dwedit - Thu Jun 12, 2008 6:54 am</h4>
+    <div class="postbody"><span class="postbody">r4-r7 are supposed to be preserved across function calls.  If not, there's a broken function.  Try saving and restoring r7.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#158491 - ingramb - Thu Jun 12, 2008 6:57 am</h4>
+    <div class="postbody"><span class="postbody">u32 testVal = g_neo-&gt;val0; 
+<br/>
+int fd = open(szFile, O_RDONLY);
+<br/>
+g_neo = &amp;g_neoContext; //this line doesn't help...
+<br/>
+ASSERT(testVal == g_neo-&gt;val0); //!!!!!!! this fails! 
+<br/>
+return fd;
+<br/>
+<br/>
+Resetting the value of r7 doesn't help.  It seems that the actual memory is being changed.  This is really confusing me =(</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#158492 - Dwedit - Thu Jun 12, 2008 8:07 am</h4>
+    <div class="postbody"><span class="postbody">Is malloc destroying your global data?  Maybe you need to use modified gba_nds_fat, which never calls malloc.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#158493 - ingramb - Thu Jun 12, 2008 8:15 am</h4>
+    <div class="postbody"><span class="postbody">Looks like it's interrupt related.  Disabling interrupts around fat calls fixes things.  Even though I don't have any interrupts that should be doing anything at that point...
+<br/>
+<br/>
+Anyway, thanks for the suggestions guys.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#158494 - eKid - Thu Jun 12, 2008 9:43 am</h4>
+    <div class="postbody"><span class="postbody">You probably should be writing the functions in assembly (the ones that interface with the stuff), r7 may be getting overwritten somewhere.
+<br/>
+<br/>
+An interrupt handler may overwrite r7 easily. r7 is an easily accessed register so the compiler may generate code that uses it too.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

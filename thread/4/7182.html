@@ -1,0 +1,314 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Text delivery system, non-gaming application - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > Text delivery system, non-gaming application</h2>
+<div id="posts">
+<div class="post">
+    <h4>#57471 - phirewind - Sun Oct 16, 2005 7:27 am</h4>
+    <div class="postbody"><span class="postbody">This is sort of a big question, so please forgive me for the long post...
+<br/>
+<br/>
+I'm fleshing out a project that is essentially an e-book delivery system on the GBA (and eventually DS so I can use stylus input), and am trying to decide on a few key issues.  I have several different options for each, and was hoping for some feedback from those of you with more expertise in the performance characteristics of the hardware.
+<br/>
+<br/>
+1.  I'd want to deliver mass amounts of text data, such as a combination of reference manuals, and  I could easily see the upper limits of a 256Mbit cart being thought of as a real constraint on the system in some extreme cases.  My first real target test document is 40 Mbit in raw text form.  What would the best-case scenario be for storage?  A conversion to "const unsigned char" files like GFX2GBA output?  That seems like the best choice to keep it out of RAM (since it won't have to be streamed in large chunks for a simple display utility), but then the question comes up as to how to manage that information.  What is the limit to how many items can be in a const unsigned char array?  If it's a 32-bit address, then each document could be stored as one huge hunk since it cant get near 4 terabytes, and another const array generated as an index for the multiple levels of referencing (chapter, section, subject, whatever).  Then a document could be stored and indexed something like this...
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#define DEPTH  3 // number of nesting levels in the structure
+<br/>
+<br/>
+const u32 elemcount[DEPTH] = { 25,89,520 } // 25 chapters, 89 sections, 520 subjects
+<br/>
+<br/>
+// store 6 u32's for each element.
+<br/>
+// 1.  index of the first child element,
+<br/>
+// 2.  number of children
+<br/>
+// 3.  byte position in raw data
+<br/>
+// 4.  length of element in bytes
+<br/>
+// 5.  byte position of in the name array
+<br/>
+// 6.  length of element name
+<br/>
+const u32 eleminfo[] = { 
+<br/>
+  1, 25, 0, 4678301, 0, 17 // the total book.  first chapter is element 1, 25 chapters, starts at byte 0, 4678301 total bytes, name at 0, 17-byte name
+<br/>
+  27, 4, 0, 184235, 18, 12// chapter 1, first section is eleminfo 27, 4 sections in chapter, start at byte 0, lasts 184235 bytes, name at 18, 12-byte name
+<br/>
+  // etc.
+<br/>
+};
+<br/>
+<br/>
+const unsigned char elemnames[] = {
+<br/>
+ T,h,e, ,B,o,o,k, ,o,f, ,S,t,u,f,f,
+<br/>
+ I,n,t,r,o,d,u,c,t,i,o,n,
+<br/>
+ // etc.
+<br/>
+};
+<br/>
+<br/>
+const unsigned char mybook[4678301] = { // the raw data
+<br/>
+  M,a,r,y, ,h,a,d, ,a, ,l,i,t,t,l,e, ,c,o,d,e,r, // etc., for 4.6 million characters
+<br/>
+}; // actually uses 2x characters for the data because of the commas, so 5 million character data takes 10 million characters to store...
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Simply put, if you had to deliver 5 million characters for a document organized in 3 to 5 levels, how would you store and access it?  Am I proposing something even feasible?  Ok, maybe not so simple...
+<br/>
+<br/>
+2.  Displaying (an easier question).  Since this is strictly a text-display system, I'll be pre-rendering a non-mono-spaced font at 12, 18, and 24pt sizes, possibly using a real-time sub-pixel method to make the fonts come out nice and smooth on the GBA or DS LCD.  My best options seem to be:
+<br/>
+  a)  blit the character images to a Mode 3 or 4 background, use no sprites.
+<br/>
+  b)  use a sprite per each character, and count scanlines or hblanks to write a new set of sprites into OAM for each line of text.
+<br/>
+<br/>
+<br/>
+From my photoshop mockups, the maximum output rate would be at 12pt font, using 12 scanlines per line of text, with a reasonable max of about 40 characters per line.  It seems to me that if I use the sprites + hblank method, I'd have to re-render the sprites every time for every line of text since I'd be using up to 11 lines of text on the screen.  If I used a real-time sub-pixel font smoother, will I be able to render 40 characters in under 15,000 cycles?  I think I just talked myself into a manual blitting method in mode 4... that way as the text is scrolling, even with sub-pixel smoothing, I'd only have to re-render a couple of scanlines per vblank, and just copy the rest between buffers with the proper offset.  Then I'd only have to re-render the entire screen with the font smoothing if the text was scrolled by page or tabbed to entirely different locations.
+<br/>
+<br/>
+3.  Searching the text.  I don't suppose anyone here has ever done this on a GBA... text comparisons?  I guess I could always just brute-force it, but I was hoping for a way to allow the user to searc for a word or precise phrase through part or all of the document.  I shudder to think how long it would take to search through a 40 Mbit data structure, but maybe I'm underestimating the speed of the media.  Any ideas on how to speed up any part of that process?
+<br/>
+<br/>
+<br/>
+Well, I may have answered my own display question, but any insight to that, the storage method, or the search routine would be greatly appreciated.  Once I get the rendering method and data structure in place, this is a fairly simple application.  Heh, it may take more time to write the tools to convert some of the doucments into the proper format than it will to write the GBA application to view them.  Ah well, I can at least have fun with some interesting code for a little while.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#57474 - poslundc - Sun Oct 16, 2005 8:45 am</h4>
+    <div class="postbody"><span class="postbody">You don't want to convert massive amounts of data into C arrays. Compiling those arrays takes a lot of system resources and can be extremely slow. Convert the data directly into a "raw" binary format and use objcopy to copy it directly into your ROM, or alternatively a file system like <a class="postlink" href="http://www.pineight.com/gba/#gbfs" target="_blank">GBFS</a>. If you aren't comfortable with those tools, the next-best option is to convert your data into assembly code (.s or .S), which processes an order of magnitude faster and more efficiently than C arrays do.
+<br/>
+<br/>
+Text should also be able to compress well. Find or write a tool to compress your text into a format that you can then decompress into EWRAM on the GBA as you need to access it.
+<br/>
+<br/>
+If all your application does is display the text and you want it to be in a variable-width font, then the bitmap modes are probably your best bet. Alternatively, if you can write routines to paint text across tile boundaries in modes 0-2, then you can take advantage of the other layers for things like a HUD or whatever. Using sprites would work as well, but setting up the HBlank system to account for various line widths would be a pretty big pain, I think.
+<br/>
+<br/>
+I'm not sure what kind of real-time requirements this sub-pixel method you speak of would have. <a class="postlink" href="http://grc.com/cleartype.htm" target="_blank">The only sub-pixel font rendering technique I know of</a> only requires that you design your font with the GBA pixel ordering in mind. That said, I think sub-pixel rendering is something to be approached with caution - especially for something like a book reader, increasing horizontal resolution is not worthwhile when it's at the expense of legibility, and you also limit your ability to switch text colours if you use it (since it's most effective with white-on-black).
+<br/>
+<br/>
+I don't really know that much about searching algorithms - at least on unindexed data - so I can't really offer you any suggestions there.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#57533 - phonymike - Sun Oct 16, 2005 8:11 pm</h4>
+    <div class="postbody"><span class="postbody">there's several e-book readers available for gba. the way they put text into the rom is append it to the end of the file. you may be able to have an asm file with a variable in it such as last_byte and when compiled, have it be put in last. like how crt0.s is always first, just the opposite. that way you'll know the location of the text. a simple batch file or dos command copy /b book.gba + input_text.txt final_rom.gba would combine the two.
+<br/>
+<br/>
+also with lots of text, a simple compression could be implimented. I would say DTE (dual tile encoding.) meaning each letter would take up a byte, but there's also a lookup table of bytes, where bytes would result in several letters. let's say in the following sentence:
+<br/>
+<br/>
+"The father took Theodore to the theme park."
+<br/>
+<br/>
+if you were to represent 'the' as ? and 'to' as ? it'd be
+<br/>
+<br/>
+"? fa?r ?ok ?odore ? ? ?me park."
+<br/>
+<br/>
+it's simple as hell to write, and you'd make a windows program (pry command line) that would have your gba book file embedded in it (a makefile would keep the gba and windows program up to date) that would spit out the gba book file, take the text file and optionally compress it, then combine the two into a final ebook rom.
+<br/>
+<br/>
+also things like the book reader below, after rendering a screen of text, it would go into the lowest power setting mode. I forget if there's a sleep mode or what but whatever power saving mode possible because there's no need for sound, and the user button presses could be handled with interrupts.
+<br/>
+<br/>
+e-book advance, I've read many books on my gba with this one! <a href="http://members.optushome.com.au/dancotter/ebook.htm" target="_blank">http://members.optushome.com.au/dancotter/ebook.htm</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#57536 - tepples - Sun Oct 16, 2005 8:24 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>phonymike wrote:</b></span></td> </tr> <tr> <td class="quote">also with lots of text, a simple compression could be implimented. I would say DTE (dual tile encoding.) meaning each letter would take up a byte, but there's also a lookup table of bytes, where bytes would result in several letters. let's say in the following sentence:
+<br/>
+<br/>
+"The father took Theodore to the theme park."
+<br/>
+<br/>
+if you were to represent 'the' as ? and 'to' as ? it'd be
+<br/>
+<br/>
+"? fa?r ?ok ?odore ? ? ?me park."
+<br/>
+<br/>
+it's simple as hell to write</td> </tr></table><span class="postbody">
+<br/>
+This is dictionary based text compression, and it looks like it'd be more easily seekable than LZ77. But do I have to pick out the most common letter sequences manually, or is there an algorithm to come up with them?<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#57543 - strager - Sun Oct 16, 2005 9:24 pm</h4>
+    <div class="postbody"><span class="postbody">If you want to add massive ammounts of data to a GBA rom, compile a binary object directally to .o and use that alone.  There's a little script called "bin2o" somewhere out there.
+<br/>
+To section the text into different parts, you could use special characters like 0x01 for "Begin Book," 0x02 for "End Book," 0x03 for "Begin Unit," etc.
+<br/>
+<br/>
+I would recommend writing the text to a bitmap and not using sprites per-character.  Using sub-pixel rendering is slow, unless you plan on using the quick and dirty method (no anti-aliasing).
+<br/>
+<br/>
+I don't know if you can speed up searching through the text much, but what you can do is enable and disable searching through different parts of the text.  Searchable items would be like keywords, titles and subtitles, and topic sentences.  
+<br/>
+<br/>
+** Non-searchable items would be compressed, and searchable items uncompressed, to speed up searching?  Just an idea.
+<br/>
+<br/>
+Compression: Maybe Huffman or LZ77/LZSS, because they are both supported by hardware.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#57550 - phirewind - Sun Oct 16, 2005 10:38 pm</h4>
+    <div class="postbody"><span class="postbody">poslundc, that's actually the sub-pixel method I was aiming for, but I was thinking it would need real-time rendering because the space between letters will not always be a exactly X pixels wide.  I had planned on storing a "virtual image" of each letter using 4 bits per pixel to indicate the sub-pixel use.  Actually, it'd only use 3 bits, (B, G, R) on/off, ingoring the left-most bit.  Then when I render the text, I bit-shift each pixel's value left or right depending on the current sub-pixel offset, carrying overflowed bits between pixels, and use that value to determine the final pixel color.  Pretty simple end result, actually, something like: 
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">paletteIndex = (myletter[pixelIndex] &gt;&gt; subOffset) + carryover; // bit-shift the BGR value for current sub-pixel offset
+<br/>
+carryover = paletteIndex &gt;&gt; 3; // add the overflowed sub-pixel elements from the previous character
+<br/>
+pixelColor = myPalette[paletteIndex]; // use this as an index to a palette to produce the final color</td> </tr></table><span class="postbody">
+<br/>
+I'm not sure I understand your reservation about sub-pixel rendering... it seems to me that the virtual increase in horizontal resolution is a method to increase legibility, not an opposing force.
+<br/>
+<br/>
+Thanks for the tip about compression, guys.  I had completely forgotten about the dictionary compression method, and I'll have to look into the Huffman and LZ77 compression stuff, I didn't realize there was hardware support for it.  I'd also have to figure out how to record specific byte locations of text in the compressed data so I can create the quick-access links.  Perhaps I do that during the compression?
+<br/>
+<br/>
+For searches, I had considered generating a binary search tree linked to a complete concordance.  Then I'd limit the search to non-common instances, i.e. you can't search for the word "the", or "a'.  I forget my grammar lingo at the moment and can't recall what that determination is called...   The search tree would be extremely fast, of course, but could use as much storage space as the entire document itself.  However, that may still be better than streaming through the entire document, compiling results on the fly.  I may just have to write implement both methods and see how they compare.  One benefit of the pre-generated search tree is that you can easily do "AND" searches, and produce search results of each base unit that contains the words "blue" and "moon", for example.  It wouldn't be word-distance accurate, but would be helpful when I can't quite remember how a certain phrase is worded.
+<br/>
+<br/>
+One of the main reasons I want to write one myself (besides wanting to try something new) is that I also plan to implement a hyperlink system.  I wouldn't tie it to words or phrases, but to the base unit, perhaps a paragraph.  When displayed, the reader would indcate that this paragraph contains references to a defined list of other paragraphs in the document, and I could move back and forth between the hyperlinks without losing my place.
+<br/>
+<br/>
+Also, I've done a lot of work with XML environments, and doing the "element" type system just comes naturally to me.  With that in place, I could have a program that takes any document like this:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">&lt;doc&gt;
+<br/>
+  &lt;chapter id="1" name="Introduction"&gt;
+<br/>
+    &lt;section id="1.1" name="Bits and Bytes"&gt;
+<br/>
+      &lt;subject id="1.1.1" name=""&gt;A long, long time ago, in an application far away...&lt;/subject&gt;
+<br/>
+      &lt;subject id="1.1.2" name=""&gt;There were things that did &lt;link id="1.2.1"&gt;stuff&lt;/link&gt;.&lt;/subject&gt;
+<br/>
+    &lt;/section&gt;
+<br/>
+    &lt;section id="1.2" name="History"&gt;
+<br/>
+      &lt;subject id="1.2.1" name=""&gt;Things still do stuff.&lt;/subject&gt;
+<br/>
+    &lt;/section&gt;
+<br/>
+  &lt;/chapter&gt;
+<br/>
+&lt;/doc&gt;
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+and transforms it into the fully searchable and referenced format for use with this reader, complete with a quick-access index, in one click.  It also wouldn't care what each level of nesting is called, or whether or not each item is named.  At that point, I can write XSL transformations to take other XML formats and produce a compatible input format.
+<br/>
+<br/>
+Finally, as soon as I obtain a method for uploading homebrew to my blue DS, I'm want to make it native to that platform, so I can dedicate the top screen to text display, and use the bottom screen for stylus control on a touch-screen GUI.
+<br/>
+<br/>
+I do have the same question as tepples, though... Most straight-text documents can be represented with 73 chars, I believe. a-z, A-Z, 0-9, space, and the following 10:    , . ? ; : ' " ( ) !
+<br/>
+That leaves 183 values in a byte representation that could be used as sequence representers.  Anybody know if there's an existing database or algorithm for common letter sequences, or should I just write my own multi-pass brute-force number cruncher to spit one out?
+<br/>
+<br/>
+Thanks again.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#57560 - poslundc - Mon Oct 17, 2005 12:11 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>phirewind wrote:</b></span></td> </tr> <tr> <td class="quote">poslundc, that's actually the sub-pixel method I was aiming for, but I was thinking it would need real-time rendering because the space between letters will not always be a exactly X pixels wide.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+So long as X is an integer number of pixels (and not, say, half a pixel) this shouldn't matter. That is to say, you store the necessary luminescence values for each pixel to create the sub-pixel effect for each glyph of your font, then just paint that entire glyph wherever you want.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">I'm not sure I understand your reservation about sub-pixel rendering... it seems to me that the virtual increase in horizontal resolution is a method to increase legibility, not an opposing force.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Increasing resolution != increasing legibility. If it did, everyone would leave their monitors on the highest resolution possible. As it happens, people who are more focussed on content than they are on technology - especially people who work in offices where they have to read stuff off of a screen all the time - rarely use the high-resolution settings available on modern machines.
+<br/>
+<br/>
+Remember that LCDs are designed to look natural without sub-pixel behaviour being exploited. Personally, I find that sub-pixellated text that's done to increase line width looks squished and unnatural, and not as easy to read as normal text. I can see a videogame or something maybe getting away with it, but I wouldn't want to read a virtual book of the stuff.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Thanks for the tip about compression, guys.  I had completely forgotten about the dictionary compression method, and I'll have to look into the Huffman and LZ77 compression stuff, I didn't realize there was hardware support for it.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+"Hardware support" is a bit of an exaggeration. The GBA has built-in, precoded routines for decompression on its BIOS, but they are not inordinately fast and they run on the CPU just like any other code does. That said, they work and are useable, and ought to run faster than most unoptimized code, especially code running from ROM.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">I do have the same question as tepples, though... Most straight-text documents can be represented with 73 chars, I believe. a-z, A-Z, 0-9, space, and the following 10:    , . ? ; : ' " ( ) !</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+You are naive to leave out at least the basic ASCII character set, unless you think you can get away without @, #, $, %, &amp;, *, /, +, etc. etc. And if you want your reader to possess any level of versatility, you'll want to use extended ASCII codes for accented letters.
+<br/>
+<br/>
+Visit <a href="http://www.asciitable.com" target="_blank">http://www.asciitable.com</a> and use it as a reference guide to the characters you will have to support. You might be able to override enough of the bottom 31 and top 80 to meet all of your control-character needs, but I wouldn't recommend doing it this way. I would instead represent escape sequences with multiple consecutive bytes: first an escape character (\033 is a decent choice, since it's the official ASCII "escape"), followed by a byte to represent the specific instruction you want to perform (and then more bytes if the instruction requires parameters). This is a much more flexible method that is easier to maintain and upgrade.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#57565 - phirewind - Mon Oct 17, 2005 1:47 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>poslundc wrote:</b></span></td> </tr> <tr> <td class="quote">Remember that LCDs are designed to look natural without sub-pixel behaviour being exploited. Personally, I find that sub-pixellated text that's done to increase line width looks squished and unnatural, and not as easy to read as normal text. I can see a videogame or something maybe getting away with it, but I wouldn't want to read a virtual book of the stuff.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Actually I wasn't looking to squeeze more characters in, but make the existing text output smoother at the legible sizes.  Since I wouldn't be the only person using it, I'm not assuming they have 20-20 eyesight.  Basically it's just to have a more precise anti-aliasing at the same font size.  The real-time sub-pixel rendering issue is still up for grabs until I commit to generating the glyphs at each font size to see if integer pixel spaces look good enough.  In my case, it'd be used more often to give room than it is to squeeze into less, since something like 1.0 pixel at 12pt font might need 1 and 1/3 pixels at 18pt, but not look quite right at 2.0 until 24pt.   Then again, at those decent sizes, 1 pixel of spacing might not make a difference.
+<br/>
+<br/>
+I guess I had a brain-blank on the extra characters, I meant to include at least another 10 in the process, or optimally 128 display characters and 128 reference characters.  Then again, there are the accents, as you said.  Whether or not I use double-byte codes will probably depend on how many reference codes I eventually come up with.  As far as the ASCII table goes, heh, I've got a txt file that I wrote with a C program from years ago with that in it.. it's been on every "don't lose this" archive CD I've made for about 8 years.  I can never remember what the ? symbol is...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#57575 - DekuTree64 - Mon Oct 17, 2005 3:02 am</h4>
+    <div class="postbody"><span class="postbody">Realtime (monochrome) sub-pixel rendering is pretty easy to do, so I wouldn't worry about having all characters whole-pixel aligned.
+<br/>
+<br/>
+I had a section in my old <a class="postlink" href="http://deku.gbadev.org/program/eternity.zip" target="_blank">Eternity demo</a> with shapes and stuff rendered in sub-pixels. <a class="postlink" href="http://deku.gbadev.org/program/eternity-source.zip" target="_blank">Source</a> is available, although I didn't believe in comments back when I wrote it, so it's a little hard to follow :)
+<br/>
+<br/>
+Basically what I did was make a 720x160, 1-bit bitmap (i.e. 3x as wide as the GBA screen) in RAM, clear it to 0 every frame, and OR in pixels to draw them. Then at the end of the frame, it would convert that to 4-bit chars to display on a text BG. That gives enough VRAM to double buffer the whole screen, so the conversion doesn't even have to be super fast.
+<br/>
+<br/>
+I did the conversion with an 8KB lookup table (4096 entries, 2 bytes each), which would convert 12 sub-pixel bits into 4 4-bit pixels. It ran nice and fast, more than enough for a book reader.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

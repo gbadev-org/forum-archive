@@ -1,0 +1,136 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Unlocking VRAM - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Unlocking VRAM</h2>
+<div id="posts">
+<div class="post">
+    <h4>#142221 - NeX - Sat Oct 06, 2007 4:36 pm</h4>
+    <div class="postbody"><span class="postbody">How do I do this?  I am trying to copy 32 32x32 8-bit textures into VRAM A every frame.  Maybe I'm asking a bit much of the hardware.  But anyhow, I've tried dmaCopying to the VRAM and things, but nothing seems to work.  I have read that I need to "unlock" VRAM and this can be a little awkward, with all sorts of complications.  I've tried reassigning the VRAM bank to LCD whilst copying and then back, but not only does this not do anything, it blanks half the screen.  I've googled and I've searched this forum.  I could do with some pointers.<br/>_________________<br/><a class="postlink" href="http://www.mediafire.com/?cuyb10fzdz2" target="_blank">Strummer</a> or <a class="postlink" href="http://www.mediafire.com/?71zxcztscix" target="_blank">Drummer?</a>.  
+<br/>
+Or maybe you would rather play with sand? <a class="postlink" href="http://www.mediafire.com/?a05z5wmdvxm" target="_blank">Sandscape is for you in that case.</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#142222 - Sausage Boy - Sat Oct 06, 2007 4:47 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">&lt;sgstair&gt; if you're locking vram to update textures, that's going to cause flickering most of the time.
+<br/>
+&lt;sgstair&gt; the only safe time to do it is after rendering is complete for a frame (somewhere between scanline 144 and 192 - you'll have to poll the register to know exactly when), and you must have all the data loaded into vram by scanline 214
+<br/>
+&lt;sgstair&gt; Another reasonable way to do it is to have 2 VRAM banks for textures, but only use one at a time (or 4, use 2 at a time) - load data to the vram banks not in use, and switch the banks that are engaged as texture memory when vblank starts.
+<br/>
+&lt;sgstair&gt; ideally though, you don't want to be changing the textures every frame.
+<br/>
+&lt;sgstair&gt; if you can avoid it, that's best.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Here are some lines from sgstair about the matter which I rescued from IRC. I think having 2 VRAM banks would be the best thing in your case. And yeah, you need to assign a bank to LCD before you can copy anything to it.<br/>_________________<br/>"no offense, but this is the gayest game ever"</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#142224 - zeruda - Sat Oct 06, 2007 5:16 pm</h4>
+    <div class="postbody"><span class="postbody">2 VRAM banks are not necessary. Are you using the standard libnds texture loading function? Because the RAM is unlocked and relocked in that anyway. In terms of doing this, it's quite simple. You need to have a VBLank interrupt running, as soon as that is called inside it you call the texture loading routine. That stuff is in the libnds examples or in doubles tutorials.
+<br/>
+<br/>
+You set up interrupts with:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void InitInterruptHandler()
+<br/>
+{
+<br/>
+  REG_IME = 0;
+<br/>
+  IRQ_HANDLER = on_irq;
+<br/>
+  REG_IE = IRQ_VBLANK;
+<br/>
+  REG_IF = ~0;
+<br/>
+  DISP_SR = DISP_VBLANK_IRQ;
+<br/>
+  REG_IME = 1;
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Before your main loop call these:
+<br/>
+<br/>
+    irqInit();                  // Basic IRQ setup
+<br/>
+    irqSet(IRQ_VBLANK, 0);
+<br/>
+    InitInterruptHandler();
+<br/>
+<br/>
+In you main loop you call:
+<br/>
+swiWaitForVBlank();
+<br/>
+<br/>
+Here's what the VBlank routine looks like.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void on_irq()
+<br/>
+{
+<br/>
+    if(REG_IF &amp; IRQ_VBLANK) {
+<br/>
+        // I think this is glTexImage2D in libnds
+<br/>
+        Texture.Load(17, TEXTURE_SIZE_256, GL_RGB, "flipface.pcx");
+<br/>
+<br/>
+        // Tell the DS we handled the VBLANK interrupt
+<br/>
+        VBLANK_INTR_WAIT_FLAGS |= IRQ_VBLANK;
+<br/>
+        REG_IF |= IRQ_VBLANK;
+<br/>
+    } else {
+<br/>
+        REG_IF = REG_IF; // Ignore all other interrupts
+<br/>
+    }
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I managed to load a 256*256 16 bit texture in the VBlank without any flickering. That is equivalent to 64 32*32 textures so what you require should definitely be possible.
+<br/>
+<br/>
+Oh and you unlock VRAM like so:
+<br/>
+    vramSetBankE(VRAM_E_LCD);
+<br/>
+and relock it like so:
+<br/>
+    vramSetBankE(VRAM_E_TEX_PALETTE);
+<br/>
+<br/>
+Obviously you have to choose which bank to unlock and what mode you are relocking it to. Alternatively you can unlock all the main vram banks.
+<br/>
+<br/>
+u32 vramTemp = vramSetMainBanks(VRAM_A_LCD,VRAM_B_LCD,VRAM_C_LCD,VRAM_D_LCD); // unlock VRAM
+<br/>
+MessAroundWithVRAMBanks();
+<br/>
+vramRestoreMainBanks(vramTemp);</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

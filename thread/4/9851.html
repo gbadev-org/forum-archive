@@ -1,0 +1,189 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>does vba not count right, or does gcc optimize too much? - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > does vba not count right, or does gcc optimize too much?</h2>
+<div id="posts">
+<div class="post">
+    <h4>#86994 - Ant6n - Sun Jun 11, 2006 7:24 am</h4>
+    <div class="postbody"><span class="postbody">Hi,
+<br/>
+<br/>
+i have a little issue with a high speed timer on VBA. i am running timer 2 and 3 in count up style with timer 2 in mode 1 (cpu clock speed), and i have an u32 count up everytime timer 3 overflows - to get a general purpose 64bit timer.
+<br/>
+everything seems to work fine, but my main loop, which looks like this...:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+    while(1)
+<br/>
+   {
+<br/>
+        x = time_cycles();
+<br/>
+        y = time_cycles();
+<br/>
+        sprintf(text,"time %d,  %d \n",x,y);
+<br/>
+        agbprint(text);
+<br/>
+   }
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+<br/>
+...prints this:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+time 108,  108 
+<br/>
+time 28444,  28500 
+<br/>
+time 78660,  78660 
+<br/>
+time 129580,  129740 
+<br/>
+time 188100,  188100 
+<br/>
+time 248012,  248012 
+<br/>
+time 307420,  307800 
+<br/>
+time 368220,  368220 
+<br/>
+time 429400,  429780 
+<br/>
+time 491948,  491948 
+<br/>
+...
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Now, why are some of the numbers the same (which would imply that gcc just optimized the two calls to time_cycles() despite everything being volatile, even the return type of that function), yet others are different?
+<br/>
+My suspicion is that the emulator doesnt do timers that well, but i am still puzzled about this?
+<br/>
+does anybody know why the loop takes like 30~50K clock cycles; does VBA only allow a print every 1ms or something?
+<br/>
+thx
+<br/>
+<br/>
+anton</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#86995 - poslundc - Sun Jun 11, 2006 8:23 am</h4>
+    <div class="postbody"><span class="postbody">A few notes:
+<br/>
+<br/>
+1. If you're using "mode 1", the timer will increment every 64 cycles, not every cycle, so you could easily get disparities in some lines but not others.
+<br/>
+<br/>
+2. Interrupts take additional processing time, so if one of them is triggered it could be messing with your stuff as well.
+<br/>
+<br/>
+3. You might want to make sure you are zeroing out the timer values before turning them on, to be certain that you are getting the full 16-bit scope on them.
+<br/>
+<br/>
+4. Perhaps most importantly, VBA is not all that reliable when it comes to cycle-accuracy.
+<br/>
+<br/>
+The most likely reason for the delay between loops is because you are using sprintf() to convert from base 2 to base 10, which calls the painfully slow GCC division routine. Still, 30-50K seems awfully steep, so it may be some other VBA-related issue.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#87092 - Ant6n - Sun Jun 11, 2006 9:52 pm</h4>
+    <div class="postbody"><span class="postbody">ok, emm,
+<br/>
+<br/>
+1. I just named it mode1 because the clock cycle multiplier is 1, i have something like this:
+<br/>
+#define TMR_MODE1       0
+<br/>
+#define TMR_MODE64      1
+<br/>
+<br/>
+2. I only have interrupts every 256 seconds
+<br/>
+<br/>
+4. Yeah, i think vba decides to count up only every like 100 cycles or so (but then adds 100 cycles)
+<br/>
+<br/>
+I dont think sprintf takes that long, because the first... o right, it has to be sprintf.
+<br/>
+<br/>
+thank you for the tips.
+<br/>
+<br/>
+3. here is my initcode
+<br/>
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">/* sets up the timer, but starts at seconds.cycles. notice that
+<br/>
+   the higher 8 bits of cycles are ignored (should still give you more than 190 days) */
+<br/>
+void time_initat(u32 seconds, u32 cycles){
+<br/>
+    if (((cycles &amp; 0xffff) + SAVECYCLES) &gt; 0xffff){
+<br/>
+        cycles = (cycles &amp; 0x00ff0000) + 0x010000;
+<br/>
+        if (cycles &gt; 0x00ffffff) seconds+= cycles &gt;&gt; 24;
+<br/>
+    }                                       // insert padding so that tmr2 doesnt overflow during init
+<br/>
+    overflow = seconds &gt;&gt; 8;                // the overflow value comes in increments of 256 seconds
+<br/>
+    u16 tim2 = cycles &amp; 0xffff;             // the lower 16 bit of cycles go in timer 2
+<br/>
+    u16 tim3 = ((cycles &amp; 0x00ff0000) &gt;&gt; 16)// the lower 8 bit of tmr3 come from cycles...
+<br/>
+              +((seconds &amp; 0xff) &lt;&lt; 8);     // ..the higher 8 bit from come seconds
+<br/>
+<br/>
+    TMR2_CONTROL = 0;       // stop timer 2 so that it cant affect timer 3
+<br/>
+    TMR3_CONTROL = 0;       // stop timer 3 so that it doesnt overflow and call an interrupt
+<br/>
+    TMR2_COUNT = tim2;      // set up initial values for timers
+<br/>
+    TMR3_COUNT = tim3;
+<br/>
+    irq_set(IRQ_TIMER3, tmr3overflow, 0);
+<br/>
+    TMR3_CONTROL = TMR_COUNTUP | TMR_IRQENABLE | TMR_START;
+<br/>
+                            // start timer in countup mode, with irq enabled, initial value will
+<br/>
+                            // be tmr3 - it doesnt start yet because timer2 is stopped
+<br/>
+    TMR3_COUNT = 0;         // make sure that after overflow timer will be at 0;
+<br/>
+    TMR2_CONTROL = TMR_MODE1 | TMR_START; //start timer - SAVECYELCES inserted here
+<br/>
+    TMR2_COUNT = 0;         // when timer overflows next time it'll start 0
+<br/>
+}</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

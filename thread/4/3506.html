@@ -1,0 +1,627 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Mode 2 problem - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > Mode 2 problem</h2>
+<div id="posts">
+<div class="post">
+    <h4>#21637 - jarobi - Wed Jun 02, 2004 6:36 am</h4>
+    <div class="postbody"><span class="postbody">I just started playing around with tile modes and decided to start with mode 2, but whenever I try to set REG_BG2CNT some other background register gets written to and my tiles display weird in that background (tile 0 only, in random places). My intent is to put tile data (8 tiles, 256 colors) in charater base 0, and my map data in screen base 1. However, when i run my program and observe the contents of the background registers, REG_BG2CNT uses the map data from the correct location, but uses charater block 2 for its tile data (which happens to be empty). The other background register that displays my tiles, is empty, therefore the map data and the tile data are in the same location, thus the random appearance of tiles. I've tried using different charater base blocks and screen base blocks to no avail. I tried switching to the background that displays funny stuff, but it displays that in background 2 instead. I noticed I was accessing map data 8 bits at a time, so I fixed that and nothing happened. Can anyone please tell me what I might be doing wrong?
+<br/>
+Here is part of my code and header file for some insight:
+<br/>
+<span style="font-weight: bold"><span style="text-decoration: underline">Header File:</span></span>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+//my modifications:
+<br/>
+<br/>
+#define GAMEPAK_RAM      *(u8*)0xE000000      //gamepak ram 64KB
+<br/>
+<br/>
+//setting screen mode
+<br/>
+#define MODE_0 0x0
+<br/>
+#define MODE_1 0x1
+<br/>
+#define MODE_2 0x2
+<br/>
+#define MODE_3 0x3
+<br/>
+#define MODE_4 0x4
+<br/>
+#define MODE_5 0x5
+<br/>
+<br/>
+#define BACKBUFFER 0x10
+<br/>
+#define H_BLANK_OAM 0x20
+<br/>
+<br/>
+#define OBJ_MAP_2D 0x0
+<br/>
+#define OBJ_MAP_1D 0x40
+<br/>
+<br/>
+#define FORCE_BLANK 0x80
+<br/>
+<br/>
+#define BG0_ENABLE 0x100
+<br/>
+#define BG1_ENABLE 0x200
+<br/>
+#define BG2_ENABLE 0x400
+<br/>
+#define BG3_ENABLE 0x800
+<br/>
+#define OBJ_ENABLE 0x1000
+<br/>
+#define WIN1_ENABLE 0x2000
+<br/>
+#define WIN2_ENABLE 0x4000
+<br/>
+#define WINOBJ_ENABLE 0x8000
+<br/>
+<br/>
+#define setMode(mode) REG_DISPCNT=(mode)
+<br/>
+<br/>
+//height and width
+<br/>
+#define HEIGHT 160
+<br/>
+#define WIDTH 240
+<br/>
+<br/>
+#define RGB(r,g,b) (r|(g&lt;&lt;5)|(b&lt;&lt;10))
+<br/>
+<br/>
+//keypad (REG_KEYPAD is address 0x4000130 -- dereferences address)
+<br/>
+#define KEY_A 1
+<br/>
+#define KEY_B 2
+<br/>
+#define KEY_SELECT 4
+<br/>
+#define KEY_START 8
+<br/>
+#define KEY_RIGHT 16
+<br/>
+#define KEY_LEFT 32
+<br/>
+#define KEY_UP 64
+<br/>
+#define KEY_DOWN 128
+<br/>
+#define KEY_R 256
+<br/>
+#define KEY_L 512
+<br/>
+#define KEY_PRESSED(k) (!(REG_KEYPAD &amp; k))
+<br/>
+<br/>
+//sprites
+<br/>
+//attribute 0 data
+<br/>
+#define ROTATION_FLAG 0x100
+<br/>
+#define SIZE_DOUBLE 0x200
+<br/>
+#define MODE_NORMAL 0x0
+<br/>
+#define MODE_TRANSPARENT 0x400
+<br/>
+#define MODE_WINDOWED 0x800
+<br/>
+#define MOSAIC 0x1000
+<br/>
+#define COLOR_16 0x0000
+<br/>
+#define COLOR_256 0x2000
+<br/>
+#define SQUARE 0x0
+<br/>
+#define TALL 0x8000
+<br/>
+#define WIDE 0x4000
+<br/>
+//attribute 1 data
+<br/>
+#define ROT_INDEX(n) ((n &amp; 0x1f) &lt;&lt; 9)
+<br/>
+#define HORIZONTAL_FLIP 0x1000
+<br/>
+#define VERTICAL_FLIP 0x2000
+<br/>
+#define SIZE_8 0x0
+<br/>
+#define SIZE_16 0x4000
+<br/>
+#define SIZE_32 0x8000
+<br/>
+#define SIZE_64 0xC000
+<br/>
+//attribute 2 data
+<br/>
+#define PRIORITY(n) ((n &amp; 3) &lt;&lt; 10)
+<br/>
+#define PALETTE(n) ((n &amp; 15) &lt;&lt; 12)
+<br/>
+//attribute 4 and sprite data
+<br/>
+typedef struct tagOAMEntry
+<br/>
+{
+<br/>
+        u16 attribute0;
+<br/>
+        u16 attribute1;
+<br/>
+        u16 attribute2;
+<br/>
+        u16 attribute3;
+<br/>
+} OAMEntry, *pOAMEntry;
+<br/>
+<br/>
+typedef struct tagRotData
+<br/>
+{
+<br/>
+        u16 filler1[3]; //not used
+<br/>
+        u16 pa;
+<br/>
+        u16 filler2[3]; //not used
+<br/>
+        u16 pb;
+<br/>
+        u16 filler3[3]; //not used
+<br/>
+        u16 pc;
+<br/>
+        u16 filler4[3]; //not used
+<br/>
+        u16 pd;
+<br/>
+} RotData, *pRotData;
+<br/>
+<br/>
+u16 *OAM = (u16*)0x7000000; //the address of OAM
+<br/>
+OAMEntry sprites[128]; //My sprite array
+<br/>
+pRotData rotData = (pRotData)sprites;
+<br/>
+<br/>
+//backgrounds (tile mode)
+<br/>
+#define BG_MOSAIC_ENABLE 0x40
+<br/>
+#define BG_COLOR_256 0x80      //256 color mode
+<br/>
+#define BG_COLOR_16 0x0         //16 color mode
+<br/>
+#define TEXTBG_SIZE_1 0x0      //256 x 256 tiles
+<br/>
+#define TEXTBG_SIZE_3 0x8000   //256 x 512 tiles
+<br/>
+#define TEXTBG_SIZE_2 0x4000   //512 x 256 tiles
+<br/>
+#define TEXTBG_SIZE_4 0xC000   //512 x 512 tiles
+<br/>
+#define ROTBG_SIZE_1 0x0      //128 x 128 tiles
+<br/>
+#define ROTBG_SIZE_2 0x4000      //256 x 256 tiles
+<br/>
+#define ROTBG_SIZE_3 0x8000      //512 x 512 tiles
+<br/>
+#define ROTBG_SIZE_4 0xC000      //1024 x 1024 tiles
+<br/>
+#define WRAP_AROUND 0x2000      //map wrap over for rotation bg's
+<br/>
+#define BG_PRIORITY(n) (n&amp;3)   //bgackground priority
+<br/>
+#define CHAR_BASE_BLOCK(n) (((n)&amp;0x3)&lt;&lt;2)   //used when updating BGxCNT register
+<br/>
+#define SCREEN_BASE_BLOCK(n) (((n)&amp;0x1F)&lt;&lt;8)   //used when updating BGxCNT register
+<br/>
+#define charBaseBlock(n) (0x6000000+(n*0x4000)) //gives address
+<br/>
+#define screenBaseBlock(n) (0x6000000+(n*0x800)) //gives address
+<br/>
+<br/>
+//a struct holding all the attributes of a background
+<br/>
+struct BACKGROUND
+<br/>
+{
+<br/>
+   u8 bgNumber;
+<br/>
+   u16 attributes; //holds attributes of background to be put in REG_BGxCNT
+<br/>
+   u16 x_scroll, y_scroll; //scroll for text bg (also used for rotation bg implicitly)
+<br/>
+   u32 dx, dy; //scroll for rotation bg exclusively
+<br/>
+   u16 pa, pb, pc, pd; //rotation attributes
+<br/>
+};
+<br/>
+typedef struct BACKGROUND Background;
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+<span style="font-weight: bold"><span style="text-decoration: underline">C File:</span></span>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#include &lt;stdlib.h&gt;
+<br/>
+#include "../gba.h"
+<br/>
+#include "../fixed.h"
+<br/>
+#include "../sincostable.h"
+<br/>
+#include "ship.h"
+<br/>
+#include "bgtiles_space.h"
+<br/>
+<br/>
+#define PALETTE_LENGTH 256
+<br/>
+<br/>
+u16 *tileData_space = (u16*)charBaseBlock(0);
+<br/>
+u16 *mapData_space = (u16*)screenBaseBlock(16);
+<br/>
+<br/>
+u16 *bgPaletteMem = (u16*)0x5000000;
+<br/>
+u16 *objPaletteMem = (u16*)0x5000200;
+<br/>
+<br/>
+u16 *videoBuffer = (u16*)0x6000000;
+<br/>
+u16 *charBuffer = (u16*)0x6010000;
+<br/>
+<br/>
+void rotateBackground(Background *bg, s16 angle, int center_x, int center_y, Fixed scale)
+<br/>
+{
+<br/>
+    center_y = (center_y * scale)&gt;&gt;8;
+<br/>
+    center_x = (center_x * scale)&gt;&gt;8;
+<br/>
+<br/>
+   bg-&gt;dx = (bg-&gt;x_scroll - (center_y*SIN[angle]) - (center_x*COS[angle]));
+<br/>
+   bg-&gt;dy = (bg-&gt;y_scroll - (center_y*COS[angle]) + (center_x*SIN[angle]));
+<br/>
+<br/>
+   bg-&gt;pa = multFixed(COS[angle], scale);
+<br/>
+   bg-&gt;pb = multFixed(SIN[angle], scale);
+<br/>
+   bg-&gt;pc = multFixed(-SIN[angle], scale);
+<br/>
+   bg-&gt;pd = multFixed(COS[angle], scale);
+<br/>
+}
+<br/>
+<br/>
+void updateBackground(Background *bg)
+<br/>
+{
+<br/>
+    switch(bg-&gt;bgNumber)
+<br/>
+    {
+<br/>
+      case 0:
+<br/>
+         REG_BG0HOFS = bg-&gt;x_scroll;
+<br/>
+         REG_BG0VOFS = bg-&gt;y_scroll;
+<br/>
+         break;
+<br/>
+      case 1:
+<br/>
+         REG_BG1HOFS = bg-&gt;x_scroll;
+<br/>
+         REG_BG1VOFS = bg-&gt;y_scroll;
+<br/>
+         break;
+<br/>
+      case 2:
+<br/>
+         if(!(REG_DISPCNT &amp; MODE_0))
+<br/>
+         {
+<br/>
+            REG_BG2X = bg-&gt;dx;
+<br/>
+            REG_BG2Y = bg-&gt;dy;
+<br/>
+<br/>
+            REG_BG2PA = bg-&gt;pa;
+<br/>
+            REG_BG2PB = bg-&gt;pb;
+<br/>
+            REG_BG2PC = bg-&gt;pc;
+<br/>
+            REG_BG2PD = bg-&gt;pd;
+<br/>
+         }
+<br/>
+         else
+<br/>
+         {
+<br/>
+            REG_BG2HOFS = bg-&gt;x_scroll;
+<br/>
+            REG_BG2VOFS = bg-&gt;y_scroll;
+<br/>
+         }
+<br/>
+         break;
+<br/>
+      case 3:
+<br/>
+         if(!(REG_DISPCNT &amp; MODE_0))
+<br/>
+         {
+<br/>
+            REG_BG3X = bg-&gt;dx;
+<br/>
+            REG_BG3Y = bg-&gt;dy;
+<br/>
+<br/>
+            REG_BG3PA = bg-&gt;pa;
+<br/>
+            REG_BG3PB = bg-&gt;pb;
+<br/>
+            REG_BG3PC = bg-&gt;pc;
+<br/>
+            REG_BG3PD = bg-&gt;pd;
+<br/>
+         }
+<br/>
+         else
+<br/>
+         {
+<br/>
+            REG_BG3HOFS = bg-&gt;x_scroll;
+<br/>
+            REG_BG3VOFS = bg-&gt;y_scroll;
+<br/>
+         }
+<br/>
+    }
+<br/>
+}
+<br/>
+<br/>
+<br/>
+void waitForVBlank()
+<br/>
+{
+<br/>
+   while (REG_VCOUNT &lt; 160){}
+<br/>
+}
+<br/>
+<br/>
+void copyOAM()
+<br/>
+{
+<br/>
+   int i;
+<br/>
+   u16 *spritePtr = (u16*)sprites;
+<br/>
+   for (i = 0; i &lt; 128 * 4; i++)
+<br/>
+   {
+<br/>
+      OAM[i] = spritePtr[i];
+<br/>
+   }
+<br/>
+}
+<br/>
+<br/>
+void moveSprite(OAMEntry *sprite, s16 *x, s16 *y)
+<br/>
+{
+<br/>
+   sprite-&gt;attribute0 &amp;= 0xff00;
+<br/>
+   sprite-&gt;attribute0 |= (*y &amp;= 0x00ff);
+<br/>
+   sprite-&gt;attribute1 &amp;= 0xfe00;
+<br/>
+   sprite-&gt;attribute1 |= (*x &amp;= 0x01ff);
+<br/>
+}
+<br/>
+<br/>
+void rotateSprite(s16 rotDataIndex, s16 angle, s16 x_scale, s16 y_scale)
+<br/>
+{
+<br/>
+   s16 pa, pb, pc, pd;
+<br/>
+   pa = multFixed(x_scale, COS[angle]);
+<br/>
+   pb = multFixed(y_scale, SIN[angle]);
+<br/>
+   pc = multFixed(x_scale, -SIN[angle]);
+<br/>
+   pd = multFixed(y_scale, COS[angle]);
+<br/>
+<br/>
+   rotData[rotDataIndex].pa = pa;
+<br/>
+   rotData[rotDataIndex].pb = pb;
+<br/>
+   rotData[rotDataIndex].pc = pc;
+<br/>
+   rotData[rotDataIndex].pd = pd;
+<br/>
+}
+<br/>
+<br/>
+void initSprites()
+<br/>
+{
+<br/>
+   int i;
+<br/>
+   for (i = 0; i &lt; 128; i++)
+<br/>
+   {
+<br/>
+      sprites[i].attribute0 = 160;
+<br/>
+      sprites[i].attribute1 = 240;
+<br/>
+   }
+<br/>
+}
+<br/>
+<br/>
+int main()
+<br/>
+{
+<br/>
+   int i;
+<br/>
+   Background *bg2_space;
+<br/>
+<br/>
+   setMode(MODE_2|OBJ_MAP_1D|BG2_ENABLE|OBJ_ENABLE);
+<br/>
+   bg2_space-&gt;bgNumber = 2;
+<br/>
+   bg2_space-&gt;attributes = ROTBG_SIZE_1|WRAP_AROUND|SCREEN_BASE_BLOCK(1)|BG_COLOR_256|CHAR_BASE_BLOCK(0)|BG_PRIORITY(3);
+<br/>
+   REG_BG2CNT = bg2_space-&gt;attributes;
+<br/>
+<br/>
+   //load obj and bg palettes
+<br/>
+   for (i = 0; i &lt; PALETTE_LENGTH; i++)
+<br/>
+   {
+<br/>
+      bgPaletteMem[i] = bgtiles_spacePalette[i];
+<br/>
+      objPaletteMem[i] = shipPalette[i];
+<br/>
+   }
+<br/>
+<br/>
+   for (i = 0; i &lt; 256; i++)
+<br/>
+   {
+<br/>
+      tileData_space[i] = bgtiles_spaceData[i];
+<br/>
+   }
+<br/>
+<br/>
+   for (i = 0; i &lt; 256/2; i++)
+<br/>
+   {
+<br/>
+      mapData_space[i] = 0;
+<br/>
+      mapData_space[i] = 0&lt;&lt;8;
+<br/>
+   }
+<br/>
+<br/>
+   while (1)
+<br/>
+   {
+<br/>
+      waitForVBlank();
+<br/>
+   }
+<br/>
+<br/>
+<br/>
+   return 0;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody"><br/>_________________<br/>Nihongo o hanasemasen!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#21646 - Cearn - Wed Jun 02, 2004 12:58 pm</h4>
+    <div class="postbody"><span class="postbody">I have no idea why charblock 2 is used instead of 0, but I do notice a couple of things that can cause problems:
+<br/>
+<br/>
+1. bg2_space is a pointer, but what does it point to?
+<br/>
+2. Since you're using a rot/scale background, you need to set the affine matrix for it as well (REG_BG2PA - REG_BG2PD).
+<br/>
+3. On that topic, rotateSprite uses the wrong matrix, see <a class="postlink" href="http://user.chem.tue.nl/jakvijn/tonc/affine.htm" target="_blank">here</a> for details. 
+<br/>
+4. Note that the memory location for charblock 2 is also screenblock 16 (=mapData_space). While, yes it is empty now, I have a feeling that you were trying to load the map data here, so it would be empty anymore then.
+<br/>
+5. While you mentioned that you fixed the part about writing 8bits to VRAM at a time, 
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+      mapData_space[i] = 0; 
+<br/>
+      mapData_space[i] = 0&lt;&lt;8; 
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+is probably not what you want since the second copy completely overwrites the first one (again, this doesn't matter when both are 0, but if you try using real mapdata, problems will occur). Using |= or combining them into one write should work. Or casting the data to a u16 pointer first.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+u16 *map= (u16*)yourmap;
+<br/>
+for(i=0; i &lt; mapsize&gt;&gt;1; i++)  // divisions are evil
+<br/>
+    mpData_space[i]= map[i];
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#21684 - dagamer34 - Thu Jun 03, 2004 12:25 am</h4>
+    <div class="postbody"><span class="postbody">Yeah, you need to make sure that your map and tile data don't overlap. That's probably why.<br/>_________________<br/>Little kids and Playstation 2's don't mix. :(</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#21702 - jarobi - Thu Jun 03, 2004 6:44 am</h4>
+    <div class="postbody"><span class="postbody">Stupid me! I forgot to allocate space for my background pointer! Thanks for the input!<br/>_________________<br/>Nihongo o hanasemasen!</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

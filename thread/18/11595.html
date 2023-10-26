@@ -1,0 +1,205 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>How to read the DS Card Header? - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > How to read the DS Card Header?</h2>
+<div id="posts">
+<div class="post">
+    <h4>#107764 - Lick - Wed Nov 01, 2006 8:56 pm</h4>
+    <div class="postbody"><span class="postbody">I've tried without success. Anyone who can give me more insight on this?
+<br/>
+<br/>
+<span style="font-weight: bold">Taken from hbfirmware</span>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">typedef struct {
+<br/>
+   int id;
+<br/>
+   int id2;
+<br/>
+   u32 CRCs;
+<br/>
+   int invalid;
+<br/>
+   u8 _10[8];
+<br/>
+} PACKED CARDINFO;
+<br/>
+static CARDINFO *cardinfo=(CARDINFO*)0x27ff800;
+<br/>
+<br/>
+typedef struct {
+<br/>
+   u8 _00[0x20];
+<br/>
+   u32 arm9src;
+<br/>
+   u32 arm9exec;
+<br/>
+   u32 arm9dst;
+<br/>
+   u32 arm9size;
+<br/>
+   u32 arm7src;
+<br/>
+   u32 arm7exec;
+<br/>
+   u32 arm7dst;
+<br/>
+   u32 arm7size;
+<br/>
+   u8 _40[0x20];
+<br/>
+   u32 flags0;
+<br/>
+   u32 flags1;
+<br/>
+} PACKED NDSHEADER;
+<br/>
+<br/>
+static NDSHEADER *head=(NDSHEADER*)0x27ffe00;
+<br/>
+<br/>
+void read_card(u32 src, u32 dst, int size) {
+<br/>
+   u32 flags;
+<br/>
+   u32 cmd[2];
+<br/>
+<br/>
+   flags=CARD_ACTIVATE | CARD_nRESET | 0x01000000 | head-&gt;flags0;
+<br/>
+   cmd[0]=0x00000000;
+<br/>
+   cmd[1]=0xb7000000 | (src&gt;&gt;8);
+<br/>
+   while(size&gt;0) {
+<br/>
+      cardPolledTransfer(flags, (u32*)dst, size&gt;512?512:size, (u8*)cmd);
+<br/>
+      cmd[1]+=2;
+<br/>
+      dst+=512;
+<br/>
+      size-=512;
+<br/>
+   }
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+<span style="font-weight: bold">Calling above code on ARM9</span>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">    sNDSHeader physicalNDSHeader;
+<br/>
+    sysSetBusOwners(true, true);
+<br/>
+    read_card(0, (u32)&amp;physicalNDSHeader, 512);
+<br/>
+    sysSetBusOwners(false, false);
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I get random junk, different on each run. =(
+<br/>
+<br/>
+- Lick<br/>_________________<br/><a class="postlink" href="http://licklick.wordpress.com" target="_blank">http://licklick.wordpress.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#107766 - MaHe - Wed Nov 01, 2006 9:05 pm</h4>
+    <div class="postbody"><span class="postbody">Can't take a look at it now, but REIN does it, as far as I know (take a look at the sources):
+<br/>
+<a href="http://www.pat.hi-ho.ne.jp/sata68/nds.shtml" target="_blank">http://www.pat.hi-ho.ne.jp/sata68/nds.shtml</a><br/>_________________<br/><span style="font-size: 9px; line-height: normal">[ Crimson and Black Nintendo DS Lite | CycloDS Evolution | EZ-Flash 3-in-1 | 1 GB Transcend microSD ]</span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#107771 - Lick - Wed Nov 01, 2006 9:22 pm</h4>
+    <div class="postbody"><span class="postbody">Thanks MaHe, but I searched REIN and wasn't able to find any additional header reading procedures.
+<br/>
+<br/>
+- Lick<br/>_________________<br/><a class="postlink" href="http://licklick.wordpress.com" target="_blank">http://licklick.wordpress.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#107785 - chishm - Wed Nov 01, 2006 11:52 pm</h4>
+    <div class="postbody"><span class="postbody">You can't read anything below 0x8000 once the DS card had been set into data mode. The only way to get the header directly would be to eject the card, reinsert it, then read it.<br/>_________________<br/><a class="postlink" href="http://chishm.drunkencoders.com" target="_blank">http://chishm.drunkencoders.com</a>
+<br/>
+<a class="postlink" href="http://dldi.drunkencoders.com" target="_blank">http://dldi.drunkencoders.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#107845 - Lick - Thu Nov 02, 2006 4:21 pm</h4>
+    <div class="postbody"><span class="postbody">*pukes*
+<br/>
+Bleghh.. Well what does the <a class="postlink" href="http://nocash.emubase.de/gbatek.htm#auxdsgamecardslot" target="_blank">Reset pin (5)</a> do?
+<br/>
+<br/>
+Thanks chishm!
+<br/>
+- Lick<br/>_________________<br/><a class="postlink" href="http://licklick.wordpress.com" target="_blank">http://licklick.wordpress.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#107846 - josath - Thu Nov 02, 2006 4:56 pm</h4>
+    <div class="postbody"><span class="postbody">Some notes:
+<br/>
+1. I believe the header is copied into main RAM by the firmware, so you may be able to grab a copy of this at the beginning of your app (It might get overwritten by the homebrew, not sure)
+<br/>
+<br/>
+2. The eject/insert thing -- The neoflash MK2/MK3 have a function to read what your current NDS cart is, but they require you to eject / reinsert it first.
+<br/>
+<br/>
+3. Is there any possibility of doing a 'hard reset' (instead of a soft reset), where it will reset everything, and go back to the nintendo logo / firmware / etc? This would be better than nothing, if we can't get the card reading working directly.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#107848 - tepples - Thu Nov 02, 2006 5:00 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>josath wrote:</b></span></td> </tr> <tr> <td class="quote">3. Is there any possibility of doing a 'hard reset' (instead of a soft reset), where it will reset everything, and go back to the nintendo logo / firmware / etc?</td> </tr></table><span class="postbody">
+<br/>
+Of course. Just turn the power off. This is the solution that the DS firmware itself uses to exit from PictoChat, DS Download Play, or settings.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#107854 - Lick - Thu Nov 02, 2006 5:10 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>josath wrote:</b></span></td> </tr> <tr> <td class="quote">Some notes:
+<br/>
+1. I believe the header is copied into main RAM by the firmware, so you may be able to grab a copy of this at the beginning of your app (It might get overwritten by the homebrew, not sure)</td> </tr></table><span class="postbody">
+<br/>
+Yes, but it seems like all devices that use PassMe as a booting solution will overwrite the RAM copy of the header. Also, my main goal is to reset back to the SLOT1 homebrew devices, and I suspect those will overwrite the RAM copy of the header as well.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">2. The eject/insert thing -- The neoflash MK2/MK3 have a function to read what your current NDS cart is, but they require you to eject / reinsert it first.</td> </tr></table><span class="postbody">
+<br/>
+Tried it, and it seems like I am getting the header values alright! I'll still be hoping for a software method to reset the DS card. <span style="color: green">Hurray for josath again!</span>
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">3. Is there any possibility of doing a 'hard reset' (instead of a soft reset), where it will reset everything, and go back to the nintendo logo / firmware / etc? This would be better than nothing, if we can't get the card reading working directly.</td> </tr></table><span class="postbody">
+<br/>
+You NEED to reset the card before it works. The firmware won't reset them for you, it will just assume that both SLOT1 and SLOT2 cards are resetted, because of the power off. If that's not true, perhaps the firmware will hang or something?<br/>_________________<br/><a class="postlink" href="http://licklick.wordpress.com" target="_blank">http://licklick.wordpress.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#107855 - Lick - Thu Nov 02, 2006 5:12 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>josath wrote:</b></span></td> </tr> <tr> <td class="quote">3. Is there any possibility of doing a 'hard reset' (instead of a soft reset), where it will reset everything, and go back to the nintendo logo / firmware / etc?</td> </tr></table><span class="postbody">
+<br/>
+Of course. Just turn the power off. This is the solution that the DS firmware itself uses to exit from PictoChat, DS Download Play, or settings.</span></td> </tr></table><span class="postbody">
+<br/>
+What fun is that? Hehe, I mean, I always hated that the DS firmware doesn't just reset back to the mainmenu.<br/>_________________<br/><a class="postlink" href="http://licklick.wordpress.com" target="_blank">http://licklick.wordpress.com</a></span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

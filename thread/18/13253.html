@@ -1,0 +1,541 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Console and Ext Background on both screen (example here) - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Console and Ext Background on both screen (example here)</h2>
+<div id="posts">
+<div class="post">
+    <h4>#129243 - odelot - Mon May 21, 2007 12:16 am</h4>
+    <div class="postbody"><span class="postbody">Hi everyone... i waste my weekend studying the material around the net about ds development and some codes too. I started to code on DS last weekend and started with palib, but it was making the DSerial lib to crash some times...
+<br/>
+<br/>
+so I decided to make my own window system to DS... the first thing that i needed to do was to find a way to the video ram as framebuffer for both screen and have text support...
+<br/>
+<br/>
+i noticed that it is a doubt of many here, and there is a lot of question on forum. the main problem is how to setup the console from ndslib to subscreen, if we use all the memory on extended background..
+<br/>
+<br/>
+So, i started to study some codes and I found the anwser on Win2DS code. He did what I was looking for.
+<br/>
+<br/>
+His trick was to scroll the background on Y. As we know, the 16bit 256x256 framebuffer for sub screen use all bank C, and if we want to use another thing, like tile base background, we cant. But the DS Screen does not has 256x256 but 256x192. So there is memory that we can use. Then, if we make a little horizontal scroll in extended background (ex SUB_BG3_CY = 64 &lt;&lt; 8) we are telling to DS no to use the begin of C banck (0x0620000) but an andress after the begin (if we use the scrolling command SUB_BG3_CY = 64 &lt;&lt; 8, then DS will point the ext background to 0x06208000). So, now we have 0x8000 Bytes (32KB) of free space to use with tile map background and then to text.
+<br/>
+<br/>
+I follow the WIN2DS example and didn't use the console from ndslib, but 2 tile maps, one for each screen, and then i update the maps to show the text that i wanted
+<br/>
+<br/>
+concluding, using text with tile based background has its advantages and disadvantages. The advantages is that we dont need to change (redraw) the entire framebuffer to display or change text. The disadvantages is that you cannot show text in anywhere in the screen, but just in a 32x24 grid that map the screen, because of the definition of the tile background 
+<br/>
+<br/>
+the code below configures the DS memory to use ext background and tile based text on both screens, and for both it implements double buffering
+<br/>
+<br/>
+hope that this helps you! Odelot
+<br/>
+<br/>
+here is the link to code and to ascii tile and pallet files
+<br/>
+(code) <a class="postlink" href="http://grad.icmc.usp.br/~fabiotp/dsDev/DSVideo.rar" target="_blank">http://grad.icmc.usp.br/~fabiotp/dsDev/DSVideo.rar</a>
+<br/>
+(pic) <a class="postlink" href="http://grad.icmc.usp.br/~fabiotp/dsDev/dsDevExtBGwithText.jpg" target="_blank">http://grad.icmc.usp.br/~fabiotp/dsDev/dsDevExtBGwithText.jpg</a>
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#include "../gfx/ascii.c"
+<br/>
+<br/>
+<br/>
+class DSVideo
+<br/>
+{
+<br/>
+public:
+<br/>
+   void init ()
+<br/>
+   {
+<br/>
+      
+<br/>
+      //initialing this variable that will help us with the swapBuffers of double buffering of main screen
+<br/>
+      m_drawingMainScr1=true;
+<br/>
+<br/>
+<br/>
+      //initializing the main screen with mode5 and extended backgrounds
+<br/>
+      videoSetMode(MODE_5_2D |DISPLAY_BG0_ACTIVE | DISPLAY_BG3_ACTIVE);   
+<br/>
+      //initializing the sub screen with mode5 and extended backgrounds
+<br/>
+      videoSetModeSub(MODE_5_2D  | DISPLAY_BG0_ACTIVE | DISPLAY_BG3_ACTIVE );   
+<br/>
+<br/>
+      //initializing the bank A, B and C. Note that C bank is set to be used in sub screen
+<br/>
+      vramSetBankA (VRAM_A_MAIN_BG_0x06000000); 
+<br/>
+      vramSetBankB (VRAM_B_MAIN_BG_0x06020000);
+<br/>
+      vramSetBankC (VRAM_C_SUB_BG);
+<br/>
+      vramSetBankD (VRAM_D_MAIN_BG_0x06040000); // i am not sure that i need this, but...
+<br/>
+<br/>
+<br/>
+      
+<br/>
+<br/>
+      //BG3_CR (main screen) is a complicated register... it has a lot of information.
+<br/>
+      //what we need to know is that, with OR operation, we make it, and it
+<br/>
+      //will works like a pointer for what the DS need to show on background (BG)
+<br/>
+      //layer, in case, the Background 3 that we enabled on videoSetMode
+<br/>
+      //
+<br/>
+      //as we didnt tell him here to point (using BG_MAP_BASE(x) or BG_BMP_BASE(x), etc)
+<br/>
+      //then it will point to 0x06000000. but we will scroll the background (BG3_CY = 64 &lt;&lt; 8)
+<br/>
+      //so it will point to 0x06008000
+<br/>
+      BG3_CR = BG_BMP16_256x256 | BG_PRIORITY(3);
+<br/>
+<br/>
+<br/>
+      //same as BG3_CR, but for sub screen (0x06200000 is the adreess of 
+<br/>
+      //the begining of C bank)  - remember that this address will change 
+<br/>
+      //when we make the scrolling (SUB_BG3_CY = 64 &lt;&lt; 8), so it will point to 0x62008000
+<br/>
+      SUB_BG3_CR = BG_BMP16_256x256|BG_PRIORITY(3);  
+<br/>
+<br/>
+<br/>
+      //setting up scale, rotation and scroll of our extended backgrounds
+<br/>
+      BG3_XDX = 1 &lt;&lt; 8;
+<br/>
+      BG3_XDY = 0;
+<br/>
+      BG3_YDX = 0;
+<br/>
+      BG3_YDY = 1 &lt;&lt; 8;
+<br/>
+      //our bitmap looks a bit better if we center it so scroll down (256 - 192) / 2 
+<br/>
+      BG3_CX = 0;
+<br/>
+      BG3_CY = 64 &lt;&lt; 8;
+<br/>
+<br/>
+      SUB_BG3_XDX = 1 &lt;&lt; 8;
+<br/>
+      SUB_BG3_XDY = 0;
+<br/>
+      SUB_BG3_YDX = 0;
+<br/>
+      SUB_BG3_YDY = 1 &lt;&lt; 8;
+<br/>
+      SUB_BG3_CX = 0;
+<br/>
+      SUB_BG3_CY = 64 &lt;&lt; 8;
+<br/>
+<br/>
+   
+<br/>
+<br/>
+      //setting up the background 0 from main and sub screen to use tile backgrounds
+<br/>
+      //for text use (probably I need to make my own text render, as this type of text
+<br/>
+      //do not apply for a windows system)
+<br/>
+      BG0_CR = BG_COLOR_16 | BG_32x32 | BG_MAP_BASE(6) | BG_TILE_BASE(0);//  | BG_PRIORITY(1);
+<br/>
+      SUB_BG0_CR = BG_COLOR_16 | BG_32x32 | BG_MAP_BASE(6) | BG_TILE_BASE(0);//  | BG_PRIORITY(0);
+<br/>
+      
+<br/>
+<br/>
+      //applying the pointers to framebuffers
+<br/>
+      m_fbMainScr1=(u16*)  0x06008000;// (u16*)BG_BMP_RAM(2); //point to init of bank A, or 0x06008000
+<br/>
+      m_fbMainScr2=(u16*)  0x06028000;// (u16*)BG_BMP_RAM(10); //point to init of bank B, or 0x06028000
+<br/>
+      m_fbSubScr= (u16*)   0x06208000; //point to init of bank c, or 0x06208000
+<br/>
+      m_fbMainScr = m_fbMainScr2; //actual backbuffer is back B
+<br/>
+      
+<br/>
+      m_fbSubScrEmulated = (u16*)malloc (256*256*2); //just if we will use emulated double buffering for sub screen
+<br/>
+<br/>
+      int i=0;
+<br/>
+<br/>
+      //cleaning the vram      
+<br/>
+      u16* vram = (u16*)(0x06020000);
+<br/>
+      while(i++ &lt;= (256*256)) vram[i] = 0;
+<br/>
+      vram = (u16*)(0x06000000); i = 0;
+<br/>
+      while(i++ &lt;= (256*256)) vram[i] = 0;
+<br/>
+<br/>
+      
+<br/>
+      //Load the text I use into character slot 0 for both screens
+<br/>
+      loadText((u16*)CHAR_BASE_BLOCK(0),(u16*)BG_PALETTE);  //CHAR_BASE_BLOCK(0) = 0x6000000
+<br/>
+      loadText((u16*)CHAR_BASE_BLOCK_SUB(0),(u16*)BG_PALETTE_SUB); //CHAR_BASE_BLOCK_SUB(0) = 0x6200000
+<br/>
+<br/>
+      //setting color to text
+<br/>
+      BG_PALETTE[0]=RGB15(0,0,0);   //background text color 
+<br/>
+      BG_PALETTE[1]=RGB15(31,31,31); //text color
+<br/>
+      BG_PALETTE_SUB[0]=RGB15(0,0,0);
+<br/>
+      BG_PALETTE_SUB[1] = RGB15(31, 31, 31);
+<br/>
+<br/>
+<br/>
+   }
+<br/>
+<br/>
+   //print text using tile based text on subScreen
+<br/>
+   void printTextSubScrn(const char * str, int x, int y) 
+<br/>
+   {
+<br/>
+      u16* map = (u16*)BG_MAP_RAM_SUB(6); //counting that it will not change
+<br/>
+      while(*str) 
+<br/>
+      {
+<br/>
+         if(x==32) {x=0; y++;}
+<br/>
+         if(y==24) return;
+<br/>
+         map[y*32+x++]=(*str)-32;
+<br/>
+         str++;
+<br/>
+      }
+<br/>
+   }
+<br/>
+<br/>
+   //print text using tile based text on mainScreen
+<br/>
+   void printTextMainScrn(const char * str, int x, int y) 
+<br/>
+   {
+<br/>
+      u16* map = (u16*)BG_MAP_RAM(6); //counting that it will not change
+<br/>
+      while(*str) 
+<br/>
+      {
+<br/>
+         if(x==32) {x=0; y++;}
+<br/>
+         if(y==24) return;
+<br/>
+         map[y*32+x++]=(*str)-32;
+<br/>
+         str++;
+<br/>
+      }
+<br/>
+   }
+<br/>
+   
+<br/>
+   //copying text tile info and pallete to memory
+<br/>
+   void loadText(u16 *map, u16 *palette)
+<br/>
+   {
+<br/>
+      
+<br/>
+      dmaCopy((u16 *)asciiPal, (u16 *)palette, asciiPalLen);
+<br/>
+      dmaCopy((u16 *)asciiData, (u16 *)map, asciiLen);
+<br/>
+   }
+<br/>
+<br/>
+   //swap back and front buffers of main and sub screen 
+<br/>
+   //can make separete swapBuffer methods to each screen
+<br/>
+   //to optimizate screen refresh
+<br/>
+   void swapBuffers ( )
+<br/>
+   {
+<br/>
+      //mainScreen swap code
+<br/>
+      m_drawingMainScr1=!m_drawingMainScr1;
+<br/>
+      if (m_drawingMainScr1)
+<br/>
+      {
+<br/>
+            //changing the back buffer pointer
+<br/>
+         m_fbMainScr=m_fbMainScr2;
+<br/>
+         //if we are drawing now main screen 1, so here we are updating the DS pointer to it
+<br/>
+         BG3_CR = BG_BMP16_256x256 | BG_BMP_BASE(0)  |  BG_PRIORITY(3);  
+<br/>
+      }
+<br/>
+      else
+<br/>
+      {   
+<br/>
+         m_fbMainScr=m_fbMainScr1;
+<br/>
+         BG3_CR = BG_BMP16_256x256 | BG_BMP_BASE(8)  |  BG_PRIORITY(3);
+<br/>
+      }
+<br/>
+<br/>
+      //subScreen swap code
+<br/>
+<br/>
+      //usign the emulated framebuffer
+<br/>
+      memcpy (m_fbSubScr,m_fbSubScrEmulated,256*192*2 );
+<br/>
+      
+<br/>
+<br/>
+   }
+<br/>
+<br/>
+<br/>
+    //just to test - dont use coordinates that exceeds Y=192 and X=256, or you will mess if the memory
+<br/>
+   void drawRectangleMainScreen (int posX, int posY, int sizeX, int sizeY, u16 color)
+<br/>
+   {
+<br/>
+      for (int i=posY; i&lt;posY+sizeY; i+=1)
+<br/>
+         for (int j=posX; j&lt;posX+sizeX; j+=1)
+<br/>
+            m_fbMainScr[i*256+j]= color;
+<br/>
+<br/>
+   }
+<br/>
+<br/>
+   //just to test - dont use coordinates that exceeds Y=192 and X=256, or you will mess if the memory
+<br/>
+   void drawRectangleSubScreen (int posX, int posY, int sizeX, int sizeY, u16 color)
+<br/>
+   {
+<br/>
+      for (int i=posY; i&lt;posY+sizeY; i+=1)
+<br/>
+         for (int j=posX; j&lt;posX+sizeX; j+=1)
+<br/>
+            m_fbSubScrEmulated[i*256+j]= color;
+<br/>
+<br/>
+   }
+<br/>
+<br/>
+   //return the framebuffer to be used to subScreen 
+<br/>
+   //(remember to swapBuffers to refresh the DS screen)
+<br/>
+   u16* getFrameBufferSubScr ()
+<br/>
+   {
+<br/>
+      return m_fbSubScrEmulated;
+<br/>
+   }
+<br/>
+<br/>
+   //return the framebuffer to be used to mainScreen 
+<br/>
+   //(remember to swapBuffers to refresh the DS screen)
+<br/>
+   u16* getFrameBufferMainScr ()
+<br/>
+   {
+<br/>
+      return m_fbMainScr;
+<br/>
+   }
+<br/>
+<br/>
+private:
+<br/>
+   //main screen framebuffer  #1
+<br/>
+   u16* m_fbMainScr1;
+<br/>
+<br/>
+   //main screen framebuffer  #2
+<br/>
+   u16* m_fbMainScr2;
+<br/>
+<br/>
+   //main screen framebuffer actual
+<br/>
+   u16* m_fbMainScr;
+<br/>
+<br/>
+   //sub screen framebuffer 
+<br/>
+   u16* m_fbSubScr;
+<br/>
+<br/>
+   //emulated sub screen framebuffer  (it is crashing the rom ? )
+<br/>
+   //u16 m_fbSubScrEmulated [65536];//use or not use it, it is the question
+<br/>
+   u16 *m_fbSubScrEmulated;
+<br/>
+<br/>
+   //what framebuffer on main screen we are drawing
+<br/>
+   bool m_drawingMainScr1;
+<br/>
+<br/>
+};</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#129267 - mml - Mon May 21, 2007 9:11 am</h4>
+    <div class="postbody"><span class="postbody">That's a cute idea, top stuff.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#129305 - Cydrak - Mon May 21, 2007 7:27 pm</h4>
+    <div class="postbody"><span class="postbody">Actually, the subscreen can be double-buffered (in hardware), if you really want. This is <a class="postlink" href="http://forum.gbadev.org/viewtopic.php?t=11364" target="_blank">how dual-screen 3D works</a>: two screen buffers in C/D and you swap the screens, using display capture to update one per frame.
+<br/>
+<br/>
+The trick is--you're right, you can't get two full BGs since the sub is capped at 128k. Even with 32k at the end, if you try to "spill over" into D, D doesn't map to the BG so you're out of luck. ... Except, what else does D map to?
+<br/>
+<br/>
+Well... the DS has these odd "bitmap sprites", and they have not only an (X, Y) onscreen, but an (X, Y) in a big flat texture (like those portrait cut-out sheets with the wallet sizes... or 3D quads without the 3D). Does that sound useful to you? Just to give you ideas:
+<br/>
+<br/>
+Bank C =&gt; sub BG
+<br/>
+Bank D =&gt; sub OBJs
+<br/>
+sub extended BG3 =&gt; sub buffer 0
+<br/>
+"fleet" of sub OBJs =&gt; sub buffer 1
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">// Attributes for a bitmap sprite behind BG3.. at 64x64, 12 of these cover the screen.
+<br/>
+OAM_SUB[4*n+0] = OBJ_Y(screenY) | ATTR0_NORMAL | ATTR0_BMP | ATTR0_SQUARE;
+<br/>
+OAM_SUB[4*n+1] = OBJ_X(screenX) | ATTR1_SIZE_64;
+<br/>
+OAM_SUB[4*n+2] = (bitmapX/8) | (bitmapY/8)&lt;&lt;5 | ATTR2_ALPHA(15) | ATTR2_PRIORITY(3);
+<br/>
+<br/>
+    ...
+<br/>
+<br/>
+// Display the BG over the bitmap OBJs. Affine settings omitted.
+<br/>
+SUB_BG3_CR = BG_BMP16_256x256 | BG_BMP_BASE(0) | BG_PRIORITY(2);
+<br/>
+SUB_DISPLAY_CR = MODE_5_2D | DISPLAY_SPR_2D_BMP_256 | DISPLAY_BG3_ACTIVE | DISPLAY_SPR_ACTIVE;
+<br/>
+<br/>
+    ...
+<br/>
+<br/>
+// Swap the BG3/OBJs each frame.
+<br/>
+// Beware if your framebuffer uses transparency--will need to toggle the sprites' visibility, too.
+<br/>
+SUB_DISPLAY_CR ^= DISPLAY_BG3_ACTIVE;</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Hope this helps. I use very similar code to do 3D, and it works a treat.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#129308 - odelot - Mon May 21, 2007 8:08 pm</h4>
+    <div class="postbody"><span class="postbody">hi.. i didnt use sprites yet, as I started to code on DS just last wednesday, put i think that you are telling me to put one framebuffer on background in bank C and use bank D to put the other framebuffer splited into sprites, am I right??
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">     if (frameCount &amp; 0x1) 
+<br/>
+      { 
+<br/>
+         vramSetBankC(VRAM_C_SUB_BG); 
+<br/>
+         vramSetBankD(VRAM_D_LCD); 
+<br/>
+         SetRegCapture(true, 0, 15, 3, 0, 3, 0, 0); 
+<br/>
+         scene-&gt;draw_bottom(frameCount); 
+<br/>
+      } else { 
+<br/>
+         vramSetBankC(VRAM_C_LCD); 
+<br/>
+         vramSetBankD(VRAM_D_SUB_SPRITE); 
+<br/>
+         SetRegCapture(true, 0, 15, 2, 0, 3, 0, 0); 
+<br/>
+         scene-&gt;draw_top(frameCount); 
+<br/>
+      } </td> </tr></table><span class="postbody">
+<br/>
+<br/>
+i took this code from the link that i gave.... setting a bank to LCD will make the DS to not display that bank??? as you still has the ext Background pointed to back C
+<br/>
+<br/>
+ah, and to use 3D on both screen you need to render in 2 pass, don t you?? like, for each frame, render to the sub, copying the framebuffer from main to sub, and then render to the main screen?
+<br/>
+<br/>
+well... thanks a lot... i will try to use the double-buffering on hardware to sub screen as you tell, using sprites..
+<br/>
+<br/>
+i dont want to code to 3D right now for DS, but on PC, this is the area that i study and work more on college... i think that i will try something soon on 3D... thanks again for the clue</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

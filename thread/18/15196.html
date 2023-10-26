@@ -1,0 +1,1111 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>sprites on subscreen - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > sprites on subscreen</h2>
+<div id="posts">
+<div class="post">
+    <h4>#152528 - ben0bi - Mon Mar 17, 2008 8:03 am</h4>
+    <div class="postbody"><span class="postbody">i write a game wich uses both screens for the same.
+<br/>
+<br/>
+so, is it possible to overlap the memory from the sub and main screen bg's/sprites?
+<br/>
+<br/>
+i have read and re-coded a tutorial to use OAM for sprites. is it possible to use these (OAM) sprites on the sub screen, too?
+<br/>
+<br/>
+i mapped a VRAM bank wich is capable of sub_sprite to VRAM_X_SUB_SPRITE and enabled sprites on the sub screen but what do i have to do next?
+<br/>
+<br/>
+here is the source from the tutorial. i really do not get, where i should change something. i want to use the same memory for both screens, if possible (for both, bg and sprites...if possible) - or else, how do i set up sprites for the sub engine?
+<br/>
+<br/>
+thanx for your help.
+<br/>
+<br/>
+here is the code from the tutorial, i am sorry for that much, but so you have exactly what i have...(ok, my code is encapsulated in classes and so on but its from this base code):
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+/*
+<br/>
+ *  main.cpp
+<br/>
+ *  
+<br/>
+ *  Created by Jaeden Amero on 11/12/07.
+<br/>
+ *  Copyright 2007. All rights reserved.
+<br/>
+ *
+<br/>
+ */
+<br/>
+<br/>
+#include &lt;nds.h&gt;
+<br/>
+#include &lt;assert.h&gt;
+<br/>
+#include "sprites.h"
+<br/>
+<br/>
+/* Backgrounds */
+<br/>
+#include "starField.h"
+<br/>
+#include "planet.h"
+<br/>
+#include "splash.h"
+<br/>
+/* Sprites */
+<br/>
+#include "orangeShuttle.h"
+<br/>
+#include "moon.h"
+<br/>
+<br/>
+/* Select a low priority DMA channel to perform our background copying. */
+<br/>
+static const int DMA_CHANNEL = 3;
+<br/>
+<br/>
+void initVideo() {
+<br/>
+    /*
+<br/>
+     *  Map VRAM to display a background on the main and sub screens.
+<br/>
+     * 
+<br/>
+     *  The vramSetMainBanks function takes four arguments, one for each of the
+<br/>
+     *  major VRAM banks. We can use it as shorthand for assigning values to
+<br/>
+     *  each of the VRAM bank's control registers.
+<br/>
+     *
+<br/>
+     *  We map banks A and B to main screen  background memory. This gives us
+<br/>
+     *  256KB, which is a healthy amount for 16-bit graphics.
+<br/>
+     *
+<br/>
+     *  We map bank C to sub screen background memory.
+<br/>
+     *
+<br/>
+     *  We map bank D to LCD. This setting is generally used for when we aren't
+<br/>
+     *  using a particular bank.
+<br/>
+     *
+<br/>
+     *  We map bank E to main screen sprite memory (aka object memory).
+<br/>
+     */
+<br/>
+    vramSetMainBanks(VRAM_A_MAIN_BG_0x06000000,
+<br/>
+                     VRAM_B_MAIN_BG_0x06020000,
+<br/>
+                     VRAM_C_SUB_BG_0x06200000,
+<br/>
+                     VRAM_D_LCD);
+<br/>
+<br/>
+    vramSetBankE(VRAM_E_MAIN_SPRITE);
+<br/>
+<br/>
+    /*  Set the video mode on the main screen. */
+<br/>
+    videoSetMode(MODE_5_2D | // Set the graphics mode to Mode 5
+<br/>
+                 DISPLAY_BG2_ACTIVE | // Enable BG2 for display
+<br/>
+                 DISPLAY_BG3_ACTIVE | // Enable BG3 for display
+<br/>
+                 DISPLAY_SPR_ACTIVE | // Enable sprites for display
+<br/>
+                 DISPLAY_SPR_1D       // Enable 1D tiled sprites
+<br/>
+                 );
+<br/>
+<br/>
+    /*  Set the video mode on the sub screen. */
+<br/>
+    videoSetModeSub(MODE_5_2D | // Set the graphics mode to Mode 5
+<br/>
+                    DISPLAY_BG3_ACTIVE); // Enable BG3 for display
+<br/>
+}
+<br/>
+<br/>
+void initBackgrounds() {
+<br/>
+    /*  Set up affine background 3 on main as a 16-bit color background */
+<br/>
+    BG3_CR = BG_BMP16_256x256 |
+<br/>
+             BG_BMP_BASE(0) | // The starting place in memory
+<br/>
+             BG_PRIORITY(3); // A low priority
+<br/>
+<br/>
+    /*  Set the affine transformation matrix for the main screen background 3
+<br/>
+     *  to be the identity matrix.
+<br/>
+     */
+<br/>
+    BG3_XDX = 1 &lt;&lt; 8;
+<br/>
+    BG3_XDY = 0;
+<br/>
+    BG3_YDX = 0;
+<br/>
+    BG3_YDY = 1 &lt;&lt; 8;
+<br/>
+<br/>
+    /*  Place main screen background 3 at the origin (upper left of the screen)
+<br/>
+     */
+<br/>
+    BG3_CX = 0;
+<br/>
+    BG3_CY = 0;
+<br/>
+<br/>
+    /*  Set up affine background 2 on main as a 16-bit color background */
+<br/>
+    BG2_CR = BG_BMP16_128x128 |
+<br/>
+             BG_BMP_BASE(8) | // The starting place in memory
+<br/>
+             BG_PRIORITY(2);  // A higher priority
+<br/>
+<br/>
+    /*  Set the affine transformation matrix for the main screen background 3
+<br/>
+     *  to be the identity matrix.
+<br/>
+     */
+<br/>
+    BG2_XDX = 1 &lt;&lt; 8;
+<br/>
+    BG2_XDY = 0;
+<br/>
+    BG2_YDX = 0;
+<br/>
+    BG2_YDY = 1 &lt;&lt; 8;
+<br/>
+<br/>
+    /*  Place main screen background 2 an interesting place. */
+<br/>
+    BG2_CX = -(SCREEN_WIDTH / 2 - 32) &lt;&lt; 8;
+<br/>
+    BG2_CY = -32 &lt;&lt; 8;
+<br/>
+<br/>
+    /*  Set up affine background 3 on the sub screen as a 16-bit color
+<br/>
+     *  background
+<br/>
+     */
+<br/>
+    SUB_BG3_CR = BG_BMP16_256x256 |
+<br/>
+                 BG_BMP_BASE(0) | // The starting place in memory
+<br/>
+                 BG_PRIORITY(3); // A low priority
+<br/>
+<br/>
+    /*  Set the affine transformation matrix for the sub screen background 3
+<br/>
+     *  to be the identity matrix.
+<br/>
+     */
+<br/>
+    SUB_BG3_XDX = 1 &lt;&lt; 8;
+<br/>
+    SUB_BG3_XDY = 0;
+<br/>
+    SUB_BG3_YDX = 0;
+<br/>
+    SUB_BG3_YDY = 1 &lt;&lt; 8;
+<br/>
+<br/>
+    /*
+<br/>
+     *  Place main screen background 3 at the origin (upper left of the screen)
+<br/>
+     */
+<br/>
+    SUB_BG3_CX = 0;
+<br/>
+    SUB_BG3_CY = 0;
+<br/>
+}
+<br/>
+<br/>
+void initSprites(tOAM * oam, SpriteInfo *spriteInfo) {
+<br/>
+    /*  Define some sprite configuration specific constants.
+<br/>
+     * 
+<br/>
+     *  We will use these to compute the proper index into memory for certain
+<br/>
+     *  tiles or palettes.
+<br/>
+     *
+<br/>
+     *  OFFSET_MULTIPLIER is calculated based on the following formula from
+<br/>
+     *  GBATEK (http://nocash.emubase.de/gbatek.htm#dsvideoobjs):
+<br/>
+     *      TileVramAddress = TileNumber * BoundaryValue
+<br/>
+     *  Since SPRITE_GFX is a uint16*, the compiler will increment the address
+<br/>
+     *  it points to by 2 for each change in 1 of the array index into
+<br/>
+     *  SPRITE_GFX. (The compiler does pointer arithmetic.)
+<br/>
+     */
+<br/>
+    static const int BYTES_PER_16_COLOR_TILE = 32;
+<br/>
+    static const int COLORS_PER_PALETTE = 16;
+<br/>
+    static const int BOUNDARY_VALUE = 32; /* This is the default boundary value
+<br/>
+                                           * (can be set in REG_DISPCNT) */
+<br/>
+    static const int OFFSET_MULTIPLIER = BOUNDARY_VALUE /
+<br/>
+                                         sizeof(SPRITE_GFX[0]);
+<br/>
+<br/>
+    /* Keep track of the available tiles */
+<br/>
+    int nextAvailableTileIdx = 0;
+<br/>
+<br/>
+    /* Create the ship sprite. */
+<br/>
+    static const int SHUTTLE_OAM_ID = 0;
+<br/>
+    assert(SHUTTLE_OAM_ID &lt; SPRITE_COUNT);
+<br/>
+    SpriteInfo * shuttleInfo = &amp;spriteInfo[SHUTTLE_OAM_ID];
+<br/>
+    SpriteEntry * shuttle = &amp;oam-&gt;spriteBuffer[SHUTTLE_OAM_ID];
+<br/>
+<br/>
+    /* Initialize shuttleInfo */
+<br/>
+    shuttleInfo-&gt;oamId = SHUTTLE_OAM_ID;
+<br/>
+    shuttleInfo-&gt;width = 64;
+<br/>
+    shuttleInfo-&gt;height = 64;
+<br/>
+    shuttleInfo-&gt;angle = 462;
+<br/>
+    shuttleInfo-&gt;entry = shuttle;
+<br/>
+<br/>
+    /*
+<br/>
+     *  Configure attribute 0. 
+<br/>
+     *
+<br/>
+     *  OBJCOLOR_16 will make a 16-color sprite. We specify that we want an
+<br/>
+     *  affine sprite (via isRotoscale) here because we would like to rotate
+<br/>
+     *  the ship.
+<br/>
+     */
+<br/>
+    shuttle-&gt;posY = SCREEN_HEIGHT / 2 - shuttleInfo-&gt;height;
+<br/>
+    shuttle-&gt;isRotoscale = true;
+<br/>
+    /* This assert is a check to see a matrix is available to store the affine
+<br/>
+     * transformation matrix for this sprite. Of course, you don't have to have
+<br/>
+     * the matrix id match the affine id, but if you do make them match, this
+<br/>
+     * assert can be helpful. */
+<br/>
+    assert(!shuttle-&gt;isRotoscale || (shuttleInfo-&gt;oamId &lt; MATRIX_COUNT));
+<br/>
+    shuttle-&gt;rsDouble = false;
+<br/>
+    shuttle-&gt;objMode = OBJMODE_NORMAL;
+<br/>
+    shuttle-&gt;isMosaic = false;
+<br/>
+    shuttle-&gt;colMode = OBJCOLOR_16;
+<br/>
+    shuttle-&gt;objShape = OBJSHAPE_SQUARE;
+<br/>
+<br/>
+    /*
+<br/>
+     *  Configure attribute 1.
+<br/>
+     *
+<br/>
+     *  rsMatrixId refers to the loation of affine transformation matrix. We
+<br/>
+     *  set it to a location computed with a macro. OBJSIZE_64, in our case
+<br/>
+     *  since we are making a square sprite, creates a 64x64 sprite.
+<br/>
+     */
+<br/>
+    shuttle-&gt;posX = SCREEN_WIDTH / 2 - shuttleInfo-&gt;width * 2 +
+<br/>
+                    shuttleInfo-&gt;width / 2;
+<br/>
+    shuttle-&gt;rsMatrixIdx = ATTR1_ROTDATA(shuttleInfo-&gt;oamId);
+<br/>
+    shuttle-&gt;objSize = OBJSIZE_64;
+<br/>
+<br/>
+    /* 
+<br/>
+     *  Configure attribute 2.
+<br/>
+     * 
+<br/>
+     *  Configure which tiles the sprite will use, which priority layer it will
+<br/>
+     *  be placed onto, which palette the sprite should use, and whether or not
+<br/>
+     *  to show the sprite.
+<br/>
+     */
+<br/>
+    shuttle-&gt;tileIdx = nextAvailableTileIdx;
+<br/>
+    nextAvailableTileIdx += orangeShuttleTilesLen / BYTES_PER_16_COLOR_TILE;
+<br/>
+    shuttle-&gt;objPriority = OBJPRIORITY_0;
+<br/>
+    shuttle-&gt;objPal = shuttleInfo-&gt;oamId;
+<br/>
+<br/>
+    /* Rotate the sprite */
+<br/>
+    rotateSprite(&amp;oam-&gt;matrixBuffer[shuttleInfo-&gt;oamId],
+<br/>
+                 shuttleInfo-&gt;angle);
+<br/>
+<br/>
+    /*************************************************************************/
+<br/>
+<br/>
+    /* Create the moon sprite. */
+<br/>
+    static const int MOON_OAM_ID = 1;
+<br/>
+    assert(MOON_OAM_ID &lt; SPRITE_COUNT);
+<br/>
+    SpriteInfo * moonInfo = &amp;spriteInfo[MOON_OAM_ID];
+<br/>
+    SpriteEntry * moon = &amp;oam-&gt;spriteBuffer[MOON_OAM_ID];
+<br/>
+<br/>
+    /* Initialize moonInfo */
+<br/>
+    moonInfo-&gt;oamId = MOON_OAM_ID;
+<br/>
+    moonInfo-&gt;width = 32;
+<br/>
+    moonInfo-&gt;height = 32;
+<br/>
+    moonInfo-&gt;angle = 462;
+<br/>
+    moonInfo-&gt;entry = moon;
+<br/>
+<br/>
+    /*
+<br/>
+     *  Configure attribute 0.
+<br/>
+     *
+<br/>
+     *  OBJCOLOR_16 will make a 16-color sprite. We won't specify that we want
+<br/>
+     *  an affine sprite here because we don't want one this time.
+<br/>
+     */
+<br/>
+    moon-&gt;posY = SCREEN_WIDTH / 2 + moonInfo-&gt;height / 2;
+<br/>
+    moon-&gt;isRotoscale = false;
+<br/>
+    /* This assert is a check to see a matrix is available to store the affine
+<br/>
+     * transformation matrix for this sprite. Of course, you don't have to have
+<br/>
+     * the matrix id match the affine id, but if you do make them match, this
+<br/>
+     * assert can be helpful. */
+<br/>
+    assert(!moon-&gt;isRotoscale || (moonInfo-&gt;oamId &lt; MATRIX_COUNT));
+<br/>
+    moon-&gt;isHidden = false;
+<br/>
+    moon-&gt;objMode = OBJMODE_NORMAL;
+<br/>
+    moon-&gt;isMosaic = false;
+<br/>
+    moon-&gt;colMode = OBJCOLOR_16;
+<br/>
+    moon-&gt;objShape = OBJSHAPE_SQUARE;
+<br/>
+<br/>
+    /*
+<br/>
+     * Configure attribute 1.
+<br/>
+     *
+<br/>
+     * OBJSIZE_32 will create a sprite of size 32x32, since we are making a
+<br/>
+     * square sprite. Since we are using a non-affine sprite, attribute 1
+<br/>
+     * doesn't have an rsMatrixIdx anymore. Instead, it has the ability to flip
+<br/>
+     * the sprite vertically or horizontally.
+<br/>
+     */
+<br/>
+    moon-&gt;posX = SCREEN_WIDTH / 2 + moonInfo-&gt;width + moonInfo-&gt;width / 2;
+<br/>
+    moon-&gt;hFlip = false;
+<br/>
+    moon-&gt;vFlip = false;
+<br/>
+    moon-&gt;objSize = OBJSIZE_32;
+<br/>
+<br/>
+    /* 
+<br/>
+     *  Configure attribute 2.
+<br/>
+     * 
+<br/>
+     *  Configure which tiles the sprite will use, which priority layer it will
+<br/>
+     *  be placed onto, which palette the sprite should use, and whether or not
+<br/>
+     *  to show the sprite.
+<br/>
+     */
+<br/>
+    moon-&gt;tileIdx = nextAvailableTileIdx;
+<br/>
+    nextAvailableTileIdx += moonTilesLen / BYTES_PER_16_COLOR_TILE;
+<br/>
+    moon-&gt;objPriority = OBJPRIORITY_2;
+<br/>
+    moon-&gt;objPal = moonInfo-&gt;oamId;
+<br/>
+<br/>
+    /*************************************************************************/
+<br/>
+<br/>
+    /* Copy over the sprite palettes */
+<br/>
+    dmaCopyHalfWords(SPRITE_DMA_CHANNEL,
+<br/>
+                     orangeShuttlePal,
+<br/>
+                     &amp;SPRITE_PALETTE[shuttleInfo-&gt;oamId *
+<br/>
+                                     COLORS_PER_PALETTE],
+<br/>
+                     orangeShuttlePalLen);
+<br/>
+    dmaCopyHalfWords(SPRITE_DMA_CHANNEL,
+<br/>
+                     moonPal,
+<br/>
+                     &amp;SPRITE_PALETTE[moonInfo-&gt;oamId * COLORS_PER_PALETTE],
+<br/>
+                     moonPalLen);
+<br/>
+<br/>
+    /* Copy the sprite graphics to sprite graphics memory */
+<br/>
+    dmaCopyHalfWords(SPRITE_DMA_CHANNEL,
+<br/>
+                     orangeShuttleTiles,
+<br/>
+                     &amp;SPRITE_GFX[shuttle-&gt;tileIdx * OFFSET_MULTIPLIER],
+<br/>
+                     orangeShuttleTilesLen);
+<br/>
+    dmaCopyHalfWords(SPRITE_DMA_CHANNEL,
+<br/>
+                     moonTiles,
+<br/>
+                     &amp;SPRITE_GFX[moon-&gt;tileIdx * OFFSET_MULTIPLIER],
+<br/>
+                     moonTilesLen);
+<br/>
+}
+<br/>
+<br/>
+void displayStarField() {
+<br/>
+    dmaCopyHalfWords(DMA_CHANNEL,
+<br/>
+                     starFieldBitmap, /* This variable is generated for us by
+<br/>
+                                       * grit. */
+<br/>
+                     (uint16 *)BG_BMP_RAM(0), /* Our address for main
+<br/>
+                                               * background 3 */
+<br/>
+                     starFieldBitmapLen);
+<br/>
+}
+<br/>
+<br/>
+void displayPlanet() {
+<br/>
+    dmaCopyHalfWords(DMA_CHANNEL,
+<br/>
+                     planetBitmap, /* This variable is generated for us by
+<br/>
+                                    * grit. */
+<br/>
+                     (uint16 *)BG_BMP_RAM(8), /* Our address for main
+<br/>
+                                               * background 2 */
+<br/>
+                     planetBitmapLen);
+<br/>
+}
+<br/>
+<br/>
+void displaySplash() {
+<br/>
+    dmaCopyHalfWords(DMA_CHANNEL,
+<br/>
+                     splashBitmap, /* This variable is generated for us by
+<br/>
+                                    * grit. */
+<br/>
+                     (uint16 *)BG_BMP_RAM_SUB(0), /* Our address for sub
+<br/>
+                                                     background 3 */
+<br/>
+                     splashBitmapLen);
+<br/>
+}
+<br/>
+<br/>
+int main() {
+<br/>
+    /*  Turn on the 2D graphics core. */
+<br/>
+    powerON(POWER_ALL_2D);
+<br/>
+<br/>
+    /*
+<br/>
+     *  Set up interrupts.
+<br/>
+     *
+<br/>
+     *  We don't really get into what these do exactly at this point in the
+<br/>
+     *  manual, but we still need to do them for now.
+<br/>
+     */
+<br/>
+    irqInit();
+<br/>
+    irqSet(IRQ_VBLANK, 0);
+<br/>
+<br/>
+    /*
+<br/>
+     *  Configure the VRAM and background control registers.
+<br/>
+     *
+<br/>
+     *  Place the main screen on the bottom physical screen. Then arrange the
+<br/>
+     *  VRAM banks. Next, confiure the background control registers.
+<br/>
+     */
+<br/>
+    lcdMainOnBottom();
+<br/>
+    initVideo();
+<br/>
+    initBackgrounds();
+<br/>
+<br/>
+    /* Set up a few sprites. */
+<br/>
+    SpriteInfo spriteInfo[SPRITE_COUNT];
+<br/>
+    tOAM *oam = new tOAM();
+<br/>
+    initOAM(oam);
+<br/>
+    initSprites(oam, spriteInfo);
+<br/>
+<br/>
+    /* Display the backgrounds. */
+<br/>
+    displayStarField();
+<br/>
+    displayPlanet();
+<br/>
+    displaySplash();
+<br/>
+<br/>
+    /*
+<br/>
+     *  Update the OAM.
+<br/>
+     *
+<br/>
+     *  We have to copy our copy of OAM data into the actual
+<br/>
+     *  OAM during VBlank (writes to it are locked during
+<br/>
+     *  other times).
+<br/>
+     */
+<br/>
+    swiWaitForVBlank();
+<br/>
+    updateOAM(oam);
+<br/>
+<br/>
+    return 0;
+<br/>
+}
+<br/>
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+/*
+<br/>
+ *  Sprites.h
+<br/>
+ *  
+<br/>
+ *   Adapted from Liran Nuna's sprite handling code. Special thanks to Liran
+<br/>
+ *   Nuna.
+<br/>
+ *
+<br/>
+ *  Created by Jaeden Amero on 3/12/06.
+<br/>
+ *  Copyright 2006. All rights reserved.
+<br/>
+ *
+<br/>
+ */
+<br/>
+<br/>
+#include &lt;nds.h&gt;
+<br/>
+<br/>
+#ifndef SPRITES_H
+<br/>
+#define SPRITES_H
+<br/>
+<br/>
+#define SPRITE_ANGLE_MASK 0x01FF
+<br/>
+static const int SPRITE_DMA_CHANNEL = 3;
+<br/>
+<br/>
+typedef struct {
+<br/>
+    int oamId;
+<br/>
+    int width;
+<br/>
+    int height;
+<br/>
+    int angle;
+<br/>
+    SpriteEntry * entry;
+<br/>
+} SpriteInfo;
+<br/>
+<br/>
+/*
+<br/>
+ *  updateOAM
+<br/>
+ *
+<br/>
+ *  Update the OAM.
+<br/>
+ *
+<br/>
+ */
+<br/>
+void updateOAM(tOAM * oam);
+<br/>
+<br/>
+/*
+<br/>
+ *  initOAM
+<br/>
+ *
+<br/>
+ *  Initialize the OAM.
+<br/>
+ *
+<br/>
+ */
+<br/>
+void initOAM(tOAM * oam);
+<br/>
+<br/>
+/*
+<br/>
+ *  rotateSprite
+<br/>
+ *
+<br/>
+ *  Rotate a sprite.
+<br/>
+ *
+<br/>
+ */
+<br/>
+void rotateSprite(SpriteRotation * spriteRotation, u16 angle);
+<br/>
+<br/>
+/*
+<br/>
+ *  setSpriteVisibility
+<br/>
+ *
+<br/>
+ *  Hide or show a sprite of a certain type: affine double bound, affine
+<br/>
+ *  non-double bound, or ordinary.
+<br/>
+ *
+<br/>
+ */
+<br/>
+void setSpriteVisibility(SpriteEntry * spriteEntry, bool hidden,
+<br/>
+                         bool affine = false, bool doubleBound = false);
+<br/>
+<br/>
+#endif
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+<br/>
+/*
+<br/>
+ *  Sprites.cpp
+<br/>
+ *  
+<br/>
+ *  Adapted from Liran Nuna's sprite handling code. Special thanks to Liran
+<br/>
+ *  Nuna.
+<br/>
+ *
+<br/>
+ *  Created by Jaeden Amero on 3/12/06.
+<br/>
+ *  Copyright 2006. All rights reserved.
+<br/>
+ *
+<br/>
+ */
+<br/>
+<br/>
+#include &lt;nds.h&gt;
+<br/>
+#include &lt;nds/arm9/trig_lut.h&gt;
+<br/>
+#include "sprites.h"
+<br/>
+<br/>
+void updateOAM(tOAM * oam) {
+<br/>
+    DC_FlushAll();
+<br/>
+    dmaCopyHalfWords(SPRITE_DMA_CHANNEL,
+<br/>
+                     oam-&gt;spriteBuffer,
+<br/>
+                     OAM,
+<br/>
+                     SPRITE_COUNT * sizeof(SpriteEntry));
+<br/>
+}
+<br/>
+<br/>
+void initOAM(tOAM * oam) {
+<br/>
+    /*
+<br/>
+     * For all 128 sprites on the DS, disable and clear any attributes they 
+<br/>
+     * might have. This prevents any garbage from being displayed and gives 
+<br/>
+     * us a clean slate to work with.
+<br/>
+     */
+<br/>
+    for (int i = 0; i &lt; SPRITE_COUNT; i++) {
+<br/>
+        oam-&gt;spriteBuffer[i].attribute[0] = ATTR0_DISABLED;
+<br/>
+        oam-&gt;spriteBuffer[i].attribute[1] = 0;
+<br/>
+        oam-&gt;spriteBuffer[i].attribute[2] = 0;
+<br/>
+    }
+<br/>
+    for (int i = 0; i &lt; MATRIX_COUNT; i++) {
+<br/>
+        /* If you look carefully, you'll see this is that affine trasformation
+<br/>
+         * matrix again. We initialize it to the identity matrix, as we did
+<br/>
+         * with backgrounds
+<br/>
+         */
+<br/>
+        oam-&gt;matrixBuffer[i].hdx = 1 &lt;&lt; 8;
+<br/>
+        oam-&gt;matrixBuffer[i].hdy = 0;
+<br/>
+        oam-&gt;matrixBuffer[i].vdx = 0;
+<br/>
+        oam-&gt;matrixBuffer[i].vdy = 1 &lt;&lt; 8;
+<br/>
+    }
+<br/>
+    /* Be sure to wait for vblank before trying to update the OAM. */
+<br/>
+    swiWaitForVBlank();
+<br/>
+    updateOAM(oam);
+<br/>
+}
+<br/>
+<br/>
+void rotateSprite(SpriteRotation * spriteRotation, u16 angle) {
+<br/>
+    s16 s = SIN[angle &amp; SPRITE_ANGLE_MASK] &gt;&gt; 4;
+<br/>
+    s16 c = COS[angle &amp; SPRITE_ANGLE_MASK] &gt;&gt; 4;
+<br/>
+    
+<br/>
+    spriteRotation-&gt;hdx = c;
+<br/>
+    spriteRotation-&gt;hdy = s;
+<br/>
+    spriteRotation-&gt;vdx = -s;
+<br/>
+    spriteRotation-&gt;vdy = c;
+<br/>
+}
+<br/>
+<br/>
+void setSpriteVisibility(SpriteEntry * spriteEntry, bool hidden, bool affine,
+<br/>
+                         bool doubleBound) {
+<br/>
+    if (hidden) {
+<br/>
+        /*
+<br/>
+         * Make the sprite invisible.
+<br/>
+         * 
+<br/>
+         * An affine sprite cannot be hidden. We have to turn it into a
+<br/>
+         * non-affine sprite before we can hide it. To hide any sprite, we must
+<br/>
+         * set bit 8 and clear bit 9. For non-affine sprites, this is a bit
+<br/>
+         * redundant, but it is faster than a branch to just set it regardless
+<br/>
+         * of whether or not it is already set.
+<br/>
+         */
+<br/>
+        spriteEntry-&gt;isRotoscale = false; // Bit 9 off
+<br/>
+        spriteEntry-&gt;isHidden = true; // Bit 8 on
+<br/>
+    } else {
+<br/>
+        /* Make the sprite visible.*/
+<br/>
+        if (affine) {
+<br/>
+            /* Again, keep in mind that affine sprites cannot be hidden, so
+<br/>
+             * enabling affine is enough to show the sprite again. We also need
+<br/>
+             * to allow the user to get the double bound flag in the sprite
+<br/>
+             * attribute. If we did not, then our sprite hiding function would
+<br/>
+             * not be able to properly hide and restore double bound sprites.
+<br/>
+             * We enable bit 9 here because we want an affine sprite.
+<br/>
+             */
+<br/>
+            spriteEntry-&gt;isRotoscale = true;
+<br/>
+<br/>
+            /* The double bound flag only acts as the double bound flag when
+<br/>
+             * the sprite is an affine sprite. At all other times, it acts as
+<br/>
+             * the sprite invisibility flag. We only enable bit 8 here if we want
+<br/>
+             * a double bound sprite. */
+<br/>
+            spriteEntry-&gt;rsDouble = doubleBound;
+<br/>
+        } else {
+<br/>
+            /* Bit 9 (the affine flag) will already be off here, so we don't
+<br/>
+             * need to clear it. However, bit 8 (the sprite invisibility flag)
+<br/>
+             * will need to be cleared. */
+<br/>
+            spriteEntry-&gt;isHidden = false;
+<br/>
+        }
+<br/>
+    }
+<br/>
+}
+<br/>
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#152530 - TwentySeven - Mon Mar 17, 2008 8:53 am</h4>
+    <div class="postbody"><span class="postbody">I havn't read the code yet, but No, its one OAM entry per screen.
+<br/>
+<br/>
+What you'll probably want to do is create your own sprite entity table, and then figure out which screen your "virtual" sprite is on (based on world coordinates?) and then fill out an appropriate OAM slot.
+<br/>
+<br/>
+This doesn't take the sprite graphics themselves into account, but thats the general gist of what you'll need to do.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#152536 - ben0bi - Mon Mar 17, 2008 12:18 pm</h4>
+    <div class="postbody"><span class="postbody">yes but how?
+<br/>
+<br/>
+i don't see where i should write some changes.
+<br/>
+is there something like sub_oam or what?
+<br/>
+<br/>
+how can i determine on wich screen the sprite is?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#152539 - tepples - Mon Mar 17, 2008 1:06 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>ben0bi wrote:</b></span></td> </tr> <tr> <td class="quote">i want to use the same memory for both screens</td> </tr></table><span class="postbody">
+<br/>
+As far as I can tell, no.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">if possible (for both, bg and sprites...if possible) - or else, how do i set up sprites for the sub engine?</td> </tr></table><span class="postbody">
+<br/>
+The same way you do so for the main engine. You pick a VRAM bank (D or I) for the sub engine's sprite layer, load in the sprite cels (even if they're duplicate copies of the ones for the main engine), set the palette, set OAM, and then turn on the sprite layer in vramSetModeSub.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#152543 - ben0bi - Mon Mar 17, 2008 3:50 pm</h4>
+    <div class="postbody"><span class="postbody">i did that but it doesnt work.
+<br/>
+<br/>
+videoSetModeSub(SPRITES, 1d...);
+<br/>
+vramSetBankI(VRAM_I_SUB_SPRITE);
+<br/>
+...
+<br/>
+<br/>
+dmaCopy(...SPRITE_PALETTE_SUB[]...);
+<br/>
+dmaCopy(...SPRITE_GFX_SUB[]...);
+<br/>
+<br/>
+all other things are the same, because i really do not know what i should change more...
+<br/>
+<br/>
+..??..</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#168534 - renatobs - Sun May 03, 2009 5:34 am</h4>
+    <div class="postbody"><span class="postbody">I?d like to see the final of this...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#168538 - sverx - Mon May 04, 2009 12:02 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>ben0bi wrote:</b></span></td> </tr> <tr> <td class="quote">is there something like sub_oam or what?</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+... of course! Two engines, two OAMs.  ( it's OAM_SUB )</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

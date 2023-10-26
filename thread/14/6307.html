@@ -1,0 +1,205 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Maps in headers or binaries? - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Beginners > Maps in headers or binaries?</h2>
+<div id="posts">
+<div class="post">
+    <h4>#47955 - joebob180 - Fri Jul 15, 2005 9:10 am</h4>
+    <div class="postbody"><span class="postbody">Is there any advantage to storing maps in binaries as opposed to headers?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#47956 - wintermute - Fri Jul 15, 2005 9:42 am</h4>
+    <div class="postbody"><span class="postbody">1. Never, ever put data in headers. It's extremely poor practice and will cause problems at some point. If nothing else #including a header with data will require that data to be recompiled every time the C/CPP file changes. Compiling arrays is both memory hungry and notoriously slow.
+<br/>
+<br/>
+2. There are several  advantages to converting directly from binary data to an object file using objcopy without the intermediate step of converting to a C array. As noted above, compiling large arrays consume copious quantities of memory and are notoriously slow. There is also no need to consume large quantities of disk space to store the converted arrays as source code.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#47970 - tepples - Fri Jul 15, 2005 1:23 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>wintermute wrote:</b></span></td> </tr> <tr> <td class="quote">There are several  advantages to converting directly from binary data to an object file using objcopy without the intermediate step of converting to a C array.</td> </tr></table><span class="postbody">
+<br/>
+There is one main disadvantage: objcopy does <span style="font-style: italic">not</span> let the caller specify the minimum alignment of the object in memory.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">As noted above, compiling large arrays consume copious quantities of memory and are notoriously slow.</td> </tr></table><span class="postbody">
+<br/>
+Only if you converted your file to C rather than assembly language. The GBFS distribution includes a tool called 'bin2s' that converts binary files to assembly language code, which is much faster to compile than C. The advantage of 'bin2s' over 'objcopy' is that 'bin2s' assumes 4-byte alignment, unlike 'objcopy' that assumes 1-byte alignment.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">There is also no need to consume large quantities of disk space to store the converted arrays as source code.</td> </tr></table><span class="postbody">
+<br/>
+Then store the converted arrays in the operating system's pipe buffer using something like this:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">bin2s data1.bin data2.bin data3.bin | as -c -mthumb-interwork -o data.o</td> </tr></table><span class="postbody"><br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#47980 - wintermute - Fri Jul 15, 2005 4:19 pm</h4>
+    <div class="postbody"><span class="postbody">That's quite cool. Bin2s is provided in the latest devkitARM release so we could modify the bin2o rule in base rules to use that instead of the objcopy trickery.
+<br/>
+<br/>
+This section :-
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+# canned command sequence for binary data
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+define bin2o
+<br/>
+   padbin 4 $(&lt;)
+<br/>
+   $(OBJCOPY) -I binary -O elf32-littlearm -B arm \
+<br/>
+   --rename-section .data=.rodata,readonly,data,contents,alloc \
+<br/>
+   --redefine-sym _binary_`(echo $(&lt;) | sed -e 's/^\/\([a-zA-Z]\/\)/\1_/' | tr . _ | tr / _)`_start=`(echo $(&lt;F) | tr . _)`\
+<br/>
+   --redefine-sym _binary_`(echo $(&lt;) | sed -e 's/^\/\([a-zA-Z]\/\)/\1_/' | tr . _ | tr / _)`_end=`(echo $(&lt;F) | tr . _)`_end\
+<br/>
+   --redefine-sym _binary_`(echo $(&lt;) | sed -e 's/^\/\([a-zA-Z]\/\)/\1_/' | tr . _ | tr / _)`_size=`(echo $(&lt;F) | tr . _)`_size\
+<br/>
+   $(&lt;) $(@)
+<br/>
+   echo "extern const u32" `(echo $(&lt;F) | tr . _)`"_end[];" &gt; `(echo $(&lt;F) | tr . _)`.h
+<br/>
+   echo "extern const u8" `(echo $(&lt;F) | tr . _)`"[];" &gt;&gt; `(echo $(&lt;F) | tr . _)`.h
+<br/>
+   echo "extern const u32" `(echo $(&lt;F) | tr . _)`_size[]";" &gt;&gt; `(echo $(&lt;F) | tr . _)`.h
+<br/>
+endef
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+would become :-
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+# canned command sequence for binary data
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+define bin2o
+<br/>
+   bin2s $(&lt;) | arm-elf-as -o $(@)
+<br/>
+   echo "extern const u32" `(echo $(&lt;F) | tr . _)`"_end[];" &gt; `(echo $(&lt;F) | tr . _)`.h
+<br/>
+   echo "extern const u8" `(echo $(&lt;F) | tr . _)`"[];" &gt;&gt; `(echo $(&lt;F) | tr . _)`.h
+<br/>
+   echo "extern const u32" `(echo $(&lt;F) | tr . _)`_size[]";" &gt;&gt; `(echo $(&lt;F) | tr . _)`.h
+<br/>
+endef
+<br/>
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#47984 - ScottLininger - Fri Jul 15, 2005 4:55 pm</h4>
+    <div class="postbody"><span class="postbody">Devil's Advocate post here...
+<br/>
+<br/>
+One advantage to using headers (or at least .c files, with headers) is for learning. It allows you to see the data in an extremely simple and easy-to-edit format that maps one-to-one to what you'd see if you hand coded the data. This saved my butt many, many times while I was learning GBA programming and trying to debug my first programs. 
+<br/>
+<br/>
+Another time to consider using headers is if you are generating maps out of your own tools. Yes, writing a binary file from most environments is almost as easy as writing a text file, but it gets back to the debugging issue noted above. When you can see the output from your mapping program in a form that you've already got working on the GB side, there's one less layer of obfuscation to debug.
+<br/>
+<br/>
+Finally, headers means one less step in your compiling/linking process, which can be a challenge in itself, especially for compiler retard like me.
+<br/>
+<br/>
+:)
+<br/>
+<br/>
+-Scott</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#47986 - tepples - Fri Jul 15, 2005 5:03 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>ScottLininger wrote:</b></span></td> </tr> <tr> <td class="quote">One advantage to using headers (or at least .c files, with headers) is for learning. It allows you to see the data in an extremely simple and easy-to-edit format that maps one-to-one to what you'd see if you hand coded the data.</td> </tr></table><span class="postbody">
+<br/>
+So does the .s method.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Another time to consider using headers is if you are generating maps out of your own tools. Yes, writing a binary file from most environments is almost as easy as writing a text file, but it gets back to the debugging issue noted above. When you can see the output from your mapping program in a form that you've already got working on the GB side, there's one less layer of obfuscation to debug.</td> </tr></table><span class="postbody">
+<br/>
+So does the .s method.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Finally, headers means one less step in your compiling/linking process, which can be a challenge in itself, especially for compiler retard like me.</td> </tr></table><span class="postbody">
+<br/>
+data.s is just one more file, and it can be put in with the link step; how hard can that be?<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#47999 - poslundc - Fri Jul 15, 2005 8:52 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>ScottLininger wrote:</b></span></td> </tr> <tr> <td class="quote">One advantage to using headers (or at least .c files, with headers)</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Big distinction. One's good for learning, I agree. The other, however, I believe is only good for learning how to do things incorrectly.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#48004 - joebob180 - Fri Jul 15, 2005 10:34 pm</h4>
+    <div class="postbody"><span class="postbody">Ok, thanks for the advice.
+<br/>
+<br/>
+I am going to make my own tools, and thats the main reason I asked, but its about the same either way.
+<br/>
+<br/>
+Im going to use Visual Basic to make my tools. I already know the basics, but Im going to have to remember them ;). Does anyobdy know any good tutorials for tool making in VB? I remember reading one a long time ago for rom hacking but I cant find it now?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#48181 - Miked0801 - Sun Jul 17, 2005 11:58 pm</h4>
+    <div class="postbody"><span class="postbody">How well do you already know VB?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#48195 - joebob180 - Mon Jul 18, 2005 3:45 am</h4>
+    <div class="postbody"><span class="postbody">Fairly good, not much .NET, but I know 6.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#48197 - poslundc - Mon Jul 18, 2005 4:33 am</h4>
+    <div class="postbody"><span class="postbody">It should come as no surprise that you do not need to know anything about .NET in order to write GBA tools.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#48223 - joebob180 - Mon Jul 18, 2005 7:45 am</h4>
+    <div class="postbody"><span class="postbody">Yeah, I know, I just got to find my VB cd and install it, its been a while.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

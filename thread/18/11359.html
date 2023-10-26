@@ -1,0 +1,191 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>SPI Command 0Bh (FAST) for faster read [Fixed, somehow..] - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > SPI Command 0Bh (FAST) for faster read [Fixed, somehow..]</h2>
+<div id="posts">
+<div class="post">
+    <h4>#105082 - Lick - Thu Oct 05, 2006 8:38 pm</h4>
+    <div class="postbody"><span class="postbody">The following code is a modified version of Stephen (sgstair)'s Read_Flash() function. The modification is that I'm trying to use the FAST instruction instead of the READ instruction. (For info, <a class="postlink" href="http://nocash.emubase.de/gbatek.htm#dsfirmwareserialflashmemory" target="_blank">here</a>.)
+<br/>
+The code does not work as wanted, but my question is, does the DS support this instruction at all? Libnds seems to have excluded it from the #defines.
+<br/>
+<br/>
+<span style="font-style: italic"><a class="postlink" href="http://rafb.net/paste/results/JTJvtN50.html" target="_blank">http://rafb.net/paste/results/JTJvtN50.html</a></span>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void Read_FlashFast(int address, char * destination, int length) {
+<br/>
+   int i;
+<br/>
+    int dummy = 0;
+<br/>
+   while(REG_SPICNT&amp;0x80);
+<br/>
+   REG_SPICNT=0x8900;
+<br/>
+   REG_SPIDATA=0x0B; // fast read
+<br/>
+   while(REG_SPICNT&amp;0x80);
+<br/>
+ 
+<br/>
+    // 3 times
+<br/>
+   REG_SPIDATA=(address&gt;&gt;16)&amp;255;
+<br/>
+   while(REG_SPICNT&amp;0x80);
+<br/>
+   REG_SPIDATA=(address&gt;&gt;8)&amp;255;
+<br/>
+   while(REG_SPICNT&amp;0x80);
+<br/>
+   REG_SPIDATA=(address)&amp;255;
+<br/>
+   while(REG_SPICNT&amp;0x80); 
+<br/>
+    // dummy
+<br/>
+   REG_SPIDATA=(dummy)&amp;255;
+<br/>
+   while(REG_SPICNT&amp;0x80);
+<br/>
+ 
+<br/>
+   for(i=0;i&lt;length;i++) {
+<br/>
+      REG_SPIDATA=0;
+<br/>
+      while(REG_SPICNT&amp;0x80);
+<br/>
+      destination[i]=REG_SPIDATA;
+<br/>
+   }
+<br/>
+   REG_SPICNT=0;
+<br/>
+}</td> </tr></table><span class="postbody"><br/>_________________<br/><a class="postlink" href="http://licklick.wordpress.com" target="_blank">http://licklick.wordpress.com</a></span><span class="gensmall"><br/><br/>Last edited by Lick on Sun Oct 08, 2006 3:43 pm; edited 2 times in total</span></div>    
+</div>
+<div class="post">
+    <h4>#105085 - Lick - Thu Oct 05, 2006 8:56 pm</h4>
+    <div class="postbody"><span class="postbody">Okay, it -is- working as expected. I haven't measured the speeds, but the result is there.
+<br/>
+<br/>
+The bug was this: </span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">    printf("%u x %u x %u\n", NDSX_Firmware_GetShort(36),NDSX_Firmware_GetShort(38),NDSX_Firmware_GetLong(8));
+<br/>
+    printf("%u %u - %u\n", 
+<br/>
+        NDSX_Firmware_GetShort(36), NDSX_Firmware_GetShort(38),
+<br/>
+        NDSX_Firmware_GetLong(8));
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+If I comment out the second printf(), the application works and does not hang. WIth the second printf(), the application hangs -BEFORE- the first printf(). That's sick.
+<br/>
+<br/>
+- Lick<br/>_________________<br/><a class="postlink" href="http://licklick.wordpress.com" target="_blank">http://licklick.wordpress.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#105104 - tepples - Thu Oct 05, 2006 11:34 pm</h4>
+    <div class="postbody"><span class="postbody">Try getting all the results into variables and <span style="font-style: italic">then</span> printf()ing them. Also try iprintf() instead of printf() so that you don't need to bring in the floating-point emulator.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#105123 - HyperHacker - Fri Oct 06, 2006 7:50 am</h4>
+    <div class="postbody"><span class="postbody">Sounds like memory corruption.<br/>_________________<br/>I'm a PSP hacker now, but I still &lt;3 DS.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#105413 - Lick - Sun Oct 08, 2006 3:41 pm</h4>
+    <div class="postbody"><span class="postbody">Okay just to report how it's going, it is all working now. The SPI command is working (!) and it should be faster than the readFirmware function in libnds (which doesn't work currently due to a small typo, but this is already fixed in r20).
+<br/>
+<br/>
+The problem was probably something with the ARM9 cache, Wintermute told me. By putting DC_InvalidateRange(..); before each read, it was fixed. I'm not sure if this is the true solution but whatever it was, it hindered me to read the firmware many times, so as a work-around, now I have only a single (big) read. 
+<br/>
+<br/>
+I also wrestled with the FIFO queue, and if you read my blog, you'll find a new and useful tip! ;)
+<br/>
+<br/>
+- Lick<br/>_________________<br/><a class="postlink" href="http://licklick.wordpress.com" target="_blank">http://licklick.wordpress.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#105415 - Lick - Sun Oct 08, 2006 3:45 pm</h4>
+    <div class="postbody"><span class="postbody">To add to the previous post ^, here is the <span style="font-weight: bold">Arm7</span> code for faster reading:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void Read_FlashFast(u32 address, u8 *destination, u32 length) {
+<br/>
+    u32 i;
+<br/>
+<br/>
+    // Set SPI command
+<br/>
+    //
+<br/>
+    while(REG_SPICNT &amp; SPI_BUSY);
+<br/>
+    REG_SPICNT  = 0x8900;
+<br/>
+    REG_SPIDATA = 0x0B;             // 0B = fast read, 03 = normal read
+<br/>
+    while(REG_SPICNT &amp; SPI_BUSY);
+<br/>
+<br/>
+    // Command parameters
+<br/>
+    // 
+<br/>
+    REG_SPIDATA=(address&gt;&gt;16)&amp;255;  // Part 1 of address
+<br/>
+    while(REG_SPICNT &amp; SPI_BUSY);
+<br/>
+    REG_SPIDATA=(address&gt;&gt;8)&amp;255;   // Part 2 of address
+<br/>
+    while(REG_SPICNT &amp; SPI_BUSY);
+<br/>
+    REG_SPIDATA=(address)&amp;255;      // Part 3 of address
+<br/>
+    while(REG_SPICNT &amp; SPI_BUSY);
+<br/>
+    REG_SPIDATA=0;                  // Dummy write, only when using SPI{0B}
+<br/>
+    while(REG_SPICNT &amp; SPI_BUSY);
+<br/>
+<br/>
+    for(i=0; i&lt;length; i++) 
+<br/>
+    {
+<br/>
+        REG_SPIDATA = 0;
+<br/>
+        while(REG_SPICNT &amp; SPI_BUSY);
+<br/>
+        destination[i] = REG_SPIDATA &amp; 255;
+<br/>
+    }
+<br/>
+<br/>
+    REG_SPICNT = 0;
+<br/>
+}</td> </tr></table><span class="postbody"><br/>_________________<br/><a class="postlink" href="http://licklick.wordpress.com" target="_blank">http://licklick.wordpress.com</a></span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

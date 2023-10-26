@@ -1,0 +1,917 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Hot compression action (coder pr0n) - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > Hot compression action (coder pr0n)</h2>
+<div id="posts">
+<div class="post">
+    <h4>#31159 - Lord Graga - Wed Dec 08, 2004 2:40 pm</h4>
+    <div class="postbody"><span class="postbody">Heya. It's a little late, but as the chosen of the compo will be working a bit more to polish their games anyway, I would like to share this public domain compression function, by my good mate Mr. Spiv, for GBA with you:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+<br/>
+@  &gt;&gt;&gt; Decompressor for FXP3 algorithm (c) 2004 Jouni 'Mr.Spiv' Korhonen &lt;&lt;&lt;
+<br/>
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+<br/>
+@ 
+<br/>
+@ Version:
+<br/>
+@  v0.1 07-Sep-2004 JiK - initial release version for gcc
+<br/>
+@
+<br/>
+@
+<br/>
+@
+<br/>
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+<br/>
+@
+<br/>
+@ This file is released into the public domain for commercial
+<br/>
+@ or non-commercial usage with no restrictions placed upon it.
+<br/>
+@
+<br/>
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+<br/>
+<br/>
+      .section   .iwram,"ax",%progbits
+<br/>
+      .TEXT
+<br/>
+<br/>
+      .equ   SIZE_PRETABLE,   (8 + 16*8 + 16*4)
+<br/>
+      .equ   M_POS,         SIZE_PRETABLE
+<br/>
+      .equ   SIZE_LTMTABLE,   16+(8 + 16*8 + 512*4)
+<br/>
+      .equ   SIZE_HGHTABLE,   16+(8 + 16*8 + 256*4)+8
+<br/>
+      .equ   SIZE_LOWTABLE,   16+(8 + 16*8 + 256*4)
+<br/>
+      .equ   M_SIZE,         16
+<br/>
+      .equ   SIZE_STACK,      0x1300
+<br/>
+<br/>
+      @
+<br/>
+      @
+<br/>
+      @
+<br/>
+<br/>
+      .GLOBAL     decrunch3
+<br/>
+        .ALIGN
+<br/>
+        .CODE 32
+<br/>
+<br/>
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+<br/>
+@
+<br/>
+@ Parameters:
+<br/>
+@  r0 - src i.e. a ptr to the compressed data. Must be 16bits aligned.
+<br/>
+@  r1 - dst i.e. a ptr to the destination memory.
+<br/>
+@
+<br/>
+@ Returns:
+<br/>
+@  none
+<br/>
+@
+<br/>
+@ Notes:
+<br/>
+@  The routine does not check if source and destination memory areas
+<br/>
+@  overlap. In such case a crash is very probable.
+<br/>
+@  Runtime memory usage is 0x1300 bytes of stack space!
+<br/>
+@
+<br/>
+@ Prototype:
+<br/>
+@  void decrunch3( void *src, void *dst );
+<br/>
+@
+<br/>
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+<br/>
+<br/>
+decrunch3:
+<br/>
+      stmdb   sp!,{r4-r12,lr}
+<br/>
+      add      r12,r0,#12
+<br/>
+      mov      r9,r1
+<br/>
+<br/>
+      @ r12 - 4 = ptr to crunched data (ID already skipped)
+<br/>
+      @ r9 = ptr to destination mem
+<br/>
+<br/>
+      sub      sp,sp,#SIZE_STACK      @ space for huffman trees
+<br/>
+      mov      r10,#16
+<br/>
+<br/>
+      @
+<br/>
+      @ Start of the block loop.. visited every 32K..
+<br/>
+      @
+<br/>
+<br/>
+blockLoop:
+<br/>
+      cmp      r10,#16
+<br/>
+      subeq   r12,r12,#4
+<br/>
+      subne   r12,r12,#2
+<br/>
+      ldrh   r8,[r12],#2      @ compressed size of block
+<br/>
+<br/>
+      @ r8 = compressed block size, 0x0000 means EOF
+<br/>
+      cmp      r8,#0
+<br/>
+      addeq   sp,sp,#SIZE_STACK
+<br/>
+      ldmeqia   sp!,{r4-r12,pc}      @ EOF
+<br/>
+<br/>
+      @ Initialize the bitshifter
+<br/>
+      ldrh   r11,[r12],#2
+<br/>
+      mov      r10,#16
+<br/>
+      ldrh   r1,[r12],#2
+<br/>
+      orr      r11,r1,r11,lsl #16
+<br/>
+<br/>
+      @
+<br/>
+      @ r12 = b (r11 = _bb, r10 = _bc)
+<br/>
+      @
+<br/>
+      @ Build trees.. r2-r7 are free for use
+<br/>
+<br/>
+decodeTrees:
+<br/>
+      mov      r2,#8&lt;&lt;16
+<br/>
+      mov      r3,#16
+<br/>
+      mov      r4,sp
+<br/>
+      bl      prepareDecodingStructure
+<br/>
+<br/>
+      @ read in depths
+<br/>
+<br/>
+      add      r6,sp,#16*8+4
+<br/>
+0:      mov      r1,#3      
+<br/>
+      rsb      r0,r1,#32            @ moved from getB()
+<br/>
+      bl      getB
+<br/>
+      orr      r1,r5,r0,lsl #16
+<br/>
+      str      r1,[r6],#4
+<br/>
+      add      r5,r5,#1
+<br/>
+      cmp      r5,r3
+<br/>
+      blo      0b
+<br/>
+<br/>
+      @ build tree..
+<br/>
+      @  r3 = num symbols = 16
+<br/>
+      @  r4 = ptr to decoding structure..
+<br/>
+<br/>
+      bl      buildDecodingTree   @ PRETREE
+<br/>
+<br/>
+      @ init MTF table M
+<br/>
+<br/>
+      mov      r0,#15
+<br/>
+      add      r7,sp,#M_POS
+<br/>
+1:      strb   r0,[r7,r0]
+<br/>
+      subs   r0,r0,#1
+<br/>
+      bpl      1b
+<br/>
+<br/>
+      @ decoding structure for real decoding huffman..
+<br/>
+      @ r7 = ptr to M
+<br/>
+<br/>
+      mov      r2,#16&lt;&lt;16
+<br/>
+      mov      r3,#512               @ Literals and matches
+<br/>
+      add      r4,sp,#SIZE_PRETABLE+M_SIZE
+<br/>
+      bl      prepareDecodingStructure
+<br/>
+      bl      buildDecodingTree2      @ DECTREE
+<br/>
+<br/>
+      mov      r3,#256               @ high offset
+<br/>
+      add      r4,sp,#SIZE_PRETABLE+SIZE_LTMTABLE+M_SIZE
+<br/>
+      bl      prepareDecodingStructure
+<br/>
+      bl      buildDecodingTree2      @ DECTREE
+<br/>
+<br/>
+                              @ low offset
+<br/>
+      add      r4,sp,#SIZE_PRETABLE+SIZE_LTMTABLE+SIZE_HGHTABLE+M_SIZE
+<br/>
+      bl      prepareDecodingStructure
+<br/>
+      bl      buildDecodingTree2      @ DECTREE
+<br/>
+<br/>
+      @
+<br/>
+      @ r5 = oldLength (PMR)      no init required
+<br/>
+      @ r6 = oldOffset (PMR)      no init required
+<br/>
+      @ r7 = oldOffsetLong (PMR)  no init required
+<br/>
+      @
+<br/>
+      @ r9  = dest
+<br/>
+      @ r0,r1,r8 are general trash registers (functions..)
+<br/>
+      @ r10,r11,r12 are reserved for bit input
+<br/>
+      @ 
+<br/>
+<br/>
+mainLoop:
+<br/>
+      add      r2,sp,#SIZE_PRETABLE+M_SIZE
+<br/>
+      bl      getSyml
+<br/>
+      subs   r3,r2,#256
+<br/>
+decodeLiteral:
+<br/>
+      bmi      copyLiteral
+<br/>
+      beq      blockLoop
+<br/>
+      subs   r3,r3,#1
+<br/>
+      moveq   r3,r5
+<br/>
+      moveq   r4,r6
+<br/>
+      beq      copyLoop
+<br/>
+decodeMatch:
+<br/>
+      @ r3 = match_length-1
+<br/>
+      mov      r5,r3            @ PMR oldLength
+<br/>
+decodeOffset:
+<br/>
+      add      r2,sp,#SIZE_PRETABLE+SIZE_LTMTABLE+M_SIZE
+<br/>
+      bl      getSyml
+<br/>
+      cmp      r2,#0
+<br/>
+      moveq   r4,r7
+<br/>
+      beq      oldOffsetLong
+<br/>
+      and      r4,r2,#0x7f
+<br/>
+      cmp      r4,r2
+<br/>
+<br/>
+      addne   r2,sp,#SIZE_PRETABLE+SIZE_LTMTABLE+SIZE_HGHTABLE+M_SIZE
+<br/>
+      blne   getSyml
+<br/>
+      orrne   r4,r2,r4,lsl #8
+<br/>
+      movne   r7,r4            @ PMR oldOffsetLong
+<br/>
+oldOffsetLong:
+<br/>
+      mov      r6,r4            @ PMR oldOffset
+<br/>
+copyLoop:
+<br/>
+      ldrb   r2,[r9,-r4]
+<br/>
+      subs   r3,r3,#1
+<br/>
+copyLiteral:
+<br/>
+      strb   r2,[r9],#1
+<br/>
+      bpl      copyLoop
+<br/>
+      b      mainLoop
+<br/>
+<br/>
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+<br/>
+@
+<br/>
+@ Description:
+<br/>
+@  This function decodes the next symbol from the given huffman tree.
+<br/>
+@
+<br/>
+@ Parameters:
+<br/>
+@  r2 = ptr to (huffman)tables..
+<br/>
+@
+<br/>
+@ Returns:
+<br/>
+@  r0 = bits encoding the symbol..
+<br/>
+@  r1 = cnt (num bits needed for symbol..)
+<br/>
+@  r2 = symbol
+<br/>
+@
+<br/>
+@ Trashes:
+<br/>
+@  r0,r1,r2,r8
+<br/>
+@
+<br/>
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+<br/>
+<br/>
+getSyml:
+<br/>
+      add      r8,r2,#16*8+4
+<br/>
+0:      ldr      r1,[r2],#8      @ _tbl-&gt;cde
+<br/>
+      cmp      r11,r1
+<br/>
+      bhi      0b
+<br/>
+<br/>
+1:      ldrh   r1,[r2,#-2]      @ cnt = _tbl-&gt;bts
+<br/>
+      ldrh   r2,[r2,#-4]      @ _tbl-&gt;ind
+<br/>
+      rsb      r0,r1,#32
+<br/>
+      rsb      r2,r2,r11,lsr r0
+<br/>
+      ldr      r2,[r8,r2,lsl #2]
+<br/>
+<br/>
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+<br/>
+@ 
+<br/>
+@ Description:
+<br/>
+@  This function extracts n bits from the compressed data stream and
+<br/>
+@  returns them.
+<br/>
+@
+<br/>
+@ Parameters:
+<br/>
+@  r0 = 32-num_bits_to_extract
+<br/>
+@  r1 = num_bits_to_extract
+<br/>
+@
+<br/>
+@ Returns:
+<br/>
+@  r0 = extracted bits
+<br/>
+@
+<br/>
+@ Trashes:
+<br/>
+@  flags,r1
+<br/>
+@
+<br/>
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+<br/>
+<br/>
+getB:   @rsb      r0,r1,#32
+<br/>
+      subs   r10,r10,r1
+<br/>
+      mov      r0,r11,lsr r0
+<br/>
+      mov      r11,r11,lsl r1
+<br/>
+      @
+<br/>
+      ldrleh   r1,[r12],#2
+<br/>
+      rsble   r10,r10,#0
+<br/>
+      orrle   r11,r11,r1,lsl r10
+<br/>
+      rsbles   r10,r10,#16
+<br/>
+      mov      pc,lr
+<br/>
+<br/>
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+<br/>
+@
+<br/>
+@ Description:
+<br/>
+@  Prepares huffman trees and decoding structures.
+<br/>
+@
+<br/>
+@ Parameters:
+<br/>
+@  r2 = (_maxCodeLength+1) &lt;&lt; 16
+<br/>
+@  r3 = num symbols
+<br/>
+@  r4 = dest i.e. ptr to the tree to be initialized.
+<br/>
+@ 
+<br/>
+@ Returns:
+<br/>
+@  r5 = 0
+<br/>
+@
+<br/>
+@ Trashes:
+<br/>
+@  r1,r2
+<br/>
+@
+<br/>
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+<br/>
+<br/>
+prepareDecodingStructure:
+<br/>
+      add      r1,r4,#16*8+4
+<br/>
+<br/>
+      @ insert endmark to _alp..
+<br/>
+<br/>
+      str      r2,[r1,r3,lsl #2]
+<br/>
+<br/>
+      @ Prepare for _alp..
+<br/>
+<br/>
+      mov      r5,#0
+<br/>
+      str      r5,[r1,#-4]         @ note! no +4
+<br/>
+      mov      pc,lr
+<br/>
+<br/>
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+<br/>
+@
+<br/>
+@ Description:
+<br/>
+@  Build huffman tree &amp; decoding structures. This function also reads symbols
+<br/>
+@  from the comppressed stream and then does inverse MTF (move to front) to
+<br/>
+@  symbols. This function is only used to decode/build the pretree.
+<br/>
+@
+<br/>
+@ Parameters:
+<br/>
+@  r3 = num symbold
+<br/>
+@  r4 = dest
+<br/>
+@  sp = ptr to PRETREE
+<br/>
+@
+<br/>
+@ Returns:
+<br/>
+@  None.
+<br/>
+@
+<br/>
+@ Trashes:
+<br/>
+@  r0,r1,r4,r5,r6,r7
+<br/>
+@
+<br/>
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+<br/>
+<br/>
+buildDecodingTree2:
+<br/>
+      stmdb   sp!,{r2,lr}
+<br/>
+      mov      r5,#0
+<br/>
+      add      r6,r4,#16*8+4
+<br/>
+1:      add      r2,sp,#8         @ pretable.. skip r2,r4,lr in stack
+<br/>
+      bl      getSyml
+<br/>
+<br/>
+      @ inverse MTF
+<br/>
+                           @ j = M[i];
+<br/>
+      mov      r0,r2
+<br/>
+      ldrb   r2,[r7,r2]         @ M[i] = T[j];
+<br/>
+      add      r7,r7,r0
+<br/>
+2:      cmp      r0,#0            @ while (j &gt; 0)
+<br/>
+      ldrgtb   r1,[r7,#-1]         @   tmp = T[j - 1];
+<br/>
+      subgt   r0,r0,#1         @   j--;
+<br/>
+      strgtb   r1,[r7],#-1         @   T[j+1] = tmp;
+<br/>
+      bgt      2b
+<br/>
+<br/>
+      strb   r2,[r7]            @ T[0] = M[i];
+<br/>
+<br/>
+      @
+<br/>
+      
+<br/>
+      orr      r0,r5,r2,lsl #16
+<br/>
+      str      r0,[r6,r5,lsl #2]
+<br/>
+      add      r5,r5,#1
+<br/>
+      cmp      r5,r3
+<br/>
+      blo      1b
+<br/>
+      ldmia   sp!,{r2,lr}
+<br/>
+<br/>
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+<br/>
+@
+<br/>
+@ Description:
+<br/>
+@  Build huffman tree &amp; decoding structures. This function assumes that all
+<br/>
+@  symbols are already loaded into memory.
+<br/>
+@
+<br/>
+@ Parameters:
+<br/>
+@  r3 = num symbold
+<br/>
+@  r4 = dest
+<br/>
+@
+<br/>
+@ Returns:
+<br/>
+@  None.
+<br/>
+@
+<br/>
+@ Trashes:
+<br/>
+@  r0,r1,r5,r6,r7
+<br/>
+@
+<br/>
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+<br/>
+<br/>
+buildDecodingTree:
+<br/>
+      stmdb   sp!,{r2-r4,r7,lr}
+<br/>
+      mov      r5,#0      @ i
+<br/>
+      add      r2,r4,#16*8+4
+<br/>
+<br/>
+inplaceShellsort:
+<br/>
+      ldr      r0,[r2,r5,lsl #2]   @ r0 = (i | (depth &lt;&lt; 16)
+<br/>
+      add      r6,r2,r5,lsl #2
+<br/>
+0:      ldr      r1,[r6,#-4]!      @ r1 = (i | (depth &lt;&lt; 16)
+<br/>
+      cmp      r1,r0
+<br/>
+      strhi   r1,[r6,#4]
+<br/>
+      bhi      0b
+<br/>
+      str      r0,[r6,#4]
+<br/>
+      add      r5,r5,#1
+<br/>
+      cmp      r5,r3
+<br/>
+      blo      inplaceShellsort
+<br/>
+<br/>
+      @ Find _start.. i.e. find the first symbol with
+<br/>
+      @ nonzero weight.
+<br/>
+      @
+<br/>
+      @ r2 = start of symbols
+<br/>
+<br/>
+      mov      r5,#0
+<br/>
+2:      cmp      r5,r3
+<br/>
+      ldmhsia   sp!,{r2-r4,r7,pc}
+<br/>
+      ldr      r1,[r2,r5,lsl #2]
+<br/>
+      movs   r1,r1,lsr #16
+<br/>
+      addeq   r5,r5,#1
+<br/>
+      beq      2b
+<br/>
+<br/>
+      @ move rest so that n will always be 0 at the beginning..
+<br/>
+      
+<br/>
+      mov      r6,#0
+<br/>
+      sub      r3,r3,r5
+<br/>
+3:      ldr      r1,[r2,r5,lsl #2]
+<br/>
+      add      r5,r5,#1
+<br/>
+      str      r1,[r2,r6,lsl #2]
+<br/>
+      add      r6,r6,#1
+<br/>
+      cmp      r6,r3
+<br/>
+      bls      3b
+<br/>
+<br/>
+calculateCanonicalCodes:
+<br/>
+<br/>
+      mov      r5,#0
+<br/>
+      mov      r6,#0
+<br/>
+      mvn      r7,#0
+<br/>
+<br/>
+      @ r2 = _alp+_start
+<br/>
+      @ r3 = _alpsize
+<br/>
+      @ r4 = _tlb
+<br/>
+      @ r5 = n
+<br/>
+      @ r6 = c = 0
+<br/>
+      @ r7 = 0xffffffff
+<br/>
+<br/>
+0:      ldrh   r0,[r2,#2]
+<br/>
+      ldrh   r1,[r2,#6]
+<br/>
+      subs   r1,r1,r0   @ if (r0 &lt; r1) ??
+<br/>
+      ble      1f
+<br/>
+<br/>
+      mov      lr,r7,lsr r0
+<br/>
+      orr      lr,lr,r6, ror r0   
+<br/>
+      str      lr,[r4],#4      @ cde
+<br/>
+      sub      lr,r6,r5      @ ind = (unsigned short)(c-n)
+<br/>
+      strh   lr,[r4],#2      @ ind
+<br/>
+      strh   r0,[r4],#2      @ bts
+<br/>
+<br/>
+1:      add      r6,r6,#1
+<br/>
+      movgt   r6,r6,lsl r1
+<br/>
+      add      r5,r5,#1
+<br/>
+      ldr      r0,[r2],#4
+<br/>
+      cmp      r5,r3         @ for ( ; n &lt; _alpsize; n++)..
+<br/>
+      and      r0,r0,r7,lsr #16
+<br/>
+      str      r0,[r2,#-4]
+<br/>
+      blo      0b
+<br/>
+      ldmia   sp!,{r2-r4,r7,pc}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Here is the compresor, it is called b2fxec: <a class="postlink" href="http://www.cs.helsinki.fi/u/jikorhon/condev/gp32/" target="_blank">http://www.cs.helsinki.fi/u/jikorhon/condev/gp32/</a>
+<br/>
+<br/>
+Compress data like this:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">b2fxec -d input.data output.fxe</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+<br/>
+If you are working with *VERY* limited space (say, a 4k intro) you may want to use LZ77 and then huffmann compression instead, since this function is somewhat big (around 630 bytes I believe). It's not as fast as LZ77, but it's even more sexy.</span><span class="gensmall"><br/><br/>Last edited by Lord Graga on Wed Dec 08, 2004 7:42 pm; edited 1 time in total</span></div>    
+</div>
+<div class="post">
+    <h4>#31176 - tepples - Wed Dec 08, 2004 5:59 pm</h4>
+    <div class="postbody"><span class="postbody">I'm not familiar with "FXP3", and Google didn't seem helpful. Is there a publicly available compressor?<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#31187 - Lord Graga - Wed Dec 08, 2004 7:40 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote">I'm not familiar with "FXP3", and Google didn't seem helpful. Is there a publicly available compressor?</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Ah, right! I forgot the damn compressor! ;P
+<br/>
+<br/>
+Here you go: <a class="postlink" href="http://www.cs.helsinki.fi/u/jikorhon/condev/gp32/" target="_blank">http://www.cs.helsinki.fi/u/jikorhon/condev/gp32/</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#31189 - Lord Graga - Wed Dec 08, 2004 7:41 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote">I'm not familiar with "FXP3", and Google didn't seem helpful. Is there a publicly available compressor?</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Ah, right! I forgot the damn compressor! ;P
+<br/>
+<br/>
+Here you go. It is called b2fxec: <a class="postlink" href="http://www.cs.helsinki.fi/u/jikorhon/condev/gp32/" target="_blank">http://www.cs.helsinki.fi/u/jikorhon/condev/gp32/</a>
+<br/>
+<br/>
+Compress data like this:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">b2fxec -d input.data output.fxe</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#31190 - Miked0801 - Wed Dec 08, 2004 7:47 pm</h4>
+    <div class="postbody"><span class="postbody">Or go download the ARM PUCrunch compressor/decompressor for really strong, but slow decompression.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#31209 - bertsnks - Wed Dec 08, 2004 9:58 pm</h4>
+    <div class="postbody"><span class="postbody">Is this compressor even close to compressing data better than PUcrunch or RNC2?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#31214 - Lord Graga - Wed Dec 08, 2004 10:32 pm</h4>
+    <div class="postbody"><span class="postbody">It beats RNC2 by several percents. I did a test on a 1.180.244 byte large file, and b2fxec got it down at 383.312 byte, while RNC2 got it down at 439.552 byte, taking a *LOT* longer time to compress it.
+<br/>
+<br/>
+c64pack hangs at this machine, but I would be surprised if it was any better.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#31270 - FluBBa - Thu Dec 09, 2004 1:04 pm</h4>
+    <div class="postbody"><span class="postbody">Is this somewhat like his old StoneCruncher for the Amiga?
+<br/>
+Oh, and doesn't the compressor output a GP32 exe file?<br/>_________________<br/>I probably suck, my not is a programmer.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#31296 - Lord Graga - Thu Dec 09, 2004 6:51 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>FluBBa wrote:</b></span></td> </tr> <tr> <td class="quote">Is this somewhat like his old StoneCruncher for the Amiga?
+<br/>
+Oh, and doesn't the compressor output a GP32 exe file?</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Not if you use -d.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#31301 - tepples - Thu Dec 09, 2004 8:00 pm</h4>
+    <div class="postbody"><span class="postbody">What's the approximate decompression rate in kilobytes of decompressed data per second on a 16.78 MHz ARM7TDMI?
+<br/>
+<br/>
+And is the source code for b2fxec available?<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#31304 - Lord Graga - Thu Dec 09, 2004 9:18 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote">What's the approximate decompression rate in kilobytes of decompressed data per second on a 16.78 MHz ARM7TDMI?
+<br/>
+<br/>
+And is the source code for b2fxec available?</td> </tr></table><span class="postbody">The decompression is pretty fast. Unpacking ~128 kbyte of data will take less than ?second, but I must admit never to have checked this.
+<br/>
+<br/>
+I am sure that the source code is avaible if you ask Mr. Spiv nicely.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

@@ -1,0 +1,199 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>libgba sprite tutorial? - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > libgba sprite tutorial?</h2>
+<div id="posts">
+<div class="post">
+    <h4>#63596 - Cthulhu32 - Wed Dec 14, 2005 9:51 pm</h4>
+    <div class="postbody"><span class="postbody">I've been chatting a bit with #gbadev guys, but seems like everyone points away from the libraries that come with the devkitPro package.  I'm trying to adjust to using libgba, however I'm slightly confused in the gba_sprite.h file.  I've already run doxygen against the package myself and found this was one of the many files without doxygen comments.
+<br/>
+<br/>
+So I was wondering if anyone has any examples of using sprites with the libgba library?  The best I've found is this: <a href="http://paste.atopia.net/157" target="_blank">http://paste.atopia.net/157</a> but I'm not sure what kind of setup he had on the s_piece_bin.h or how he set that up?
+<br/>
+<br/>
+Also, what do people do for defines such as TALL 0x8000 and all of those sprite calls?  Should I just add this into gba_sprites.h, link my own sprites from gba_sprites.h?  any other suggestions?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#63745 - Cthulhu32 - Fri Dec 16, 2005 1:44 am</h4>
+    <div class="postbody"><span class="postbody">Does nobody use the libgba library?  All I really need to get started is an example of a sprite call, how you copy the memory &amp; palette correctly, and how to update the OAM correctly with libgba to display the sprite.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#63747 - crossraleigh - Fri Dec 16, 2005 2:12 am</h4>
+    <div class="postbody"><span class="postbody">Judging from the pasted code, s_piece_bin is an 8x8, 256-color sprite cel. It was probably created using gfx2gba or a similar program.
+<br/>
+<br/>
+In libgba, sprite size is set with OBJ_SIZE(), just like shape is set with OBJ_SHAPE(). Use OBJ_SIZE(2) to get the same effect as TALL.
+<br/>
+<br/>
+Use memcpy(), DMA, or CpuFastSet() to copy the sprite palette, cel, and attributes. You will usually want to keep a working version of OAM:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">OBJATTR shadow_oam[128];                                       // Change this instead of real OAM.
+<br/>
+CpuFastSet(shadow_oam, OAM, sizeof(shadow_oam) / sizeof(int)); // Call this every v-blank.</td> </tr></table><span class="postbody"><br/>_________________<br/>My world is black and white, but if I blink fast enough, I see it in grayscale.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#63792 - Cthulhu32 - Fri Dec 16, 2005 9:36 am</h4>
+    <div class="postbody"><span class="postbody">hey thanks a lot, that actually helps considerably.  So I have a quick question about that code snippet, he uses the same palette for the background &amp; the sprite correct?  
+<br/>
+Maybe if I try to put comments on all of these, people can correct me where I'm wrong
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+ memcpy(BITMAP_OBJ_BASE_ADR + 0x1000, s_piece_bin, 64);
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+-------- 8x8 sprite copied to our BITMAP_OBJ_BASE_ADR plus 0x1000, not sure exactly why he chose to move it that far ahead?
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+// Assuming that DecodePCX loads the background palette into a
+<br/>
+// buffer that i can also use for my sprite.
+<br/>
+memcpy(OBJ_COLORS, PaletteBuffer, 512);
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+-------- copies the background's palette to the OBJ_COLORS palette, which I understand how to use individual sprite palettes for, but I guess he decided to use the same palettes.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+ // these should be the only attributes worth setting right now
+<br/>
+sprite.attr0 = OBJ_256_COLOR;
+<br/>
+sprite.attr2 = 512;
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+-------- all the sprite info, like X/Y coords, palette used for 16 color sprites, etc.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+memcpy(OAM, &amp;sprite, sizeof(sprite));
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+-------- copies the data at our sprite pointer to the OAM
+<br/>
+<br/>
+<br/>
+<br/>
+so the best way to copy to the OAM is to use the CpuFastSet, the built in gba copier, and call this like
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+OBJATTR shadow_oam[128]; // Change this instead of real OAM.
+<br/>
+memcpy(shadow_oam, sprite, sizeof(sprite)); //something like this?
+<br/>
+CpuFastSet(shadow_oam, OAM, sizeof(shadow_oam) / sizeof(int)); // Call this every v-blank.
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#64411 - Cthulhu32 - Thu Dec 22, 2005 3:56 am</h4>
+    <div class="postbody"><span class="postbody">ok, so I got it all figured out &amp; figured out all the shadow_oam &amp; oam business works.  If anyone else is curious about this because I honestly did not find any good documentation on the libgba specific way of doing things I'll write my findings.  I also noticed something about copying sprites into the shadow_oam, because they use OBJATTR, you only need to increment the BITMAP_OBJ_BASE_ADR + 0x1 to increase which OAM its copying to.  
+<br/>
+So for example, 
+<br/>
+sprite1 = some sprite w/ attributes of sprite 1
+<br/>
+sprite2 = some sprite w/ attributes of sprite 2
+<br/>
+<br/>
+your memory copy would look like
+<br/>
+memcpy(shadow_oam, sprite1, sizeof(sprite1));
+<br/>
+memcpy(shadow_oam + 0x1, sprite2, sizeof(sprite2));
+<br/>
+then after you CpuFastSet your shadow_oam to your oam, it would all match correctly.
+<br/>
+<br/>
+now to see if I can figure out how to make Usenti output transparancies from pcx files instead of manually having to go through the .h created.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#64448 - Cearn - Thu Dec 22, 2005 1:15 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Cthulhu32 wrote:</b></span></td> </tr> <tr> <td class="quote">If anyone else is curious about this because I honestly did not find any good documentation on the libgba specific way of doing things I'll write my findings.</td> </tr></table><span class="postbody"> Keep in mind that what matters is in terms of tutorials is how you deal with the hardware, which is the same for every library that you may find. The names that the various libs use are irrelevant.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Cthulhu32 wrote:</b></span></td> </tr> <tr> <td class="quote">I also noticed something about copying sprites into the shadow_oam, because they use OBJATTR, you only need to increment the BITMAP_OBJ_BASE_ADR + 0x1 to increase which OAM its copying to. 
+<br/>
+</td> </tr></table><span class="postbody">May have misunderstood your meaning here, but BITMAP_OBJ_BASE_ADR is not part of OAM, it's part of VRAM. The only connection between the two is oam attribute 2, which specifies which part of VRAM the sprite should display.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Cthulhu32 wrote:</b></span></td> </tr> <tr> <td class="quote">So for example, 
+<br/>
+sprite1 = some sprite w/ attributes of sprite 1
+<br/>
+sprite2 = some sprite w/ attributes of sprite 2
+<br/>
+<br/>
+your memory copy would look like
+<br/>
+memcpy(shadow_oam, sprite1, sizeof(sprite1));
+<br/>
+memcpy(shadow_oam + 0x1, sprite2, sizeof(sprite2));
+<br/>
+then after you CpuFastSet your shadow_oam to your oam, it would all match correctly.
+<br/>
+</td> </tr></table><span class="postbody">Sprite to shadow_oam to oam ... you're shadowing your shadow_oam? Well, whatever floats your boat I guess :P
+<br/>
+One oam buffer is quite enough, and sometimes even that is unnecesary. Furthermore, using memcpy to copy a single OBJATTR is not recommended. Because it's only 8 bytes, memcpy might do it in byte-size steps, which is slow and wouldn't even work when copying to OAM because, like VRAM, it has the no-byte-write restriction. Besides, C allows struct copies so you could just use
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">shadow_oam[0]= sprite1;
+<br/>
+shadow_oam[1]= sprite2;</td> </tr></table><span class="postbody">Not quite as fast as CpuFastSet when you copy the whole thing, but still pretty fast.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Cthulhu32 wrote:</b></span></td> </tr> <tr> <td class="quote">now to see if I can figure out how to make Usenti output transparancies from pcx files instead of manually having to go through the .h created.</td> </tr></table><span class="postbody">The transparent color is always that of palette index 0. If you're using a different index, simply swap them first (select both indices in the palette, Alt+S). Oh, and you mean C files; there's no data in Usenti's headers, because that's not what headers are for.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#64497 - Cthulhu32 - Thu Dec 22, 2005 11:18 pm</h4>
+    <div class="postbody"><span class="postbody">whoops, yeah I meant OAM + 0x1 to increase which OAM it copies too.
+<br/>
+<br/>
+ahh alright, that looks like a much better way of taking care of the shadow_oam.
+<br/>
+<br/>
+Ok, quick question about that, so is there a perk to using a shadow_oam then cpufastsetting it?  I was mainly following crossraleigh's example, but I couldn't really come up with any reasons to use it besides having a prebuilt sprite set you can just CpuFastSet when changing scenes possibly?
+<br/>
+<br/>
+I got the transparent palette part figured out, the CowBite Specs is really useful, and you're right, it doesn't matter which library you use because they're all using the gba hardware for the same purpose.  Honestly I just had not had any real experience dealing with pre-built libraries like libgba, all they really taught me in school was how to use the std in C++, and a few built in .NET libraries.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#64531 - tepples - Fri Dec 23, 2005 7:35 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Cthulhu32 wrote:</b></span></td> </tr> <tr> <td class="quote">so is there a perk to using a shadow_oam then cpufastsetting it?</td> </tr></table><span class="postbody">
+<br/>
+It lets you construct different parts of your OAM display list without having to worry about a half-built one showing up on screen. You build the display list in shadow_oam in the draw time and then copy it to OAM during vblank.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

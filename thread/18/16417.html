@@ -1,0 +1,302 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>FIFO example? - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > FIFO example?</h2>
+<div id="posts">
+<div class="post">
+    <h4>#166435 - Echo49 - Sun Feb 08, 2009 6:19 am</h4>
+    <div class="postbody"><span class="postbody">I couldn't find a FIFO example in devkitpro/examples. Does anyone know where to find examples utilising custom FIFO channels?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#166593 - Lazy1 - Wed Feb 11, 2009 3:08 am</h4>
+    <div class="postbody"><span class="postbody">Here is how I did my cheap fifo stuff for my arm7 IMF player:
+<br/>
+<br/>
+Arm7:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#define MakeID( a, b, c, d ) ( ( d &lt;&lt; 24 ) | ( c &lt;&lt; 16 ) | ( b &lt;&lt; 8 ) | a )  
+<br/>
+<br/>
+void Fifo_Arm7MusicService( int Count, void* Userdata ) {
+<br/>
+   u32 Data[ 6 ];
+<br/>
+   
+<br/>
+   if ( Count ) {
+<br/>
+      fifoGetDatamsg( FIFO_USER_01, Count, ( u8* ) Data );
+<br/>
+      
+<br/>
+      switch ( Data[ 0 ] ) {
+<br/>
+         case MakeID( 'M', 'O', 'P', 'L' ): {
+<br/>
+            MakeOPL( );
+<br/>
+            break;
+<br/>
+         }
+<br/>
+         case MakeID( 'P', 'L', 'A', 'Y' ): {
+<br/>
+            StartMusic( Data[ 1 ] );
+<br/>
+            break;
+<br/>
+         }
+<br/>
+         case MakeID( 'S', 'T', 'O', 'P' ): {
+<br/>
+            StopMusic( );
+<br/>
+            break;
+<br/>
+         }
+<br/>
+         case MakeID( 'B', 'U', 'F', 'R' ): {
+<br/>
+            RingBufferSize = Data[ 1 ];
+<br/>
+            RingBuffer = ( short* ) Data[ 2 ];
+<br/>
+            
+<br/>
+            SampleBufferSize = Data[ 3 ];
+<br/>
+            SampleBuffer = ( short* ) Data[ 4 ];
+<br/>
+            
+<br/>
+            if ( ! RingBuffer || ! SampleBuffer )
+<br/>
+               Noise( );
+<br/>
+            
+<br/>
+            break;
+<br/>
+         }
+<br/>
+         default: break;
+<br/>
+      };
+<br/>
+   }
+<br/>
+}
+<br/>
+<br/>
+//---------------------------------------------------------------------------------
+<br/>
+int main() {
+<br/>
+//---------------------------------------------------------------------------------
+<br/>
+   //while ((*(vuint8*)0x04000240 &amp; 0x02) == 0);    
+<br/>
+   
+<br/>
+   fake_heap_start = ( char* ) 0x06000000;
+<br/>
+   fake_heap_end = ( char* ) 0x06020000;
+<br/>
+   
+<br/>
+   irqInit();
+<br/>
+   fifoInit();
+<br/>
+<br/>
+   // read User Settings from firmware
+<br/>
+   readUserSettings();
+<br/>
+<br/>
+   // Start the RTC tracking IRQ
+<br/>
+   initClockIRQ();
+<br/>
+<br/>
+   SetYtrigger(80);
+<br/>
+<br/>
+   //installWifiFIFO();
+<br/>
+   installSoundFIFO();
+<br/>
+<br/>
+   //mmInstall(FIFO_MAXMOD);
+<br/>
+<br/>
+   installSystemFIFO();
+<br/>
+   
+<br/>
+   // Music system fifo callbacks
+<br/>
+   fifoSetDatamsgHandler( FIFO_USER_01, Fifo_Arm7MusicService, NULL );
+<br/>
+   
+<br/>
+   irqSet(IRQ_VCOUNT, VcountHandler);
+<br/>
+   irqSet(IRQ_VBLANK, VblankHandler);
+<br/>
+<br/>
+   irqEnable( IRQ_VBLANK | IRQ_VCOUNT );
+<br/>
+   
+<br/>
+   while ( 1 ) {
+<br/>
+      swiWaitForVBlank( );
+<br/>
+      
+<br/>
+      if ( StartPlayingMusic == 1 ) {
+<br/>
+         StartPlayingMusic = 0;
+<br/>
+         
+<br/>
+         // Enter play loop
+<br/>
+         PlayTheTune( );
+<br/>
+      }
+<br/>
+   }
+<br/>
+<br/>
+   // Keep the ARM7 mostly idle
+<br/>
+   //while (1) swiWaitForVBlank();
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Arm9:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#define MakeID( a, b, c, d ) ( ( d &lt;&lt; 24 ) | ( c &lt;&lt; 16 ) | ( b &lt;&lt; 8 ) | a )  
+<br/>
+#define Arm7RingBufferSize ( 8192 * sizeof( u16 ) )
+<br/>
+#define Arm7SampleBufferSize ( 11025 * sizeof( u16 ) )
+<br/>
+<br/>
+int Arm7_MakeOPL( void ) {
+<br/>
+   u32 Outgoing[ 1 ] = {
+<br/>
+      MakeID( 'M', 'O', 'P', 'L' )
+<br/>
+   };
+<br/>
+   
+<br/>
+   fifoSendDatamsg( FIFO_USER_01, sizeof( Outgoing ), ( u8* ) Outgoing );
+<br/>
+   return 1;
+<br/>
+}
+<br/>
+<br/>
+void Arm7_StartMusic( u8* MusicBase ) {
+<br/>
+   u32 Outgoing[ 2 ] = {
+<br/>
+      MakeID( 'P', 'L', 'A', 'Y' ),
+<br/>
+      ( u32 ) MusicBase
+<br/>
+   };
+<br/>
+   
+<br/>
+   fifoSendDatamsg( FIFO_USER_01, sizeof( Outgoing ), ( u8* ) Outgoing );
+<br/>
+}
+<br/>
+<br/>
+void Arm7_StopMusic( void ) {
+<br/>
+   u32 Outgoing[ 1 ] = {
+<br/>
+      MakeID( 'S', 'T', 'O', 'P' )
+<br/>
+   };
+<br/>
+   
+<br/>
+   fifoSendDatamsg( FIFO_USER_01, sizeof( Outgoing ), ( u8* ) Outgoing );
+<br/>
+}
+<br/>
+<br/>
+void Arm7_GiveBuffers( void ) {
+<br/>
+   u32 Outgoing[ 5 ] = {
+<br/>
+      MakeID( 'B', 'U', 'F', 'R' ),
+<br/>
+      Arm7RingBufferSize,
+<br/>
+      0,
+<br/>
+      Arm7SampleBufferSize,
+<br/>
+      0
+<br/>
+   };
+<br/>
+   
+<br/>
+   Outgoing[ 2 ] = ( u32 ) malloc( Arm7RingBufferSize );
+<br/>
+   Outgoing[ 4 ] = ( u32 ) malloc( Arm7SampleBufferSize );
+<br/>
+   
+<br/>
+   fifoSendDatamsg( FIFO_USER_01, sizeof( Outgoing ), ( u8* ) Outgoing );
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Maybe not the best way of doing things but I had troubles using more than 3 or 4 user fifo channels.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#171133 - a128 - Mon Nov 02, 2009 10:56 am</h4>
+    <div class="postbody"><span class="postbody">I did a Fifo example for sending 32bit values from arm9-&gt;arm7 back to arm9
+<br/>
+<br/>
+download here 
+<br/>
+<br/>
+<a class="postlink" href="http://www.storage.to/get/IQt1pekc/fifotest_nds.tgz" target="_blank">http://www.storage.to/get/IQt1pekc/fifotest_nds.tgz</a><br/>_________________<br/>"Hey! It compiles! Ship it!"</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

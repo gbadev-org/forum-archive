@@ -1,0 +1,186 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>more sprite q's - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Beginners > more sprite q's</h2>
+<div id="posts">
+<div class="post">
+    <h4>#25914 - strider - Tue Aug 31, 2004 4:55 pm</h4>
+    <div class="postbody"><span class="postbody">Okay i have a lot of questions so plz be patient :)
+<br/>
+<br/>
+I was wondering how to calculate the size of a sprite/image so that you can put it in attribute 2 of a sprite.  For example i was following Ebbesen's tutorial on making pong; he stores an 8x8 sprite for a ball and when he adds a paddle sprite, he does:
+<br/>
+sprites[1].attribute2 = 512 + 8;
+<br/>
+how do you get the '+ 8'? i figured it was from the size of the sprite, however when i was trying my hand at animating sprites, i loaded in 7 frames each 64x64, and i tried incrementing attribute2 for each successive sprite by 64 but that didn't work so i had to increment by 128, i'm not really sure why this works but it did:
+<br/>
+sprites[0].attribute2=0; 
+<br/>
+sprites[1].attribute2=128; 
+<br/>
+sprites[2].attribute2=256; etc...
+<br/>
+so how do you calculate the address of the next sprite?
+<br/>
+<br/>
+Next I realized that since the character name in sprites[].attribute2 is only 10 bits long the largest character name/address you can enter is 1024.  If you're incrementing by 128 (see above) then you can only store so many frames in memory, and then you'd have no more space left for like enemy sprites and various other sprites, am i correct? if i am then how do you go about swapping in and out sprite data from the sprite space (0x06010000)?
+<br/>
+<br/>
+Finally, a lot of sprites i've seen ripped from GBA games (ie. castlevania, mario) have sprites that don't quite fit any of the 16x16, 32x32, 64x64, etc. sizes.  ex. sometimes a sprite will take up like 18x24 pixels or 43x50 pixels...so would you just use the next biggest size that fits? ie. in the first case make it a 32x32 sprite and in the second case a 64x64 sprite? there is a lot of blank/empty space if you do this and it seems like a waste...I was wondering how you handle these type of sprites.
+<br/>
+<br/>
+anyways, thats a lot of questions, i hope they all make some sense.  any help would be greatly appreciated whether you know the answer or could point me to a tutorial or something that would explain one of the topics specifically...thanks!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#25925 - sajiimori - Tue Aug 31, 2004 6:53 pm</h4>
+    <div class="postbody"><span class="postbody">Use #defines and wrapper functions to access sprite attributes, rather than hand-calculating the bitfields.  It's unfortunate that the tutorial uses magic numbers.
+<br/>
+<br/>
+First, make an enumeration of all the sprite sizes, corresponding to all the combinations of the size and shape bitfields.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+enum
+<br/>
+{
+<br/>
+  SPRITE_SIZE_8x8,
+<br/>
+  SPRITE_SIZE_16x8,
+<br/>
+  ...
+<br/>
+};
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Then write all the handy utilities, like a function that rounds a pixel width and height upward to the nearest sprite size:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+typedef struct
+<br/>
+{
+<br/>
+  s16 x, y;
+<br/>
+} Vector;
+<br/>
+<br/>
+int vector_to_sprite_size(Vector v)
+<br/>
+{
+<br/>
+  if(v.x &lt;= 8 &amp;&amp; v.y &lt;= 8)
+<br/>
+    return SPRITE_SIZE_8x8;
+<br/>
+  ...
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Then write one that converts a sprite size to a vector, and one that writes a sprite size into an OAM sprite struct, one that turns a sprite size into a number of chars, and one that converts a number of chars to a number of bytes (in 4 bit or 8 bit), and whatever else you could use.  (Some of these switches could be written as arrays for cleaner code.)
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+static inline Vector make_vector(int x, int y)
+<br/>
+{
+<br/>
+  Vector v;
+<br/>
+  v.x = x;
+<br/>
+  v.y = y;
+<br/>
+  return v;
+<br/>
+}
+<br/>
+<br/>
+Vector sprite_size_to_vector(int size)
+<br/>
+{
+<br/>
+  switch(size)
+<br/>
+  {
+<br/>
+  case SPRITE_SIZE_8x8:
+<br/>
+    return make_vector(8, 8);
+<br/>
+  ...
+<br/>
+  }
+<br/>
+}
+<br/>
+<br/>
+void write_size_to_oam(OAMStruct oam, int size)
+<br/>
+{
+<br/>
+  switch(size)
+<br/>
+  {
+<br/>
+  case SPRITE_SIZE_8x8:
+<br/>
+    oam.attribute2 &amp;= ...
+<br/>
+    oam.attribute2 |= ...
+<br/>
+    ...
+<br/>
+  }
+<br/>
+}
+<br/>
+<br/>
+int sprite_size_to_chars(int size)
+<br/>
+{
+<br/>
+  switch(size)
+<br/>
+  {
+<br/>
+  case SPRITE_SIZE_8x8:
+<br/>
+    return 1;
+<br/>
+  ...
+<br/>
+  }
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+When you have all the tools you need, it's way easier to solve problems.
+<br/>
+<br/>
+Oh, and you can DMA frames to sprite RAM as needed, so you won't often run out of char space.  For awkwardly shaped sprites, you can pad them to the next bigger size (which isn't that horrible if you are only keeping 1 frame per sprite in VRAM), or you can sew multiple sprites together (which is common but it makes scaling hard).
+<br/>
+<br/>
+If you go the sewing route, remember to write all the tools you need to make it easy.  One way to tell if it's easy enough is to ask yourself if it's much harder to make a sprite with 5 parts than one with 2 parts.  If it is, then write more tools to do the tedious work for you.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

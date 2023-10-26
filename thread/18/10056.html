@@ -1,0 +1,125 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Sound issues, interrupts and clicking - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Sound issues, interrupts and clicking</h2>
+<div id="posts">
+<div class="post">
+    <h4>#89445 - Lazy1 - Sat Jun 24, 2006 11:08 pm</h4>
+    <div class="postbody"><span class="postbody">I got around to adding sound to wolf3d which aside from clicking and one rare bug seems to work great.
+<br/>
+The rare bug I had caused the game to stall for about a second and part of the machinegun sprite had turned corrupt.
+<br/>
+<br/>
+I figured that it was caused by the timer interrupt calling the function that was interrupted ( loading pages from a swap file ). But I'm not sure if this is the case and it has only happened once since I added support for sounds that use more than 1 page ( 4kb ).
+<br/>
+<br/>
+Would setting REG_IME to 0 in all pagefile functions solve this problem?
+<br/>
+As for the clicking, it was majorly reduced by moving all sound updates to a 0.98ms timer running on both the arm7 and arm9 but it's still there and very noticable even if reduced.
+<br/>
+<br/>
+The basic cycle of sound is this:
+<br/>
+<br/>
+Arm9:
+<br/>
+1. Request from engine to play sound
+<br/>
+2. Send sound data to arm7
+<br/>
+<br/>
+Arm9 Timer2 Interrupt:
+<br/>
+1. If the arm7 is requesting another page
+<br/>
+1a. Load another page from the swapfile
+<br/>
+<br/>
+Arm7 Timer2 Interrupt:
+<br/>
+1. Is a sound supposed to be playing but the sound hw is finished
+<br/>
+1a. Request another sound page from the arm9
+<br/>
+2. Is there a sound request from the arm9
+<br/>
+2a. Play sound</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#89448 - Mighty Max - Sat Jun 24, 2006 11:23 pm</h4>
+    <div class="postbody"><span class="postbody">The rare bug you are seeing might be a stack problem. I had this behaviour too with some other function and it turned out that i was using that much stack that the system and irq stack were overlapping, and thus corrupting. Or you are simply changing values (globals) that exists chached in the interruped function.
+<br/>
+<br/>
+The sound:
+<br/>
+This can have multiple reasons with the solutions:
+<br/>
+- using the ipc FIFO to better synch the functions
+<br/>
+- have the sound in two half-buffers. If you are done with playing the first, start the second and reload the next page into the first again while playing again. This removes the delay where you don't play anything
+<br/>
+- if you are using PCM sound, the first value of the next page is played as is, and not relative to the previous one. Say you encoded the following sequence (page border marked with | ):
+<br/>
+<br/>
+80 88 90 | 84 70 66
+<br/>
+<br/>
+In PCM:
+<br/>
+80 +8 +2 -6 -14 -4
+<br/>
+<br/>
+But when playing this in two chunks youll get the result:
+<br/>
+80 88 90 | -6 -20 -24
+<br/>
+<br/>
+The sharp jump might be audible as a click.
+<br/>
+Fix: Auto repeat will continue PCM decodeing, instead of restarting at page border.<br/>_________________<br/><a class="postlink" href="http://mightymax.org/gbamp_multiboot.html" target="_blank">GBAMP Multiboot</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#89456 - tepples - Sun Jun 25, 2006 12:07 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Mighty Max wrote:</b></span></td> </tr> <tr> <td class="quote">- if you are using PCM sound, the first value of the next page is played as is, and not relative to the previous one.</td> </tr></table><span class="postbody">
+<br/>
+Don't you mean "DPCM" or "ADPCM"?<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#89557 - Mighty Max - Sun Jun 25, 2006 2:07 pm</h4>
+    <div class="postbody"><span class="postbody">This applies to both. Alltho if the differential signals are of the same size as the DAC, the effect vanishes.
+<br/>
+<br/>
+As far i testet in 8 bit pcm on the ds it starts clicking when i start a new stream without caring about reinitializing the startvalue or use the hardware to repeat the buffer (and tho not resetting this channel) i filled with the next data waiting to be played.<br/>_________________<br/><a class="postlink" href="http://mightymax.org/gbamp_multiboot.html" target="_blank">GBAMP Multiboot</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#89568 - tepples - Sun Jun 25, 2006 3:58 pm</h4>
+    <div class="postbody"><span class="postbody">I thought the DS sound hardware's 8-bit and 16-bit PCM modes were straight PCM, not delta PCM. Or are you talking about some game's specific lossless compression? In that case, shouldn't you just Diff8bitUnFilterWram the data when loading it?<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

@@ -1,0 +1,561 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Quick question on mode 4 - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Beginners > Quick question on mode 4</h2>
+<div id="posts">
+<div class="post">
+    <h4>#58083 - Lazy1 - Thu Oct 20, 2005 6:22 pm</h4>
+    <div class="postbody"><span class="postbody">I'm having problems with mode 4, I have read that you need to write two pixels at a time but I couldn't find an example where an image is read into the framebuffer this way.
+<br/>
+<br/>
+I'm going through the GBA tutorials on <a href="http://www.drunkencoders.com" target="_blank">www.drunkencoders.com</a> and I'm on day 2 where it deals with mode 4 and pcx images.
+<br/>
+Rather than copy the tutorial files I prefer to go along and write my own code so I decided to replace the pcx images with a half-life sprite.
+<br/>
+( Don't worry about incompatible licenses, I sat down with a hex editor and figured out the file format myself ).
+<br/>
+<br/>
+So I'm at the point where I have loaded the sprite's palette into BGPaletteMem ( I have verified this to be correct using visualboy advance's palette viewer ) and have to write the actual image data into the framebuffer.
+<br/>
+All my attempts so far haven't worked, though I did see something it was usually the image spaced out by black pixels.
+<br/>
+<br/>
+There is also another wierd problem which I'm not sure if it was the way I was displaying the image but the top half of the image is cut off and displayed at the bottom aswell as some garbage at the very right.
+<br/>
+<br/>
+Could someone provide an example of taking two pixels from an image and placing them on the screen in mode 4?
+<br/>
+Thanks in advance.
+<br/>
+<br/>
+[Added]
+<br/>
+I found a few really dumb mistakes and now I can actually see the sprite!
+<br/>
+There is still a problem though as you can see here <a href="http://img422.imageshack.us/img422/6417/day2mb8vf.png" target="_blank">http://img422.imageshack.us/img422/6417/day2mb8vf.png</a>
+<br/>
+<br/>
+Here is my ( so far ) hacked up code for day 2.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#include "gba.h"
+<br/>
+#include "hl_sprite.h"
+<br/>
+<br/>
+#define MODE3_POS( x, y ) ( x + ( y * 240 ) )
+<br/>
+#define MODE4_POS( x, y ) ( x + ( y * 120 ) )
+<br/>
+#define MODE5_POS( x, y ) ( x + ( y * 160 ) )
+<br/>
+<br/>
+int __gba_multiboot = 0;
+<br/>
+<br/>
+extern u8 _binary_blueflare1_spr_start[ ];
+<br/>
+//extern u8 _binary_bluejet1_spr_start[ ];
+<br/>
+<br/>
+void FatalError( void ) {
+<br/>
+   unsigned int iX = 0;
+<br/>
+   unsigned int iY = 0;
+<br/>
+   
+<br/>
+   SetMode( MODE_3 | BG2_ENABLE );
+<br/>
+   
+<br/>
+   for ( iX = 0; iX &lt; 240; iX++ ) {
+<br/>
+      for ( iY = 0; iY &lt; 160; iY++ ) {
+<br/>
+         VideoBuffer[ MODE3_POS( iX, iY ) ] = RGB16( 31, 0, 0 );
+<br/>
+      }
+<br/>
+   }
+<br/>
+<br/>
+   while ( 1 ) {
+<br/>
+   }
+<br/>
+}
+<br/>
+<br/>
+// Loads a Half-Life sprite into the frontbuffer
+<br/>
+int LoadHLSprite( u8* pSpritememory, int iFrame ) {
+<br/>
+   hl_sprheader_t* pSprite = ( hl_sprheader_t* ) pSpritememory;
+<br/>
+   hl_sprframe_t* pFrame = NULL;
+<br/>
+   u8* pDataptr = pSpritememory;
+<br/>
+   u32 iX = 0;
+<br/>
+   u32 iY = 0;
+<br/>
+   u32 i = 0;
+<br/>
+   u16 p = 0;
+<br/>
+   
+<br/>
+   // Make sure this is has a valid sprite header ( ASCII "IDSP" ) and the version is 2 ( half-life format )
+<br/>
+   // If not, return failure now.
+<br/>
+   if ( *( ( int* ) pSprite-&gt;sprIdentify ) != HL_SPR_IDENTITY || pSprite-&gt;iVersion != 2 )
+<br/>
+      return 0;
+<br/>
+   
+<br/>
+   // Move past the header
+<br/>
+   pDataptr+= sizeof( hl_sprheader_t );
+<br/>
+   
+<br/>
+   // Copy in the sprite's palette
+<br/>
+   for ( i = 0; i &lt; 256; i++, pDataptr+= 3 )
+<br/>
+      BGPaletteMem[ i ] = RGB16( pDataptr[ 0 ] &gt;&gt; 3, pDataptr[ 1 ] &gt;&gt; 3, pDataptr[ 2 ] &gt;&gt; 3 );
+<br/>
+      
+<br/>
+   // Get a pointer to the first sprite frame after the palette and
+<br/>
+   // point our data pointer past it
+<br/>
+   pFrame = ( hl_sprheader_t* ) pDataptr;
+<br/>
+   pDataptr+= sizeof( hl_sprheader_t );
+<br/>
+   
+<br/>
+   // BROKEN
+<br/>
+   // Display sprite
+<br/>
+   for ( iX = 0; iX &lt; pFrame-&gt;iWidth &gt;&gt; 1; iX++ ) {
+<br/>
+      for ( iY = 0; iY &lt; pFrame-&gt;iHeight; iY++ ) {
+<br/>
+         p = ( ( *pDataptr++ ) &lt;&lt; 8 ) + *pDataptr++;
+<br/>
+         FrontBuffer[ MODE4_POS( iX, iY ) ] = p;
+<br/>
+      }
+<br/>
+   }
+<br/>
+   
+<br/>
+   return 1;
+<br/>
+}
+<br/>
+<br/>
+// Mode 4 16 bit
+<br/>
+//
+<br/>
+// 11111111 2222222
+<br/>
+// Leftmost Rightmost
+<br/>
+<br/>
+int main( void ) {
+<br/>
+   SetMode( MODE_4 | BG2_ENABLE );
+<br/>
+   
+<br/>
+   if ( ! LoadHLSprite( _binary_blueflare1_spr_start, 0 ) )
+<br/>
+      FatalError( );
+<br/>
+<br/>
+   while ( 1 ) {
+<br/>
+   }
+<br/>
+   
+<br/>
+   return 0;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#58117 - Lazy1 - Thu Oct 20, 2005 11:57 pm</h4>
+    <div class="postbody"><span class="postbody">Anyone have an idea what is going on here?
+<br/>
+I'm running out of thoughts as to why this won't display properly.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#58133 - Nacho - Fri Oct 21, 2005 4:19 am</h4>
+    <div class="postbody"><span class="postbody">Hi! I think the following sentence is the problem:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">p = ( ( *pDataptr++ ) &lt;&lt; 8 ) + *pDataptr++;</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Remember that the post-increment operator is applied AFTER the entire statement is executed, so you?re basically accessing the same data twice. Hope that helps!!
+<br/>
+<br/>
+--Nacho</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#58134 - gauauu - Fri Oct 21, 2005 4:29 am</h4>
+    <div class="postbody"><span class="postbody">Or technically, even scarier, the C standard says that trying to use the postincrement operator on the same value in the same expression is undefined -- meaning ANYTHING can happen.  
+<br/>
+<br/>
+Although most likely it won't do anything disastrous, you can't really be sure WHAT will happen when you do it.  (gcc might have a standard way of handling it, I don't know) ..... Thus, it's best avoided.
+<br/>
+<br/>
+See the <a class="postlink" href="http://www.faqs.org/faqs/C-faq/faq/" target="_blank">C faq</a>, sections 3.2 and 11.33</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#58139 - Cearn - Fri Oct 21, 2005 8:14 am</h4>
+    <div class="postbody"><span class="postbody">What they said.
+<br/>
+<br/>
+And are you sure that the sprite data is column-based? Pretty much ever bitmap format I know is row-based. And have you tried getting the algorithm to work in a PC environment, where you have all the proper debugging tools?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#58181 - Lazy1 - Fri Oct 21, 2005 3:06 pm</h4>
+    <div class="postbody"><span class="postbody">Thanks, that helped a little bit ( damn stupid mistake with incrementing the pointer ) and I switched it to draw in rows instead.
+<br/>
+It looks better now except the sprite displays as it should from top to bottom except the first few pixels appear on the other side.
+<br/>
+<br/>
+It's possible I have to dig around and figure out the file format a little more since I only worked on getting the main header, palette and frame header.
+<br/>
+<br/>
+Here is what I know ( besides actual struct definitions )
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+// Half-life sprite file structure...
+<br/>
+// ---------------------
+<br/>
+// Header 42 bytes
+<br/>
+// Palette 768 bytes
+<br/>
+// Frame header 20 bytes
+<br/>
+// Image data ( frame header-&gt;width * frame header-&gt;height )
+<br/>
+// ...
+<br/>
+// If you have more than one frame...
+<br/>
+// Frame header 20 bytes
+<br/>
+// Image data ( frame header-&gt;width * frame header-&gt;height )
+<br/>
+// ...
+<br/>
+// ... ect...
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#58188 - Cearn - Fri Oct 21, 2005 3:52 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">... sizeof(hl_sprheader_t) ... </td> </tr></table><span class="postbody"></span></td> </tr></table><span class="postbody">
+<br/>
+Can we see the struct definitions please? <span style="font-size: 9px; line-height: normal">hint: data alignment</span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#58191 - Lazy1 - Fri Oct 21, 2005 3:56 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#ifndef _HL_SPRITE_H_
+<br/>
+#define _HL_SPRITE_H_
+<br/>
+<br/>
+// Should be at the start of the file, identifies this as a sprite
+<br/>
+#define HL_SPR_IDENTITY ( ( 'P' &lt;&lt; 24 ) + ( 'S' &lt;&lt; 16 ) + ( 'D' &lt;&lt; 8 ) + ( 'I' ) )
+<br/>
+<br/>
+// Half-life sprite file structure...
+<br/>
+// ---------------------
+<br/>
+// Header 42 bytes
+<br/>
+// Palette 768 bytes
+<br/>
+// Frame header 20 bytes
+<br/>
+// Image data ( frame header-&gt;width * frame header-&gt;height )
+<br/>
+// ...
+<br/>
+// If you have more than one frame...
+<br/>
+// Frame header 20 bytes
+<br/>
+// Image data ( frame header-&gt;width * frame header-&gt;height )
+<br/>
+// ...
+<br/>
+// ... ect...
+<br/>
+<br/>
+// Half-life sprite rendering modes, these determine how sprites are
+<br/>
+// rendered by the engine.
+<br/>
+enum hl_sprite_rendermodes_e {
+<br/>
+   SPR_MODE_NORMAL = 0, // Normal rendering
+<br/>
+   SPR_MODE_ADDITIVE,   // Black ( RGB 0, 0, 0 ) is transparent
+<br/>
+   SPR_MODE_INDEXALPHA, // Last color in palette is the sprite's in-game color
+<br/>
+   SPR_MODE_ALPHATEST   // Last color in palette is transparent
+<br/>
+};
+<br/>
+<br/>
+// Half-life sprite types, these determine how the sprite rotates
+<br/>
+// when viewed by a player in-game.
+<br/>
+enum hl_sprite_type_e {
+<br/>
+   SPR_TYPE_ROTATE_Y_ONLY = 0,   // Sprite does not rotate on the X axis
+<br/>
+   SPR_TYPE_ONE_WAY,             // Sprite faces one way and does not rotate ( NOTE: Not 100% sure on this )
+<br/>
+   SPR_TYPE_ROTATE_XY,           // Sprite rotates to face the player on both the X and Y axis
+<br/>
+   SPR_TYPE_ONE_WAY2,            // Odd, same as SPR_FACE_ONE_WAY except in a different direction
+<br/>
+   SPR_TYPE_ROTATE_XY2           // Hmm, this seemingly does the same thing as SPR_FACE_ROTATE_XY
+<br/>
+};
+<br/>
+<br/>
+// Half-life sprite header.
+<br/>
+// Still under research.
+<br/>
+//#pragma pack( 2 )
+<br/>
+typedef struct hl_sprheader_s {
+<br/>
+   char sprIdentify[ 4 ];  // 4 Character non null terminated file id. Should contain "IDSP"
+<br/>
+   int iVersion;           // Sprite version number. Should be 2.
+<br/>
+   int iSpritetype;        // Type of sprite
+<br/>
+   int iRendermode;        // Sprite render mode. See hl_sprite_rendermodes_e.
+<br/>
+   int iUnknown4;          // Offset? Actually no, it's something else...
+<br/>
+   unsigned int iWidth;    // Width of sprite
+<br/>
+   unsigned int iHeight;   // Height of sprite
+<br/>
+   int iFramecount;        // Number of frames in sprite
+<br/>
+   int iUnknown5;
+<br/>
+   int iUnknown6;
+<br/>
+   unsigned short iUnknown7;
+<br/>
+} __attribute__( ( packed ) ) hl_sprheader_t;
+<br/>
+<br/>
+// This structure seems to appear at the start of a new frame within the sprite.
+<br/>
+// NOTES:
+<br/>
+// This is a complete structure!
+<br/>
+// Only alter when new type/use information is found.
+<br/>
+typedef struct hl_sprframe_s {
+<br/>
+   int iUnknown1;          // Always seems to be 0
+<br/>
+   int iUnknown2;          // Always seems to be C0 FF FF FF
+<br/>
+   int iUnknown3;          // Always seems to be 1
+<br/>
+   unsigned int iWidth;    // Width of frame
+<br/>
+   unsigned int iHeight;   // Height of frame
+<br/>
+} __attribute( ( packed ) ) hl_sprframe_t;
+<br/>
+<br/>
+#endif
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Thats as far as I researched it.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#58301 - Cearn - Sat Oct 22, 2005 1:17 pm</h4>
+    <div class="postbody"><span class="postbody">Ok, so you're already using the packing attribute. It still looks like you have an offset error somewhere, though. Could you check with a simple sprite,something with well-defined edges; a simple box maybe? That should show offset anomalies. Also, each pixel seems to be doubled somehow, or is that just something from the double *ptr++ stuff.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#58328 - Lazy1 - Sat Oct 22, 2005 6:45 pm</h4>
+    <div class="postbody"><span class="postbody">I removed the problem code where I set the pixels and used a different method so I don't think that is the problem.
+<br/>
+I did make a small sprite which was a 16x16 green box and it did come out broken when displayed in the gba program.
+<br/>
+<br/>
+I also did some tests as to how the image data was stored in the sprite itself, it is written like this...
+<br/>
+<br/>
+[16x16 image]
+<br/>
+Line 1: 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01
+<br/>
+Line 2: 02 02 02 02 02 02 02 02 02 02 02 02 02 02 02 02
+<br/>
+<br/>
+Modified code section
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+   // BROKEN
+<br/>
+   // Display sprite
+<br/>
+   for ( iY = 0; iY &lt; pFrame-&gt;iHeight; iY++ ) {
+<br/>
+      for ( iX = 0; iX &lt; ( pFrame-&gt;iWidth ) &gt;&gt; 1; iX++ ) {
+<br/>
+         FrontBuffer[ MODE4_POS( iX, iY ) ] = ( ( *pDataptr ) &lt;&lt; 8 ) + *( pDataptr + 1 );
+<br/>
+         pDataptr+= 2;
+<br/>
+      }
+<br/>
+   }
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Or is it the way I embed the sprite into the .gba file?
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+arm-elf-objcopy -I binary -O elf32-littlearm -B arm --rename-section .data=.ewram square.spr square.od
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#58336 - tepples - Sat Oct 22, 2005 7:24 pm</h4>
+    <div class="postbody"><span class="postbody">You have to set the image converter to tiled mode, not mode 4.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#58343 - Lazy1 - Sat Oct 22, 2005 8:38 pm</h4>
+    <div class="postbody"><span class="postbody">I'm not using an image converter, or atleast not one that converts it directly into a format the gba can use.
+<br/>
+Unless I didn't understand what you said...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#58345 - tepples - Sat Oct 22, 2005 8:44 pm</h4>
+    <div class="postbody"><span class="postbody">If you're loading pcx images directly in your GBA program, then you'll need to convert them to tiled format inside your GBA program. Read the CowBite spec and GBATEK (use Google).<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#58347 - Lazy1 - Sat Oct 22, 2005 8:57 pm</h4>
+    <div class="postbody"><span class="postbody">Actually, I'm not using PCX images...
+<br/>
+A while ago I got bored and figured out the game Half-Life 's sprite file format.
+<br/>
+The ( mostly ) figured out format sat around doing nothing until a few days ago when I decided to put it to work while learning GBA programming.
+<br/>
+<br/>
+The format is probably similar though, you have the main header, palette, sprite frame header and the rest is bytes which index into the palette.
+<br/>
+It's because of that I chose to use it since mode 4 was the same way.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#58350 - Cearn - Sat Oct 22, 2005 9:33 pm</h4>
+    <div class="postbody"><span class="postbody"><a class="postlink" href="http://www.planethalflife.com/mach3/sprites/source.html" target="_blank">http://www.planethalflife.com/mach3/sprites/source.html</a>
+<br/>
+<a class="postlink" href="http://www.gamers.org/dEngine/quake/Qutil/spritegn.h" target="_blank">http://www.gamers.org/dEngine/quake/Qutil/spritegn.h</a>
+<br/>
+<br/>
+GIYF</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#58353 - Lazy1 - Sat Oct 22, 2005 9:56 pm</h4>
+    <div class="postbody"><span class="postbody">Thats not what I meant, I don't need to know any more about the sprite format itself - and if I use that information I'll have to deal with some kind of license crap.
+<br/>
+<br/>
+I'm just trying to put the information I gathered to use, is there a problem with the drawing code itself?
+<br/>
+If there isn't then it looks like I'll go back and work on the file format some more and use something else for day2.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#58356 - Cearn - Sat Oct 22, 2005 10:14 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Lazy1 wrote:</b></span></td> </tr> <tr> <td class="quote">Thats not what I meant, I don't need to know any more about the sprite format itself - and if I use that information I'll have to deal with some kind of license crap.</td> </tr></table><span class="postbody">
+<br/>
+OK, fair enough. But isn't Quake code opensource nowadays anyway? It does seem that your frame struct may have the wrong size, though.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Lazy1 wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+I'm just trying to put the information I gathered to use, is there a problem with the drawing code itself?</td> </tr></table><span class="postbody">
+<br/>
+Now that you mention it, yeah, there is something wrong. GBA is little endian, so that the byte-order (and hence the pixel order) is 0x0201, not 0x0102, so you probably need to reverse that. In fact, if the pixel data is always on even addresses, you can cast to u16* instead of u8*, or use DMA for each line.
+<br/>
+<br/>
+Also, in what way is it broken now?</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

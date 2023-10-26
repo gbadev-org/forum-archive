@@ -1,0 +1,373 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Passing arguments to a non inline function... - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>C/C++ > Passing arguments to a non inline function...</h2>
+<div id="posts">
+<div class="post">
+    <h4>#140001 - Leevon - Wed Sep 12, 2007 3:51 pm</h4>
+    <div class="postbody"><span class="postbody">First of all, sorry for my english guys, but i really can't figure this out alone.
+<br/>
+<br/>
+I begin to write C GBA code just few days ago, and I think i'm missing something important, because my program acts quite weird.
+<br/>
+<br/>
+I've written a structure to keep all the sprites informations. So the OAM of the sprite is in this structure, but when i try to pass the address of the oam field in order to be modified, this is totally erased from the stack, and then from mem when I call the update function, wich is "static inline" and works just well. This happens even if i just pass it to a totally empty function, but i can pass other types without problems, like u8* or u32*. What I'm missing?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#140008 - sajiimori - Wed Sep 12, 2007 6:46 pm</h4>
+    <div class="postbody"><span class="postbody">Hard to say.  Can you give a <span style="font-style: italic">very small</span> code example that illustrates the problem?  The example should include the definition of anything that the example uses.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#140009 - strager - Wed Sep 12, 2007 6:46 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Leevon wrote:</b></span></td> </tr> <tr> <td class="quote">I've written a structure to keep all the sprites informations. So the OAM of the sprite is in this structure, but when i try to pass the address of the oam field in order to be modified, this is totally erased from the stack, and then from mem when I call the update function, wich is "static inline" and works just well. This happens even if i just pass it to a totally empty function, but i can pass other types without problems, like u8* or u32*. What I'm missing?</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Are you doing something like:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">struct { int massive[123456]; } bar;
+<br/>
+foo(bar);</td> </tr></table><span class="postbody">
+<br/>
+If so, you're probably corrupting the stack by shoving that whole array onto the stack.  Or something.  I'm just suspecting stack corruption.  For inline functions, the 'bar' is inlined into the code and doesn't need to be pushed.
+<br/>
+<br/>
+Try pushing a pointer to the data you're passing.
+<br/>
+<br/>
+Code examples or snippets are good, too.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#140037 - Leevon - Wed Sep 12, 2007 11:03 pm</h4>
+    <div class="postbody"><span class="postbody">Here is the structure:
+<br/>
+<br/>
+typedef struct Oam_entry
+<br/>
+{
+<br/>
+  u16 attr0;
+<br/>
+  u16 attr1;
+<br/>
+  u16 attr2;
+<br/>
+  s16 fill;
+<br/>
+}Oam_entry;
+<br/>
+<br/>
+<br/>
+The problem is simple, every non inline function destroy this, even if I pass just the pointer, even if I pass a const pointer, and now i was trying using a global variable: Nothing.
+<br/>
+<br/>
+The program works well if I use the Oam_entry only in the main(), the working loop is this:
+<br/>
+<br/>
+<br/>
+int main()
+<br/>
+{
+<br/>
+u8 x = 1, y=1;
+<br/>
+u32 i;
+<br/>
+Oam_entry oam;
+<br/>
+<br/>
+// set memory and oam....
+<br/>
+<br/>
+ while(1)
+<br/>
+    {
+<br/>
+      for(i=0; i&lt;2000; i++) // I know, this sucks
+<br/>
+       while(REG_VCOUNT &lt; 160);
+<br/>
+<br/>
+      key_check(key_buff);
+<br/>
+<br/>
+      movement(&amp;x, &amp;y); // obviously move the sprite
+<br/>
+<br/>
+      oam_set_pos(&amp;oam, x,y ); // this is inline and works
+<br/>
+<br/>
+      oam_update ( &amp;oam, 0 );   // this too
+<br/>
+<br/>
+    }
+<br/>
+<br/>
+Whit this, the sprite shows up and moves just like I want. But if I try todo this:
+<br/>
+<br/>
+ while(1)
+<br/>
+    {
+<br/>
+      for(i=0; i&lt;2000; i++)      // I know, this sucks
+<br/>
+       while(REG_VCOUNT &lt; 160);
+<br/>
+<br/>
+      key_check(key_buff);
+<br/>
+<br/>
+      movement(&amp;x, &amp;y, &amp;oam); // positioning and update are in the function itself
+<br/>
+<br/>
+<br/>
+    }
+<br/>
+<br/>
+There is  no sign of the sprite, and  neither the OAM, in fact using VBA I can't see the OAM in ram.
+<br/>
+So, I tried doing NOTHING inside the function, and keeping oam_set_pos and oam_update in the main: no sprite again. Then I tried passing the whole Oam_entry, not just the pointer, in something like  
+<br/>
+<br/>
+oam = movement (&amp;x, &amp;y, oam);
+<br/>
+<br/>
+Wich is definitely the worst thing  i could ever think, but nothing, it seems that just putting the struct as a parameter screws everything up.
+<br/>
+<br/>
+Again, sorry for my english :P Hope i'ts not too messed up :P</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#140043 - sajiimori - Thu Sep 13, 2007 12:26 am</h4>
+    <div class="postbody"><span class="postbody">I don't see anything wrong with that code, besides the timing loop.  After fixing that, post the 'movement' function.
+<br/>
+<br/>
+Here's a reasonable VBlank wait:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+while(REG_VCOUNT != 159);
+<br/>
+while(REG_VCOUNT == 159);
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#140044 - Cearn - Thu Sep 13, 2007 12:34 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Leevon wrote:</b></span></td> </tr> <tr> <td class="quote">Here is the structure:
+<br/>
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">typedef struct Oam_entry
+<br/>
+{
+<br/>
+  u16 attr0;
+<br/>
+  u16 attr1;
+<br/>
+  u16 attr2;
+<br/>
+  s16 fill;
+<br/>
+}Oam_entry;</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+The problem is simple, every non inline function destroy this, even if I pass just the pointer, even if I pass a const pointer, and now i was trying using a global variable: Nothing.
+<br/>
+<br/>
+The program works well if I use the Oam_entry only in the main(), the working loop is this:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">int main()
+<br/>
+{
+<br/>
+u8 x = 1, y=1;
+<br/>
+u32 i;
+<br/>
+Oam_entry oam;
+<br/>
+<br/>
+// set memory and oam....
+<br/>
+<br/>
+ while(1)
+<br/>
+    {
+<br/>
+      for(i=0; i&lt;2000; i++) // I know, this sucks
+<br/>
+       while(REG_VCOUNT &lt; 160);
+<br/>
+      
+<br/>
+      key_check(key_buff);
+<br/>
+<br/>
+      movement(&amp;x, &amp;y); // obviously move the sprite
+<br/>
+      
+<br/>
+      oam_set_pos(&amp;oam, x,y ); // this is inline and works
+<br/>
+<br/>
+      oam_update ( &amp;oam, 0 );   // this too
+<br/>
+<br/>
+    }
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Whit this, the sprite shows up and moves just like I want. But if I try todo this:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">while(1)
+<br/>
+    {
+<br/>
+      for(i=0; i&lt;2000; i++)      // I know, this sucks
+<br/>
+       while(REG_VCOUNT &lt; 160);
+<br/>
+      
+<br/>
+      key_check(key_buff);
+<br/>
+<br/>
+      movement(&amp;x, &amp;y, &amp;oam); // positioning and update are in the function itself
+<br/>
+    }
+<br/>
+</td> </tr></table><span class="postbody"></span></td> </tr></table><span class="postbody">
+<br/>
+You can preserve code layout through the use of [code] tags. If you're using the 2000 loop because timing seems screwy otherwise, wait for the VBlank to be over before you wait for the next one. <a class="postlink" href="http://www.coranac.com/tonc/text/video.htm#sec-vsync1" target="_blank">Example.</a>
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Leevon wrote:</b></span></td> </tr> <tr> <td class="quote">There is no sign of the sprite, and neither the OAM, in fact using VBA I can't see the OAM in ram.
+<br/>
+</td> </tr></table><span class="postbody">OAM isn't in RAM, it's in OAM :P. OAM is located at 0700:0000; RAM is at 0200:0000 and 0300:0000. If you meant VBA's memory viewer here, then nevermind this point. The variable you've called <span style="font-style: italic">oam</span> in your code actually has nothing to do with OAM just yet: it's simply a local variable (on the stack). Until you write its contents to OAM at some point, no sprites will show up. I'm assuming this is what oam_update() does, right?
+<br/>
+<br/>
+Now you say that in the second code, you do the positioning and update in movement(). I can't see anything wrong in the snippets itself, so are you <span style="font-style: italic">sure</span> you didn't miss something deeper down? When memory items seem to go wonky, it's often something somewhere else that's causing the problem, so it's important that we see as much as possible. If they're not too large, I'd like to see the initialization of oam, formatting of OAM (the pointer to OAM I mean), oam_set_pos, oam_update() and movement() in both cases.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#140073 - Leevon - Thu Sep 13, 2007 7:13 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">I don't see anything wrong with that code, besides the timing loop.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Me too :P I complied the same code (with all the needed changes) for the PC and works just well. Is the GBA that works different. That's the fun  part :P
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">OAM isn't in RAM, it's in OAM :P. OAM is located at 0700:0000; RAM is at 0200:0000 and 0300:0000. </td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Sorry i meant "the ram part used by OAMs" :P He disappear from there when i call oam_update after passing the OAM in a function. This means that the structure is destroyed i think...
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">The variable you've called oam in your code actually has nothing to do with OAM just yet: it's simply a local variable (on the stack). Until you write its contents to OAM at some point, no sprites will show up. I'm assuming this is what oam_update() does, right? </td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Indeed... Is from the stack that disappears, then from the OAM, the update overwrite the OAM mem with nothing.
+<br/>
+<br/>
+This afternoon (here in Italy now is 8:00 AM) i can post all the code in my <a href="http://FTP." target="_blank">FTP.</a>
+<br/>
+<br/>
+I will post both ROMs and two mains, if you have the time can take a look.
+<br/>
+<br/>
+Tank you all guys ^___^</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#140092 - Leevon - Thu Sep 13, 2007 2:25 pm</h4>
+    <div class="postbody"><span class="postbody">Sorry got a problem with the site. I'll put everything as soon as is solved...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#140099 - Leevon - Thu Sep 13, 2007 4:00 pm</h4>
+    <div class="postbody"><span class="postbody">Ok got the link:
+<br/>
+<br/>
+<a href="http://leevon.altervista.org" target="_blank">http://leevon.altervista.org</a>
+<br/>
+<br/>
+You can download sources and ROMs from here.
+<br/>
+<br/>
+The program is in the "bg_demo_engine" directory, the working one is "bg_demo.c" and  obviously the non working one is "bg_demo_wrong.c".
+<br/>
+<br/>
+I've included the other dirs just in case you want to compile it again. 
+<br/>
+To compile  the wrong one just "make wrong" in a devkitARM envroinment.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#140108 - Cearn - Thu Sep 13, 2007 5:42 pm</h4>
+    <div class="postbody"><span class="postbody">Thank you for uploading everything, it made things a lot easier.
+<br/>
+<br/>
+The problem is in the <a class="postlink" href="file:///E:/dev/gba/proj/tonc/prehtml/regobj.htm#sec-oam" target="_blank">definition of Oam_entry</a>. Particularly the alignment of the struct in memory. Add '__attribute__((aligned(4)))' to the definition of Oam_entry and everything works again.
+<br/>
+<br/>
+&lt;explanation technicality=100%&gt;
+<br/>
+As of DevkitARM r19, structs (and unions, etc) aren't automatically aligned to 32bits anymore; Instead, they follow the alignment of its longest member. In the case of Oam_entry, that's halfwords (16bit). Fast struct copies rely on word-alignment, but if word-alignment is not guaranteed GCC willl just use memcpy() internally, which works just as well ... usually. memcpy() will copy as words under <a class="postlink" href="file:///E:/dev/gba/proj/tonc/prehtml/bitmaps.htm#ssec-data-memcpy" target="_blank">certain conditions</a>, otherwise it'll use byte-copies. In this case, because each Oam_entry is 8 bytes long, it's a byte-copy, and byte-writes don't work in the palette, VRAM or OAM.
+<br/>
+<br/>
+The solution is to force word-alignment with the <span style="font-style: italic">aligned</span> attribute on structs that don't have 32bit members. Then it'll use proper struct copies and everything will be fine. Alternatively, copy member for member.
+<br/>
+<br/>
+Now, the reason the 'right' version worked is because it wasn't a loose Oam_entry: it was embedded in a Sprite struct, which has a pointer-member (behaviour). Pointers are 32bit, so the struct has 32bit alignment; and because oam is the first member, it'll have guaranteed 32bit alignment as well, so the struct-copy is still good.
+<br/>
+&lt;/explanation&gt;
+<br/>
+<br/>
+So basically, you got caught between some <span style="font-style: italic">very</span> specific compiler and hardware circumstances. GBA programming is like that sometimes :P
+<br/>
+<br/>
+I should also point out that your oam_set_pos function may be problematic. The <span style="font-style: italic">x</span> field is 9 bits long, not 8. Also, negative <span style="font-style: italic">x</span> and <span style="font-style: italic">y</span> values do have some meaning: to have the sprite partially visible on the left or top side. That's why the standard version usually looks like this:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">static inline void oam_set_pos ( Oam_entry* oam, int x, int y)
+<br/>
+{
+<br/>
+   oam-&gt;attr0= (oam-&gt;attr0 &amp;~ 0x00FF) | (y &amp; 0x00FF);
+<br/>
+   oam-&gt;attr1= (oam-&gt;attr1 &amp;~ 0x01FF) | (x &amp; 0x01FF);
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#140114 - Leevon - Thu Sep 13, 2007 6:05 pm</h4>
+    <div class="postbody"><span class="postbody">Thank you so much *_________*
+<br/>
+<br/>
+For everything *_* from the technical things to the right spell of beahaviour!
+<br/>
+<br/>
+Now everything works! The behaviour func now takes a Struct*, so i can just made an array of sprites and move them in a single-line for loop *_*
+<br/>
+<br/>
+Thanks so much ^_^</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

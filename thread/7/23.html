@@ -1,0 +1,387 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Makefile dependencies - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>C/C++ > Makefile dependencies</h2>
+<div id="posts">
+<div class="post">
+    <h4>#114 - regularkid - Fri Jan 03, 2003 5:17 am</h4>
+    <div class="postbody"><span class="postbody">Quick GBA makefile question. Instead of doing this:
+<br/>
+main.o : main.c common.h blah.h junk.h, etc
+<br/>
+<br/>
+I heard that you could do this:
+<br/>
+DEPEND= makedepend $(CFLAGS)
+<br/>
+      etc...
+<br/>
+# what are the source dependencies
+<br/>
+<br/>
+depend: main.c
+<br/>
+      $(DEPEND) main.c
+<br/>
+<br/>
+      etc....
+<br/>
+# DO NOT DELETE THIS LINE -- ....
+<br/>
+main.o: /usr/include/stdio.h
+<br/>
+<br/>
+In order to find out what header files are included into a source file. Is there a way of doing this in gcc for GBA? Also, how does this work? This is where I got that info from: 
+<br/>
+<br/>
+<a class="postlink" href="http://vertigo.hsrl.rutgers.edu/ug/make_help.html" target="_blank">http://vertigo.hsrl.rutgers.edu/ug/make_help.html</a>
+<br/>
+<br/>
+at the bottom of the page.
+<br/>
+<br/>
+Thanks!<br/>_________________<br/>- RegularKid</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#124 - Touchstone - Fri Jan 03, 2003 6:33 pm</h4>
+    <div class="postbody"><span class="postbody">Funny you should ask. I've just managed to automatically generate dependencies in the makefile.
+<br/>
+<br/>
+I've added a new target in my makefile called 'depend' and it looks something like this:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">depend :
+<br/>
+   $(GCC_DIR)/gcc -c -M $(CFILES) &gt; $(CDEPEND)</td> </tr></table><span class="postbody">
+<br/>
+<span style="font-weight: bold">GCC_DIR</span> is just the path to my gcc executable
+<br/>
+<span style="font-weight: bold">CFILES</span> is a list of all the C files in the project (just listed as 'main.c input.c sound.c' etc..)
+<br/>
+<span style="font-weight: bold">CDEPEND</span> is just the filename of my dependency file, in my case 'cdepend'
+<br/>
+<br/>
+It's the switch '-M' that makes GCC generate dependencies to stdout which is piped to the file cdepend. When this is done you have to include the dependency file in your makefile. I've put the include statemend in the end of my makefile like so:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">include $(CDEPEND)</td> </tr></table><span class="postbody">
+<br/>
+To generate the dependency file just ask for the 'depend' target when making like so from your command-line: <span style="font-weight: bold">make depend</span>
+<br/>
+<br/>
+<br/>
+As a supplementary, this is what my entire dependency target looks like (running on Mac OS X):
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">depend :
+<br/>
+   @echo Generating dependencies
+<br/>
+   $(SILENT)$(SHELL) -ec '$(GCC_DIR)/gcc -c -M $(CFILES) \
+<br/>
+   | sed '\''s/^[a-z]/$(subst /,\/,$(OBJDIR))&amp;/g'\'' &gt; $(CDEPEND)'</td> </tr></table><span class="postbody">
+<br/>
+First I generate the dependencies to stdout which is piped to the program sed's stdin. Sed process the text-stream, adding the text $(OBJDIR) before all dependency targets then sending the processed text to it's stdout which is piped to the file $(CDEPEND). This is because I need the dependency targets to look like <span style="font-weight: bold">build/obj/main.o: src/main.c src/main.h src/input.h</span> instead of <span style="font-weight: bold">main.o: src/main.c src/main.h src/input.h</span>. Notice the added directory in the target name. This is because I don't want the object files laying around the same directory as the source-files.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#158 - regularkid - Sat Jan 04, 2003 1:34 am</h4>
+    <div class="postbody"><span class="postbody">Thanks! But I'm still a tad bit confused, could you post your entire makefile? Basically, I want mine to work where I give it all my .c files and then it only builds the ones that need to be build (ie. the ones where an included header file has changed or the .c file itself has changed). That is where the dependency comes in. It would be really tedious to have to update the makefile with each .h that an .o file is dependent on. Example: If I have this:
+<br/>
+<br/>
+main.o : main.c common.h junk.h blah.h
+<br/>
+    gcc -c main.c
+<br/>
+<br/>
+and, say I add:
+<br/>
+<br/>
+#include "anotherInclude.h"
+<br/>
+<br/>
+to main.c . I don't want to have to update my makefile to look like this:
+<br/>
+<br/>
+main.o : main.c common.h junk.h blah.h anotherInclude.h
+<br/>
+    gcc -c main.c
+<br/>
+<br/>
+I want all my makefile lines to only have the .c file that an .o file is dependent on and then have it automatically generate what .h files the .o file is also dependent on. Is that what yours does? Thanks again.<br/>_________________<br/>- RegularKid</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177 - Touchstone - Sat Jan 04, 2003 1:15 pm</h4>
+    <div class="postbody"><span class="postbody">Uhm, my makefile could be a bit confusing if you are not used to them. Anyways, what my makefile does is generate a list of dependencies for all object files and then I have a 'generic' (I think it's called generic) .o from .c target that defines how each C file should be compiled. That way I just have my list of C files that should be compiled and I have the .O files dependencies. Argh, I'm so confused from a cold I can't explain it properly. Here is my makefile:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">GCC_DIR = /usr/local/gbasdk/arm-agb-elf/bin
+<br/>
+CC   = $(GCC_DIR)/gcc
+<br/>
+<br/>
+BLDDIR   = release/
+<br/>
+SRCDIR   = src/
+<br/>
+OBJDIR   = $(BLDDIR)obj/
+<br/>
+<br/>
+SILENT   = @
+<br/>
+<br/>
+CFILES   =   src/main.c
+<br/>
+CFILES   +=   src/sys/input.c
+<br/>
+CFILES   +=   src/sys/file.c
+<br/>
+CFILES   +=   src/game/gamecontext.c
+<br/>
+CFILES   +=   src/game/gcIntro.c
+<br/>
+CFILES   +=   src/sys/mt.c
+<br/>
+#CFILES   +=   src/game/anima.c
+<br/>
+CFILES   +=   src/sys/Math.c
+<br/>
+CFILES   +=   src/sys/Graphics.c
+<br/>
+CFILES   +=   src/sys/Tweety.c
+<br/>
+#CFILES   +=   src/game/gcExplore.c
+<br/>
+#CFILES   +=   src/game/gcUnarmedFight.c
+<br/>
+#CFILES   +=   src/data/Animations.c
+<br/>
+<br/>
+#         src/sys/debug.c
+<br/>
+#         src/sys/dbgFont.c
+<br/>
+<br/>
+<br/>
+SFILES   = src/crt0.s src/data/libfile.s
+<br/>
+<br/>
+OFILES   = $(subst $(SRCDIR),$(OBJDIR),$(SFILES:.s=.o)) \
+<br/>
+      $(subst $(SRCDIR),$(OBJDIR),$(CFILES:.c=.o))
+<br/>
+      
+<br/>
+<br/>
+BINFILE   = $(BLDDIR)ProjectB.bin
+<br/>
+ELFFILE   = $(BLDDIR)ProjectB.elf
+<br/>
+MAPFILE   = $(BLDDIR)ProjectB.map
+<br/>
+CDEPEND   = cdepend
+<br/>
+<br/>
+CFLAGS   = -I -mthumb -mthumb-interwork -g -Wall -fverbose-asm
+<br/>
+SFLAGS   = -mthumb-interwork
+<br/>
+LFLAGS   = -Tbss 0x03000000 -Tdata 0x08000000 -Ttext 0x08000000
+<br/>
+<br/>
+<br/>
+$(BINFILE) : depend makefile $(ELFFILE)
+<br/>
+   @echo Stripping ELF information
+<br/>
+    $(SILENT)$(GCC_DIR)/objcopy -v -O binary $(ELFFILE) $(BINFILE)
+<br/>
+<br/>
+$(ELFFILE) : $(OFILES) makefile
+<br/>
+   @echo Linking $@
+<br/>
+   @-mkdir -p $(dir $@)
+<br/>
+   $(SILENT)$(GCC_DIR)/ld -o $(ELFFILE) -Map $(MAPFILE) $(LFLAGS) $(OFILES)
+<br/>
+<br/>
+$(OBJDIR)%.o : $(SRCDIR)%.c makefile
+<br/>
+   @echo Compiling file $&lt;
+<br/>
+   @-mkdir -p $(dir $@)
+<br/>
+   $(SILENT)$(GCC_DIR)/gcc -c -o $@ $(CFLAGS) $&lt;
+<br/>
+<br/>
+$(OBJDIR)%.o : $(SRCDIR)%.s
+<br/>
+   @echo Assembling file $&lt;
+<br/>
+   @-mkdir -p $(dir $@)
+<br/>
+   $(SILENT)$(GCC_DIR)/as -o $@ $(SFLAGS) $&lt;
+<br/>
+<br/>
+clean :
+<br/>
+   @echo Removing intermediate files
+<br/>
+   -$(SILENT)rm $(BINFILE) $(ELFFILE) $(MAPFILE) $(OFILES) $(CDEPEND)
+<br/>
+<br/>
+depend :
+<br/>
+   @echo Generating dependencies
+<br/>
+   $(SILENT)$(SHELL) -ec '$(GCC_DIR)/gcc -c -M $(CFILES) \
+<br/>
+   | sed '\''s/^[a-z]/$(subst /,\/,$(OBJDIR))&amp;/g'\'' &gt; $(CDEPEND)'
+<br/>
+<br/>
+$(CDEPEND) : depend
+<br/>
+<br/>
+test :
+<br/>
+<br/>
+all : clean depend $(BINFILE)
+<br/>
+<br/>
+release : $(BINFILE)
+<br/>
+<br/>
+debug :
+<br/>
+   @echo $(CFLAGS)
+<br/>
+<br/>
+include $(CDEPEND)</td> </tr></table><span class="postbody">
+<br/>
+What you are interested in is the 'generic' .O target. A cleaner target would look like this:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">%.o : %.c
+<br/>
+   gcc -c -o $@ $(CFLAGS) $&lt;</td> </tr></table><span class="postbody">
+<br/>
+That way, if you have an .o target that is dependant on a .c file (instead of a .s file) the target <span style="font-weight: bold">%.o : %.c</span> is what's executed. With this generic target in place you just write down your .o dependencies to look like this:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">main.o : main.c .. all dependencies goes here</td> </tr></table><span class="postbody">
+<br/>
+Incidentally this is the format you get when you let gcc automatically generate dependencies with this command line:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">gcc -c -M main.c</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Hmm, a simple makefile that uses this automatic dependency thingie without getting to complex could look like this:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+SFILES = crt0.s
+<br/>
+CFILES = main.c
+<br/>
+OFILES = $(SFILES:.s=.o) $(CFILES:.c=.o)
+<br/>
+<br/>
+CFLAGS   = -I -mthumb -mthumb-interwork -g -Wall -fverbose-asm
+<br/>
+SFLAGS   = -mthumb-interwork
+<br/>
+LFLAGS   = -Tbss 0x03000000 -Tdata 0x08000000 -Ttext 0x08000000
+<br/>
+<br/>
+test.bin : test.elf
+<br/>
+   objcopy -v -O binary test.elf test.bin
+<br/>
+<br/>
+test.elf : $(OFILES)
+<br/>
+   ld -o test.elf $(LFLAGS) $(OFILES)
+<br/>
+<br/>
+%.o : %.c
+<br/>
+   gcc -c -o $@ $(CFLAGS) $&lt;
+<br/>
+<br/>
+%.o : %.s
+<br/>
+   as -o $@ $(SFLAGS) $&lt;
+<br/>
+<br/>
+depend :
+<br/>
+   gcc -c -M $(CFILES) &gt; makedepend
+<br/>
+<br/>
+include makedepend
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I don't know if that makefile works because I just tossed it together but if it does work you use it by first doing 'make depend' to generate the file 'makedepend'. In this 'makedepend' all .o files that are generated from .c files are listed with dependencies. The just call 'make' again when you have the 'makedepend' file. You probably need to have a target for the .s files to.
+<br/>
+<br/>
+Try out the <span style="font-weight: bold">gcc -c -M main.c</span> and you will see that it generates dependencies for you. That, in combination with the generic .O from .C target is what you are interested in.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#271 - regularkid - Sun Jan 05, 2003 8:20 pm</h4>
+    <div class="postbody"><span class="postbody">Dude! You are awsome! Thank you soo much for explaining that all to me. I think I understand now. I've asked this question before but no one has given me a good answer until you! Thanks again.<br/>_________________<br/>- RegularKid</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#283 - Touchstone - Sun Jan 05, 2003 10:41 pm</h4>
+    <div class="postbody"><span class="postbody">Cool.. Thanks!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#336 - KashinKoji - Mon Jan 06, 2003 5:32 pm</h4>
+    <div class="postbody"><span class="postbody">Hey touchstone I've been thinking of that same problem. Thanks for posting those makefile portions. Have you also put in BMP's or other graphics files into your dependencies, so they are converted with gfx2gba or another tool if they are updated between makes?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#365 - Touchstone - Mon Jan 06, 2003 9:41 pm</h4>
+    <div class="postbody"><span class="postbody">You're welcome Koji.
+<br/>
+<br/>
+I don't convert data in my makefiles. There are two reasons why I decided against doing so.
+<br/>
+<br/>
+<ul>1) <span style="text-decoration: underline">Version control.</span> I simply don't want new data to be linked into my executable without me explicitly asking for it. Say an artist is updating some sprite data and the new data is erroneous, you might think the problem is because of something in your code. In that case it's better to isolate the retreival of new data so you can verify that the new data works before going back to code.
+<br/>
+<br/>
+2) <span style="text-decoration: underline">Unified data access.</span> I've written an data access interface which I'm using through all of my code which allows all kinds of data that is accessed via this interface to be compressed for instance. (ok, compression isn't supported yet but that's the idea anyways :)</ul>
+<br/>
+<br/>
+I could use a makefile to convert my data and still comply with my notes above but I don't do that at the moment. I used to be developing on PC (Win32) but I've recently switched to Mac OS X so now I'll have to decide on how I should manage the conversion of all my data. There's actually quite much to take into considerations. :) For instance, should I get the source BMP file from my artist or should he do the conversion from BMP to plain BINARY and hand me the BINARY? Should I supply my artist with a testbed on which he can test his latest data without bothering me about it? Up until now I've converted all files by hand as the artist have had a new version done but I'm rethinking all of this as I have to recode all the tools anyway.<br/>_________________<br/>You can't beat our meat</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#409 - KashinKoji - Tue Jan 07, 2003 3:43 pm</h4>
+    <div class="postbody"><span class="postbody">I see your point. 
+<br/>
+I was thinking I would implement my makefile to do the conversions because I see myself doing a lot of tweaking in that department. So far I just use the GIMP to do my sprite design, and I convert with command line gfx2gba.  
+<br/>
+I thought I would wind up rebuilding with new sprite data quite a lot to get the right" look". The further I go into this gba development (and video game development in general, I am rather new at) I realize that the right look I'm looking for is actually the right "feel", and is more dependant on the mathematical behavior of the sprite in motion, and I must humbly outsource the artwork to someone else. 
+<br/>
+I arranged with an artist friend of mine to do sprite design/animation and I am making a simple test program so that he can run his stuff on an emulator. He is not a programmer, so I thought a makefile with data dependancies would be good for that purpose, in the frame of a completely static test program with no updating going on except the sprite data.
+<br/>
+<br/>
+Thanks for the input.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#436 - Ped - Tue Jan 07, 2003 6:30 pm</h4>
+    <div class="postbody"><span class="postbody">I posted some sort of "universal" makefile to GBA dev mailing list few months ago and I never get any response or comments, but it looks like you might be the right person to give it a look... I'm also doing gfx conversions in makefile .. mail me some "request" e-mail, I'll send it to you. (but basically most of the info is already written here, it may be worth just like another example)<br/>_________________<br/>--  Ped - ped at 7gods dot sk
+<br/>
+there used to be times, when sex was safe and flying was dangerous...</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

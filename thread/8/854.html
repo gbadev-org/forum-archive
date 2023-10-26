@@ -1,0 +1,293 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Multiboot & Burst Boot - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>ASM > Multiboot & Burst Boot</h2>
+<div id="posts">
+<div class="post">
+    <h4>#4257 - arundel - Wed Mar 26, 2003 1:56 am</h4>
+    <div class="postbody"><span class="postbody">Hi everybody. You may find this little piece of code useful. It should work with goldroad and maybe GAS (Intel syntax). Most of it has been writen by Martin Korth. However it was written for the a22i (at&amp;t syntax) assembler, which is the assembler build into his no$gba emulator. Since only a few people use this assembler (too bad Martin discontinued the shareware version. stupid crackers :[) I changed the syntax. Works great.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">@arm
+<br/>
+@textarea $02000000                    ;Set origin to external WRAM
+<br/>
+ b   rom_start                          ;rom entry point
+<br/>
+ @dcd   0x051AEFF24,0x021A29A69,0x00A82843D,0x0AD09E484,0x0988B2411   ;nintendo
+<br/>
+ @dcd   0x0217F81C0,0x019BE52A3,0x020CE0993,0x04A4A4610,0x0EC3127F8   ;logo
+<br/>
+ @dcd   0x033E8C758,0x0BFCEE382,0x094DFF485,0x0C1094BCE,0x0C08A5694   ;one byte
+<br/>
+ @dcd   0x0FCA77213,0x0734D849F,0x0619ACAA3,0x027A39758,0x0769803FC   ;wrong and the
+<br/>
+ @dcd   0x061C71D23,0x056AE0403,0x0008438BF,0x0FD0EA740,0x003FE52FF   ;gba won't initialise
+<br/>
+ @dcd   0x0F130956F,0x085C0FB97,0x02580D660,0x003BE63A9,0x0E2384E01   ;the game
+<br/>
+ @dcd   0x0FF34A2F9,0x044033EBB,0x0CB900078,0x0943A1188,0x0637CC065   ;
+<br/>
+ @dcd   0x0AF3CF087,0x08BE425D6,0x072AC0A38,0x007F8D421               ;
+<br/>
+ @dcb   "TITLE HERE  "                  ;title (12 bytes)
+<br/>
+ @dcb   "MB  ",  0,0                    ;game code (4 bytes), maker code (2 bytes)
+<br/>
+ @dcb   0x96,0,0                        ;fixed value 96h, main unit code, device type
+<br/>
+ @dcb   0,0,0,0,0,0,0                   ;reserved (7 bytes)
+<br/>
+ @dcb   0                               ;software version number
+<br/>
+ @dcb   0                               ;header checksum (set by .fix)
+<br/>
+ @dcb   0,0                             ;reserved (2 bytes)
+<br/>
+<br/>
+ b   wram_start                         ;multiboot ram entry point
+<br/>
+ @dcb   0,0                             ;multiboot reserved bytes (destroyed by BIOS)
+<br/>
+ @dcb   0,0                             ;blank padded (32bit alignment)</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+<span style="font-weight: bold"><span style="color: red">^^Multiboot Header^^</span></span>
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code"> msg_boot @dcb "BOOT"                   ;reply prepared for boot
+<br/>
+ msg_okay @dcb "OKAY"                   ;reply prepared to receive length/bytes
+<br/>
+ msg_brst @dcb "BRST"                   ;ID sent by PC (XBOO)
+<br/>
+<br/>
+irq_handler:                           ;interrupt handler (note: r0-r3 are pushed by BIOS)
+<br/>
+ mov   r1,0x4000000                     ;get I/O base address,
+<br/>
+ ldr   r0,[r1,0x200]                    ;read IE and IF,
+<br/>
+ and   r0,r0,r0,lsr 16                  ;isolate occurred AND enabled irqs,
+<br/>
+ add   r3,r1,0x200                      ;and acknowledge these in IF
+<br/>
+ strh   r0,[r3,2]
+<br/>
+ ldrh   r3,[r1,-8]                      ;mix up with BIOS irq flags at 3007FF8h,
+<br/>
+ orr   r3,r3,r0                         ;aka mirrored at 3FFFFF8h, this is required
+<br/>
+ strh   r3,[r1,-8]                      ;when using the (VBlank-)IntrWait functions
+<br/>
+ and   r3,r0,0x80                       ;IE/IF.7 SIO
+<br/>
+ cmp   r3,0x80                          ;check if it's a burst boot interrupt
+<br/>
+ ldreq  r2,[r1,0x120]                   ;SIODATA32 (if interrupt caused by serial transfer,
+<br/>
+ ldreq  r3,[msg_brst]                   ;and if received data is "BRST",
+<br/>
+ cmpeq  r2,r3                           ;then jump to burst boot)
+<br/>
+ beq   burst_boot
+<br/>
+ ;... insert your own interrupt handler code here ...
+<br/>
+ bx    lr                               ;return to the BIOS interrupt handler
+<br/>
+<br/>
+burst_boot:                            ;requires incoming r1=4000000h
+<br/>
+ ;... if your program uses DMA, disable any active DMA transfers here ...
+<br/>
+ ldr   r4,[msg_okay]                    ;tell SIO to receive length/bytes
+<br/>
+ bl   sio_transfer
+<br/>
+ mov   r2,r0                            ;now r2 holds length
+<br/>
+ mov   r3,0x3000000                     ;the destination for the actual burst loader
+<br/>
+ mov   r4,0                             ;reply will be ignored while getting the burst loader
+<br/>
+<br/>
+lop:                                   ;this loop will download the burst loader and do a crc checking
+<br/>
+ bl   sio_transfer                      ;download burst loader to 3000000h and up
+<br/>
+ stmia r3!,[r0]                         ;store recieved data in r3 and do a writeback on 3000000h
+<br/>
+ add   r4,r4,r0                         ;add every new data segemnt together (crc)
+<br/>
+ subs  r2,r2,4                          ;correct the length
+<br/>
+ bhi   lop                              ;loop while not all the data has been sent/received
+<br/>
+ bl   sio_transfer                      ;exchange crc values to ensure correct transfer
+<br/>
+ b    0x3000000                         ;now start the actual burst loader and let it download your program to external WRAM ($02000000)
+<br/>
+<br/>
+sio_transfer:                          ;This routine is for sending/receiving data                     
+<br/>
+                                       ;(32bit, normal mode, external clock/timing)
+<br/>
+ str   r4,[r1,0x120]                    ;what shall be send to the PC
+<br/>
+ ldr   r0,[r1,0x128]                    ;pop some value?
+<br/>
+ orr   r0,r0,0x80                       ;?
+<br/>
+ str   r0,[r1,0x128]                    ;change some value?
+<br/>
+ .wait:                                 ;Here we wait until the transfer is complete
+<br/>
+  ldr   r0,[r1,0x128]                  ;PC will set $04000128 to $80 when it finishes transfer
+<br/>
+  tst   r0,0x80
+<br/>
+  bne   wait
+<br/>
+  ldr   r0,[r1,0x120]                  ;get the data the PC sent us (saved at $04000120-$04000128)
+<br/>
+bx   lr
+<br/>
+<br/>
+init_interrupts:
+<br/>
+ mov  r4,0x04000000                     ;base address for below I/O registers
+<br/>
+ ldr  r0,=irq_handler                   ;install IRQ handler address
+<br/>
+ str  r0,[r4,-4]                        ;bios will call funktion at 3FFFFFC upon any interrupt
+<br/>
+ mov  r0,0x0008                         ;enable generating vblank irqs
+<br/>
+ strh r0,[r4,0x4]                       ;DISPSTAT
+<br/>
+ mrs  r0,cpsr                           ;?
+<br/>
+ bic  r0,r0,0x80                        ;cpu interrupt enable (clear i-flag)
+<br/>
+ msr  cpsr,r0                           ;?
+<br/>
+ mov  r0,0
+<br/>
+ str  r0,[r4,0x134]                     ;init SIO normal mode, external clock,
+<br/>
+ ldr  r0,=0x5080                        ;32bit, IRQ enable, transfer started
+<br/>
+ str  r0,[r4,0x128]                     ;output "BOOT" (indicate burst boot prepared)
+<br/>
+ ldr  r0,[msg_boot]
+<br/>
+ str  r0,[r4,0x120]                     ;SIODATA32
+<br/>
+ mov  r0,1                              ;interrupt master enable
+<br/>
+ str  r0,[r4,0x208]                     ;IME=1
+<br/>
+ mov  r0,0x81                           ;enable execution of vblank IRQs,
+<br/>
+ str  r0,[r4,0x200]                     ;?
+<br/>
+ bx   lr</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+<span style="font-weight: bold"><span style="color: red">^^Burst Boot^^</span></span>
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">download_rom_to_wram:
+<br/>
+ mov   r1,0x08000000                    ;ROM (source)
+<br/>
+ mov   r2,0x02000000                    ;WRAM (destination)
+<br/>
+ mov   r3,0x100                         ;amount (256 kbyte)
+<br/>
+ .copyloop:
+<br/>
+  ldmia   r1!,{r4-r7}                  ;multiple ldr
+<br/>
+  stmia   r2!,{r4-r7}                  ;multiple str
+<br/>
+  subs   r3,r3,1
+<br/>
+ bne   copyloop
+<br/>
+ sub   r15,lr,0x08000000-0x02000000     ;set new value for r15 (PC)</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+<span style="font-weight: bold"><span style="color: red">^^Copy Rom to WRAM^^</span></span>
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">rom_start:                             ;entry for Cartridge (ROM)
+<br/>
+ bl   download_rom_to_wram              ;download ROM to WRAM and return
+<br/>
+wram_start:                            ;entry for Multiboot (WRAM)
+<br/>
+ mov   r0,$0fe                          ;Reset all registers except
+<br/>
+ swi   $10000                           ;external WRAM (02000000)
+<br/>
+ bl   init_interrupts
+<br/>
+@pool
+<br/>
+@endarea</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+<span style="font-weight: bold"><span style="color: red">^^Main Routine^^</span></span>
+<br/>
+<br/>
+<br/>
+Puhhh...<br/>_________________<br/><span style="font-weight: bold">http://www.nausicaa.net</span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#5900 - Jason Wilkins - Mon May 12, 2003 3:54 pm</h4>
+    <div class="postbody"><span class="postbody">I was wondering, what is this Burst Boot you talk about, and why is it so useful?
+<br/>
+<br/>
+How would I use this code you have posted?<br/>_________________<br/><a href="http://devkitadv.sourceforge.net" target="_blank">http://devkitadv.sourceforge.net</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#5914 - torne - Mon May 12, 2003 7:36 pm</h4>
+    <div class="postbody"><span class="postbody">Burst Boot is a backdoor that the no$gba developer suggested; it's to allow you to download one game after another through a PC multiboot cable and play them without rebooting. Basically, it just listens for a certain magic string, then when it receives it, stops the current program, downloads the data into ewram over the previous binary, and just jumps back to the start, thus avoiding having to reset the gba or watch the nintendo logo again. So as long as all the PD roms you are using support it, testing stuff via mb cable is fast =)
+<br/>
+<br/>
+The whole multiboot protocol is documented in the no$gba manual, and the code posted in this thread by the kind arundel is a translation from a22i assembler syntax into goldroad syntax of the example implementation.
+<br/>
+<br/>
+It might be a nice thing to add into devkitadvance, if you like it, Jason. =)
+<br/>
+<br/>
+Torne</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#5917 - Jason Wilkins - Mon May 12, 2003 7:57 pm</h4>
+    <div class="postbody"><span class="postbody">Ok, this would be awesome then because DevKit Advance currently has about 60 test ROMs produced by my testsuite project, and will only get more in the future.  A great number of tests can be done as multiboot programs, so I could develop a script to string them together and test them all very quickly.
+<br/>
+<br/>
+Although, I could probably do something similar by concatenating a bunch of MB images into a cart and having each one load the next one when its finished.
+<br/>
+<br/>
+I'm not completely sure yet, but has given me another option.<br/>_________________<br/><a href="http://devkitadv.sourceforge.net" target="_blank">http://devkitadv.sourceforge.net</a></span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

@@ -1,0 +1,175 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Which kind of number works the fastest on the DS? - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Which kind of number works the fastest on the DS?</h2>
+<div id="posts">
+<div class="post">
+    <h4>#141252 - NeX - Sun Sep 23, 2007 4:10 pm</h4>
+    <div class="postbody"><span class="postbody">I am intending to do loads of calculations on small numbers (0-15).  At the moment, I am using u8s.  What is the fastest number the DS can calculate under LibNDS?  I've heard INTs but I am not sure.<br/>_________________<br/><a class="postlink" href="http://www.mediafire.com/?cuyb10fzdz2" target="_blank">Strummer</a> or <a class="postlink" href="http://www.mediafire.com/?71zxcztscix" target="_blank">Drummer?</a>.  
+<br/>
+Or maybe you would rather play with sand? <a class="postlink" href="http://www.mediafire.com/?a05z5wmdvxm" target="_blank">Sandscape is for you in that case.</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#141257 - Peter - Sun Sep 23, 2007 4:29 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>NeX wrote:</b></span></td> </tr> <tr> <td class="quote">I am intending to do loads of calculations on small numbers (0-15).  At the moment, I am using u8s.  What is the fastest number the DS can calculate under LibNDS?  I've heard INTs but I am not sure.</td> </tr></table><span class="postbody">
+<br/>
+Once the value is loaded into a register, it's 32bit anyway. The "problem" with datatypes which are not 32bit in size is that the compiler must generate extra code to enforce the value-range.
+<br/>
+<br/>
+For example an 8bit value can be 0..255, but since registers are 32bit, the compiler generates code to clear all bits except the lower 8:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+void foobar(unsigned char value)
+<br/>
+{
+<br/>
+  // the compiler generates something like this
+<br/>
+  // to make sure the value is in range 0..255
+<br/>
+  value &amp;= 255;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+This can make your program run a little slower. This applies also if you load a value from memory. To "workaround" this behaviour, we can simply use a 32bit datatype as parameter and the extra generated instruction won't be there.
+<br/>
+<br/>
+But it highly depends where your data is located. For example on the AGB, where the ROM bus is only 16bits wide, I gained a lot of performance to reduce some lookup-tables from 32bit to 16bit. If your data is located in RAM, 32bit variables can be faster.
+<br/>
+<br/>
+However, this highly depends on the situation and there is no general rule of thumb from my experience. I usually check the generated assembler code and use a profiler to make optimizations, everything else is just like poking around in the dark.
+<br/>
+<br/>
+Hope it helps<br/>_________________<br/>Kind Regards,
+<br/>
+Peter</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#141419 - jonezer4 - Tue Sep 25, 2007 4:57 am</h4>
+    <div class="postbody"><span class="postbody">Is using short ints faster or at least less memory intensive than ints and long ints?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#141439 - Cearn - Tue Sep 25, 2007 3:39 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>jonezer4 wrote:</b></span></td> </tr> <tr> <td class="quote">Is using short ints faster or at least less memory intensive than ints and long ints?</td> </tr></table><span class="postbody">
+<br/>
+No. And yes. And maybe. It's ... complicated. 'int' and 'long' are equivalent datatypes by the way.
+<br/>
+<br/>
+In rough terms, you have two types of data: stuff in registers and stuff in memory. Global variables, arrays, structs live in memory. Here the smaller types obviously use less memory. However, any actual work is done in registers, so before you can use memory-based data, it has to be loaded into a register first, operated on, and then perhaps stored back into memory again. For example:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">global++;
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+What the CPU sees is this:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">register= global;
+<br/>
+register++;
+<br/>
+global= register;
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+As Peter says, these registers are always 32-bit. And because they're 32-bit, every time you work on <span style="font-style: italic">non</span>-32-bit stuff, it has to be cut down to that size again. This is usually done by two extra shift instructions. For example:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">u8 sum(u8 a[], u16 count)
+<br/>
+{
+<br/>
+    u16 ii, sum=0;
+<br/>
+    for(ii=0; ii&lt;count; ii++)
+<br/>
+        sum += a[ii];
+<br/>
+<br/>
+    return sum;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+What actually happens this:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">u8 sum(u8 a[], u16 count)
+<br/>
+{
+<br/>
+    u16 ii, sum=0;
+<br/>
+    u32 tmp;
+<br/>
+<br/>
+    for(ii=0; ii&lt;count; )
+<br/>
+    {
+<br/>
+        tmp= a[ii];
+<br/>
+        sum += tmp;
+<br/>
+        sum &lt;&lt;= 16;
+<br/>
+        sum &gt;&gt;= 16;
+<br/>
+<br/>
+        ii++;
+<br/>
+        ii &lt;&lt;= 16;
+<br/>
+        ii &gt;&gt;= 16;
+<br/>
+    }
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+The the local variables <span style="font-style: italic">ii</span> and <span style="font-style: italic">sum</span> are registers; local variables usually are. This means that for them to be non-ints (i.e., non-32-bit) variables, every action on them is followed by two shift instructions.
+<br/>
+<br/>
+<span style="font-style: italic">count</span> is also already in a register, because the parameters of a function always are (technically only the first four are and later ones go on the stack (in memory), but before use, they'd have to be loaded back into registers anyway). As a side note, because the datatype of <span style="font-style: italic">count</span> is non-32-bit, you have two extra shifts for that as well before the function is called (unless it's a constant, in which case the compiler can tell if it fits u16 already; like I said, it's complicated).
+<br/>
+<br/>
+Basically, using non-ints (bytes or halfwords, doesn't matter) for the local variables and the parameters means two extra instructions for every arithmetic operation done on them. I haven't tested this DS-wise, but I reckon the routine takes about 40%-50% longer purely because of not using ints for the local variables. In more complicated routines like color adjustments, that could very well go up to 100%. On the DS, it also has an extra problem: all these extra instructions clog up cache, making things slower still. For locals, <span style="font-weight: bold">always</span> use int or u32.
+<br/>
+<br/>
+As said, for memory-resident data, small types mean less memory. The only reason they may be faster is due to bus-sizes, but because the CPU has better support for loading/storing 32-bit stuff, you may lose that benefit again anyway.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#141536 - strager - Wed Sep 26, 2007 7:02 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Cearn wrote:</b></span></td> </tr> <tr> <td class="quote">As said, for memory-resident data, small types mean less memory. The only reason they may be faster is due to bus-sizes, but because the CPU has better support for loading/storing 32-bit stuff, you may lose that benefit again anyway.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+In addition/clarification, the ARM processors used by the DS (and GBA) cannot preform optimized array calculations as fast for halfword (short) arrays than for byte (char) or word (int) arrays.  This is because for halfword access, the processor does not have the luxury of shifting the address offset, while for byte and word transfers it does.  For example, to access one element of a halfword array, you must first shift the address left by one bit then read from memory.  This takes just one 1S cycle; however, these cycles can really add up if a lot of indexes are being used (e.g. in a loop).
+<br/>
+<br/>
+Otherwise, for all three data types (not including double-word), there is no need to mask the data, since this is automatically done by the processor.  The only limit is the data bus.
+<br/>
+<br/>
+For small LUTs in DTCM, I've noticed that changing "u16" to "u32" speeds up the functions that use the LUT.  These LUTs were access many (thousands per second) times, and were not cached.  I didn't intensively profile the change, however, so it may have been some other strange condition that sped the code up.
+<br/>
+<br/>
+(I'm probably wrong somewhere (or everywhere).  Don't take my word as fact...)</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

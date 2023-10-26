@@ -1,0 +1,168 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Problem with BG rotation - FIXED - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Problem with BG rotation - FIXED</h2>
+<div id="posts">
+<div class="post">
+    <h4>#101583 - Omegas - Wed Sep 06, 2006 7:09 pm</h4>
+    <div class="postbody"><span class="postbody">I'm trying to rotate a 256x256 exrot background around the center of the screen (x=128, y=96). The BG_Rotation libnds example looks like it's trying to accomplish this so I took the code and tried it with my own images. I soon noticed that the rotation seems to be off-center for some reason. To confirm this I made a test background that has a dot in the middle and a crosshair showing where the rotation center should be. You can download this test at <a class="postlink" href="http://www.vilminko.net/henri/nds/rot_test.zip" target="_blank">http://www.vilminko.net/henri/nds/rot_test.zip</a>. The code is taken from the rotation example, I just added the crosshair image on BG2. Use L/R to rotate the image and you'll see that the center of rotation lies a dozen pixels down and left from the middle point of the screen.
+<br/>
+<br/>
+Please don't tell me to read the Tonc chapter about affine transformations... That's what I did first and didn't find anything useful about rotating <span style="font-style: italic">and</span> scrolling backgrounds at the same time. I would appreciate it if someone could tell me how this bit is derived though:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">BG3_CX = (scrollX&lt;&lt;8) - rcX * (c - s);
+<br/>
+BG3_CY = (scrollY&lt;&lt;8) - rcY * (s + c);</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+(<span style="font-style: italic">s</span> and <span style="font-style: italic">c</span> being the sine and the cosine of the current rotation angle and <span style="font-style: italic">rcX, rcY</span> the coordinates the image should rotate about)</span><span class="gensmall"><br/><br/>Last edited by Omegas on Thu Sep 07, 2006 3:16 pm; edited 1 time in total</span></div>    
+</div>
+<div class="post">
+    <h4>#101595 - Cearn - Wed Sep 06, 2006 8:21 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Omegas wrote:</b></span></td> </tr> <tr> <td class="quote">Please don't tell me to read the Tonc chapter about affine transformations... That's what I did first and didn't find anything useful about rotating and scrolling backgrounds at the same time</td> </tr></table><span class="postbody">
+<br/>
+As tonc does indeed cover the rotation and scaling at the same time, I'm afraid I'm going to have to insist :P 
+<br/>
+<a class="postlink" href="http://www.coranac.com/tonc/text/affbg.htm#eq-aff-ofs" target="_blank">tonc: affine bgs, eq 4</a> is exactly what you need to do.
+<br/>
+<br/>
+The problem is that the libnds example was wrong to begin with: the matrix multiplication was incorrect. It should have been
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">      BG3_CX = (scrollX&lt;&lt;8) - (rcX * c - rcY*s);
+<br/>
+      BG3_CY = (scrollY&lt;&lt;8) - (rcX * s + rcY*c);
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+This is <span style="font-weight: bold">p0</span> - <span style="font-weight: bold">P</span>?<span style="font-weight: bold">q0</span>; what the example did was <span style="font-weight: bold">p0</span> - <span style="font-weight: bold">q0</span>^T ? <span style="font-weight: bold">P</span>. These are not the same operation.
+<br/>
+<br/>
+<span style="font-size: 9px; line-height: normal">Hmm, maybe this explains why the #defines of the matrix are transposed too ...</span>
+<br/>
+<br/>
+<br/>
+ETA: also, use ints (s32/u32) as local variables; while the slowness of non-ints will not be a limiting factor here, it seems quite silly to actually <span style="font-style: italic">make</span> your code slower when there's absolutely no reason to.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#101696 - Omegas - Thu Sep 07, 2006 3:09 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Cearn wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+As tonc does indeed cover the rotation and scaling at the same time, I'm afraid I'm going to have to insist :P 
+<br/>
+<a class="postlink" href="http://www.coranac.com/tonc/text/affbg.htm#eq-aff-ofs" target="_blank">tonc: affine bgs, eq 4</a> is exactly what you need to do.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Eh, I guess I have to read my copy of Tonc more carefully next time... :) But I have to thank you as I got it solved now. This is how I did it:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+   // set up a rotation matrix
+<br/>
+   // (see TONC chapter on affine transformations)
+<br/>
+   u32 xdx = ( c * scaleX ) &gt;&gt; 8;
+<br/>
+   u32 xdy = (-s * scaleX ) &gt;&gt; 8;
+<br/>
+   u32 ydx = ( s * scaleY ) &gt;&gt; 8;
+<br/>
+   u32 ydy = ( c * scaleY ) &gt;&gt; 8;
+<br/>
+      
+<br/>
+   // set the translation registers
+<br/>
+   BG3_XDX = xdx;
+<br/>
+   BG3_XDY = xdy;
+<br/>
+   BG3_YDX = ydx;
+<br/>
+   BG3_YDY = ydy;
+<br/>
+      
+<br/>
+   // set the scroll registers
+<br/>
+   // (see the TONC chapter about positioning and transforming affine backgrounds)
+<br/>
+   BG3_CX = (scrollX&lt;&lt;8) - (xdx * rcX + xdy * rcY);
+<br/>
+   BG3_CY = (scrollY&lt;&lt;8) - (ydx * rcX + ydy * rcY);
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Your version was good but it didn't account for the scaling factors <span style="font-style: italic">scaleX </span>and <span style="font-style: italic">scaleY</span>. This could probably be optimized too but at least it's working properly now. :)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#101702 - gmiller - Thu Sep 07, 2006 3:19 pm</h4>
+    <div class="postbody"><span class="postbody">I make my students in my GBA class read tonc and cowbite so they will know how to do this.  Thanks Cearn ....</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#101708 - Cearn - Thu Sep 07, 2006 3:43 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Omegas wrote:</b></span></td> </tr> <tr> <td class="quote">Your version was good but it didn't account for the scaling factors scaleX and scaleY. This could probably be optimized too but at least it's working properly now. :)</td> </tr></table><span class="postbody">Should have noticed that one, sorry about that. Also, this probably cannot be optimized further; not unless you want to lose generality anyway.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Omegas wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+   // set up a rotation matrix
+<br/>
+   // (see TONC chapter on affine transformations)
+<br/>
+   u32 xdx = ( c * scaleX ) &gt;&gt; 8;
+<br/>
+   u32 xdy = (-s * scaleX ) &gt;&gt; 8;
+<br/>
+   u32 ydx = ( s * scaleY ) &gt;&gt; 8;
+<br/>
+   u32 ydy = ( c * scaleY ) &gt;&gt; 8;
+<br/>
+</td> </tr></table><span class="postbody"></span></td> </tr></table><span class="postbody">
+<br/>
+These should be signed, not unsigned integers. 
+<br/>
+Also, just as a general comment, be aware that the mathematical convention for vector notation is <span style="font-style: italic">vector-name</span>_<span style="font-style: italic">vector-elements</span>: 
+<br/>
+<span style="font-weight: bold">v</span> = (<span style="font-style: italic">vx</span>, <span style="font-style: italic">vy</span>, <span style="font-style: italic">vz</span>). This seems to be reversed in libgba's affine matrix definitions: its <span style="font-style: italic">xdy</span> is actually the <span style="font-style: italic">x</span> element of the <span style="font-weight: bold">dy</span> vector. Be aware of this when you try to compare the operations with mathematical texts.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>gmiller wrote:</b></span></td> </tr> <tr> <td class="quote">I make my students in my GBA class read tonc and cowbite so they will know how to do this. Thanks Cearn ....</td> </tr></table><span class="postbody"> CowBite suffers from the problem as most other documents on the affine matrix: it uses a transposed (or even inverted) version of the matrix. It also lists the elements as having a separate signbit (1.7.8 format), which is also incorrect: these are simple integers in 2s complement, not a derivative of floating point numbers.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#101713 - gmiller - Thu Sep 07, 2006 4:20 pm</h4>
+    <div class="postbody"><span class="postbody">Cearn wrote:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+ CowBite suffers from the problem as most other documents on the affine matrix: it uses a transposed (or even inverted) version of the matrix. It also lists the elements as having a separate signbit (1.7.8 format), which is also incorrect: these are simple integers in 2s complement, not a derivative of floating point numbers.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Yes it sufferes more than that but to put is all together I do not rely on only one source.  Most the of documents have errors in them so I use what is available and then try to point out the problems.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#101714 - gmiller - Thu Sep 07, 2006 4:24 pm</h4>
+    <div class="postbody"><span class="postbody">We have also added a whole section on fixed point math avoiding the inferred sign magnitude representation and pointing out that it is just 2's complement and what is requred when doing add and subtract as well as the results when doing multiply and divide.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

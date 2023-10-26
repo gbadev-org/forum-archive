@@ -1,0 +1,401 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Texture load amount in between frame renders? - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Texture load amount in between frame renders?</h2>
+<div id="posts">
+<div class="post">
+    <h4>#170240 - DiscoStew - Fri Sep 11, 2009 1:42 am</h4>
+    <div class="postbody"><span class="postbody">How much data can be loaded to texture-allocated vram banks in between frames? If I remember correctly, because of the 48 scanline cache, I could start loading at scanline 144 (is there some way to tell when the load to that cache is done?), but at scanline 214, the hardware processes the 3D data given it.
+<br/>
+<br/>
+So, in ~70 scanlines if I'm correct, how much data can be copied straight into VRAM?<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#170242 - TwentySeven - Fri Sep 11, 2009 4:23 am</h4>
+    <div class="postbody"><span class="postbody">Using all four dma channels I managed to max it out at a little over 32kb.
+<br/>
+<br/>
+Thats enough time to get an entire 128x128x16bit texture up, but not much else.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#170243 - DiscoStew - Fri Sep 11, 2009 4:50 am</h4>
+    <div class="postbody"><span class="postbody">Thx, though that kinda cuts into what I had planned. I had thought that more could be done.<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#170247 - Miked0801 - Fri Sep 11, 2009 2:43 pm</h4>
+    <div class="postbody"><span class="postbody">All 4 DMA channels?  If I remember right, each channel co-ops the other so there is no gain in using more than 1 channel.
+<br/>
+<br/>
+Also, if you are doing any sort of heavy wireless connection stuff, this nearly renders the 3D system useless.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#170248 - zeruda - Fri Sep 11, 2009 3:12 pm</h4>
+    <div class="postbody"><span class="postbody">I managed to load a 256*256 16 bit texture in the VBlank without any flickering. Here's the code I used:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void on_irq()
+<br/>
+{
+<br/>
+    if(REG_IF &amp; IRQ_VBLANK) {
+<br/>
+        printf("\x1b[2J");
+<br/>
+        printf("\nin the VBLANK");
+<br/>
+        Texture.Load(16, TEXTURE_SIZE_256, GL_RGB, "bigface256.pcx");
+<br/>
+        // Tell the DS we handled the VBLANK interrupt
+<br/>
+        VBLANK_INTR_WAIT_FLAGS |= IRQ_VBLANK;
+<br/>
+        REG_IF |= IRQ_VBLANK;
+<br/>
+    } else {
+<br/>
+        REG_IF = REG_IF; // Ignore all other interrupts
+<br/>
+    }
+<br/>
+}
+<br/>
+<br/>
+void CTexture::Load(int index, int Size, int Format, const char *TextureFile)
+<br/>
+{
+<br/>
+    loadPCX((u8*)gbfs_get_obj(&amp;data_gbfs, TextureFile, NULL), &amp;pcx);
+<br/>
+    image8to16trans(&amp;pcx, 0);
+<br/>
+    myglGenTextures(1, &amp;Texture.texture[index]);
+<br/>
+    LoadToVram(index, Format, Size, pcx.image.data8,  TEXGEN_TEXCOORD | GL_TEXTURE_WRAP_S | GL_TEXTURE_WRAP_T);
+<br/>
+    imageDestroy(&amp;pcx);
+<br/>
+}
+<br/>
+<br/>
+int CTexture::LoadToVram(int index, int type, int Dimensions, uint8* texture, int param)
+<br/>
+{
+<br/>
+    uint32* addr;
+<br/>
+    uint32 vramTemp;
+<br/>
+    uint32 size = 1 &lt;&lt; (Dimensions + Dimensions + 6);
+<br/>
+    switch (type) {
+<br/>
+        case GL_RGB:
+<br/>
+        case GL_RGBA:
+<br/>
+            size = size &lt;&lt; 1;
+<br/>
+            break;
+<br/>
+        case GL_RGB4:
+<br/>
+            size = size &gt;&gt; 2;
+<br/>
+            break;
+<br/>
+        case GL_RGB16:
+<br/>
+            size = size &gt;&gt; 1;
+<br/>
+            break;
+<br/>
+        default:
+<br/>
+            break;
+<br/>
+    }
+<br/>
+<br/>
+    addr = (uint32*)GetBestTextureSlot(size, index);
+<br/>
+    if(!addr) { return 0; }
+<br/>
+<br/>
+    Slots[ToTextureSlot[index]].Param = param;
+<br/>
+    Slots[ToTextureSlot[index]].Dimensions = Dimensions;
+<br/>
+    Slots[ToTextureSlot[index]].Mode = type;
+<br/>
+    Slots[ToTextureSlot[index]].GlobalTextureIndex = TextureToWrite;
+<br/>
+    // unlock texture memory
+<br/>
+    vramTemp = vramSetMainBanks(VRAM_A_LCD,VRAM_B_LCD,VRAM_C_LCD,VRAM_D_LCD);
+<br/>
+    if (type == GL_RGB) {
+<br/>
+        // We do GL_RGB as GL_RGBA, but we set each alpha bit to 1 during the copy
+<br/>
+        u16 * src = (u16*)texture;
+<br/>
+        u16 * dest = (u16*)addr;
+<br/>
+        glTexPar(Dimensions, Dimensions, addr, GL_RGBA, param);
+<br/>
+        Slots[ToTextureSlot[index]].Mode = GL_RGBA;
+<br/>
+        for(uint32 i = 0; i &lt; ((size) &gt;&gt; 1); i++) {
+<br/>
+            *dest = *src | (1 &lt;&lt; 15);
+<br/>
+            dest++;
+<br/>
+            src++;
+<br/>
+        }
+<br/>
+    } else {
+<br/>
+        // For everything else, we do a straight copy
+<br/>
+        glTexPar(Dimensions, Dimensions, addr, type, param);
+<br/>
+        swiCopy((uint32*)texture, addr , size / 4 | COPY_MODE_WORD);
+<br/>
+    }
+<br/>
+    vramRestoreMainBanks(vramTemp);
+<br/>
+    return 1;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#170251 - DiscoStew - Fri Sep 11, 2009 4:38 pm</h4>
+    <div class="postbody"><span class="postbody">zeruda,
+<br/>
+<br/>
+If you were able to copy 128kBytes into VRAM in one VBlank with needing to convert it from pcx and then manually copying it in (because of the GL_RGB format), you think it would be possible of doubling that amount if the data had no conversions or manual copying, but was just DMAed straight into VRAM?
+<br/>
+<br/>
+I'm basically trying to reduce my overall use of vram banks from 4 to 2 so that I can have access to 2 banks for capture effects. This shouldn't be a problem for actual rendering if I can copy 2 vram banks worth in a vblank, as I can partition my 3D data into 2 layers based on depth, and just have my program run at 30fps instead of 60.<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#170255 - DiscoStew - Sun Sep 13, 2009 2:47 am</h4>
+    <div class="postbody"><span class="postbody">A little off topic, but it does involve my test with copying to VRAM.
+<br/>
+<br/>
+I'm currently using DMA to copy from Main Memory to VRAM (because it's been tested to be the best for large amount of data), and I've got a question. People have been saying that when they used the Asynch DMA functions, and split the amount of data between them, they got stuff copied faster ( first 3 channels as asynch, and last as normal copy with the spin check ). I tried it, but it's taking just as long to copy data as with a single dma function that copies the entire section.
+<br/>
+<br/>
+This...</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">dmaCopyWordsAsynch( 0, src, VRAM_A, 0x10000 );
+<br/>
+dmaCopyWordsAsynch( 1, src + 0x8000 , VRAM_A + 0x8000, 0x10000 );
+<br/>
+dmaCopyWordsAsynch( 2, src + 0x10000, VRAM_A + 0x10000, 0x10000 );
+<br/>
+dmaCopyWords( 3, src + 0x18000, VRAM_A + 0x18000, 0x10000 );</td> </tr></table><span class="postbody">...takes just as long to copy data as this does...</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">dmaCopyWords(3, src, VRAM_A, 0x40000 );</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Any reason why this is happening?
+<br/>
+<br/>
+EDIT:
+<br/>
+<br/>
+Just to add Miked0801, according to posts made in older threads on the DMA subject, the use of the functions above in that particular order resulted in faster data copying, though I'm not seeing it. Perhaps one of those people could shed some light on the subject?<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#170257 - SteveH - Sun Sep 13, 2009 4:37 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>DiscoStew wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">dmaCopyWordsAsynch( 0, src, VRAM_A, 0x10000 );
+<br/>
+dmaCopyWordsAsynch( 1, src + 0x8000 , VRAM_A + 0x8000, 0x10000 );
+<br/>
+dmaCopyWordsAsynch( 2, src + 0x10000, VRAM_A + 0x10000, 0x10000 );
+<br/>
+dmaCopyWords( 3, src + 0x18000, VRAM_A + 0x18000, 0x10000 );</td> </tr></table><span class="postbody"></span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I'm not sure why it's slower, but are you attempting to copy 0x40000 bytes as it looks like your offsets are wrong:
+<br/>
+<br/>
+0 = 0x00000 - 0x10000
+<br/>
+1 = 0x08000 - 0x18000
+<br/>
+2 = 0x10000 - 0x20000
+<br/>
+3 = 0x18000 - 0x18000
+<br/>
+<br/>
+To me your overlapping memory copies, which may be causing the slowdown your experiencing.
+<br/>
+<br/>
+But please bare in mind I do not know what I'm talking about as I've never attempted to copy such large amounts of data on the DS yet.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#170259 - DiscoStew - Sun Sep 13, 2009 5:47 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>SteveH wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>DiscoStew wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">dmaCopyWordsAsynch( 0, src, VRAM_A, 0x10000 );
+<br/>
+dmaCopyWordsAsynch( 1, src + 0x8000 , VRAM_A + 0x8000, 0x10000 );
+<br/>
+dmaCopyWordsAsynch( 2, src + 0x10000, VRAM_A + 0x10000, 0x10000 );
+<br/>
+dmaCopyWords( 3, src + 0x18000, VRAM_A + 0x18000, 0x10000 );</td> </tr></table><span class="postbody"></span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I'm not sure why it's slower, but are you attempting to copy 0x40000 bytes as it looks like your offsets are wrong:
+<br/>
+<br/>
+0 = 0x00000 - 0x10000
+<br/>
+1 = 0x08000 - 0x18000
+<br/>
+2 = 0x10000 - 0x20000
+<br/>
+3 = 0x18000 - 0x18000
+<br/>
+<br/>
+To me your overlapping memory copies, which may be causing the slowdown your experiencing.
+<br/>
+<br/>
+But please bare in mind I do not know what I'm talking about as I've never attempted to copy such large amounts of data on the DS yet.</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I should have made mention that both "src" and "VRAM_A" are unsigned short pointers, so the offsets used for each are adjusted by double ((u16*)0x0100 + 0x010 = 0x0120)
+<br/>
+<br/>
+EDIT:
+<br/>
+<br/>
+I still haven't figured out if it is still possible to use all 4 channels at the same time, but I wonder. What about using some assembly with "ldmia" and "stmia"? Because the entire set of DMA registers (minus the FILL) comes out to about 36 bytes, I was thinking of filling out the first register with the necessary information, and then making an 4-byte 8 element array that is filled with the rest, and just do the load and store. Could that do it, or is that method of copying done via entry-by-entry, which would still activate the first channel before getting the others started? As it's been reported in GBATek...
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">The CPU can be kept running during DMA, provided that it is accessing only TCM (or cached memory), otherwise the CPU is halted until DMA finishes.</td> </tr></table><span class="postbody"><br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#170263 - ritz - Sun Sep 13, 2009 10:44 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>DiscoStew wrote:</b></span></td> </tr> <tr> <td class="quote">I still haven't figured out if it is still possible to use all 4 channels at the same time</td> </tr></table><span class="postbody">
+<br/>
+I posted my thoughts on this before: <a href="http://forum.gbadev.org/viewtopic.php?p=161609#161609" target="_blank">http://forum.gbadev.org/viewtopic.php?p=161609#161609</a>
+<br/>
+But I'm not too sure if it works (I never really needed to do it). I believe it's just a matter of filling all your params for all four DMA channels and then set the execution time for VBlank (or whatever, but not 'immediate' mode) and the whole she-bang should go.
+<br/>
+<br/>
+However, I just do what was said earlier too: I loop calls to dmaCopyWordsAsynch() 'til there's no more data to send up. Works good enough for me (<a class="postlink" href="http://chrishecker.com/Good_Enough" target="_blank">Shhh, don't tell Chris Hecker that</a>).</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#170264 - DiscoStew - Mon Sep 14, 2009 3:56 am</h4>
+    <div class="postbody"><span class="postbody">The method a couple of posts above shows what I tried to do, which is what others have said worked, but doesn't for me.
+<br/>
+<br/>
+The VBlank method doesn't seem to be working for me
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">.
+<br/>
+irqInit();
+<br/>
+irqSet( IRQ_VBLANK, VBlank_Handler );
+<br/>
+irqEnable( IRQ_VBLANK );
+<br/>
+.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void VBlank_Handler()
+<br/>
+{
+<br/>
+   while( DMA_CR( 0 ) &amp; DMA_BUSY );
+<br/>
+   DMA_SRC( 0 ) = (uint32)tex;
+<br/>
+   DMA_DEST( 0 ) = (uint32)vram;
+<br/>
+   DMA_CR( 0 ) = 0x4000 | DMA_32_BIT | DMA_START_VBL | DMA_ENABLE;
+<br/>
+   return;
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Doing this method shows nothing on the screen. I even made print statements in the VBlank_Handler function, and those show up fine, but the texture doesn't. When I remove DMA_START_VBL, the texture shows. In that circumstance, I moved the while loop after the DMA functions, made a counter variable before them, and incremented the counter inside the while loop. The counter result was 0, as if it never entered the while loop.<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#170265 - ritz - Mon Sep 14, 2009 4:25 am</h4>
+    <div class="postbody"><span class="postbody">Your DMA_START_VBL is set in the actual vblank handler so it won't go til next round, no?
+<br/>
+Anyway, I just re-read a little on gbatek and I think this "all 4 channels at once" thing is not going to work no matter what:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">the highest priority is assigned to DMA0, followed by DMA1, DMA2, and DMA3. DMA Channels with lower priority are paused until channels with higher priority have completed</td> </tr></table><span class="postbody">
+<br/>
+I'm out of town in Winnipeg and can't actually code and test anything that I'm babbling about though :(</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#170267 - Miked0801 - Mon Sep 14, 2009 5:27 am</h4>
+    <div class="postbody"><span class="postbody">Yep - only 1 DMA fires off at a time guys.  There is no gain from using multiple interrupts (not channels) to do your bidding.  0 will go, then 1, then...
+<br/>
+<br/>
+ldmia/stmia can beat DMAs on shorter copies as well due to register setup time.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#170268 - DiscoStew - Mon Sep 14, 2009 5:27 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>ritz wrote:</b></span></td> </tr> <tr> <td class="quote">Your DMA_START_VBL is set in the actual vblank handler so it won't go til next round, no?</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I'm not getting anything when I use DMA_START_VBL, but you think that because it's being used while in the "interrupt" state, it might be dismissing it? I'll try it outside of it to see if anything changes.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>ritz wrote:</b></span></td> </tr> <tr> <td class="quote">Anyway, I just re-read a little on gbatek and I think this "all 4 channels at once" thing is not going to work no matter what:
+<br/>
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">the highest priority is assigned to DMA0, followed by DMA1, DMA2, and DMA3. DMA Channels with lower priority are paused until channels with higher priority have completed</td> </tr></table><span class="postbody">
+<br/>
+I'm out of town in Winnipeg and can't actually code and test anything that I'm babbling about though :(</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I do remember that, but I thought that was mainly for the use on the GBA. If it holds true for the DS, then perhaps some reasons to still have 4 channels is for GBA compatibility, as well as for other uses like what I'm trying to do, except in the sense of having up to 4 different sections of data being copied to 4 different areas, and it goes through each one after the other.
+<br/>
+<br/>
+EDIT:
+<br/>
+<br/>
+Just gave the altered method a try (moving the DMA functionality outside the handler), and now it's copying, and the texture is showing up. I had to add in a VCount interrupt alongside the VBlank interrupt so it would change to state of the vram banks to LCDC between finishing up the last buffered scanline, and the beginning of the VBlank. I went and gave it a try with all 4 channels afterwards. Unfortunately, this method shows that the DMA copying is done one channel at a time.<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#170269 - zeruda - Mon Sep 14, 2009 7:53 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>DiscoStew wrote:</b></span></td> </tr> <tr> <td class="quote">If you were able to copy 128kBytes into VRAM in one VBlank with needing to convert it from pcx and then manually copying it in (because of the GL_RGB format), you think it would be possible of doubling that amount if the data had no conversions or manual copying, but was just DMAed straight into VRAM?</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I got no idea, I didn't bother with timings, best just to experiment, I had it such that when I pressed a button 1 or more textures would load. When there was too much there would be a flash, otherwise a straight transition. This was ages ago though. How many textures are you using? Are you using compressed textures?
+<br/>
+<br/>
+In terms of DMA, when you fire a DMA it runs alongside the CPU. You can then simultaneously use the CPU and process data in the TCM. As soon as you touch the main RAM though the CPU stalls until the DMA completes. More specifically, if you access any variables or any code or functions in the main RAM it stalls. So looking at your code:
+<br/>
+The variable src; where is it? If on the stack/dtcm then it's ok. I'm guessing this is fine.
+<br/>
+<br/>
+The function dmaCopyWordsAsynch and dmaCopyWords. Where are these. If these are in main ram then the first call runs, then it stalls as soon as the call to the second dmaCopyWordsAsynch function occurs. To get around this these functions will have to be placed in the ITCM.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

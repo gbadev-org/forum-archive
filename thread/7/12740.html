@@ -1,0 +1,306 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Creating list of polygons during AABB-Octree test - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>C/C++ > Creating list of polygons during AABB-Octree test</h2>
+<div id="posts">
+<div class="post">
+    <h4>#122106 - Rajveer - Sat Mar 17, 2007 1:36 am</h4>
+    <div class="postbody"><span class="postbody">Hi guys. I have a ray in 3d space and an octree, and I want to test which polygons the ray intersects. I create an aabb around the ray and test this against the octree, however how would you guys suggest I keep the list of polygons to test if it intersects against? Each octree node has a linked list of polygons, so I was thinking of creating a new linked list, and when the aabb and the octree overlap, checking each polygon number in the octree node against the newly created linked list and adding it at the end if its not already in there. Anybody have any simpler/quicker ideas?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#122112 - sajiimori - Sat Mar 17, 2007 1:47 am</h4>
+    <div class="postbody"><span class="postbody">First off, if this is static geometry, I'd suggest using arrays instead of linked lists for octree nodes.  It's faster, more compact, and it has better cache behavior.
+<br/>
+<br/>
+For the intermediate result list, I'd use an array of polygon pointers, for the same reasons, especially cache behavior.
+<br/>
+<br/>
+For the final result list, you can reuse the intermediate array.  While iterating over the intermediate results, if you find a polygon that doesn't actually intersect the ray, erase it by overwriting it with the last pointer in the array and clearing the last pointer.
+<br/>
+<br/>
+That said, you may want to do the whole ray-vs-poly test at once for each poly and eliminate the intermediate list.  That way you don't have to revisit the same data twice, which can hurt cache performance.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#122113 - sajiimori - Sat Mar 17, 2007 1:59 am</h4>
+    <div class="postbody"><span class="postbody">Or wait, are you saying your AABB test is only versus octree cells, and it doesn't test against any polys?
+<br/>
+<br/>
+Is the problem that the same polys are duplicated in neighboring cells, and you don't want to test against the same poly twice?  If so, an efficient solution is to have each poly carry a timestamp.  Increment a static timestamp at the start of the whole collision operation, write the timestamp to a poly when you test against it, and ignore polys that already have the current timestamp.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#122118 - Rajveer - Sat Mar 17, 2007 2:28 am</h4>
+    <div class="postbody"><span class="postbody">Yep, the AABB only tests against the octree cells. I will use this to determine which polygons to test the ray against, and just as you said I don't want to test any duplicated polygons twice (sorry I should have been more precise in my first post!).
+<br/>
+<br/>
+I was thinking of doing something like your timestamp, except I was thinking of using a boolean, resetting all the polygons to 0 at the beginning of the collsion routine and setting tested ones for that frame to 1. Your method would be less computational as I'd only have to reset each polygon when it reaches the maximum value it can :)
+<br/>
+<br/>
+So just to make sure I'm following, test the AABB against the octree cells and whenever there's an overlap, test the ray against the polygons and write the timestamp to the polygon. Then go onto the next node and ignore polygons with the current timestamp e.t.c.
+<br/>
+<br/>
+At the moment I have the collision detection code as a complete function so I might just create an array of possible polygons, put this into the collision detection function and write a timestamp to polygons processed...or something...it's half 1 and I'm sleep deprived!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#122122 - sajiimori - Sat Mar 17, 2007 2:49 am</h4>
+    <div class="postbody"><span class="postbody">If using an intermediate list would simplify things, make it a list of overlapped octree cells.  There's no reason to unpack the individual polygons into a flat array.
+<br/>
+<br/>
+(If your octree traversal did box tests versus polys, then you'd unpack the polys because you want to exclude some of them, but since you're only testing the box versus cells, this isn't relevant.)
+<br/>
+<br/>
+There's no need to explicitly reset timestamps.  Integer overflow will reset them for you.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#122154 - Rajveer - Sat Mar 17, 2007 1:11 pm</h4>
+    <div class="postbody"><span class="postbody">I think I may change my function to test against polys, so if there's an overlap between the ray's AABB and the node, then I'll test each polygon's AABB against the ray's AABB to reduce the amount of intensive calculations (i.e. actually calculating where the ray hits each polygon's plane e.t.c.).
+<br/>
+<br/>
+At the moment I have a collision function which will test an array of polygons against a ray, so before testing I want to produce a complete array which I can use (can have repeating polygons since I'll be using your timestamp idea). I'm planning to write another function called testAABB_OctreePolys(6 f32s for the max and min coords of the AABB, pointer to an octree node initially the head) which will do the following:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+Test if ray AABB overlaps node
+<br/>
+If no {return false}
+<br/>
+If yes
+<br/>
+{
+<br/>
+   Check if current node is split
+<br/>
+   If yes{recall itself but pointing to the 8 subnodes}
+<br/>
+   If no
+<br/>
+   {
+<br/>
+      For(i = 0; i &lt; node's polycount; i++)
+<br/>
+       {
+<br/>
+         Construct AABB of node's polygon[i]
+<br/>
+         Test ray's AABB against polygon's AABB
+<br/>
+         If overlap
+<br/>
+         {
+<br/>
+            Add to an array of polygons*
+<br/>
+         }
+<br/>
+      }
+<br/>
+   }
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I'm still unsure on the overlap stage with the *. Since I'll be reducing the polygons in the octree traversal algorithm now, I'll be unpacking the polygons. How would I create a complete array at the end of the whole procedure, would I create an array each time the function is called for each overlapping node and somehow concatenate them?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#122184 - sajiimori - Sat Mar 17, 2007 7:34 pm</h4>
+    <div class="postbody"><span class="postbody">It might be worthwhile to do a ray-vs-AAB test against octree nodes before unpacking the polys inside them.  The ray's AABB might overlap nodes that the ray doesn't actually pass through, leading to a lot of extra bounding volume tests.
+<br/>
+<br/>
+Since ray AABBs can get really oversized, I might suggest testing the actual ray versus the bounding spheres of the polys instead of AABB-vs-AABB.  You could use ray-vs-AAB, but ray-vs-sphere is faster.
+<br/>
+<br/>
+Rather than building the bounding volumes of the polys at runtime, I suggest storing them in the geometry file, or if it's dynamic data, at least caching them.  This is another reason to use bounding spheres: they're more compact.
+<br/>
+<br/>
+For the pseudocode you posted, the location to store the candidate polys could be an argument, and the function could return the number of polys added.  Then you can call the function once per node, and pass it a pointer to the first unused array element.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+Poly* candidates[MAX_CANDIDATES];
+<br/>
+Poly** firstUnused = &amp;candidates[0];
+<br/>
+<br/>
+for(int i = 0; i &lt; numOverlappedNodes; ++i)
+<br/>
+{
+<br/>
+  int numFound =
+<br/>
+    findCandidates(
+<br/>
+      overlappedNodes[i],
+<br/>
+      ray,
+<br/>
+      /*dest*/ firstUnused);
+<br/>
+<br/>
+  firstUnused += numFound;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#122215 - Rajveer - Sat Mar 17, 2007 10:08 pm</h4>
+    <div class="postbody"><span class="postbody">I've been speaking to people on another forum and they too suggested going with a ray-AABB test: however since my ray is not really a ray, more like a very short segment (in relation to the size of each node) I think I'll go with an AABB-AABB test.
+<br/>
+<br/>
+Storing the polygons AABB is a good idea, and using a sphere an even better idea, I may implement this. Cheers!
+<br/>
+<br/>
+For building the array, do you mean create an array large enough so that it's not too small, and then use the position where the list of polygons in a node should be added as an argument? What about wasted space by not using the whole of the array, or do you think it's not to relevant?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#122235 - Rajveer - Sun Mar 18, 2007 12:29 am</h4>
+    <div class="postbody"><span class="postbody">I've had a new thought. Why bother with a list at all? I could incorporate the traversing of the octree and the testing of the ray against the polygons into one function, and when an intersection is found I could return the polygon number to the collision function so it can do what it has to do with it. Something like:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+COLLISION FUNCTION:
+<br/>
+{
+<br/>
+   timestamp++;
+<br/>
+   intersectedPoly = testRayOctree(...);
+<br/>
+   do what else I have to do;
+<br/>
+}
+<br/>
+<br/>
+testRayOctree(...)
+<br/>
+{
+<br/>
+   Test if ray AABB overlaps node 
+<br/>
+   If no {return false} 
+<br/>
+   If yes 
+<br/>
+   { 
+<br/>
+      Check if current node is split 
+<br/>
+      If yes{recall itself but pointing to the 8 subnodes, return value obtained} 
+<br/>
+      If no
+<br/>
+      { 
+<br/>
+         For(i = 0; i &lt; node's polycount; i++) 
+<br/>
+         {
+<br/>
+            if(polygon[i].timestamp != timestamp)
+<br/>
+            {
+<br/>
+               polygon[i].timestamp = timestamp
+<br/>
+               Test the ray against the polygon[i]
+<br/>
+               If there is an intersection and its within the segment size
+<br/>
+               { 
+<br/>
+                  return i
+<br/>
+               }
+<br/>
+            }
+<br/>
+         } 
+<br/>
+      } 
+<br/>
+   }
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Would this seem ok?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#122365 - sajiimori - Sun Mar 18, 2007 10:51 pm</h4>
+    <div class="postbody"><span class="postbody">The pseudocode you posted doesn't seem to report multiple collisions.  That's not really an option for me because I often need to respond to multiple intersections at once, for instance if the player picks up two items at the same time.  If all you need is to pick an intersected poly -- any poly -- then that solution is fine.
+<br/>
+<br/>
+If you want to avoid making a list, but you still want to handle multiple collisions, you could pass the action to perform as an argument, perhaps in the form of a function pointer.  Then you'd call the action on polys as they're encountered.
+<br/>
+<br/>
+At work, I use a shared dynamically-resizable doubly-linked list of collision results.  It's used like this:</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">// Tests myObject against other relevant objects and
+<br/>
+// returns a list of objects that it intersects.
+<br/>
+// The result list is just a pair of pointers for the first
+<br/>
+// and last link in a list of objects.  The links are drawn
+<br/>
+// from a shared pool, and the pool grows as needed.
+<br/>
+// The result list destructor adds the links back to the
+<br/>
+// free list.
+<br/>
+ResultList results = findIntersectedObjects(myObject);</td> </tr></table><span class="postbody">I could arrange the interface like this instead:</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">doActionOnIntersectedObjects(myObject, action);</td> </tr></table><span class="postbody">But I use result lists because I tend to arrange my code in terms of queries rather than actions.  It's easier to follow and it's less cumbersome for doing hypothetical tests, like "What would happen if this object moved to this location?"
+<br/>
+<br/>
+Which is faster depends on the situation: Building and destroying lists is extra work, but focusing on collision tasks could have better cache behavior, and repeated calls to the action function brings some overhead.
+<br/>
+<br/>
+Since the list management is a relatively small portion of the work involved, I went for the architecturally cleaner solution.
+<br/>
+<br/>
+Incidentally, one of my coworkers disagreed and made a modified version that takes the action as an argument.  As I understand, the main reason was that he often wanted to abort the test upon finding the first intersection.  (If the action function returns false, the test halts.)  My preferred solution would be having a separate function that only returns the first intersected object, as you described.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#122487 - Rajveer - Mon Mar 19, 2007 6:48 pm</h4>
+    <div class="postbody"><span class="postbody">Cheers for all the help sajiimori! I've implemented the function, and changed it to test against all possible polygons, keeping only the nearest polygon and it's time/distance till collision and rejecting all polygons with a time/distance greater than this one (and replacing it with nearer polygons if encountered).
+<br/>
+<br/>
+I think I tend to arrange my code more in terms of actions rather than queries, but this could be because I'm a new programmer and haven't got any real experience behind me so perhaps it's something I'll learn over time.
+<br/>
+<br/>
+I do have one last question though: above you mentioned that the best way to store polygons within an octree node is as an array for static geometry. I'd prefer this, infact this is how I used to do it, but as I programmed my octree more I realised that I want to not only limit the number of polygons within a node but also the size of a node, and if a node is too small and it's polycount is greater than the minimum I would just let that node's polycount be higher than I wanted. I couldn't do this with arrays as when I define the nodes, I have to define the array as a set size and either have polygons not stored in a node that should be, or have the default size of the array much larger than needed just in case, wasting space, so I went with linked lists. How would you solve this problem? (I'd much rather use arrays: they're easier and quicker to use).</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#122490 - sajiimori - Mon Mar 19, 2007 7:06 pm</h4>
+    <div class="postbody"><span class="postbody">Add an extra level of indirection.  You want octree nodes to be a fixed size, right?  So have each node be a pointer to an array.  Then all nodes are exactly 4 bytes in size, but each array can be a different length.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#122579 - Rajveer - Tue Mar 20, 2007 2:02 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sajiimori wrote:</b></span></td> </tr> <tr> <td class="quote">Add an extra level of indirection.  You want octree nodes to be a fixed size, right?  So have each node be a pointer to an array.  Then all nodes are exactly 4 bytes in size, but each array can be a different length.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+...so obvious! Cheers :)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#122635 - sajiimori - Tue Mar 20, 2007 9:57 pm</h4>
+    <div class="postbody"><span class="postbody">So all that said, I never do collision versus polys at runtime.  Everything is boxes, spheres, cylinders, capsules, and BSP.  Polys are slow and they don't distinguish solid and empty volumes.
+<br/>
+<br/>
+Trying to do collision between swept volumes and polys is painful.  Even a swept sphere test against a single poly is lengthy.  BSP offers swept volume tests almost for free.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

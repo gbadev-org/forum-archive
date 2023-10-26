@@ -1,0 +1,347 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Problems with new fastloader.. - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > Problems with new fastloader..</h2>
+<div id="posts">
+<div class="post">
+    <h4>#20864 - BeeWarloc - Tue May 18, 2004 9:15 pm</h4>
+    <div class="postbody"><span class="postbody">Hi... I wrote a new fastloader for a linker application I'm coding (xupload)..
+<br/>
+But it won't load all roms, some will run, and some will not. I think it has something to do with the state the gameboy is in when I jump back to the ROM..
+<br/>
+<br/>
+Anyone know what's appropriate to do before jumping to 0x02000000?
+<br/>
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+/* a very simple fastloader created for xupload */
+<br/>
+/* to compile this file crt0.s needs to have interrupts disabled */
+<br/>
+<br/>
+<br/>
+#include &lt;mygba.h&gt;
+<br/>
+<br/>
+extern void __FarProcedure (void (*ptr)(), ...);  // Reference to routine in crt0.S
+<br/>
+void fastloader() MEM_FUNC_IN_IWRAM;
+<br/>
+<br/>
+#define RCNT_PTR ((u16 *)0x04000134)
+<br/>
+#define SIOCNT_PTR ((u16 *)0x4000128)
+<br/>
+#define SIODATA32L_PTR ((u16 *)0x4000120)
+<br/>
+#define SIODATA32H_PTR ((u16 *)0x4000122)
+<br/>
+#define SIODATA32_PTR ((u32 *)0x04000120)
+<br/>
+<br/>
+MULTIBOOT
+<br/>
+<br/>
+/*********************************************************************************
+<br/>
+ * Program entry point
+<br/>
+ ********************************************************************************/
+<br/>
+<br/>
+void fastloader() {
+<br/>
+    u32 counter = 0, size;
+<br/>
+    u32 *ewram = (u32 *)0x02000000;
+<br/>
+<br/>
+   *RCNT_PTR = 0x0;
+<br/>
+   *SIOCNT_PTR = 0x02 | 0x80 | 0x1000;
+<br/>
+<br/>
+   *SIODATA32_PTR = 0xABADBABE;
+<br/>
+<br/>
+   while(1) {
+<br/>
+        if(!(*SIOCNT_PTR &amp; 0x80)) {
+<br/>
+            *SIOCNT_PTR |= 0x80;
+<br/>
+            if(*SIODATA32_PTR == 0xB0B0DEAD)
+<br/>
+                break;
+<br/>
+            *SIODATA32_PTR = 0xABADBABE;
+<br/>
+            *SIOCNT_PTR |= 0x02 | 0x80;
+<br/>
+        }
+<br/>
+   }
+<br/>
+<br/>
+   *SIODATA32_PTR = 0x12652395;
+<br/>
+   *SIOCNT_PTR |= 0x02 | 0x80;
+<br/>
+<br/>
+   while(1) {
+<br/>
+        if(!(*SIOCNT_PTR &amp; 0x80)) {
+<br/>
+            *SIOCNT_PTR |= 0x80;
+<br/>
+            break;
+<br/>
+        }
+<br/>
+   }
+<br/>
+<br/>
+   size = *SIODATA32_PTR / sizeof(u32);
+<br/>
+   *SIODATA32_PTR = size;
+<br/>
+   *SIOCNT_PTR |= 0x02 | 0x80;
+<br/>
+<br/>
+   while(1) {
+<br/>
+        if(!(*SIOCNT_PTR &amp; 0x80)) {
+<br/>
+            *SIOCNT_PTR |= 0x80; //?
+<br/>
+            ewram[counter] = *SIODATA32_PTR;
+<br/>
+            *SIODATA32_PTR = counter;
+<br/>
+            counter++;
+<br/>
+            if(counter &gt;= size)
+<br/>
+                break;
+<br/>
+            *SIOCNT_PTR |= 0x02 | 0x80;
+<br/>
+        }
+<br/>
+   }
+<br/>
+<br/>
+   __FarProcedure((void *)0x02000000);
+<br/>
+}
+<br/>
+<br/>
+int main(void)
+<br/>
+{
+<br/>
+    fastloader();
+<br/>
+    return 0;
+<br/>
+}
+<br/>
+<br/>
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+(yeah I know it probably should have been coded in asm, but with a stripped crt0.s and only -lgcc it compiles to ca 700 bytes including header, which is tolerable)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#20867 - poslundc - Tue May 18, 2004 9:25 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>BeeWarloc wrote:</b></span></td> </tr> <tr> <td class="quote">Hi... I wrote a new fastloader for a linker application I'm coding (xupload)..
+<br/>
+But it won't load all roms, some will run, and some will not.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+This may be pointing out the obvious, but you do realize that this will only work with roms compiled for multiboot support, right? Conventional roms won't work with it.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#20871 - tepples - Tue May 18, 2004 9:48 pm</h4>
+    <div class="postbody"><span class="postbody">Do all programs compiled for multiboot work, or do only those under a given size work?<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#20877 - BeeWarloc - Tue May 18, 2004 11:16 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>poslundc wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>BeeWarloc wrote:</b></span></td> </tr> <tr> <td class="quote">Hi... I wrote a new fastloader for a linker application I'm coding (xupload)..
+<br/>
+But it won't load all roms, some will run, and some will not.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+This may be pointing out the obvious, but you do realize that this will only work with roms compiled for multiboot support, right? Conventional roms won't work with it.
+<br/>
+<br/>
+Dan.</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Yes, I realize that..
+<br/>
+<br/>
+Tepples: Yes all programs compiled for multiboot _should_ work, the size is transferred before the program.. however, there are some var initialization stuff that i don't get..</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#20878 - BeeWarloc - Tue May 18, 2004 11:25 pm</h4>
+    <div class="postbody"><span class="postbody">Tepples: I think I misunderstood your question..
+<br/>
+<br/>
+Since there only 256kB of ewram available, the max size will be 256kB.. I guess theoretically I could add support for writing another (32kB - loader size - stack size) bytes of data into iwram, but for this you would have to have a custom compiled binary (made with a modified linker script and crt0.s or something like that)..
+<br/>
+<br/>
+If you need anything more than that you would have to write some rom flash code too, and have a flash cart..</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#20894 - BeeWarloc - Wed May 19, 2004 10:02 am</h4>
+    <div class="postbody"><span class="postbody">Hi, I just got it to work..
+<br/>
+<br/>
+I had to call the RegisterRamReset bios function, then jump to 0x02000000 (I found out this looking at the pogoshell source, which I ripped a few lines from):
+<br/>
+<br/>
+(Just called this end of fastload(), instead of the __FarProcedure call)
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+    .SECTION   .iwram
+<br/>
+<br/>
+   .ALIGN
+<br/>
+   .CODE 32
+<br/>
+<br/>
+   .GLOBAL    reset_func
+<br/>
+<br/>
+reset_func:
+<br/>
+   mov   r0,#0xfc      @reset all execept RAM
+<br/>
+   swi   #0x010000
+<br/>
+   ldr   r0, =0x02000000
+<br/>
+   bx   r0
+<br/>
+reset_end:
+<br/>
+<br/>
+<br/>
+<br/>
+   .ALIGN
+<br/>
+   .POOL
+<br/>
+   .END
+<br/>
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Now I get a 256kB rom to chainload in 7-8 seconds from my xupload utility which is a big improvement..
+<br/>
+(if anyone wants the code, just say so, and I will post it)
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+&gt; xupload f wws.mb
+<br/>
+<br/>
+Found interface \\?\usb#vid_4542&amp;pid_4144#5&amp;308a5c96&amp;0&amp;1#{606377c1-2270-11d4-bfd
+<br/>
+8-00207812f5d5}
+<br/>
+Read 26 bytes from 0x222000 DIOC
+<br/>
+00 00 1C 00 76 6B 06 00 04 00 00 80 01 00 00 00
+<br/>
+04 00 00 00 01 00 00 00 4C 69
+<br/>
+multibooting fastloader..
+<br/>
+Read 880 bytes
+<br/>
+   192 mb_index
+<br/>
+mb_index: 256
+<br/>
+mb_index: 512
+<br/>
+mb_index: 768
+<br/>
+6491 &lt;&gt; 6491
+<br/>
+fastloading wws.mb
+<br/>
+Read 198520 bytes
+<br/>
+Warning: pads mb from 198520 to  262144
+<br/>
+burst 0
+<br/>
+stream transfer returned 00, retlength 65536 size 65536
+<br/>
+burst 10000
+<br/>
+stream transfer returned 00, retlength 65536 size 65536
+<br/>
+burst 20000
+<br/>
+stream transfer returned 00, retlength 65536 size 65536
+<br/>
+burst 30000
+<br/>
+stream transfer returned 00, retlength 65536 size 65536
+<br/>
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#20929 - tepples - Thu May 20, 2004 3:53 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>BeeWarloc wrote:</b></span></td> </tr> <tr> <td class="quote">Tepples: I think I misunderstood your question</td> </tr></table><span class="postbody">
+<br/>
+For the record, my question was could you run all multiboot programs, even TOD (160 KB) and Panel de Pon (200 KB), or did it work only for programs smaller than 32 KB, 64 KB, or 128 KB?<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#20941 - BeeWarloc - Thu May 20, 2004 9:44 am</h4>
+    <div class="postbody"><span class="postbody">Yes it runs all multiboot programs up to 256kB..</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

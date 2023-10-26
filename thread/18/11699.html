@@ -1,0 +1,494 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Displaying sprites above a bgd - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Displaying sprites above a bgd</h2>
+<div id="posts">
+<div class="post">
+    <h4>#108977 - smoggie83 - Mon Nov 13, 2006 7:00 pm</h4>
+    <div class="postbody"><span class="postbody">Hi
+<br/>
+<br/>
+I am a newbie to ds development and have been trying to display a sprite above a bgd. What is necessary in the code below to do this as i cant find any tutorials. I basically want my graphic backArrow displayed above the menu graphic.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#include &lt;nds.h&gt;
+<br/>
+<br/>
+#include &lt;nds/arm9/math.h&gt;
+<br/>
+#include &lt;nds/arm9/console.h&gt;
+<br/>
+#include &lt;nds/arm9/trig_lut.h&gt; 
+<br/>
+#include &lt;stdio.h&gt;
+<br/>
+<br/>
+//make file automaticaly makes a header file for access
+<br/>
+//to the binary data in any file ending in .bin that is in
+<br/>
+//the data folder.  It also links in that data to your project
+<br/>
+<br/>
+SpriteEntry OAMCopy[128];
+<br/>
+<br/>
+#include "drunkenlogo_bin.h"
+<br/>
+#include "palette_bin.h"
+<br/>
+<br/>
+#include "backArrow_bin.h"
+<br/>
+#include "backArrowpalette_bin.h"
+<br/>
+<br/>
+#include "gameBoard_bin.h"
+<br/>
+#include "gameBoardPalette_bin.h"
+<br/>
+<br/>
+#include "menuTopScreen_bin.h"
+<br/>
+#include "menuTopScreenPalette_bin.h"
+<br/>
+<br/>
+#include "options_bin.h"
+<br/>
+#include "optionsPalette_bin.h"
+<br/>
+<br/>
+#include "diceRoll_bin.h"
+<br/>
+#include "diceRollPalette_bin.h"
+<br/>
+<br/>
+#include "players_bin.h"
+<br/>
+#include "playersPalette_bin.h"
+<br/>
+<br/>
+enum { CONTINUOUS, SINGLE } TouchType = SINGLE;
+<br/>
+enum { MAINMENU, OPTIONS, HOWTO, GAME } GameState = MAINMENU;
+<br/>
+<br/>
+volatile int frame = 0;
+<br/>
+<br/>
+//----------------------------------------------------------------------------------
+<br/>
+typedef struct selectionBoundaries{
+<br/>
+//----------------------------------------------------------------------------------
+<br/>
+   int minX,minY,maxX,maxY;
+<br/>
+} tSelectionBoundaries;
+<br/>
+<br/>
+//---------------------------------------------------------------------------------
+<br/>
+void Vblank() {
+<br/>
+//---------------------------------------------------------------------------------
+<br/>
+   frame++;
+<br/>
+}
+<br/>
+<br/>
+<br/>
+void initVideo() {
+<br/>
+   //enable vram and map it to the right places
+<br/>
+    vramSetMainBanks(   VRAM_A_MAIN_BG_0x6000000,      //map A and B to main background memory
+<br/>
+                        VRAM_B_MAIN_BG_0x6020000,
+<br/>
+                        VRAM_C_SUB_BG_0x6200000,      //map C to sub background memory
+<br/>
+                        VRAM_D_LCD                  //map D to LCD free space
+<br/>
+                  //allows adjacent banks to overflow into D if a bug like that was ever to occur
+<br/>
+                        );
+<br/>
+   
+<br/>
+   //map a bank for use with sprites
+<br/>
+   vramSetBankE(VRAM_E_MAIN_SPRITE); //mapping E to main sprites gives us 64k for sprites
+<br/>
+   //(64k is the max space that 1024 tiles take up in 256 color mode)
+<br/>
+   
+<br/>
+   vramSetBankE(VRAM_D_SUB_SPRITE);
+<br/>
+   
+<br/>
+   //set the video mode
+<br/>
+    videoSetMode(  MODE_5_2D | DISPLAY_SPR_ACTIVE | DISPLAY_BG0_ACTIVE |   
+<br/>
+                   DISPLAY_BG3_ACTIVE |    //turn on background 3
+<br/>
+               DISPLAY_SPR_1D
+<br/>
+               );
+<br/>
+   
+<br/>
+   videoSetModeSub(MODE_5_2D | DISPLAY_BG3_ACTIVE | DISPLAY_SPR_1D  ); 
+<br/>
+}
+<br/>
+<br/>
+<br/>
+void initBackgrounds() {
+<br/>
+<br/>
+   //setup exrot bg 3 on main as a 16bit color background
+<br/>
+   BG3_CR = BG_BMP8_256x256 | BG_BMP_BASE(8) | BG_PRIORITY(1);
+<br/>
+   //attributes of the affine translation matrix
+<br/>
+   BG3_XDX = 1 &lt;&lt; 8; //scale x
+<br/>
+   BG3_XDY = 0; //rotation x
+<br/>
+   BG3_YDX = 0; //rotation y
+<br/>
+   BG3_YDY = 1 &lt;&lt; 8; //scale y
+<br/>
+   BG3_CX = 0; //translation x
+<br/>
+   BG3_CY = 0; //translation y
+<br/>
+   
+<br/>
+   
+<br/>
+   BG0_CR = BG_MAP_BASE(31) | BG_PRIORITY(0); //use bg0 for the text  
+<br/>
+   
+<br/>
+   //setup exrot bg 3 on sub
+<br/>
+   SUB_BG3_CR = BG_BMP8_256x256 | BG_BMP_BASE(0) | BG_PRIORITY(0) ;
+<br/>
+   //attributes of the affine translation matrix
+<br/>
+   SUB_BG3_XDX = 1 &lt;&lt; 8; //scale x
+<br/>
+   SUB_BG3_XDY = 0; //rotation x
+<br/>
+   SUB_BG3_YDX = 0; //scale y
+<br/>
+   SUB_BG3_YDY = 1 &lt;&lt; 8; //scale y
+<br/>
+   SUB_BG3_CX = 0; //translation x
+<br/>
+   SUB_BG3_CY = 0; //translation y
+<br/>
+}
+<br/>
+<br/>
+void showMainMenu(void){
+<br/>
+   //Top Screen 
+<br/>
+   dmaCopy(menuTopScreen_bin, (uint16 *)BG_BMP_RAM_SUB(0), 256*192);
+<br/>
+   dmaCopy(menuTopScreenPalette_bin, BG_PALETTE_SUB, 256*2);
+<br/>
+   
+<br/>
+   //Lower Screen Menu
+<br/>
+   dmaCopy(drunkenlogo_bin, (void*)BG_BMP_RAM(8), 256*192);
+<br/>
+   dmaCopy(palette_bin, BG_PALETTE, 256*2);
+<br/>
+}
+<br/>
+<br/>
+void showOptionsMenu(void){
+<br/>
+   dmaCopy(options_bin, (void*)BG_BMP_RAM(8), 256*192);
+<br/>
+   dmaCopy(optionsPalette_bin, BG_PALETTE, 256*2);
+<br/>
+}
+<br/>
+<br/>
+bool touchPosBetween(int posMinX,int posMaxX,int posMinY, int posMaxY, touchPosition touch){
+<br/>
+   if ( touch.px &gt; posMinX &amp;&amp; touch.px &lt; posMaxX){      
+<br/>
+      if ( touch.py &gt; posMinY &amp;&amp; touch.py &lt; posMaxY){
+<br/>
+         return true;
+<br/>
+      }
+<br/>
+   }
+<br/>
+<br/>
+   return false;
+<br/>
+}
+<br/>
+<br/>
+void checkSelectedOptionsMainMenu(touchPosition touch){
+<br/>
+   tSelectionBoundaries option1Bounds;
+<br/>
+   tSelectionBoundaries option2Bounds;
+<br/>
+   tSelectionBoundaries option3Bounds;
+<br/>
+   
+<br/>
+   option1Bounds.minX = 32;
+<br/>
+   option1Bounds.maxX = 232;
+<br/>
+   option1Bounds.minY = 80;
+<br/>
+   option1Bounds.maxY = 110;
+<br/>
+   
+<br/>
+   option2Bounds.minX = 32;
+<br/>
+   option2Bounds.maxX = 232;
+<br/>
+   option2Bounds.minY = 117;
+<br/>
+   option2Bounds.maxY = 147;
+<br/>
+   
+<br/>
+   option3Bounds.minX = 32;
+<br/>
+   option3Bounds.maxX = 232;
+<br/>
+   option3Bounds.minY = 156;
+<br/>
+   option3Bounds.maxY = 186;
+<br/>
+<br/>
+   if ( touchPosBetween(option1Bounds.minX,option1Bounds.maxX,option1Bounds.minY,option1Bounds.maxY,touch) )
+<br/>
+   {
+<br/>
+      GameState = GAME;
+<br/>
+   }else
+<br/>
+   if ( touchPosBetween(option2Bounds.minX,option2Bounds.maxX,option2Bounds.minY,option2Bounds.maxY,touch) )
+<br/>
+   {
+<br/>
+      GameState = HOWTO;
+<br/>
+   }else
+<br/>
+   if ( touchPosBetween(option3Bounds.minX,option3Bounds.maxX,option3Bounds.minY,option3Bounds.maxY,touch) )
+<br/>
+   {
+<br/>
+      GameState = OPTIONS;
+<br/>
+      showOptionsMenu();
+<br/>
+   }
+<br/>
+<br/>
+}
+<br/>
+<br/>
+int main(void) {
+<br/>
+//---------------------------------------------------------------------------------
+<br/>
+   int min_x  = 4096 , min_y  = 4096, max_x  = 0, max_y   = 0;
+<br/>
+   int min_px = 4096 , min_py = 4096, max_px = 0 , max_py = 0;
+<br/>
+   touchPosition touch;
+<br/>
+<br/>
+   powerON(POWER_ALL); 
+<br/>
+   
+<br/>
+   //initialise the interrupt system
+<br/>
+   irqInit();
+<br/>
+   //install our simple vblank handler
+<br/>
+   irqSet(IRQ_VBLANK, Vblank);
+<br/>
+   //enable the interrupt
+<br/>
+   irqEnable(IRQ_VBLANK);
+<br/>
+   
+<br/>
+   //set the mode for 2 text layers and two extended background layers
+<br/>
+   initVideo();
+<br/>
+<br/>
+   ///////////////set up our bitmap background///////////////////////
+<br/>
+   initBackgrounds();
+<br/>
+      
+<br/>
+   //consoleInit() is a lot more flexible but this gets you up and running quick
+<br/>
+   consoleInitDefault((u16*)SCREEN_BASE_BLOCK(31), (u16*)CHAR_BASE_BLOCK(0), 16);
+<br/>
+<br/>
+   BG_PALETTE[255] = RGB15(31,31,31);//by default font rendered with color 255
+<br/>
+   
+<br/>
+   showMainMenu(); 
+<br/>
+         
+<br/>
+   lcdMainOnBottom();
+<br/>
+   while(1) {
+<br/>
+      swiWaitForVBlank();
+<br/>
+      
+<br/>
+      // read the button states
+<br/>
+      scanKeys();
+<br/>
+<br/>
+      // read the touchscreen coordinates
+<br/>
+      touch=touchReadXY();
+<br/>
+      
+<br/>
+      int pressed = keysDown();   // buttons pressed this loop
+<br/>
+      int held = keysHeld();      // buttons currently held
+<br/>
+<br/>
+      // Right Shoulder button toggles the mode
+<br/>
+      if ( pressed &amp; KEY_R) TouchType ^= SINGLE;
+<br/>
+      
+<br/>
+         iprintf("\x1b[14;4HTouch mode: %s",TouchType==CONTINUOUS?"CONTINUOUS ":"SINGLE SHOT");
+<br/>
+         
+<br/>
+         if ( TouchType == SINGLE &amp;&amp; !(pressed &amp; KEY_TOUCH) ) continue;
+<br/>
+   
+<br/>
+         if ( !(held &amp; KEY_TOUCH) || touch.x == 0 || touch.y == 0) continue;
+<br/>
+         
+<br/>
+         iprintf("\x1b[10;10H(%d,%d)      ",touch.px,touch.py);
+<br/>
+         
+<br/>
+         if ( touch.x &gt; max_x)      max_x = touch.x;
+<br/>
+         if ( touch.y &gt; max_y)      max_y = touch.y;
+<br/>
+         if ( touch.px &gt; max_px)   max_px = touch.px;
+<br/>
+         if ( touch.py &gt; max_py)   max_py = touch.py;
+<br/>
+   
+<br/>
+         if ( touch.x &lt; min_x)      min_x = touch.x;
+<br/>
+         if ( touch.y &lt; min_y)      min_y = touch.y;
+<br/>
+         if ( touch.px &lt; min_px)   min_px = touch.px;
+<br/>
+         if ( touch.py &lt; min_py)   min_py = touch.py;
+<br/>
+         
+<br/>
+         if (GameState == MAINMENU){
+<br/>
+            checkSelectedOptionsMainMenu(touch);
+<br/>
+         }
+<br/>
+         iprintf("\x1b[9;10HGameState %d\n", GameState);
+<br/>
+         
+<br/>
+         OAMCopy[0].attribute[2] = 0;
+<br/>
+         OAMCopy[0].attribute[1] = ATTR1_SIZE_32 |((touch.px - 16) &amp; 0x01FF);
+<br/>
+         OAMCopy[0].attribute[0] = ATTR0_COLOR_256 | ATTR0_SQUARE | ((touch.py -16) &amp; 0x00FF);
+<br/>
+   }
+<br/>
+<br/>
+   return 0;
+<br/>
+}
+<br/>
+<br/>
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Cheers
+<br/>
+<br/>
+Dave</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#108985 - Dark Knight ez - Mon Nov 13, 2006 9:25 pm</h4>
+    <div class="postbody"><span class="postbody">You still need to load in the sprite graphics.
+<br/>
+Loading it should be done to SPRITE_GFX, in about the same way as you did with loading in background graphics.<br/>_________________<br/><span style="font-size: 9px; line-height: normal"><a class="postlink" href="http://amplituds.drunkencoders.com" target="_blank">AmplituDS website</a></span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#108989 - Lick - Mon Nov 13, 2006 9:54 pm</h4>
+    <div class="postbody"><span class="postbody">You don't copy the OAMCopy back to the actual OAM?<br/>_________________<br/><a class="postlink" href="http://licklick.wordpress.com" target="_blank">http://licklick.wordpress.com</a></span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

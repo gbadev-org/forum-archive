@@ -1,0 +1,170 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>When to call bgUpdate, glFlush and swiWaitForVBlank? - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > When to call bgUpdate, glFlush and swiWaitForVBlank?</h2>
+<div id="posts">
+<div class="post">
+    <h4>#177242 - SchmendrickSchmuck - Fri Feb 17, 2012 12:41 am</h4>
+    <div class="postbody"><span class="postbody">In my DS homebrew, I want to scroll a bg using the hardware scroll function. My code inside the while loop is like below:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">{ Update code }
+<br/>
+{ Draw code }   // &lt;- contains bgSetScroll
+<br/>
+<br/>
+// X jumpy screen
+<br/>
+glFlush(0);
+<br/>
+// X jumpy screen
+<br/>
+swiWaitForVBlank();
+<br/>
+// X one frame too late
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+As stated, in the drawing code bgSetScroll is called, as well as some bg modifications. I need these modifications and scroll to be applied in the same frame. However, placing the bgUpdate() call at any of the 'X' positions causes problems.
+<br/>
+<br/>
+By 'jumpy screen' I mean that the background (type BgType_Bmp8, BgSize_B8_256x256) is partially displayed twice vertically, and gets worse when modifying the contents of the bg:
+<br/>
+<a href="http://i42.tinypic.com/ogguuh.jpg">[Images not permitted - Click here to view it]</a>
+<br/>
+<br/>
+In case of the 'one frame too late', the bg modifications are made, but the bg isn't scrolled until the next frame, causing them to be out of sync and makes the whole thing jittery when scrolling. The 'jumpy screen' isn't here though.
+<br/>
+<br/>
+Obviously I can't call it anywhere above the Draw code since then for sure it won't update until the next frame.
+<br/>
+<br/>
+Thanks!<br/>_________________<br/><a href="http://DSLiero.DennisvanZwieten.com" target="_blank">http://DSLiero.DennisvanZwieten.com</a> - Liero for NDS!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177243 - elhobbs - Fri Feb 17, 2012 3:24 am</h4>
+    <div class="postbody"><span class="postbody">are you updating your bmp8 background directly? glFlush does not take effect until the next vblank which would make it lag a frame. after swiWaitForVBlank is where you want the bgUpdate call to go. I think you need to either double buffer your bmp8 and switch to the new version in vblank or update the bmp8 directly during vblank.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177244 - sverx - Fri Feb 17, 2012 12:30 pm</h4>
+    <div class="postbody"><span class="postbody">if hardware scroll registers are changed while drawing the screen, then that 'jumpy' effect happens, so you should change those registers only during VBlank. I don't get why it's "too late" after swiWaitForVBlank(), I suppose you're preparing all the things off screen before swiWaitForVBlank() and make them appear after that...
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">{ Update code } 
+<br/>
+{ Draw (offscreen) code } 
+<br/>
+glFlush(0); 
+<br/>
+swiWaitForVBlank();
+<br/>
+{ scroll code } 
+<br/>
+{ copy screen on code }</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+or even
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">{ Update code } 
+<br/>
+{ Draw 3D code } 
+<br/>
+glFlush(0); 
+<br/>
+swiWaitForVBlank();
+<br/>
+{ Draw 2D code }  // &lt;- contains bgSetScroll
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+might work for you...<br/>_________________<br/><a class="postlink" href="http://bit.ly/yiQrz9" target="_blank">libXM7</a>|<a class="postlink" href="http://bit.ly/yJwcOo" target="_blank">NDS programming tutorial (Italiano)</a>|<a class="postlink" href="http://disjointedstudio.blogspot.com/" target="_blank">Waimanu DS / GBA</a>|<a class="postlink" href="http://adshomebrewersdiary.blogspot.com" target="_blank">A DS Homebrewer's Diary</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177245 - SchmendrickSchmuck - Sat Feb 18, 2012 3:00 am</h4>
+    <div class="postbody"><span class="postbody">Thanks for the replies!
+<br/>
+<br/>
+That sounds more like a workaround than a solution, but I guess I don't have much of a choice.
+<br/>
+<br/>
+Sverx, I'm using something similar to your first method, and it mostly works now. How can I ensure something only happens during VBlank? Because everything's 'after' a VBlank call in a continuous while loop, this has always confused me. I suppose it's just that the DS will cram as much as possible in vblank after the call and everything that's too slow happens outside of vblank?
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">{ Update code }
+<br/>
+{ Draw code }
+<br/>
+glFlush(0);
+<br/>
+swiWaitForVBlank();
+<br/>
+Draw8bitBgs();
+<br/>
+bgUpdate();</td> </tr></table><span class="postbody">
+<br/>
+This works for me most of the time, though in some instances it still shows the artifacts as can be seen from the screenie. Not by far as bad as it was before, and only in certain sections of the game (Seemingly all the menus, though they are exactly the same as the parts that do work structure-wise..). I'm calling bgUpdate as soon as I can after VBlank; any reason the tearing still happens?
+<br/>
+<br/>
+It's 'too late' as in, I'm using a 256*256 8bit bg, but since I want to be able to have a bigger image, I'm using swiFastCopy to draw a buffer to the screen. However, since swiFastCopy requires both source and destination to be word-aligned, smooth horizontal scrolling is impossible (vertical scrolling is fine; any y position is always word-aligned). This is why I'm using bgSetScroll for these 3 pixels of scrollness. So if the data copy for '4 pixels to the right' happens out of sync with the bg scrolling, you'll see the screen 3-4 pixels to the left or right for a single frame.<br/>_________________<br/><a href="http://DSLiero.DennisvanZwieten.com" target="_blank">http://DSLiero.DennisvanZwieten.com</a> - Liero for NDS!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177246 - elhobbs - Sat Feb 18, 2012 6:13 pm</h4>
+    <div class="postbody"><span class="postbody">you may call it a workaround, but that is the way the hardware works. even on a pc you update the display buffer during vblank to avoid tearing. either by switching the buffer that the hardware looks at or by copying a buffer from main memory to video memory.
+<br/>
+<br/>
+dmaCopy is faster than swiFastCopy, but you need to flush the data cache before calling dmaCopy - DC_FlushAll or DC_FlushRange.
+<br/>
+<br/>
+to use horizontal scrolling you need to use a background bigger than 256 wide - 256 wide will give you wrapping. you will need to use a 512 wide background - BgSize_B8_512x256 or BgSize_B8_512x512
+<br/>
+<br/>
+to sync with vblank just call swiWaitForVBlank like you are doing, then do what you need. however, vblank only lasts so long. so you need to make sure you do not try to do too much. REG_VCOUNT will tell you which line the hardware is currently on. there are 262 lines on the DS. 0-191 are the visible screen. the 2d hardware is in vblank from 192-261. the 3d hardware is in vblank from 191-213.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177247 - sverx - Mon Feb 20, 2012 10:24 am</h4>
+    <div class="postbody"><span class="postbody">put in the simplest words I can:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">while (game_is_running) {
+<br/>
+  doGameLogic();
+<br/>
+  swiWaitForVBlank();
+<br/>
+  doScreenLogic();
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+of course if screen logic is taking too much, there can be some screen tearing. But if it takes so much, probably there's something wrong/unnecessary happening there...<br/>_________________<br/><a class="postlink" href="http://bit.ly/yiQrz9" target="_blank">libXM7</a>|<a class="postlink" href="http://bit.ly/yJwcOo" target="_blank">NDS programming tutorial (Italiano)</a>|<a class="postlink" href="http://disjointedstudio.blogspot.com/" target="_blank">Waimanu DS / GBA</a>|<a class="postlink" href="http://adshomebrewersdiary.blogspot.com" target="_blank">A DS Homebrewer's Diary</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177279 - SchmendrickSchmuck - Sat Mar 10, 2012 5:44 pm</h4>
+    <div class="postbody"><span class="postbody">Thanks for the replies guys. 
+<br/>
+<br/>
+What's taking so long in the draw code is the fact that I copy 192 lines of 256 8bit values from a buffer to both screens. The buffer itself is bigger than 256x192, so I can't simply copy the whole buffer at once - similar to viewing a 512*512 image in a 256*256 window, you can't just copy one big block of data, but need to do this line-by-line. As such, for 192 (or 384 for 2 screens) consecutive copies, is DMA still faster than swi? I can imagine the constant flushing takes up some time as well.
+<br/>
+Wrapping is not much of an issue, since I cover the edges of the screen most of the time.<br/>_________________<br/><a href="http://DSLiero.DennisvanZwieten.com" target="_blank">http://DSLiero.DennisvanZwieten.com</a> - Liero for NDS!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177280 - headspin - Sat Mar 10, 2012 11:55 pm</h4>
+    <div class="postbody"><span class="postbody">A DMA copy will likely be faster. Check out sverx's comparisons <a class="postlink" href="http://forum.gbadev.org/viewtopic.php?t=17831" target="_blank">here</a>.
+<br/>
+<br/>
+Also did you know that grit supports outputting graphics in "screen blocks"? That means you can DMA large sections of graphics to the screen as the data is in the internal format of the DS. Check out grit's -mLs parameter <a class="postlink" href="http://www.coranac.com/man/grit/html/grit.htm" target="_blank">here</a>.<br/>_________________<br/><a class="postlink" href="http://headsoft.com.au/index.php?category=warhawk" target="_blank">Warhawk DS</a> | <a class="postlink" href="http://headsoft.com.au/index.php?category=mmll" target="_blank">Manic Miner: The Lost Levels</a> | <a class="postlink" href="http://headsoft.com.au/index.php?category=tdg" target="_blank">The Detective Game</a></span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

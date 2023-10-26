@@ -1,0 +1,363 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Any help appreciated - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>ASM > Any help appreciated</h2>
+<div id="posts">
+<div class="post">
+    <h4>#15145 - xti - Sun Jan 18, 2004 12:46 am</h4>
+    <div class="postbody"><span class="postbody">Hello, over at the treo600 (smartphone) forums, we're attempting to unlock our treos since many of us ended up with locked ATT treos under the assumption that an unlock solution was just around the corner. 
+<br/>
+<br/>
+We have come very close, however, our community doesnt seem to have many ARM ASM coders. One person has partially sifted through the code and seems to have given a solution (but has not actually implemented it in).
+<br/>
+<br/>
+If anyone here could assist, it would be much appreciated. Thanks for your help!
+<br/>
+<br/>
+<a class="postlink" href="http://perso.wanadoo.fr/fmol/Treo600/resources/crashed.zip" target="_blank">http://perso.wanadoo.fr/fmol/Treo600/resources/crashed.zip</a> - The zip package with a number of files, the file we are interested in is Firmwarestackrel.pdb
+<br/>
+<br/>
+Heres what we know so far
+<br/>
+---------------------------
+<br/>
+The Treo is based on ARM7TDMI core (check in ARM's online database),  using WinArm the ARM7TDMI disassembler used in the Nokia community on the crashed firmware posted earlier (FirmwareStackRel.pdb), the following was found.
+<br/>
+<br/>
+Near the addres 3a191e there a number of functions handling simlock and three small functions called encrypt, decrypt, fuzz ... The firmware contains symbols for the functions just before the code so its pretty easy to pick them.
+<br/>
+<br/>
+Here is an example of my take I understanding on of the funcs in the firmware (SIMLockCheckNetworkLock).
+<br/>
+Hope this will help others to go on ...
+<br/>
+<br/>
+Basically what it does is that it get a 6 byte string input and check it against an encrypted string that is decrypted on the fly using the decrypt function.
+<br/>
+It uses also a func called BATTMgrResumeCharging ... probably something wrong here with the addressing ...
+<br/>
+<br/>
+<span style="text-decoration: underline">Well not that much here .. except that I'm wondering if simply modify the code so that SIMLockCheckNetworkLock returns always 1 would not do the trick ;-)</span> - This would be the proposed solution
+<br/>
+<br/>
+Code with comments
+<br/>
+---------------------------
+<br/>
+3a1078 :b5b0 ?? : PUSH { R4,R5,R7, LR } // Save R4,R5,R7 on stack - save LR as well for function call return
+<br/>
+3a107a :45d5 E? : CMP SP, H2 // Check on all funcs ... probably some heap overflow check 
+<br/>
+3a107c :da01 ?. : BGE 3a1082 //
+<br/>
+3a107e :f00af863: BL 3ab148 (Routine (11 calls)) //
+<br/>
+3a1082 :1c07 .. : MOV R7, R0 // R7 = R0 (1st parameter, let's call it Parm1), so R7 = Parm1
+<br/>
+3a1084 :b083 ?? : ADD SP, #-000c // Reserve 12 bytes on the stack for function usage
+<br/>
+3a1086 :482c H, : LDR R0, #003f8060 // Load a structure pointer into R0, let's call it Ptr1
+<br/>
+3a1088 :7cc0 |? : LDRB R0, [R0, #13] // R0 = *((char *)Ptr1 + 13) , let's call it Ptr1-&gt;Byte1
+<br/>
+3a108a :ab02 ?. : ADD R3, SP, #0008 // R3 points on the 9th char of the 12 we reserved on stack (let's call this LocByte1), so R3 = &amp;LocByte1 
+<br/>
+3a108c :7018 p. : STRB R0, [R3, #0] // LocByte1 = R0 = Ptr1-&gt;Byte1 
+<br/>
+3a108e :207f  : MOV R0, #7f // R0 = #7f
+<br/>
+3a1090 :03c0 .? : LSL R0, R0, #.15 // R0 = R0&lt;&lt;15 = #7f0000, let's cal it PtrByte2 (a special reserver part of the memory ? Why is it computed like this ?)
+<br/>
+3a1092 :7800 x. : LDRB R0, [R0, #0] // R0 = PtrByte2[0]
+<br/>
+3a1094 :2501 %. : MOV R5, #1 // R5 = 1
+<br/>
+3a1096 :2800 (. : CMP R0, #0 // if (R0 == 0)
+<br/>
+3a1098 :d004 ?. : BEQ 3a10a4 // Goto Branch1
+<br/>
+3a109a :1c38 .8 : MOV R0, R7 // R0 = Parm1 (R0 is used as 1st parm for function calls)
+<br/>
+3a109c :f6b7fba4: BL 2587e8 (Routine (4 calls)) // R0 = Routine1(Parm1)
+<br/>
+3a10a0 :2800 (. : CMP R0, #0 // if (R0 == 0)
+<br/>
+3a10a2 :d001 ?. : BEQ 3a10a8 // Goto Branch2
+<br/>
+<br/>
+Branch1
+<br/>
+<br/>
+3a10a4 :1c28 .( : MOV R0, R5 // R0 = R5 = 1
+<br/>
+3a10a6 :e044 ?D : B 3a1132 // goto Branch8 (return (1))
+<br/>
+<br/>
+Branch2
+<br/>
+<br/>
+3a10a8 :2101 !. : MOV R1, #1 // R1 = 1
+<br/>
+3a10aa :a802 ?. : ADD R0, SP, #0008 // R0 = &amp;LocByte1, LocByte1 = Ptr1-&gt;Byte1
+<br/>
+3a10ac :f000fc37: BL 3a191e (Routine (11 calls)) // DecryptData(&amp;LocByte1, 1) (call using a reference, not a direct value)
+<br/>
+3a10b0 :2400 $. : MOV R4, #0 // R4 = 0
+<br/>
+3a10b2 :a802 ?. : ADD R0, SP, #0008 // R0 = &amp;LocByte1 (modified)
+<br/>
+3a10b4 :7800 x. : LDRB R0, [R0, #0] // R0 = LocByte1
+<br/>
+3a10b6 :2800 (. : CMP R0, #0 // if (LocByte1 &lt;= 0)
+<br/>
+3a10b8 :dd3a ?: : BLE 3a1130 // goto Branch7 (return(0))
+<br/>
+<br/>
+Branch6
+<br/>
+<br/>
+3a10ba :0060 .` : LSL R0, R4, #.1 // R0 = R4 &lt;&lt; 1 = 0 ??? I don't understand ...
+<br/>
+3a10bc :1900 .. : ADD R0, R0, R4 // R0 += R4
+<br/>
+3a10be :0040 .@ : LSL R0, R0, #.1 // R0 = R0 &lt;&lt; 1 = 0 ???
+<br/>
+3a10c0 :4b1e K. : LDR R3, #003f8074 // R3 = Ptr2
+<br/>
+3a10c2 :18c1 .? : ADD R1, R0, R3 // R1 = &amp;Ptr2-&gt;Data1
+<br/>
+3a10c4 :4668 Fh : MOV R0, SP // R0 = stack pointer = LocString2 (points on the 1st char of the 12 we reserved on stack)
+<br/>
+3a10c6 :2206 ". : MOV R2, #6 // R2 = 6
+<br/>
+3a10c8 :f005fa2c: BL 3a6524 (Routine (13 calls)) // BATTMgrResumeCharging(LocString2 , &amp;Ptr2-&gt;Data1, 6)
+<br/>
+3a10cc :4668 Fh : MOV R0, SP // R0 = stack pointer = LocString2
+<br/>
+3a10ce :2106 !. : MOV R1, #6 // R1 = 6
+<br/>
+3a10d0 :f000fc25: BL 3a191e (Routine (11 calls)) // DecryptData(LocString2 , 6)
+<br/>
+3a10d4 :a800 ?. : ADD R0, SP, #0000 // R0 = LocString2
+<br/>
+3a10d6 :7800 x. : LDRB R0, [R0, #0] // R0 = LocString2[0] (modified by DecryptData)
+<br/>
+3a10d8 :7839 x9 : LDRB R1, [R7, #0] // R1 = Parm1[0]
+<br/>
+3a10da :4288 B? : CMP R0, R1 // if (LocString2[0] != Parm1[0])
+<br/>
+3a10dc :d121 ?! : BNE 3a1122 // goto Branch3
+<br/>
+3a10de :a800 ?. : ADD R0, SP, #0000 // R0 = LocString2
+<br/>
+3a10e0 :7840 x@ : LDRB R0, [R0, #1] // R0 = LocString2[1] 
+<br/>
+3a10e2 :7879 xy : LDRB R1, [R7, #1] // R1 = Parm1[1]
+<br/>
+3a10e4 :4288 B? : CMP R0, R1 // if (LocString2[1] != Parm1[1])
+<br/>
+3a10e6 :d11c ?. : BNE 3a1122 // goto Branch3
+<br/>
+3a10e8 :a800 ?. : ADD R0, SP, #0000 // R0 = LocString2
+<br/>
+3a10ea :7880 x? : LDRB R0, [R0, #2] // R0 = LocString2[2] 
+<br/>
+3a10ec :78b9 x? : LDRB R1, [R7, #2] // R1 = Parm1[2]
+<br/>
+3a10ee :4288 B? : CMP R0, R1 // if (LocString2[1] != Parm1[1])
+<br/>
+3a10f0 :d117 ?. : BNE 3a1122 // goto Branch3
+<br/>
+3a10f2 :a800 ?. : ADD R0, SP, #0000 // 
+<br/>
+3a10f4 :78c0 x? : LDRB R0, [R0, #3] //
+<br/>
+3a10f6 :78f9 x? : LDRB R1, [R7, #3] //
+<br/>
+3a10f8 :4288 B? : CMP R0, R1 // if (LocString2[3] != Parm1[3])
+<br/>
+3a10fa :d112 ?. : BNE 3a1122 // goto Branch3
+<br/>
+3a10fc :a801 ?. : ADD R0, SP, #0004 //
+<br/>
+3a10fe :7800 x. : LDRB R0, [R0, #0] //
+<br/>
+3a1100 :7939 y9 : LDRB R1, [R7, #4] //
+<br/>
+3a1102 :4288 B? : CMP R0, R1 // if (LocString2[4] != Parm1[4])
+<br/>
+3a1104 :d10d ?. : BNE 3a1122 // goto Branch3
+<br/>
+3a1106 :a801 ?. : ADD R0, SP, #0004
+<br/>
+3a1108 :78402800: : x@(. // ????? - probably a problem with the disassembler ...
+<br/>
+3a110c :d0ca ?? : BEQ 3a10a4
+<br/>
+3a110e :a801 ?. : ADD R0, SP, #0004
+<br/>
+3a1110 :7840 x@ : LDRB R0, [R0, #1]
+<br/>
+3a1112 :7979 yy : LDRB R1, [R7, #5]
+<br/>
+3a1114 :4288 B? : CMP R0, R1 // if (LocString2[5] != Parm1[5])
+<br/>
+3a1116 :d101 ?. : BNE 3a111c // goto Branch4
+<br/>
+3a1118 :2001 . : MOV R0, #1 // R0 = 1
+<br/>
+3a111a :e000 ?. : B 3a111e // goto Branch5
+<br/>
+<br/>
+Branch4 
+<br/>
+<br/>
+3a111c :2000 . : MOV R0, #0 // R0 = 0
+<br/>
+<br/>
+Branch5
+<br/>
+<br/>
+3a111e :2800 (. : CMP R0, #0 // if (R0 != 0)
+<br/>
+3a1120 :d1c0 ?? : BNE 3a10a4 // goto Branch1 (return(1))
+<br/>
+<br/>
+Branch3
+<br/>
+<br/>
+3a1122 :1c60 .` : ADD R0, R4, #1 // RO = R4 + 1
+<br/>
+3a1124 :06040e24: AND R4, R0, #000000ff // R4 = R0 &amp; #ff
+<br/>
+3a1128 :a802 ?. : ADD R0, SP, #0008 // R0 = &amp;LocByte1
+<br/>
+3a112a :7800 x. : LDRB R0, [R0, #0] // R0 = LocByte1
+<br/>
+3a112c :4284 B? : CMP R4, R0 // if(R4 == R0)
+<br/>
+3a112e :dbc4 ?? : BLT 3a10ba // goto Branch6
+<br/>
+<br/>
+Branch7
+<br/>
+<br/>
+3a1130 :2000 . : MOV R0, #0 // return(0)
+<br/>
+<br/>
+Branch8
+<br/>
+<br/>
+3a1132 :b003 ?. : ADD SP, #000c // Liberate the 12 bytes on the stack
+<br/>
+3a1134 :bdb0 ?? : POP { R4,R5,R7, PC } // Restore registers and return
+<br/>
+-----------------------------------------^ end routine
+<br/>
+<br/>
+<br/>
+<br/>
+I'm sure I missed something vital which is needed to help fix the code. Please post with any additional info you may need and I'll look it up.
+<br/>
+<br/>
+Again, thanks for your time!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#15153 - poslundc - Sun Jan 18, 2004 3:14 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>xti wrote:</b></span></td> </tr> <tr> <td class="quote">Hello, over at the treo600 (smartphone) forums, we're attempting to unlock our treos since many of us ended up with locked ATT treos under the assumption that an unlock solution was just around the corner.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I guess I'm not up on cell-phone lingo. What exactly do you mean by unlocking a phone?
+<br/>
+<br/>
+You've got a lot of code there. What are you trying to make it do?
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#15154 - torne - Sun Jan 18, 2004 3:32 am</h4>
+    <div class="postbody"><span class="postbody">I'll take a look at it tomorrow; sounds interesting. =)
+<br/>
+<br/>
+Unlocking a phone refers to allowing it to work with a simcard from any mobile operator; some phones are sold locked to the operator you bought it from, and they charge for unlocking. Most conventional mobile phones have some way to bypass the lock either by generating a code form your serial number or connecting a device/computer to reflash your firmware. The Treo happens to have its firmware as software, due to it being a PalmOS device.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#15155 - xti - Sun Jan 18, 2004 3:38 am</h4>
+    <div class="postbody"><span class="postbody">Torne explained it quite well. 
+<br/>
+<br/>
+As of yet, we have failed to figure out some sort of algorithm to create an unlock code for the phone, so we're trying to bypass/defeat the locking mechanism in some way shape or form. It is my assumption that we will have to flash the phone with the modified firmware to reflect the change.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#15160 - tepples - Sun Jan 18, 2004 5:58 am</h4>
+    <div class="postbody"><span class="postbody">Please read your mobile phone service provider's contract carefully. Unlocking your phone may violate your TOS, and because the telcos seem to think locking the phone constitutes part of the economic bargain that allows them to offer such low prices, you might get taken to court and be held liable for damages plus attorney's fees and court costs.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#15162 - xti - Sun Jan 18, 2004 6:03 am</h4>
+    <div class="postbody"><span class="postbody">For most of us current treo 600 owners, we took advantage of an upgrade offer from handspring. These phones were not purchased from the mobile provider. Whether or not I unlock the phone would be irrelevant since the phone was not subsidized by them.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#15170 - torne - Sun Jan 18, 2004 2:50 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote">Please read your mobile phone service provider's contract carefully. Unlocking your phone may violate your TOS, and because the telcos seem to think locking the phone constitutes part of the economic bargain that allows them to offer such low prices, you might get taken to court and be held liable for damages plus attorney's fees and court costs.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+If you have already terminated your agreement with the provider who sold you the phone, there is no legal bar from unlocking it.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#15173 - poslundc - Sun Jan 18, 2004 4:42 pm</h4>
+    <div class="postbody"><span class="postbody">OK, well, I won't pretend to understand everything going on in this program, but if all it does is return a 1 if your secret code (or whatever) is valid then it should be easy to overwrite its functionality (as you suggest doing).
+<br/>
+<br/>
+The easiest way to do this (if you are allowed to "insert" new commands into the procedure without throwing off all of the addressing/having to re-link) would be to add the command "mov r0, #1" right at the end of the code (at the address 3a1136).
+<br/>
+<br/>
+If it's more trouble inserting a command than replacing current ones, then I would replace the following (near the beginning):
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">3a1078: mov r0, #1
+<br/>
+3a107a: b 3a1136</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+The first command puts your return value (1) into r0, and then the second command jumps you to the return statement at the end of the function.
+<br/>
+<br/>
+From the look of it, your routine doesn't modify memory, so unless the other routines (BATTMgrResumeCharging et al) are required to modify memory when the check occurs you should be fine.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#15177 - xti - Sun Jan 18, 2004 4:53 pm</h4>
+    <div class="postbody"><span class="postbody">Thanks poslundc! Did the trick! We're pretty happy over at the Treo forums now. Your help (and anyone else that looked at the code) has been much appreciated.
+<br/>
+<br/>
+Now, despite the fact that we have a solution, we are going to continue our crash course in ASM and figure out the codes. Heh.
+<br/>
+<br/>
+<br/>
+Again, thank you!</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

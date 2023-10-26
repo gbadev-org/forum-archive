@@ -1,0 +1,699 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Multiboot not working on real hardware - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > Multiboot not working on real hardware</h2>
+<div id="posts">
+<div class="post">
+    <h4>#152704 - Maximus32 - Wed Mar 19, 2008 10:10 pm</h4>
+    <div class="postbody"><span class="postbody">Hello,
+<br/>
+<br/>
+Does anyone know if there is documentation on the MultiBootParam structure? GBATEK has some information but not much. And I can't find any working examples.
+<br/>
+<br/>
+My problem is the following:
+<br/>
+I have multiboot working in No$gba (up to three slaves), but when I try to run it on real hardware it fails...
+<br/>
+The other gba already shows the orange nintendo logo so it seems to work up to a certain point. All values returned by the other gba are as reported on GBATEK (I check each and every one). But when calling the MultiBoot bios function it returns immediately with return value 1.
+<br/>
+<br/>
+I think it must have something to do with the parameters in the MultiBootParam structure, but I can't find any documentation or a working example. The values I currently initialize are:
+<br/>
+<br/>
+memset(&amp;mbp, 0, sizeof(MultiBootParam));
+<br/>
+mbp.handshake_data
+<br/>
+mbp.probe_count
+<br/>
+mbp.client_data[0]
+<br/>
+mbp.client_data[1]
+<br/>
+mbp.client_data[2]
+<br/>
+mbp.palette_data
+<br/>
+mbp.client_bit
+<br/>
+mbp.boot_srcp
+<br/>
+mbp.boot_endp
+<br/>
+<br/>
+If someone has some example source or any documentation it would be really nice.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#152724 - eKid - Thu Mar 20, 2008 2:19 am</h4>
+    <div class="postbody"><span class="postbody">I've gotten it to work a couple times. If you post your code I can see what's wrong.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#152738 - Maximus32 - Thu Mar 20, 2008 8:49 am</h4>
+    <div class="postbody"><span class="postbody">The code is part of a big project, so I'll only post the multiboot function (big also :-)). Here it is:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+int
+<br/>
+CGBASerial::multiBoot()
+<br/>
+{
+<br/>
+  if(eMode_ != SIO_MULTI_MODE)
+<br/>
+  {
+<br/>
+    if(setMode(SIO_MULTI_MODE) == -1)
+<br/>
+    {
+<br/>
+      printk("unable to set multi mode\n");
+<br/>
+      return -1;
+<br/>
+    }
+<br/>
+  }
+<br/>
+<br/>
+  uint16_t slave0, slave1, slave2, slave3;
+<br/>
+  uint8_t  client_bit(0);
+<br/>
+<br/>
+  // Detect slaves
+<br/>
+  for(int i(0); i &lt; 15; i++)
+<br/>
+  {
+<br/>
+    sendMulti(0x6200, &amp;slave0, &amp;slave1, &amp;slave2, &amp;slave3);
+<br/>
+    if((slave1 &amp; 0xfff0) == 0x7200)
+<br/>
+      client_bit |= (slave1 &amp; 0x000f);
+<br/>
+    if((slave2 &amp; 0xfff0) == 0x7200)
+<br/>
+      client_bit |= (slave2 &amp; 0x000f);
+<br/>
+    if((slave3 &amp; 0xfff0) == 0x7200)
+<br/>
+      client_bit |= (slave3 &amp; 0x000f);
+<br/>
+<br/>
+    if(client_bit == 0)
+<br/>
+    {
+<br/>
+      // Wait 1/16 sec
+<br/>
+      WAIT_62_5_MS();
+<br/>
+    }
+<br/>
+  }
+<br/>
+  if(client_bit != 0)
+<br/>
+  {
+<br/>
+    printk("Detected slaves: ");
+<br/>
+    if(client_bit &amp; 0x02) printk("1 ");
+<br/>
+    if(client_bit &amp; 0x04) printk("2 ");
+<br/>
+    if(client_bit &amp; 0x08) printk("3 ");
+<br/>
+    printk("\n");
+<br/>
+  }
+<br/>
+  else
+<br/>
+  {
+<br/>
+    printk("No slaves!\n");
+<br/>
+    return -1;
+<br/>
+  }
+<br/>
+<br/>
+  // Check all slaves
+<br/>
+  sendMulti(0x6100 + client_bit, &amp;slave0, &amp;slave1, &amp;slave2, &amp;slave3);
+<br/>
+  if(client_bit &amp; (1&lt;&lt;1))
+<br/>
+  {
+<br/>
+    if(slave1 != (0x7200 + (1&lt;&lt;1)))
+<br/>
+    {
+<br/>
+      printk("Slave1 ACK error (0x%x)\n", slave1);
+<br/>
+      return -1;
+<br/>
+    }
+<br/>
+  }
+<br/>
+  if(client_bit &amp; (1&lt;&lt;2))
+<br/>
+  {
+<br/>
+    if(slave2 != (0x7200 + (1&lt;&lt;2)))
+<br/>
+    {
+<br/>
+      printk("Slave2 ACK error (0x%x)\n", slave2);
+<br/>
+      return -1;
+<br/>
+    }
+<br/>
+  }
+<br/>
+  if(client_bit &amp; (1&lt;&lt;3))
+<br/>
+  {
+<br/>
+    if(slave3 != (0x7200 + (1&lt;&lt;3)))
+<br/>
+    {
+<br/>
+      printk("Slave3 ACK error (0x%x)\n", slave3);
+<br/>
+      return -1;
+<br/>
+    }
+<br/>
+  }
+<br/>
+  printk("1 - ACK ok\n");
+<br/>
+<br/>
+  // Send multiboot header
+<br/>
+  sendMulti((pHeader[0*2+1] &lt;&lt; 8) + pHeader[0*2], &amp;slave0, &amp;slave1, &amp;slave2, &amp;slave3);
+<br/>
+  sendMulti((pHeader[1*2+1] &lt;&lt; 8) + pHeader[1*2], &amp;slave0, &amp;slave1, &amp;slave2, &amp;slave3);
+<br/>
+  for(int i(2); i &lt; 0x60; i++)
+<br/>
+  {
+<br/>
+    sendMulti((goodHeader[i*2+1] &lt;&lt; 8) + goodHeader[i*2], &amp;slave0, &amp;slave1, &amp;slave2, &amp;slave3);
+<br/>
+    if(client_bit &amp; (1&lt;&lt;1))
+<br/>
+    {
+<br/>
+      if(slave1 != (((0x60 - i) &lt;&lt; 8) | (1&lt;&lt;1)))
+<br/>
+      {
+<br/>
+        printk("Slave1 header invalid response (0x%x)\n", slave1);
+<br/>
+        return -1;
+<br/>
+      }
+<br/>
+    }
+<br/>
+    if(client_bit &amp; (1&lt;&lt;2))
+<br/>
+    {
+<br/>
+      if(slave2 != (((0x60 - i) &lt;&lt; 8) | (1&lt;&lt;2)))
+<br/>
+      {
+<br/>
+        printk("Slave2 header invalid response (0x%x)\n", slave2);
+<br/>
+        return -1;
+<br/>
+      }
+<br/>
+    }
+<br/>
+    if(client_bit &amp; (1&lt;&lt;3))
+<br/>
+    {
+<br/>
+      if(slave3 != (((0x60 - i) &lt;&lt; 8) | (1&lt;&lt;3)))
+<br/>
+      {
+<br/>
+        printk("Slave3 header invalid response (0x%x)\n", slave3);
+<br/>
+        return -1;
+<br/>
+      }
+<br/>
+    }
+<br/>
+  }
+<br/>
+  printk("Header sent ok\n");
+<br/>
+<br/>
+  // Check all slaves
+<br/>
+  sendMulti(0x6200, &amp;slave0, &amp;slave1, &amp;slave2, &amp;slave3);
+<br/>
+  if(client_bit &amp; (1&lt;&lt;1))
+<br/>
+  {
+<br/>
+    if(slave1 != (0x0000 + (1&lt;&lt;1)))
+<br/>
+    {
+<br/>
+      printk("Slave1 ACK error (0x%x)\n", slave1);
+<br/>
+      return -1;
+<br/>
+    }
+<br/>
+  }
+<br/>
+  if(client_bit &amp; (1&lt;&lt;2))
+<br/>
+  {
+<br/>
+    if(slave2 != (0x0000 + (1&lt;&lt;2)))
+<br/>
+    {
+<br/>
+      printk("Slave2 ACK error (0x%x)\n", slave2);
+<br/>
+      return -1;
+<br/>
+    }
+<br/>
+  }
+<br/>
+  if(client_bit &amp; (1&lt;&lt;3))
+<br/>
+  {
+<br/>
+    if(slave3 != (0x0000 + (1&lt;&lt;3)))
+<br/>
+    {
+<br/>
+      printk("Slave3 ACK error (0x%x)\n", slave3);
+<br/>
+      return -1;
+<br/>
+    }
+<br/>
+  }
+<br/>
+  printk("2 - ACK ok\n");
+<br/>
+<br/>
+  // Check all slaves
+<br/>
+  sendMulti(0x6200 + client_bit, &amp;slave0, &amp;slave1, &amp;slave2, &amp;slave3);
+<br/>
+  if(client_bit &amp; (1&lt;&lt;1))
+<br/>
+  {
+<br/>
+    if(slave1 != (0x7200 + (1&lt;&lt;1)))
+<br/>
+    {
+<br/>
+      printk("Slave1 ACK error (0x%x)\n", slave1);
+<br/>
+      return -1;
+<br/>
+    }
+<br/>
+  }
+<br/>
+  if(client_bit &amp; (1&lt;&lt;2))
+<br/>
+  {
+<br/>
+    if(slave2 != (0x7200 + (1&lt;&lt;2)))
+<br/>
+    {
+<br/>
+      printk("Slave2 ACK error (0x%x)\n", slave2);
+<br/>
+      return -1;
+<br/>
+    }
+<br/>
+  }
+<br/>
+  if(client_bit &amp; (1&lt;&lt;3))
+<br/>
+  {
+<br/>
+    if(slave3 != (0x7200 + (1&lt;&lt;3)))
+<br/>
+    {
+<br/>
+      printk("Slave3 ACK error (0x%x)\n", slave3);
+<br/>
+      return -1;
+<br/>
+    }
+<br/>
+  }
+<br/>
+  printk("3 - ACK ok\n");
+<br/>
+<br/>
+  // Send palette data and receive client data
+<br/>
+  uint8_t palette_data(0xc1);
+<br/>
+  uint8_t client_data[3] = {0xff, 0xff, 0xff};
+<br/>
+  uint8_t check = client_bit;
+<br/>
+  while(check != 0)
+<br/>
+  {
+<br/>
+    sendMulti(0x6300 + palette_data, &amp;slave0, &amp;slave1, &amp;slave2, &amp;slave3);
+<br/>
+    if(check &amp; (1&lt;&lt;1))
+<br/>
+    {
+<br/>
+      if((slave1 &amp; 0xff00) == 0x7300)
+<br/>
+      {
+<br/>
+        client_data[0] = slave0 &amp; 0x00ff;
+<br/>
+        check &amp;= ~(1&lt;&lt;1);
+<br/>
+      }
+<br/>
+    }
+<br/>
+    if(check &amp; (1&lt;&lt;2))
+<br/>
+    {
+<br/>
+      if((slave2 &amp; 0xff00) == 0x7300)
+<br/>
+      {
+<br/>
+        client_data[1] = slave0 &amp; 0x00ff;
+<br/>
+        check &amp;= ~(1&lt;&lt;2);
+<br/>
+      }
+<br/>
+    }
+<br/>
+    if(check &amp; (1&lt;&lt;3))
+<br/>
+    {
+<br/>
+      if((slave3 &amp; 0xff00) == 0x7300)
+<br/>
+      {
+<br/>
+        client_data[2] = slave0 &amp; 0x00ff;
+<br/>
+        check &amp;= ~(1&lt;&lt;3);
+<br/>
+      }
+<br/>
+    }
+<br/>
+  }
+<br/>
+  printk("4 - ACK ok\n");
+<br/>
+<br/>
+  uint8_t handshake_data = 0x11 + client_data[0] + client_data[1] + client_data[2];
+<br/>
+  sendMulti(0x6400 + handshake_data, &amp;slave0, &amp;slave1, &amp;slave2, &amp;slave3);
+<br/>
+  if(client_bit &amp; (1&lt;&lt;1))
+<br/>
+  {
+<br/>
+    if((slave1 &amp; 0xff00) != 0x7300)
+<br/>
+    {
+<br/>
+      printk("Slave1 ACK error (0x%x)\n", slave1);
+<br/>
+      return -1;
+<br/>
+    }
+<br/>
+  }
+<br/>
+  if(client_bit &amp; (1&lt;&lt;2))
+<br/>
+  {
+<br/>
+    if((slave2 &amp; 0xff00) != 0x7300)
+<br/>
+    {
+<br/>
+      printk("Slave2 ACK error (0x%x)\n", slave2);
+<br/>
+      return -1;
+<br/>
+    }
+<br/>
+  }
+<br/>
+  if(client_bit &amp; (1&lt;&lt;3))
+<br/>
+  {
+<br/>
+    if((slave3 &amp; 0xff00) != 0x7300)
+<br/>
+    {
+<br/>
+      printk("Slave3 ACK error (0x%x)\n", slave3);
+<br/>
+      return -1;
+<br/>
+    }
+<br/>
+  }
+<br/>
+  printk("5 - ACK ok\n");
+<br/>
+<br/>
+  uint32_t length = (256*1024) - 0xc0;
+<br/>
+//  length = (length + 0xf) &amp; ~0xf; // 16 byte units
+<br/>
+//  if(length &lt; 0x1c0)
+<br/>
+//    length = 0x1c0;
+<br/>
+<br/>
+  memset(&amp;mbp, 0, sizeof(MultiBootParam));
+<br/>
+  mbp.handshake_data    = handshake_data;
+<br/>
+  mbp.probe_count       = 0xd1;
+<br/>
+  mbp.client_data[0]    = client_data[0];
+<br/>
+  mbp.client_data[1]    = client_data[1];
+<br/>
+  mbp.client_data[2]    = client_data[2];
+<br/>
+  mbp.palette_data      = palette_data;
+<br/>
+  mbp.client_bit        = client_bit;
+<br/>
+  mbp.boot_srcp         = pData;
+<br/>
+  mbp.boot_endp         = pData + 0x3ff40; // length;
+<br/>
+<br/>
+  printk("Sending...");
+<br/>
+  uint32_t flags = local_save_flags();
+<br/>
+  local_irq_disable();
+<br/>
+  uint32_t status = MultiBoot(&amp;mbp, MODE16_MULTI);
+<br/>
+  local_irq_restore(flags);
+<br/>
+<br/>
+  if(status == 0)
+<br/>
+  {
+<br/>
+    printk("ok\n");
+<br/>
+  }
+<br/>
+  else
+<br/>
+  {
+<br/>
+    printk("error (0x%x)\n", status);
+<br/>
+    return -1;
+<br/>
+  }
+<br/>
+<br/>
+  return 0;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+The last thing I see is: "Sending...error (0x1)"
+<br/>
+The slave gba is already showing the orange nintendo logo.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#152766 - eKid - Thu Mar 20, 2008 4:47 pm</h4>
+    <div class="postbody"><span class="postbody">The problem is when you're reading the client data for the slaves (after sending palette data). There's a mistake that your reading slave0 for all of them rather than using slave1, slave2, and slave3. I changed that, and the upload worked.
+<br/>
+<br/>
+BTW, no$gba doesn't really pay attention to those details when using the multiboot function (its better if you want instant multibooting). But! If you have a GBA BIOS dump, and tell it to use that, then it can emulate the real multiboot code.
+<br/>
+<br/>
+Also BTW, multibooting in multi-player mode is very slow! It takes over a minute to transfer the full 256kb. What I did in my last game was make a very small application to multiboot to the slaves (which handles the special transfer), and then transfer the actual game image using 'normal' communication mode (cuts transfer time to about 1/10).</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#152779 - Maximus32 - Thu Mar 20, 2008 7:49 pm</h4>
+    <div class="postbody"><span class="postbody">Thanks for finding that bug! Guess I was staring at the code for too long. However it still doesn't work here?! How did you manage to get it running? Can you post the modified code?
+<br/>
+<br/>
+I'm testing on 2 GBA-Micro's with a 2-player cable (not really a standard setup). Could there perhaps be something wrong with that setup in combination with multi-player mode?
+<br/>
+<br/>
+I'll try to find a gba bios and I'll try the normal 32 bit mode. Perhaps that works for me.
+<br/>
+<br/>
+Thanks for your help so far!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#152791 - dantheman - Thu Mar 20, 2008 10:29 pm</h4>
+    <div class="postbody"><span class="postbody">If you search Google for "GBAMP BIOS Dumper" you should be able to find a program tepples made to extract your own BIOS from your GBM.  It's DLDI-capable so it works on more than just the GBAMP.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#152797 - Maximus32 - Thu Mar 20, 2008 11:01 pm</h4>
+    <div class="postbody"><span class="postbody">I got a bios for no$gba, and guess what... same problem. When calling the MultiBoot finction it immediately returns 1.
+<br/>
+<br/>
+At least now I can see if my changes have any effect much faster using the emulator, than using real hardware.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#152812 - eKid - Fri Mar 21, 2008 2:11 am</h4>
+    <div class="postbody"><span class="postbody">I tested using 2 GBA SPs with the standard multi-play cable (with the little hub in the middle). I'm not sure if the micro's are different...
+<br/>
+<br/>
+Hmm, multi-player communication mode only works if the cable has crossed SO/SI lines. no$gba emulates both types of cables, it can be changed in the emulation options.
+<br/>
+<br/>
+Here's my modified code, <a class="postlink" href="http://ekid.nintendev.com/mbcode.c" target="_blank">http://ekid.nintendev.com/mbcode.c</a>
+<br/>
+I kinda messed it up a bit (made it C :P) to get it to compile. Another thing I changed was resetting the '15' counter when you do the 1/16 second wait. That shouldn't be an issue though. Also, ignore those delay numbers I used, they are just random. :)
+<br/>
+<br/>
+EDIT: oh, but your code won't make it to the Multiboot function if your cable is incompatible with multi-player mode (but it does, so the problem isn't the cable).</span><span class="gensmall"><br/><br/>Last edited by eKid on Fri Mar 21, 2008 3:56 am; edited 1 time in total</span></div>    
+</div>
+<div class="post">
+    <h4>#152813 - eKid - Fri Mar 21, 2008 2:18 am</h4>
+    <div class="postbody"><span class="postbody">Oh, also, I changed this to use the header of my test rom (at 0x2000000)
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+// Send multiboot header
+<br/>
+sendMulti((pHeader[0*2+1] &lt;&lt; 8) + pHeader[0*2], &amp;slave0, &amp;slave1, &amp;slave2, &amp;slave3);
+<br/>
+sendMulti((pHeader[1*2+1] &lt;&lt; 8) + pHeader[1*2], &amp;slave0, &amp;slave1, &amp;slave2, &amp;slave3);
+<br/>
+for(int i(2); i &lt; 0x60; i++)
+<br/>
+{
+<br/>
+  sendMulti((goodHeader[i*2+1] &lt;&lt; 8) + goodHeader[i*2], &amp;slave0, &amp;slave1, &amp;slave2, &amp;slave3); 
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I'm not sure what pHeader is, and goodHeader, but there is a complement check in the header files. If you're using a different value for the first word, the checksum may be wrong in goodHeader. The GBA will refuse to boot without a proper checksum.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#152822 - Maximus32 - Fri Mar 21, 2008 6:59 am</h4>
+    <div class="postbody"><span class="postbody">They are two different headers. First I used pHeader only (a pointer to 0x8000000) but it showed a scrambled nintendo logo. So then I found this example multiboot program that used a (known good) header, and replaces the branch instruction at the beginning.
+<br/>
+I think the header works though, becouse I see a proper nintendo logo, and not a communication error.
+<br/>
+<br/>
+pData, by the way, is a pointer to 0x80000c0.
+<br/>
+<br/>
+The full source can be found here:
+<br/>
+<a href="https://bricks-os.svn.sourceforge.net/svnroot/bricks-os/trunk/kernel/arch/arm/gbands/gbaSerial.cpp" target="_blank">https://bricks-os.svn.sourceforge.net/svnroot/bricks-os/trunk/kernel/arch/arm/gbands/gbaSerial.cpp</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#152829 - eKid - Fri Mar 21, 2008 11:34 am</h4>
+    <div class="postbody"><span class="postbody">The Nintendo logo will still show up fine, but the complement check may still be wrong (thus still preventing execution). Are you running your main code from ewram? Why are you transferring a different first word anyway? That's the program entry point when running from a cartridge, it isn't used when multibooting though. The Value at 0xC0 is the multiboot entry point... (not transferred with goodHeader) You only need to transfer goodHeader.
+<br/>
+<br/>
+Also, the nintendo logo probably isn't set right in your main program. There is a 'gbafix' tool to correct it (and calculate the checksum).</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#152830 - Maximus32 - Fri Mar 21, 2008 12:24 pm</h4>
+    <div class="postbody"><span class="postbody">IT WORKS!!!
+<br/>
+<br/>
+Sometimes the problem is not what it seems to be...
+<br/>
+<br/>
+After building your example it worked perfectly! So then I placed your modified code in my project, and to my surprise it failed! After moving the function call to the beginning of my project it all of a sudden worked again! Turns out it only works BEFORE I enable interrupts (even if I disable interrupt before calling the bios function).
+<br/>
+<br/>
+So why?? Turns out the problem is my preemptive scheduler (yes, on a gba) is messing up the cpu mode or the stacks.
+<br/>
+<br/>
+I am no longer using a separate header, and everything works (logo showing up fine, in both gba's).
+<br/>
+<br/>
+Only thing I need to do now is dive into assembly again and fix the multithreading...
+<br/>
+<br/>
+Anyway, thanks a lot for all the help!</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

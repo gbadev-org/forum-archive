@@ -1,0 +1,364 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Corrupted Sprites - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Corrupted Sprites</h2>
+<div id="posts">
+<div class="post">
+    <h4>#85059 - PacoChan - Fri May 26, 2006 9:09 pm</h4>
+    <div class="postbody"><span class="postbody">Hi, sorry for my english, but I'm spanish. I have a problem drawing sprites. I draw a bitmap 32*32 in SPRITE_GFX with this: 
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">for(i=0;i&lt;32*32;i++) SPRITE_GFX[i]=((u16*)enemigo_bin)[i] | (1&lt;&lt;15);</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+And it works fine.
+<br/>
+<br/>
+But when I draw the same bitmap or another one on another position of SPRITE_GFX, it doesn't appear correctly:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">for(i=32*32;i&lt;32*32*2;i++) PRITE_GFX[i]=((u16*)enemigo_bin)[i] | (1&lt;&lt;15);</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Here is all the code:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+<br/>
+#include &lt;nds.h&gt;
+<br/>
+#include &lt;stdio.h&gt;
+<br/>
+#include &lt;stdlib.h&gt;
+<br/>
+#include &lt;unistd.h&gt;
+<br/>
+<br/>
+#include &lt;nds/arm9/console.h&gt; //basic print funcionality
+<br/>
+<br/>
+#include "enemigo_bin.h"
+<br/>
+<br/>
+SpriteEntry sprites[128];
+<br/>
+<br/>
+//turn off all the sprites
+<br/>
+void initSprites(void)
+<br/>
+{
+<br/>
+   int i;
+<br/>
+   
+<br/>
+   for(i = 0; i &lt; 128; i++)
+<br/>
+   {
+<br/>
+      sprites[i].attribute[0] = ATTR0_DISABLED;
+<br/>
+      sprites[i].attribute[1] = 0;
+<br/>
+      sprites[i].attribute[2] = 0;
+<br/>
+      sprites[i].attribute[3] = 0;
+<br/>
+    }
+<br/>
+}
+<br/>
+<br/>
+//copy our sprite to object attribute memory
+<br/>
+void updateOAM(void)
+<br/>
+{
+<br/>
+   DC_FlushAll();
+<br/>
+    dmaCopy(sprites, OAM, 128 * sizeof(SpriteEntry));
+<br/>
+}
+<br/>
+<br/>
+//---------------------------------------------------------------------------------
+<br/>
+int main(void) {
+<br/>
+//---------------------------------------------------------------------------------
+<br/>
+   
+<br/>
+   powerON(POWER_ALL_2D);
+<br/>
+<br/>
+    //irqs are nice
+<br/>
+   irqInit();
+<br/>
+   irqSet(IRQ_VBLANK, 0);
+<br/>
+   
+<br/>
+   touchPosition touchXY;
+<br/>
+    
+<br/>
+    //enable vram and map it to the right places
+<br/>
+    vramSetMainBanks(   VRAM_A_MAIN_SPRITE,        //A and B maped consecutivly as sprite memory
+<br/>
+                        VRAM_B_MAIN_SPRITE,        //this gives us 256KB which is the max
+<br/>
+                        VRAM_C_SUB_BG,  //map C to background memory
+<br/>
+                        VRAM_D_MAIN_BG_0x6000000               //not using D
+<br/>
+                        ); 
+<br/>
+   
+<br/>
+   //set the video mode
+<br/>
+    videoSetMode(  MODE_0_2D | 
+<br/>
+                   DISPLAY_SPR_ACTIVE |    //turn on sprites
+<br/>
+                   DISPLAY_BG0_ACTIVE |    //turn on background 0
+<br/>
+                   DISPLAY_SPR_1D |        //this is used when in tile mode
+<br/>
+                   DISPLAY_SPR_1D_BMP      //and this in bitmap mode
+<br/>
+                    );
+<br/>
+   
+<br/>
+   BG_PALETTE[0]=RGB15(0,0,0);
+<br/>
+   
+<br/>
+   videoSetModeSub(MODE_0_2D | DISPLAY_BG0_ACTIVE);   //sub bg 0 will be used to print text
+<br/>
+   
+<br/>
+   SUB_BG0_CR = BG_MAP_BASE(31);
+<br/>
+<br/>
+   BG_PALETTE_SUB[0] = RGB15(31,15,0);   //by default font will be rendered with color 255
+<br/>
+   BG_PALETTE_SUB[255] = RGB15(31,31,0);   //by default font will be rendered with color 255
+<br/>
+<br/>
+   //consoleInit() is a lot more flexible but this gets you up and running quick
+<br/>
+   consoleInitDefault((u16*)SCREEN_BASE_BLOCK_SUB(31), (u16*)CHAR_BASE_BLOCK_SUB(0), 16);
+<br/>
+<br/>
+   initSprites();
+<br/>
+   
+<br/>
+   int i;
+<br/>
+   
+<br/>
+   for(i=0;i&lt;32*32;i++) SPRITE_GFX[i]=((u16*)enemigo_bin)[i] | (1&lt;&lt;15);
+<br/>
+   for(i=32*32;i&lt;32*32*2;i++) SPRITE_GFX[i]=((u16*)enemigo_bin)[i] | (1&lt;&lt;15);
+<br/>
+   
+<br/>
+   sprites[0].attribute[0] = ATTR0_BMP | 0; 
+<br/>
+   sprites[0].attribute[1] = ATTR1_SIZE_32 | 0;
+<br/>
+   sprites[0].attribute[2] = ATTR2_ALPHA(1) | 0;
+<br/>
+   
+<br/>
+   sprites[1].attribute[0] = ATTR0_BMP | 0; 
+<br/>
+   sprites[1].attribute[1] = ATTR1_SIZE_32 | 32;
+<br/>
+   sprites[1].attribute[2] = ATTR2_ALPHA(1)| 16;
+<br/>
+   
+<br/>
+   int x=0, y=0;
+<br/>
+   
+<br/>
+   lcdSwap();
+<br/>
+<br/>
+   while(1) {
+<br/>
+      
+<br/>
+      scanKeys();
+<br/>
+      touchXY=touchReadXY();
+<br/>
+      iprintf("\x1b[10;0HTouch x = %04X, %04X\n", touchXY.x, touchXY.px);
+<br/>
+      iprintf("Touch y = %04X, %04X\n", touchXY.y, touchXY.py);
+<br/>
+      
+<br/>
+      if(keysHeld() &amp; KEY_RIGHT) x++;
+<br/>
+      if(keysHeld() &amp; KEY_LEFT) x--;
+<br/>
+      if(keysHeld() &amp; KEY_UP) y--;
+<br/>
+      if(keysHeld() &amp; KEY_DOWN) y++;
+<br/>
+      
+<br/>
+      swiWaitForVBlank();
+<br/>
+      updateOAM();
+<br/>
+<br/>
+   }
+<br/>
+<br/>
+   return 0;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I'm a noob working with sprites, so try to explain me how to solve this issue in a way that a noob can understand. Thanks.[/code]</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#85080 - silent_code - Fri May 26, 2006 10:50 pm</h4>
+    <div class="postbody"><span class="postbody">what i do is just make a counter (like int c) and increment it together with i, then set i for the next loop to c... works for me. another way that works is:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+for(i = 0; i &lt; 512; i++, c++)
+<br/>
+   SPRITE_GFX[c] = ((u16*)player8_img_bin)[i];
+<br/>
+<br/>
+for(i = 0; i &lt; 512; i++, c++)
+<br/>
+   SPRITE_GFX[c] = ((u16*)zombie8_img_bin)[i];
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+hope that fixes your problem ;)
+<br/>
+<br/>
+greets,
+<br/>
+<br/>
+Rob
+<br/>
+<br/>
+ps: i have a sprite rotation related problem... jump to "mode 5 sprites odd" to check it out... maybe you can finde something that helps me :D (what would be VERY nice!)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#85130 - PacoChan - Sat May 27, 2006 8:04 am</h4>
+    <div class="postbody"><span class="postbody">Thanks, but that did not solve my problem. But if you say that it works for you, then the problem will be another thing.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#85141 - Dark Knight ez - Sat May 27, 2006 12:06 pm</h4>
+    <div class="postbody"><span class="postbody">A couple of things...
+<br/>
+<br/>
+sprites[0].attribute[0] = <span style="color: red">some stuff you want</span> | ATTR0_SQUARE | y-position;
+<br/>
+sprites[0].attribute[1] = <span style="color: red">some stuff you want</span> | ATTR1_SIZE_32 | x-position; // I'm assuming you have a 32x32 tile that is.
+<br/>
+sprites[0].attribute[2] = <span style="color: red">the offset of where the tile is in SPRITE_GFX</span>;
+<br/>
+<br/>
+According to your i-values, the first object would be at offset 0 in SPRITE_GFX, and the second object would be at 32*32. (See your initial i values in the for-loops.)
+<br/>
+<br/>
+<br/>
+This should be code used to put a bin in your SPRITE_GFX by the way:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">for (i=0; i&lt; (sprite_bin_size &gt;&gt; 1); i++)
+<br/>
+        SPRITE_GFX[i] = ((uint16*)sprite_bin)[i];</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#85154 - PacoChan - Sat May 27, 2006 2:42 pm</h4>
+    <div class="postbody"><span class="postbody">Thanks, I finally solved the problem. It was caused by a little detail. I changed this: 
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">for(i=32*32;i&lt;32*32*2;i++) SPRITE_GFX[i] = ((u16*)enemigo_bin)[i] | (1&lt;&lt;15);</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+By this:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">for(i=32*32;i&lt;32*32*2;i++) SPRITE_GFX[i] = ((u16*)enemigo_bin)[i-(32*32)] | (1&lt;&lt;15);</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Now it works.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#85158 - Cearn - Sat May 27, 2006 3:52 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>PacoChan wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">for(i=32*32;i&lt;32*32*2;i++) SPRITE_GFX[i] = ((u16*)enemigo_bin)[i-(32*32)] | (1&lt;&lt;15);</td> </tr></table><span class="postbody">
+<br/>
+</span></td> </tr></table><span class="postbody">If you're using offsets in copies, apply the offset to the thing you're actually offsetting, in this case the destination:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">for(i=0; i&lt;32*32; i++)
+<br/>
+    SPRITE_GFX[i+32*32]= (u16*)enemigo_bin[i] | (1&lt;&lt;15);
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Or better yet, copy in word-sized chunks, which should be about twice as fast.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">u32 *src= (u32*)enemigo_bin;
+<br/>
+u32 *dst= (u32*)&amp;SPRITE_GFX[32*32];
+<br/>
+<br/>
+for(ii=0; ii&lt;32*32/2; ii++)
+<br/>
+    *dst++= *src++ | 0x80008000;
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Aside from that, you're now copying the same thing into object VRAM twice, why not simply use attr2 to point to the same graphics?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#85189 - Dark Knight ez - Sat May 27, 2006 7:15 pm</h4>
+    <div class="postbody"><span class="postbody">You're absolutely right, Cearn. In his first post he mentioned:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">But when I draw the same bitmap or another one on another position of SPRITE_GFX, it doesn't appear correctly</td> </tr></table><span class="postbody">
+<br/>
+This leads me to believe he was just testing with the same sprite graphics, to make sure it's not something graphics-wise but code-wise that went wrong. Now he should be able to replace the sprite graphics.
+<br/>
+<br/>
+And, PacoChan, glad you've managed to get it to work. :)</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

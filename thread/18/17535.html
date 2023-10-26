@@ -1,0 +1,182 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Load textures from fat - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Load textures from fat</h2>
+<div id="posts">
+<div class="post">
+    <h4>#176277 - SchmendrickSchmuck - Sat Jun 11, 2011 11:49 pm</h4>
+    <div class="postbody"><span class="postbody">I've been having some trouble trying to load a texture (pcx file) from fat.
+<br/>
+Loading an included file is easy enough:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#include "foo_pcx.h"
+<br/>
+sImage image;
+<br/>
+loadPCX(foo_pcx, &amp;image);
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+However, loading from fat doesn't give the expected results:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+fp = fopen("fat:/foo.pcx", "rb");
+<br/>
+fseek(fp, 0, SEEK_END);
+<br/>
+long len = ftell(fp);
+<br/>
+fseek(fp, 0, SEEK_SET);
+<br/>
+char* foo_pcx = (char *)malloc(len);
+<br/>
+fread(foo_pcx, len, 1, fp);
+<br/>
+fclose(fp);
+<br/>
+sImage image;
+<br/>
+loadPCX(foo_pcx, &amp;image);
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Apparently, the 'foo_pcx' in this case doesn't yield the same result in the second as in the first. Was I wrong in assuming they would? How should I load the pcx file from fat in order to use the loadPCX function as I would in the first example?
+<br/>
+<br/>
+Thanks<br/>_________________<br/><a href="http://DSLiero.DennisvanZwieten.com" target="_blank">http://DSLiero.DennisvanZwieten.com</a> - Liero for NDS!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176282 - Azenris - Sun Jun 12, 2011 11:53 pm</h4>
+    <div class="postbody"><span class="postbody">What do you mean doesn't yield same results, garbage image or just blank? Never used loadPCX myself. Is the file definitely opening?<br/>_________________<br/><a class="postlink" href="http://sacredpotion.blogspot.com/" target="_blank"><span style="color: red">My Homebrew Games</span></a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176283 - DiscoStew - Mon Jun 13, 2011 3:44 am</h4>
+    <div class="postbody"><span class="postbody">Yeah, check if the file handle is valid. Also check the length from ftell.<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176307 - SchmendrickSchmuck - Mon Jun 20, 2011 7:55 pm</h4>
+    <div class="postbody"><span class="postbody">Thanks for the replies. It didn't get the same results, as in, the loaded texture was blank (completely white). I don't know why I didn't immediately recognize this as a lack of VRAM memory, but that has been solved now. 
+<br/>
+<br/>
+Another point I came across here is that fseek (and ftell) returned invalid values (-1). I couldn't for the life of me figure out why, and after changing apparently nothing, that has too been fixed. It has still left me confused, though I can't really complain.<br/>_________________<br/><a href="http://DSLiero.DennisvanZwieten.com" target="_blank">http://DSLiero.DennisvanZwieten.com</a> - Liero for NDS!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176317 - ritz - Wed Jun 22, 2011 4:14 pm</h4>
+    <div class="postbody"><span class="postbody">Here's some code I used for putting PCX on the background, maybe it'll help:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">u8*
+<br/>
+v_readraw (char *filename)
+<br/>
+{
+<br/>
+   u8 *tp;
+<br/>
+   int fp;
+<br/>
+   u32 flen;
+<br/>
+   struct stat st;
+<br/>
+<br/>
+   fp = open(filename, O_RDONLY);
+<br/>
+   if (fp == -1)
+<br/>
+      return 0;
+<br/>
+<br/>
+   if (fstat(fp, &amp;st) == -1)
+<br/>
+      return 0;
+<br/>
+<br/>
+   flen = st.st_size;
+<br/>
+<br/>
+   tp = (u8*) malloc(flen);
+<br/>
+   if (!tp)
+<br/>
+      { close(fp); return 0; }
+<br/>
+<br/>
+   if (read(fp, tp, flen) == -1)
+<br/>
+      { close(fp); free(tp); return 0; }
+<br/>
+<br/>
+   close(fp);
+<br/>
+<br/>
+   return tp; // free(tp);
+<br/>
+}
+<br/>
+<br/>
+void
+<br/>
+v_ldpcxbg (char *sbgimg, int screen)
+<br/>
+{
+<br/>
+   sImage pcx;
+<br/>
+   void *gfxptr, *palptr;
+<br/>
+<br/>
+   u8 *tp = v_readraw(sbgimg);
+<br/>
+   if (!tp) OOP("v_readraw()");
+<br/>
+   if (!loadPCX((u8*)tp, &amp;pcx))
+<br/>
+      OOP("loadPCX()");
+<br/>
+   free(tp);
+<br/>
+<br/>
+   if (screen == 1)
+<br/>
+      { gfxptr = (void*)BG_GFX_SUB;
+<br/>
+        palptr = (void*)BG_PALETTE_SUB; }
+<br/>
+   else   { gfxptr = (void*)BG_GFX;
+<br/>
+            palptr = (void*)BG_PALETTE; }
+<br/>
+<br/>
+   swiCopy((void*)pcx.image.data8, gfxptr, ((pcx.width*pcx.height)&gt;&gt;2) | COPY_MODE_WORD);
+<br/>
+   swiCopy((void*)pcx.palette, palptr, ((256*2)&gt;&gt;2) | COPY_MODE_WORD);
+<br/>
+<br/>
+   imageDestroy(&amp;pcx);
+<br/>
+}</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

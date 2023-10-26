@@ -1,0 +1,190 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Sound playing problem - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Sound playing problem</h2>
+<div id="posts">
+<div class="post">
+    <h4>#146222 - Echo49 - Fri Nov 30, 2007 9:01 pm</h4>
+    <div class="postbody"><span class="postbody">I'm trying to make a double buffer sound playing routine which I intend to use with libfat to stream sound from my flashcart. The problem is that whenever I use my own transferSound() routine to send the data, every so often I miss 3 seconds of music. However, it works fine with the playSound() function from sound.c. My transferSound() function is identical to playSound() except that it allows me to specify which one of the 16 places to insert the data into. Any idea why this is happening? 
+<br/>
+<br/>
+Also, any recommendations as to the size of the buffers, and is there any way to sync the music properly? At the moment it's lagging by about 5 samples every second, hence the SYNC_CORRECTION define.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#include "music_raw.h"
+<br/>
+<br/>
+#define SYNC_CORRECTION 5
+<br/>
+<br/>
+u8* buffer;
+<br/>
+u8* backbuffer;
+<br/>
+bool fill;
+<br/>
+<br/>
+// this will always point to the sound data
+<br/>
+TransferSoundData soundb = {
+<br/>
+   NULL,
+<br/>
+   11025,
+<br/>
+   11025,
+<br/>
+   127,
+<br/>
+   64,
+<br/>
+   1
+<br/>
+};
+<br/>
+<br/>
+TransferSound Snd;
+<br/>
+void transferSound(u8 slot, TransferSoundData* sdata)
+<br/>
+{
+<br/>
+   Snd.count += 1;
+<br/>
+   memcpy(&amp;Snd.data[slot], sdata, sizeof(TransferSoundData));
+<br/>
+   DC_FlushRange(&amp;Snd, sizeof(TransferSound));
+<br/>
+   IPC-&gt;soundData = &amp;Snd;
+<br/>
+}
+<br/>
+<br/>
+void timerHandler()
+<br/>
+{
+<br/>
+   // send data to ARM7 to play
+<br/>
+   soundb.data = buffer;
+<br/>
+   transferSound(0, &amp;soundb);
+<br/>
+   // tell backbuffer to fill
+<br/>
+   fill = true;
+<br/>
+}
+<br/>
+<br/>
+int main(void) {
+<br/>
+<br/>
+   powerON(POWER_ALL);
+<br/>
+   
+<br/>
+   irqInit();
+<br/>
+   irqEnable(IRQ_VBLANK | IRQ_TIMER0);
+<br/>
+   irqSet(IRQ_TIMER0, timerHandler);
+<br/>
+   
+<br/>
+   lcdMainOnBottom();
+<br/>
+   
+<br/>
+   consoleDemoInit();
+<br/>
+   
+<br/>
+   buffer = (u8*)malloc(11025*sizeof(u8));
+<br/>
+   backbuffer = (u8*)malloc(11025*sizeof(u8));
+<br/>
+   
+<br/>
+   TIMER0_DATA = TIMER_FREQ_1024(1);   
+<br/>
+   TIMER0_CR = TIMER_ENABLE | TIMER_DIV_1024 | TIMER_IRQ_REQ;   
+<br/>
+      
+<br/>
+   u32 i;
+<br/>
+   u32 pos = 0;
+<br/>
+   
+<br/>
+   fill = true;
+<br/>
+      
+<br/>
+   while(true) {
+<br/>
+   
+<br/>
+      Snd.count = 0;
+<br/>
+      
+<br/>
+      if (fill) {
+<br/>
+         // fill backbuffer
+<br/>
+         for (i=0; i&lt;(11025); i++)
+<br/>
+         {
+<br/>
+            backbuffer[i] = music_raw[pos+i];
+<br/>
+         }
+<br/>
+         pos += 11025 + SYNC_CORRECTION;
+<br/>
+         fill = false;
+<br/>
+         // swap buffers
+<br/>
+         u8* temp = buffer;
+<br/>
+         buffer = backbuffer;
+<br/>
+         backbuffer = temp;
+<br/>
+      }
+<br/>
+      
+<br/>
+      swiWaitForVBlank();
+<br/>
+   }
+<br/>
+<br/>
+   return 0;
+<br/>
+}
+<br/>
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

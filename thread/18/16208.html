@@ -1,0 +1,703 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Various 3D engine questions (was: 3D engine lagging?) - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Various 3D engine questions (was: 3D engine lagging?)</h2>
+<div id="posts">
+<div class="post">
+    <h4>#164682 - Echo49 - Thu Nov 13, 2008 9:27 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">   queue&lt;object*&gt; buffer;
+<br/>
+   FillBuffer(buffer);
+<br/>
+   
+<br/>
+   list&lt;object*&gt; drawing;
+<br/>
+   
+<br/>
+   u32 startTime = clock.Time();
+<br/>
+   
+<br/>
+   while(1)
+<br/>
+   {
+<br/>
+      glPushMatrix();
+<br/>
+      
+<br/>
+      /* magic starts here */
+<br/>
+      while (buffer.size() &gt; 0 &amp;&amp; clock.Time() - startTime &gt;= buffer.front()-&gt;GetTime())
+<br/>
+      {
+<br/>
+         buffer.front()-&gt;SetDraw(true);
+<br/>
+         drawing.push_back(buffer.front());
+<br/>
+         buffer.pop();
+<br/>
+      }
+<br/>
+      
+<br/>
+      for (list&lt;object*&gt;::iterator it = drawing.begin(); it != drawing.end(); ++it)
+<br/>
+         (*it)-&gt;Draw();
+<br/>
+      
+<br/>
+      while (drawing.size() &gt; 0 &amp;&amp; drawing.front()-&gt;GetDraw() == false)
+<br/>
+         drawing.pop_front();
+<br/>
+      
+<br/>
+      /* magic finishes here */
+<br/>
+      
+<br/>
+      glPopMatrix(1);
+<br/>
+      
+<br/>
+      iprintf("\x1b[22;0H%i/%i      ", drawing.size(), buffer.size());
+<br/>
+      iprintf("\x1b[23;0HTIME:%i",clock.Time());
+<br/>
+      iprintf("\x1b[23;20HVCOUNT:%i  ", REG_VCOUNT);
+<br/>
+      
+<br/>
+      swiWaitForVBlank();   
+<br/>
+      glFlush(0);
+<br/>
+      
+<br/>
+      //increment gameclock
+<br/>
+      clock.Step();
+<br/>
+   }</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+This is the main loop of my code. When the program is idling, REG_VCOUNT reads 197 (192 if I take out the iprintfs). However, if REG_VCOUNT exceeds about 205 (about 5-6 objects being drawn), the game starts lagging, as if it's taking 2 frames instead of 1 to do the drawing.
+<br/>
+<br/>
+The drawing is only a single quad per object (4 vertices), so I can't be exceeding any sort of vertex limit.
+<br/>
+<br/>
+In the code, the member accessed by SetDraw() and GetDraw() is automatically set to false after it has finished drawing, about 3000ms per object.
+<br/>
+<br/>
+Does anyone know why this is happening, and how I can fix it?</span><span class="gensmall"><br/><br/>Last edited by Echo49 on Fri Nov 14, 2008 12:15 am; edited 1 time in total</span></div>    
+</div>
+<div class="post">
+    <h4>#164683 - elhobbs - Thu Nov 13, 2008 10:06 pm</h4>
+    <div class="postbody"><span class="postbody">there is no need to use </span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">swiWaitForVBlank();</td> </tr></table><span class="postbody">if your code is taking more than one frame to put new objects in the graphics pipeline then it will spin waiting for the next vblank</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#164684 - DekuTree64 - Thu Nov 13, 2008 10:19 pm</h4>
+    <div class="postbody"><span class="postbody">It's still a good idea to wait for VBlank, since you'll most likely be doing some 2D things on the other screen, and that generally needs more careful timing to avoid messing with VRAM for the next frame before the previous has even finshed drawing.
+<br/>
+<br/>
+The problem is that the flush should come before the wait. After you send a flush command, it doesn't actually execute until the start of VBlank. So if you send it right after the start of VBlank, it will wait all the way until the next one.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#164685 - Echo49 - Thu Nov 13, 2008 10:23 pm</h4>
+    <div class="postbody"><span class="postbody">Thanks, that solved it.
+<br/>
+<br/>
+I'm curious though, if glFlush() waits for VBlank, doesn't that make swiWaitForVBlank() redundant?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#164687 - DekuTree64 - Thu Nov 13, 2008 10:37 pm</h4>
+    <div class="postbody"><span class="postbody">It doesn't make the CPU wait for VBlank, it just sits in the 3D FIFO until VBlank, while the CPU moves on with whatever it was doing. But generally you want the CPU to wait for VBlank too.
+<br/>
+<br/>
+The stalling thing elhobbs mentioned comes up because the flush command sitting in the FIFO prevents any other commands from being processed until it finishes. So if you send a bunch more commands like for rendering a model, the FIFO will fill up. And when the CPU tries to write to the FIFO while it's full, the write stalls until space opens up for it.
+<br/>
+<br/>
+If you're only doing 3D, a stall would have basically the same effect as a wait for VBlank, but it's generally not a good idea since I don't think the CPU can process interrupts like HBlank and timers while stalled, but it can during swiWaitForVBlank.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#164688 - Echo49 - Thu Nov 13, 2008 11:30 pm</h4>
+    <div class="postbody"><span class="postbody">Thanks for the explanation.
+<br/>
+<br/>
+I have another question. What is the difference between each of the texture coordinates transformation modes?
+<br/>
+<br/>
+ie.
+<br/>
+TEXGEN_OFF
+<br/>
+TEXGEN_TEXCOORD
+<br/>
+TEXGEN_NORMAL
+<br/>
+TEXGEN_POSITION
+<br/>
+<br/>
+One other thing is that although No$gba emulates it fine, on my DS some/all (can't tell, because some are pretty small) my textures have the last column of pixels put in the first column instead.
+<br/>
+<br/>
+The texture is 128x128, so I use the coordinates (0,0), (128,0), (0,128), (128,128) when mapping the texture to my quad. I have not set any wrapping or repeating settings.
+<br/>
+<br/>
+Any ideas on this?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#164689 - naleksiev - Fri Nov 14, 2008 12:17 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Echo49 wrote:</b></span></td> </tr> <tr> <td class="quote">The texture is 128x128, so I use the coordinates (0,0), (128,0), (0,128), (128,128) when mapping the texture to my quad. I have not set any wrapping or repeating settings.
+<br/>
+<br/>
+Any ideas on this?</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+First you better set wrap(repeat) to none instead of not setting it. Also your texture coordinates should be from 0 to 127 not to 128.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#164692 - Echo49 - Fri Nov 14, 2008 1:59 am</h4>
+    <div class="postbody"><span class="postbody">The problem still exists even when I disable wrapping. More of the texture is cut off if I reduce the texture coordinates to 127.
+<br/>
+<br/>
+This is what happens when I compile my code:
+<br/>
+<a href="http://up.ppy.sh/files/eg.png">[Images not permitted - Click here to view it]</a>
+<br/>
+<br/>
+At first I thought I might be loading the texture wrong, but if it displays properly in No$gba then there shouldn't be a problem?
+<br/>
+<br/>
+In any case, this is the code I'm currently using. I can't see any problems with it.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">glGenTextures(1, textures);
+<br/>
+int palette = gluTexLoadPal((u8*)palette_bin, 16, GL_RGB16);
+<br/>
+glBindTexture(0, textures[0]);
+<br/>
+glTexImage2D(0, 0, GL_RGB16, TEXTURE_SIZE_128, TEXTURE_SIZE_128, 0,
+<br/>
+    (GL_TEXTURE_COLOR0_TRANSPARENT | TEXGEN_TEXCOORD) &amp; ~(GL_TEXTURE_WRAP_S | GL_TEXTURE_WRAP_T),
+<br/>
+    (u8*)texture_bin);
+<br/>
+<br/>
+// ...
+<br/>
+<br/>
+glBindTexture(0, textures[0]);
+<br/>
+glColorTable(GL_RGB16, palette);
+<br/>
+<br/>
+glBegin(GL_QUADS);
+<br/>
+<br/>
+GFX_TEX_COORD = TEXTURE_PACK(0,0);
+<br/>
+glVertex3v16(x,y,0);
+<br/>
+GFX_TEX_COORD = TEXTURE_PACK(inttot16(128),0);
+<br/>
+glVertex3v16(x+width,y,0);
+<br/>
+GFX_TEX_COORD = TEXTURE_PACK(inttot16(128),inttot16(128));
+<br/>
+glVertex3v16(x+width,y+height,0);
+<br/>
+GFX_TEX_COORD = TEXTURE_PACK(0,inttot16(128));
+<br/>
+glVertex3v16(x,y+height,0);
+<br/>
+<br/>
+glEnd();</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+To make it look "right" on the DS, I have to use (2,2) to (130,130) instead.</span><span class="gensmall"><br/><br/>Last edited by Echo49 on Fri Nov 14, 2008 3:20 am; edited 1 time in total</span></div>    
+</div>
+<div class="post">
+    <h4>#164693 - DiscoStew - Fri Nov 14, 2008 3:10 am</h4>
+    <div class="postbody"><span class="postbody">I've not gotten myself into textures much, but does the direction for setting the texture coordinates follow the same rule like with vertices? Looking at the textured quad example provided in devkitARM, and comparing it to yours, it looks like the two are going in opposite directions, where one goes clockwise, and the other counter-clockwise. What I mean is this....
+<br/>
+<br/>
+Yours is like this......
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+GFX_TEX_COORD = TEXTURE_PACK(0, 0);
+<br/>
+...
+<br/>
+GFX_TEX_COORD = TEXTURE_PACK(inttot16(128), 0);
+<br/>
+...
+<br/>
+GFX_TEX_COORD = TEXTURE_PACK(inttot16(128), inttot16(128));
+<br/>
+...
+<br/>
+GFX_TEX_COORD = TEXTURE_PACK(0, inttot16(128));</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+but the devkitARM example is this...
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+GFX_TEX_COORD = TEXTURE_PACK(0, inttot16(128));
+<br/>
+...
+<br/>
+GFX_TEX_COORD = TEXTURE_PACK(inttot16(128), inttot16(128));
+<br/>
+...
+<br/>
+GFX_TEX_COORD = TEXTURE_PACK(inttot16(128), 0);
+<br/>
+...
+<br/>
+GFX_TEX_COORD = TEXTURE_PACK(0, 0);</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+See what I mean? Try reversing the direction, and see if anything changes. If this reversed direction was purposefully set like this for orientating the texture and is the cause of this problem, there are the Flip flags you could use (though that "would" require texture wrapping according to the specs). To make a note, I think you need to keep it at 128, and not go one down, as I'm pretty sure that in order to use the entire texture, you have to encompass that entire area.
+<br/>
+<br/>
+Also, while it doesn't change anything, you don't need to forcefully "not" set the texture wrapping like you have it there, since the actual entry starts with nothing (or known as 0).<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#164694 - Echo49 - Fri Nov 14, 2008 3:29 am</h4>
+    <div class="postbody"><span class="postbody">Mapping the texture either way doesn't change whether it starts at the wrong column or not.
+<br/>
+<br/>
+It appears to affect all the textures I'm using. I <span style="font-style: italic">could</span> add in constants to shift it but that's so ugly...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#164695 - elhobbs - Fri Nov 14, 2008 3:40 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Echo49 wrote:</b></span></td> </tr> <tr> <td class="quote">Thanks for the explanation.
+<br/>
+<br/>
+I have another question. What is the difference between each of the texture coordinates transformation modes?
+<br/>
+<br/>
+ie.
+<br/>
+TEXGEN_OFF
+<br/>
+TEXGEN_TEXCOORD
+<br/>
+TEXGEN_NORMAL
+<br/>
+TEXGEN_POSITION
+<br/>
+<br/>
+One other thing is that although No$gba emulates it fine, on my DS some/all (can't tell, because some are pretty small) my textures have the last column of pixels put in the first column instead.
+<br/>
+<br/>
+The texture is 128x128, so I use the coordinates (0,0), (128,0), (0,128), (128,128) when mapping the texture to my quad. I have not set any wrapping or repeating settings.
+<br/>
+<br/>
+Any ideas on this?</td> </tr></table><span class="postbody">here are the comments from the videoGL.h file
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">   TEXGEN_OFF      = (0&lt;&lt;30), /*!&lt; use unmodified texcoord */
+<br/>
+   TEXGEN_TEXCOORD = (1&lt;&lt;30), /*!&lt; multiply texcoords by the texture-matrix */
+<br/>
+   TEXGEN_NORMAL   = (2&lt;&lt;30), /*!&lt; set texcoords equal to normal * texture-matrix, used for spherical reflection mapping */
+<br/>
+   TEXGEN_POSITION = (3&lt;&lt;30)  /*!&lt; set texcoords equal to vertex * texture-matrix */
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+the projection matrix can have a large impact on texture coordinates - particulary if you are not looking directly along an axis. While trying to implement a crosshair feature I had problems using the traditional approach of aligning a quad in fron of the view position. the texture would get all squigly depending on the view direction. my point is - the texture coordinates are not perfect on the ds.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#164696 - Echo49 - Fri Nov 14, 2008 10:11 am</h4>
+    <div class="postbody"><span class="postbody">I'm supposed to manually fudge the coordinates until it <span style="font-style: italic">looks</span> right? The thing that really bites me is that it works perfect on an emulator, but is wrong on the real hardware. You'd think it'd be the other way around :/</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#164698 - elhobbs - Fri Nov 14, 2008 2:45 pm</h4>
+    <div class="postbody"><span class="postbody">I think there are two factor that may be effecting the alignment. the size of the object compared to the size of the texture -  does the image need to be scaled a lot to fit on the object? and the texture coordinates for a texture width of 128 is 0 to 127 - 128 should wrap to 0 if wrapping is turned on.
+<br/>
+<br/>
+I do not know about no$gba but desmume converts the fixed point texture coords to floating point before passing them off to opengl. so, I am not really surprised that an emulator would have better precision.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#164703 - DiscoStew - Fri Nov 14, 2008 7:21 pm</h4>
+    <div class="postbody"><span class="postbody">I've been trying to mimic your code with the devkitARM examples, but I've seen no problems, both in emulator and real hardware. Is there anything else you are doing with the hardware memory registers that you aren't showing us in the code snippet you gave? How about you condense your project (back it up first) to just showing a quad with the texture on it, and letting us have at it to find the problem? It's even possible that you might find the problem while doing this too. I just can't see how to find the problem without having the overall perspective of what you are doing.<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#164705 - Echo49 - Fri Nov 14, 2008 9:07 pm</h4>
+    <div class="postbody"><span class="postbody">I will try to post a stripped down version of my code asap.
+<br/>
+<br/>
+Would the way I init'd the 3D world have anything to do with it? It was mainly copy-pasted except for GL_BLEND, gluPerspective() and gluLookAt(). Basically any number xyy corresponds to x.yyf, from left to right, top to bottom. The reason I did this is because I'm porting a game from PC with that resolution, and I didn't want to recalculate all the sprite positions. The fovy value in gluPerspective "zooms" the field to the right position.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">   //init 3d video
+<br/>
+   videoSetMode(MODE_0_3D);
+<br/>
+   vramSetBankA(VRAM_A_TEXTURE);
+<br/>
+   vramSetBankE(VRAM_E_TEX_PALETTE);
+<br/>
+   
+<br/>
+   glInit();
+<br/>
+   glEnable(GL_BLEND | GL_TEXTURE_2D | GL_ANTIALIAS);
+<br/>
+   
+<br/>
+   // setup the rear plane
+<br/>
+   glClearColor(20,20,31,31);
+<br/>
+   glClearPolyID(63);
+<br/>
+   glClearDepth(0x7FFF);
+<br/>
+   
+<br/>
+   glViewport(0,0,255,191);
+<br/>
+   
+<br/>
+   glMatrixMode(GL_PROJECTION);
+<br/>
+   glLoadIdentity();
+<br/>
+   gluPerspective(101.2, 4.0/3.0, 0.1, 100); //fovy, aspect(width/height), zNear, zFar
+<br/>
+   
+<br/>
+   // camera is flipped around a bit - x increases left to right, y increases top to bottom (0,0) to (640,480)
+<br/>
+   gluLookAt(   3.2, 2.4, -2.0,      //camera possition 
+<br/>
+               3.2, 2.4, 0.0,      //look at
+<br/>
+               0.0, -1.0, 0.0);   //up
+<br/>
+<br/>
+   glMatrixMode(GL_MODELVIEW);</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#164707 - Echo49 - Sat Nov 15, 2008 1:23 am</h4>
+    <div class="postbody"><span class="postbody">Also, I have another question:
+<br/>
+<br/>
+I was looking for some code which would allow me to rotate sprites around the local z axis. I found <a class="postlink" href="http://forum.gbadev.org/viewtopic.php?t=14455" target="_blank">this post</a> but in the end I settled for this:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">glPushMatrix();
+<br/>
+glTranslatef(x,y,0);
+<br/>
+glRotatef(angle,0,0,1);
+<br/>
+glTranslatef(-x,-y,0);
+<br/>
+<br/>
+Draw();
+<br/>
+<br/>
+glPopMatrix(0);</td> </tr></table><span class="postbody">
+<br/>
+Aside from the use of the floating point version of the functions, are there any other downsides to doing it this way rather than the way pointed out in the other topic?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#164708 - DiscoStew - Sat Nov 15, 2008 2:18 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Echo49 wrote:</b></span></td> </tr> <tr> <td class="quote">Also, I have another question:
+<br/>
+<br/>
+I was looking for some code which would allow me to rotate sprites around the local z axis. I found <a class="postlink" href="http://forum.gbadev.org/viewtopic.php?t=14455" target="_blank">this post</a> but in the end I settled for this:
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">glPushMatrix();
+<br/>
+glTranslatef(x,y,0);
+<br/>
+glRotatef(angle,0,0,1);
+<br/>
+glTranslatef(-x,-y,0);
+<br/>
+<br/>
+Draw();
+<br/>
+<br/>
+glPopMatrix(0);</td> </tr></table><span class="postbody">
+<br/>
+Aside from the use of the floating point version of the functions, are there any other downsides to doing it this way rather than the way pointed out in the other topic?</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+At this point, if anyone uses more than 1 axis at a time, it's pretty much better to go with Quaternions imo, but in your case with only 1 axis, you don't have to even use glRotate. Instead, why not try the single rotation functions, or for you specifically, glRotateZi. It's based on integers, but the LUT it uses is limited to 512 entries. Since the code is accessible from the "videoGL.h" file, you can see how it works, and make your own with more precision if needed.<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#164713 - silent_code - Sat Nov 15, 2008 3:34 pm</h4>
+    <div class="postbody"><span class="postbody">Do you initialize the texture matrix to identity?<br/>_________________<br/><span style="font-size: 9px; line-height: normal"><span style="text-decoration: underline"><span style="font-weight: bold"></span></span> July 5th 08: "<span style="font-weight: bold">Volumetric Shadow Demo</span>" 1.6.0 (final) source released
+<br/>
+June 5th 08: "<span style="font-weight: bold">Zombie NDS</span>" WIP released!
+<br/>
+It's all on my page, just click <span style="font-weight: bold">WWW</span> below.</span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#164717 - Echo49 - Sat Nov 15, 2008 8:33 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">   // setup the rear plane 
+<br/>
+   glClearColor(20,20,31,31); 
+<br/>
+   glClearPolyID(63); 
+<br/>
+   glClearDepth(0x7FFF); 
+<br/>
+    
+<br/>
+   glViewport(0,0,255,191); 
+<br/>
+    
+<br/>
+   glMatrixMode(GL_PROJECTION); 
+<br/>
+   glLoadIdentity(); 
+<br/>
+   gluPerspective(101.2, 4.0/3.0, 0.1, 100); //fovy, aspect(width/height), zNear, zFar 
+<br/>
+    
+<br/>
+   // camera is flipped around a bit - x increases left to right, y increases top to bottom (0,0) to (640,480) 
+<br/>
+   gluLookAt(   3.2, 2.4, -2.0,      //camera possition 
+<br/>
+               3.2, 2.4, 0.0,      //look at 
+<br/>
+               0.0, -1.0, 0.0);   //up 
+<br/>
+<br/>
+   glMatrixMode(GL_MODELVIEW);</td> </tr></table><span class="postbody">
+<br/>
+I do it once when I initialize but never again.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#164718 - Maxxie - Sat Nov 15, 2008 8:43 pm</h4>
+    <div class="postbody"><span class="postbody">I only see the projection matrix set there, not the texture matrix
+<br/>
+<br/>
+Matrix Mode Texture: <a href="http://nocash.emubase.de/gbatek.htm#ds3dmatrixloadmultiply" target="_blank">http://nocash.emubase.de/gbatek.htm#ds3dmatrixloadmultiply</a>
+<br/>
+Texture Matrix useage: <a href="http://nocash.emubase.de/gbatek.htm#ds3dtexturecoordinates" target="_blank">http://nocash.emubase.de/gbatek.htm#ds3dtexturecoordinates</a><br/>_________________<br/><a class="postlink" href="http://nintendods.desperate-programmers.com/doku.php?id=wireless_io_map" target="_blank">Trying  to bring more detail into understanding the wireless hardware</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#164722 - elhobbs - Sun Nov 16, 2008 1:42 am</h4>
+    <div class="postbody"><span class="postbody">I believe the texture matrix is only used for textures that are defined with TEXGEN_TEXCOORD. also, glInit sets it to identity. so, lacking code to change it then it would be fine.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#164746 - Echo49 - Mon Nov 17, 2008 5:41 am</h4>
+    <div class="postbody"><span class="postbody">Do I do
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">   glMatrixMode(GL_TEXTURE); 
+<br/>
+   glLoadIdentity();</td> </tr></table><span class="postbody">
+<br/>
+to initialize it, or do I do something tricky with registers and the like?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#164750 - elhobbs - Mon Nov 17, 2008 9:25 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Echo49 wrote:</b></span></td> </tr> <tr> <td class="quote">Do I do
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">   glMatrixMode(GL_TEXTURE); 
+<br/>
+   glLoadIdentity();</td> </tr></table><span class="postbody">
+<br/>
+to initialize it, or do I do something tricky with registers and the like?</span></td> </tr></table><span class="postbody">yes, that is how it is done.
+<br/>
+<br/>
+however, if you do not change it anywhere this is already handled for you when you called glInit() (I looked in the libnds source code to confirm) - which you need to do before using any of the gl* functions in libnds.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#164782 - Echo49 - Thu Nov 20, 2008 10:18 pm</h4>
+    <div class="postbody"><span class="postbody">OK, I think I've found the problem.
+<br/>
+<br/>
+After a bit of messing around, it seems that the DS dislikes anything that isn't aligned to 4 bytes.
+<br/>
+<br/>
+The following code all output different images (ie. shifted by n bytes) on No$gba, but <span style="font-style: italic">all output the same thing</span> on my DS! (ie. as if they were all the first one, pointer-2)
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">glTexImage2D(0, 0, GL_RGB4, TEXTURE_SIZE_32, TEXTURE_SIZE_32, 0, defaultparam, (u8*)(texture_bin-2));
+<br/>
+glTexImage2D(0, 0, GL_RGB4, TEXTURE_SIZE_32, TEXTURE_SIZE_32, 0, defaultparam, (u8*)(texture_bin-1));
+<br/>
+glTexImage2D(0, 0, GL_RGB4, TEXTURE_SIZE_32, TEXTURE_SIZE_32, 0, defaultparam, (u8*)texture_bin);
+<br/>
+glTexImage2D(0, 0, GL_RGB4, TEXTURE_SIZE_32, TEXTURE_SIZE_32, 0, defaultparam, (u8*)(texture_bin+1));</td> </tr></table><span class="postbody">
+<br/>
+Does anyone know anything about this? It seems to be independent of the order I generate the textures in, and also independent of the order I #include the textures in.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#164783 - elhobbs - Thu Nov 20, 2008 11:20 pm</h4>
+    <div class="postbody"><span class="postbody">yes, it does need to be aligned. libnds uses swiCopy to move the data to VRAM.</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">      swiCopy((uint32*)texture, addr , size / 4 | COPY_MODE_WORD);
+<br/>
+</td> </tr></table><span class="postbody">the ds does not like unaligned ints.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#164784 - Echo49 - Thu Nov 20, 2008 11:27 pm</h4>
+    <div class="postbody"><span class="postbody">How I can make it aligned? At the moment I'm just #including them one after the other, and the number of bytes in all my textures are exact multiples of 4. I can't see how they could become unaligned :/
+<br/>
+<br/>
+edit:
+<br/>
+OK, so right now I'm doing this ugly hack to make it work properly. Since this is all done only once at the start of the game, efficiency is not really an issue but if there are better ways to do it I'd really like to know.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void LoadGLTexture(GL_TEXTURE_TYPE_ENUM type, int sizeX, int sizeY, const u8* texture)
+<br/>
+{
+<br/>
+   u32 size = 64 * (2 &lt;&lt; (sizeX + sizeY));
+<br/>
+<br/>
+   //align it to 4 bytes
+<br/>
+   u32* _temp = new u32[size];
+<br/>
+   u8* temp = (u8*)_temp;
+<br/>
+   
+<br/>
+   for (u32 i=0; i&lt;size; ++i)
+<br/>
+      temp[i] = texture[i];
+<br/>
+   
+<br/>
+   glTexImage2D(0, 0, type, sizeX, sizeY, 0, GL_TEXTURE_COLOR0_TRANSPARENT, temp);
+<br/>
+   
+<br/>
+   delete[] _temp;
+<br/>
+}</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#164786 - DiscoStew - Fri Nov 21, 2008 8:48 am</h4>
+    <div class="postbody"><span class="postbody">I think this is what you are looking for...
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#define ALIGN(m)   __attribute__((aligned (m)))</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+This is under the "jtypes.h" file in the nds section of devkitARM, so it should already be included in your project. You place it in front on the same line as where the data you want aligned is defined, and when your project is compiled, it will align that data by whatever byte boundary you specify, which in this case would be per "4"-bytes.<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#164787 - Echo49 - Fri Nov 21, 2008 10:12 am</h4>
+    <div class="postbody"><span class="postbody">Since my files are external files which are #included, do I add that into the makefile which generates the .h files?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#164788 - Cearn - Fri Nov 21, 2008 10:21 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Echo49 wrote:</b></span></td> </tr> <tr> <td class="quote">How I can make it aligned? At the moment I'm just #including them one after the other, and the number of bytes in all my textures are exact multiples of 4. I can't see how they could become unaligned :/
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+It's not the size that makes them unaligned, it's the datatype (possibly combined with using #include to add them to the project). If the data are byte-arrays, they will have byte-alignment. If you #include the array and the includer has loose bytes in the global scope that are word-aligned, the array could end up right behind the byte and not be aligned to 32-bits. For details on alignment and how it may affect you, see <a class="postlink" href="http://www.coranac.com/tonc/text/bitmaps.htm#ssec-data-align" target="_blank">tonc:data-align</a>.
+<br/>
+<br/>
+Depending on exactly how the arrays are generated, byte-arrays (and halfword arrays) for graphics data may be alignment-unsafe even if you do not #include them. For C-arrays, you can add use ALIGN(4) on the <span style="font-weight: bold">definition</span> (not just the declaration) to force word-alignment. Tools that export to assembly tend to properly align their data by themselves, so these are preferred over C-arrays. If this has happened for bin2o-generated data, I'm not sure there's anything you can do :\ .</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#164789 - Echo49 - Fri Nov 21, 2008 10:48 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Cearn wrote:</b></span></td> </tr> <tr> <td class="quote">For C-arrays, you can add use ALIGN(4) on the <span style="font-weight: bold">definition</span> (not just the declaration) to force word-alignment.</td> </tr></table><span class="postbody">Do you mean definition AND declaration, or just the definition? (just want to make sure)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#164798 - Cearn - Fri Nov 21, 2008 3:35 pm</h4>
+    <div class="postbody"><span class="postbody">Well, I <span style="font-style: italic">thought</span> you'd have to do it at the definition since that's what the linker actually looks at, but now that I've tested it, it seems that adding it to just the declaration works as well.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+// Example 1: no alignment
+<br/>
+extern u8 foo[16];
+<br/>
+<br/>
+u8 a;         // 00ED
+<br/>
+u8 foo[16];   // 00DD ( crap :( )
+<br/>
+u8 b;         // 00DC
+<br/>
+<br/>
+// Example 2: with alignment
+<br/>
+extern u8 foo[16] ALIGN(4);
+<br/>
+<br/>
+u8 a;         // 00F0
+<br/>
+u8 foo[16];   // 00E0 (yay :D )
+<br/>
+u8 b;         // 00DC
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Note, however, that this only works if the declaration of alignment is inside the same file as the definition, so effectively it really has to be added to the definition after all.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#164811 - Echo49 - Sat Nov 22, 2008 10:09 am</h4>
+    <div class="postbody"><span class="postbody">Mmm I can't get it to work this way. I guess I'll just stick with the current way I do it. One other thing though - can I replace the for loop with memcpy or something?
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">   u32* _temp = new u32[size]; 
+<br/>
+   u8* temp = (u8*)_temp; 
+<br/>
+    
+<br/>
+   for (u32 i=0; i&lt;size; ++i) 
+<br/>
+      temp[i] = texture[i];
+<br/>
+<br/>
+   //...
+<br/>
+   delete[] _temp;</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#164818 - DiscoStew - Sat Nov 22, 2008 8:50 pm</h4>
+    <div class="postbody"><span class="postbody">Memcpy should work better than looping like you have, but what exactly is not working with ALIGN(4)? Does nothing change when you use it like Cearn has shown?<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#164823 - Echo49 - Sun Nov 23, 2008 4:25 am</h4>
+    <div class="postbody"><span class="postbody">The textures are .bin files included as a .h, so the directions for how to generate the .h files are in the makefile, right? I don't know much about makefiles, but I found the bit that outputs the contents of the .h file and tacked ALIGN(4) to the end of it like Cearn showed me above but it had no effect.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

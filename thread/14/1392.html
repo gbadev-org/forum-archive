@@ -1,0 +1,329 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>problem with larger maps - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Beginners > problem with larger maps</h2>
+<div id="posts">
+<div class="post">
+    <h4>#6980 - Wildginger - Thu Jun 05, 2003 7:01 pm</h4>
+    <div class="postbody"><span class="postbody">Hi,
+<br/>
+<br/>
+I made a 256x256 map using GBA Map Editor, exported it to code, then converted my tileset to code, coded it up, and jobs a good en, all worked fine.
+<br/>
+<br/>
+I then made a 512x512 map, using the same tileset as before, did exactly the same procedure as previously, and it doesnt appear correctly on the screen - the tiles are all mixed up. 
+<br/>
+<br/>
+Im using the following code to load the map:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+void MakeBKG()
+<br/>
+{
+<br/>
+   u16 loop;
+<br/>
+   for(loop = 0; loop &lt; 256; loop++)
+<br/>
+           BGPaletteMem[loop] = Chips16x16TilesPalette[loop];
+<br/>
+   for(loop = 0; loop &lt; Chips16x16Tiles_WIDTH*Chips16x16Tiles_HEIGHT/2; loop++)
+<br/>
+                        BGTileMem[loop] = Chips16x16TilesData[loop];
+<br/>
+<br/>
+   for(loop = 0; loop &lt; 64*64; loop++)
+<br/>
+           VideoBuffer[loop] = CHIPS_L1[loop];
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+CHIPS_L1 is indeed a 64x64 array, it is a 256 palette, so I dont know what is going on.
+<br/>
+<br/>
+Does anyone have any ideas?
+<br/>
+<br/>
+TIA
+<br/>
+<br/>
+Jim<br/>_________________<br/>---
+<br/>
+Wildginger (aka JimTownsend)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#6981 - niltsair - Thu Jun 05, 2003 7:15 pm</h4>
+    <div class="postbody"><span class="postbody">A 512x512 Map is treated as 4 256x256Maps.
+<br/>
+<br/>
+That mean you have to load each individually, you can't load say line 0, column 40 as if it was column 40. Each Map contains 32x32Tiles, to reach column 40, you have to skip first Map(32x32) then it's col 8 of Map1.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">0-------31-32--------63
+<br/>
+ 0|          |          |
+<br/>
+   |  Map 0   |  Map 1    |
+<br/>
+31|          |          |
+<br/>
+   --------------------------
+<br/>
+32|          |          |
+<br/>
+   |  Map 2  |  Map 3    |
+<br/>
+63|          |          |
+<br/>
+   --------------------------</td> </tr></table><span class="postbody">
+<br/>
+So you basicly have to check Row/Col to find in which maps the tile belongs to. And then store it in the right map by finding it's memory location ( Map0Address + (MapNum*32x32) )
+<br/>
+<br/>
+I apologize for the poor ascii art :P</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#6985 - Wildginger - Thu Jun 05, 2003 7:49 pm</h4>
+    <div class="postbody"><span class="postbody">Thanks for the reply, and the ascii was the easiest bit to follow!
+<br/>
+<br/>
+Ok, so I have a 512x512 map, and I have to treat it as 4 seperate maps.
+<br/>
+<br/>
+So do I have to load 0,0 to 0,31 as map1, row 1 and then 1,0 to 1,31 as map1, row 2 etc? And then do this for the 4 maps?
+<br/>
+<br/>
+So do I still load the tiles in to memory from 0 to 64x64, or does it not work that way? 
+<br/>
+<br/>
+Sorry for the newbie questions, but thats exactly what I am!
+<br/>
+<br/>
+If you felt like posting a little c code, that would be great too ;)
+<br/>
+<br/>
+Thanks again,
+<br/>
+<br/>
+Jim.<br/>_________________<br/>---
+<br/>
+Wildginger (aka JimTownsend)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#6988 - niltsair - Thu Jun 05, 2003 8:06 pm</h4>
+    <div class="postbody"><span class="postbody">Yes, it's as you said earlier, you load:
+<br/>
+- Line 0-Line 31 of Map 0 then
+<br/>
+- Line 0-Line 31 of Map 1 then
+<br/>
+- Line 0-Line 31 of Map 2 and finally
+<br/>
+- Line 0-Line 31 of Map 3 
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#define MAPADR(num)    ((32x32)*num)
+<br/>
+u16 x(0);
+<br/>
+u16 y(16);
+<br/>
+u16* VideoMap;
+<br/>
+<br/>
+    VideoMap = ... //Where you want to store the map in vide memory;
+<br/>
+<br/>
+    //Load Tile's entries of Map 0
+<br/>
+    for( y = 0; y &lt; 32; y++)
+<br/>
+        for( x = 0; x &lt; 32; x++)
+<br/>
+            VideoMap[ MAPADR(0) + ( (y-0) *32 ) + (x-0) ] = CHIPS_L1[y*64+x];
+<br/>
+<br/>
+    //Load Tile's entries of Map 1
+<br/>
+    for( y = 0; y &lt; 32; y++)
+<br/>
+        for( x = 32; x &lt; 64; x++)
+<br/>
+            VideoMap[ MAPADR(1) + ( (y-0) *32 ) + (x-32) ]  = CHIPS_L1[y*64+x];
+<br/>
+<br/>
+    //Load Tile's entries of Map 2
+<br/>
+    for( y = 0; y &lt; 32; y++)
+<br/>
+        for( x = 0; x &lt; 32; x++)
+<br/>
+            VideoMap[ MAPADR(2) + ( (y-32) *32 ) + (x-0) ] = CHIPS_L1[y*64+x];
+<br/>
+<br/>
+    //Load Tile's entries of Map 3
+<br/>
+    for( y = 0; y &lt; 32; y++)
+<br/>
+        for( x = 0; x &lt; 32; x++)
+<br/>
+            VideoMap[ MAPADR(3) + ( (y-32) *32 ) + (x-32) ]  = CHIPS_L1[y*64+x];</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Now, this code might need some adjustement, i just typed it like this, without testing. And it's far form optimized, i wanted clarity.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#6991 - Wildginger - Thu Jun 05, 2003 8:44 pm</h4>
+    <div class="postbody"><span class="postbody">Thanks for the code, much appreciated, I am now much closer to getting this working now.
+<br/>
+<br/>
+I now have "map 0" ie the top left quarter of the map displayed, and when I scroll, that map is repeated over and over. 
+<br/>
+<br/>
+so I have:
+<br/>
+<br/>
+map 0      map 0
+<br/>
+map 0      map 0
+<br/>
+<br/>
+instead of:
+<br/>
+<br/>
+map 0      map 1
+<br/>
+map 2      map 3
+<br/>
+<br/>
+Do I have to do anything specific to make sure all maps are viewable? Ive enabled backgrounds 0-3, but I dont know if thats correct?
+<br/>
+<br/>
+Thanks for all this help,
+<br/>
+<br/>
+Jim.<br/>_________________<br/>---
+<br/>
+Wildginger (aka JimTownsend)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#6994 - niltsair - Thu Jun 05, 2003 8:57 pm</h4>
+    <div class="postbody"><span class="postbody">No, you only need to enable 1 background. And for this background, tell it to use a 512x512 size, using starting position of Map 0 (in Screen Block).
+<br/>
+<br/>
+<span style="font-weight: bold">Defines from the Pern Project :</span>
+<br/>
+///BGCNT defines ///
+<br/>
+#define BG_MOSAIC_ENABLE 0x40
+<br/>
+#definee BG_COLOR_256 0x80
+<br/>
+#define BG_COLOR_16 0x0
+<br/>
+<br/>
+#define TEXTBG_SIZE_256x256 0x0
+<br/>
+#define TEXTBG_SIZE_256x512 0x8000
+<br/>
+#define TEXTBG_SIZE_512x256 0x4000
+<br/>
+#define TEXTBG_SIZE_512x512 0xC000
+<br/>
+<br/>
+#define ROTBG_SIZE_128x128 0x0
+<br/>
+#define ROTBG_SIZE_256x256 0x4000
+<br/>
+#define ROTBG_SIZE_512x512 0x8000
+<br/>
+#define ROTBG_SIZE_1024x1024 0xC000
+<br/>
+<br/>
+#define WRAPAROUND 0x2000
+<br/>
+#define ScreenBaseBlock(n) (((n)*0x800)+0x6000000) 
+<br/>
+<span style="font-weight: bold">
+<br/>
+REG_BG0CNT = TEXTBG_SIZE_512x512 | BG_COLOR_256 | ScreenBaseBlock( BlockOfYourMap0 ) | WRAPAROUND; 
+<br/>
+</span>
+<br/>
+Background 0-3 are just layers that you can view, one on top of the other.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#6996 - Wildginger - Thu Jun 05, 2003 9:22 pm</h4>
+    <div class="postbody"><span class="postbody">You'll be getting tired of me . . .
+<br/>
+<br/>
+ok, I follow everything you've said to a certain degree, but Im not sure what I should be passing into ScreenBaseBlock() . . .
+<br/>
+<br/>
+Jim.<br/>_________________<br/>---
+<br/>
+Wildginger (aka JimTownsend)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#6997 - niltsair - Thu Jun 05, 2003 9:35 pm</h4>
+    <div class="postbody"><span class="postbody">Which screen block you used to store your Map.
+<br/>
+<br/>
+In your first excerp of code you stored it there : VideoBuffer[loop]
+<br/>
+<br/>
+Which is wrong. Map and Tiles share the same area of memory. So one can overwrite the other one. We usually store the tiles starting from VideoMemory and up (Char Base Block 0) adn the Map from the end of Video Memory and down (Screen Base Block 31)
+<br/>
+<br/>
+<a class="postlink" href="http://www.thepernproject.com/index2.htm" target="_blank">http://www.thepernproject.com/index2.htm</a> check the first table, it explains the video memory layout for Tile Display mode.
+<br/>
+<br/>
+So what you should do is, use Char Block 0 to store your tiles. Use Screen Block 28 to store your maps (28,29,30,31 in fact) So, in my previous code, <span style="font-weight: bold">VideoMap = ScreenBaseBlock(28) </span>
+<br/>
+and for the Background register :
+<br/>
+<span style="font-weight: bold">REG_BG0CNT = TEXTBG_SIZE_512x512 | BG_COLOR_256 | (28&lt;&lt;SCREEN_SHIFT)  | WRAPAROUND; </span> (i made a mistake in prevous post, ScreenBaseBlock(x) return the address in memory, and not the block value to put in the register, i changed it to 28&lt;&lt;SCREEN_SHIFT.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7019 - Wildginger - Fri Jun 06, 2003 9:45 am</h4>
+    <div class="postbody"><span class="postbody">hello again,
+<br/>
+<br/>
+Well, in the end I decided to start over, went back to examples/tutorials, with your info in mind, and now it works, and I even think I understand it :)
+<br/>
+<br/>
+I have my 512x512 map, I even have my character walking round it.
+<br/>
+<br/>
+On to collision detection . . .
+<br/>
+<br/>
+Lookout for my next questions and thanks for the help!
+<br/>
+<br/>
+Jim<br/>_________________<br/>---
+<br/>
+Wildginger (aka JimTownsend)</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

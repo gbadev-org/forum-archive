@@ -1,0 +1,434 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>M3 ram - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > M3 ram</h2>
+<div id="posts">
+<div class="post">
+    <h4>#89247 - loading - Fri Jun 23, 2006 7:44 pm</h4>
+    <div class="postbody"><span class="postbody">i am working on a project which relyes on m3 ram (and quite heavily) so i have like 4+ mb in m3 ram and now i want to write that to the flashcard. copying the first 2mb to ds ram works quite nicely and writing to my sdcard works fine too. for the first 2mb if i continue reading from m3 ram its empty.
+<br/>
+<br/>
+do you have to lock m3 ram before writing or something? if so how to do it?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#89264 - agentq - Fri Jun 23, 2006 9:58 pm</h4>
+    <div class="postbody"><span class="postbody">I would imagine that writing to the SD card is disabling the M3's internal RAM, since it is mapped into the same area of the ARM9's address space.
+<br/>
+<br/>
+Beyond that, I haven't a clue.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#89283 - josath - Sat Jun 24, 2006 12:11 am</h4>
+    <div class="postbody"><span class="postbody">perhaps try writing it in chunks:
+<br/>
+<br/>
+1. copy 1MB from M3RAM to DSRAM
+<br/>
+2. switch M3 to SD mode (RAM disabled)
+<br/>
+3. write 1MB from DSRAM to SD
+<br/>
+4. switch M3 to RAM mode (SD disabled)
+<br/>
+Repeat 1-4 until all data is copied (while showing a progress bar or something onscreen)
+<br/>
+<br/>
+My guess is the same as agentq: when SD mode is enabled, it intereferes with access to the M3RAM.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#89335 - loading - Sat Jun 24, 2006 9:38 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+bool FatWrite(char *name)
+<br/>
+{
+<br/>
+   FAT_FILE* fp;
+<br/>
+   FAT_InitFiles();
+<br/>
+   fp=FAT_fopen(name, "wb+");
+<br/>
+   FAT_fseek(fp, 0, SEEK_END);
+<br/>
+     FAT_fwrite(GBA_DATA, 4, GBA_SIZE, fp);
+<br/>
+   FAT_fclose(fp);
+<br/>
+   FAT_FreeFiles();
+<br/>
+   return true;
+<br/>
+   
+<br/>
+}
+<br/>
+<br/>
+void readGba(u32 data[]) {
+<br/>
+   int i;
+<br/>
+   for(i=0; i&lt;GBA_SIZE; i++)
+<br/>
+   {
+<br/>
+      GBA_DATA[i] = data[i]; //GBA_DATA is stuff in ds mainram
+<br/>
+   }
+<br/>
+}
+<br/>
+...
+<br/>
+readGba(GBA_ROM2);
+<br/>
+if(!FatWrite("data1.bin"))
+<br/>
+iprintf("write 1 failed\n");
+<br/>
+iprintf("write part 2\n");
+<br/>
+readGba(GBA_ROM);
+<br/>
+if(!FatWrite("data2.bin"))
+<br/>
+iprintf("write 2 failed\n");
+<br/>
+iprintf("done!\n");
+<br/>
+...
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+basically this is what i do?
+<br/>
+result is data1.bin is fine data2.bin is all zero
+<br/>
+<br/>
+[edit] hmm i am getting closer thanks to your hint: running the m3 unlock sequence after the first fat write allows me to access the data again - after that the 2nd fat write does not work anymore (does not write anything) though.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#89355 - Snowy? - Sat Jun 24, 2006 2:24 pm</h4>
+    <div class="postbody"><span class="postbody">okay don't shoot me because I understand very little here but googling I found this:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">+FAT_FreeFiles
+<br/>
++Closes all open files then resets the CF card.
+<br/>
++Call this before exiting back to the GBAMP
+<br/>
++bool return OUT: true if successful.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Is this the same function/lib your using??? Would explain whats happening no?
+<br/>
+<br/>
+<a href="http://stuartp.commixus.com/nhds/nethack-nds.diff" target="_blank">http://stuartp.commixus.com/nhds/nethack-nds.diff</a>
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">+bool FAT_FreeFiles (void)
+<br/>
++{
+<br/>
++   int i;
+<br/>
++
+<br/>
++   // Close all open files
+<br/>
++   for (i=0; i &lt; MAX_FILES_OPEN; i++)
+<br/>
++   {
+<br/>
++      if (openFiles[i].inUse == true)
+<br/>
++      {
+<br/>
++         FAT_fclose(&amp;openFiles[i]);
+<br/>
++      }
+<br/>
++   }
+<br/>
++
+<br/>
++   // Flush any sectors in disc cache
+<br/>
++   disc_CacheFlush();
+<br/>
++
+<br/>
++   // Clear card status
+<br/>
++   disc_ClearStatus();
+<br/>
++
+<br/>
++   // Return status of card
+<br/>
++   return disc_IsInserted();
+<br/>
++}
+<br/>
++
+<br/>
++</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#89397 - loading - Sat Jun 24, 2006 6:18 pm</h4>
+    <div class="postbody"><span class="postbody">i got it working by commenting out these lines in disc_init (disc_io.h)
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+...
+<br/>
+   if (active_interface != 0) {
+<br/>
+      return true;
+<br/>
+   }
+<br/>
+...
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+looks like it thought the disc was still active even though running the sequence to be able to acces the m3 ram again disabled the sd access.
+<br/>
+<br/>
+maybe setting active_interface=0 in FAT_FreeFiles would be a more elegant solution but i did not try that yet.
+<br/>
+<br/>
+thank you guys.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#89702 - pepsiman - Mon Jun 26, 2006 11:39 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>loading wrote:</b></span></td> </tr> <tr> <td class="quote">looks like it thought the disc was still active even though running the sequence to be able to acces the m3 ram again disabled the sd access.</td> </tr></table><span class="postbody">
+<br/>
+What is this sequence?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#89758 - loading - Mon Jun 26, 2006 4:50 pm</h4>
+    <div class="postbody"><span class="postbody">the normal m3 unlock sequence (with or without write enable does not matter)
+<br/>
+<br/>
+what i did was
+<br/>
+fat init
+<br/>
+fat write file 1
+<br/>
+fat free files
+<br/>
+m3 unlock (otherwise i read all zero from m3 ram after fat init)
+<br/>
+read 0x08000000
+<br/>
+read 0x08000002
+<br/>
+read 0x0800000E
+<br/>
+read 0x08001FFC
+<br/>
+read 0x0800104A
+<br/>
+read 0x08000612
+<br/>
+read 0x08000000
+<br/>
+read 0x08001B66
+<br/>
+read 0x08000006
+<br/>
+read 0x08000000
+<br/>
+<br/>
+now after this sequence trying to run
+<br/>
+fat init
+<br/>
+fails, because read sector returns all zero
+<br/>
+but it works again with the the active interface check disabled.
+<br/>
+<br/>
+(not calling fat free files before the unlock sequence and then fat_fopen will always return a null pointer)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#89761 - Mighty Max - Mon Jun 26, 2006 5:06 pm</h4>
+    <div class="postbody"><span class="postbody">You should think about resetting the mode you left instead of modifying the driver.<br/>_________________<br/><a class="postlink" href="http://mightymax.org/gbamp_multiboot.html" target="_blank">GBAMP Multiboot</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#89828 - pepsiman - Mon Jun 26, 2006 8:57 pm</h4>
+    <div class="postbody"><span class="postbody">I'm trying to better understand the M3 control sequences.
+<br/>
+<br/>
+The NDSTech Wiki (http://www.bottledlight.com/ds/index.php/Hardware/FlashCartridges) has this sequence to map the CF/SD registers into GBA ROM space:
+<br/>
+  read 0x08000000
+<br/>
+  read 0x08<span style="font-weight: bold">0</span>00002
+<br/>
+  read 0x0800000E
+<br/>
+  read 0x08<span style="font-weight: bold">0</span>01FFC
+<br/>
+  read 0x0800104A
+<br/>
+  read 0x08<span style="font-weight: bold">0</span>00612
+<br/>
+  read 0x08000000
+<br/>
+  read 0x08<span style="font-weight: bold">0</span>01B66
+<br/>
+  read 0x08<span style="font-weight: bold">0</span>00006
+<br/>
+  read 0x08000000
+<br/>
+<br/>
+Chishm's lib and DSLinux have this sequence to map the CF/SD registers into GBA ROM space:
+<br/>
+  read 0x08000000
+<br/>
+  read 0x08<span style="font-weight: bold">E</span>00002
+<br/>
+  read 0x0800000E
+<br/>
+  read 0x08<span style="font-weight: bold">8</span>01FFC
+<br/>
+  read 0x0800104A
+<br/>
+  read 0x08<span style="font-weight: bold">8</span>00612
+<br/>
+  read 0x08000000
+<br/>
+  read 0x08<span style="font-weight: bold">8</span>01B66
+<br/>
+  read 0x08<span style="font-weight: bold">8</span>00006
+<br/>
+  read 0x08000000
+<br/>
+<br/>
+You've just come up with this sequence, which matches the NDSTech wiki:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>loading wrote:</b></span></td> </tr> <tr> <td class="quote">read 0x08000000
+<br/>
+read 0x08<span style="font-weight: bold">0</span>00002
+<br/>
+read 0x0800000E
+<br/>
+read 0x08<span style="font-weight: bold">0</span>01FFC
+<br/>
+read 0x0800104A
+<br/>
+read 0x08<span style="font-weight: bold">0</span>00612
+<br/>
+read 0x08000000
+<br/>
+read 0x08<span style="font-weight: bold">0</span>01B66
+<br/>
+read 0x08<span style="font-weight: bold">0</span>00006
+<br/>
+read 0x08000000</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I'll call these sequences E8888 and 00000.
+<br/>
+<br/>
+The E8888 sequence maps the CF/SD registers into GBA ROM space.
+<br/>
+<br/>
+Does the 00000 sequence map the M3 RAM back into GBA ROM space?
+<br/>
+<br/>
+Or something else?
+<br/>
+<br/>
+Do you know any other sequences?
+<br/>
+<br/>
+There should also be a sequence to bank switch the SRAM, which I haven't seen anywhere.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#89908 - chishm - Tue Jun 27, 2006 8:31 am</h4>
+    <div class="postbody"><span class="postbody">I got this function from the M3 SD's firmware:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">static u16 M3_readHalfword (u32 addr) {
+<br/>
+   return *((vu16*)addr);
+<br/>
+}
+<br/>
+<br/>
+void M3_changeMode (u32 mode) {
+<br/>
+   M3_readHalfword (0x08e00002);
+<br/>
+   M3_readHalfword (0x0800000e);
+<br/>
+   M3_readHalfword (0x08801ffc);
+<br/>
+   M3_readHalfword (0x0800104a);
+<br/>
+   M3_readHalfword (0x08800612);
+<br/>
+   M3_readHalfword (0x08000000);
+<br/>
+   M3_readHalfword (0x08801b66);
+<br/>
+   M3_readHalfword (0x08000000 + (mode &lt;&lt; 1));
+<br/>
+   M3_readHalfword (0x0800080e);
+<br/>
+   M3_readHalfword (0x08000000);
+<br/>
+   
+<br/>
+   if ((mode &amp; 0x0f) != 4) {
+<br/>
+      M3_readHalfword (0x09000000);
+<br/>
+   } else {
+<br/>
+      M3_readHalfword (0x080001e4);
+<br/>
+      M3_readHalfword (0x080001e4);
+<br/>
+      M3_readHalfword (0x08000188);
+<br/>
+      M3_readHalfword (0x08000188);
+<br/>
+   }
+<br/>
+}   
+<br/>
+<br/>
+// Values for changing mode
+<br/>
+#define M3_MODE_ROM 0x00400004
+<br/>
+#define M3_MODE_MEDIA 0x00400003</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I assume M3_MODE_ROM switches to the M3's firmware, since the M3 uses this constant before loading the main part of the firmware.<br/>_________________<br/><a class="postlink" href="http://chishm.drunkencoders.com" target="_blank">http://chishm.drunkencoders.com</a>
+<br/>
+<a class="postlink" href="http://dldi.drunkencoders.com" target="_blank">http://dldi.drunkencoders.com</a></span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

@@ -1,0 +1,127 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>pcx2sprite vs. usenti output format - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Graphics > pcx2sprite vs. usenti output format</h2>
+<div id="posts">
+<div class="post">
+    <h4>#25627 - Code Monkey - Thu Aug 26, 2004 7:38 am</h4>
+    <div class="postbody"><span class="postbody">As a newbie gba coder, I've been reading <a class="postlink" href="http://thepernproject.com" target="_blank">devoto's PERN Project tutorials</a> along with the <a class="postlink" href="http://user.chem.tue.nl/jakvijn/tonc/toc.htm" target="_blank">TONC guide</a>. I've managed to write a small gba app that blits a 64x64 tiled sprite onto the screen in mode0, mostly modelled from PERN tutorial code.
+<br/>
+<br/>
+<a class="postlink" href="http://frozdsolid.dyns.cx:800/~scott/gba/plane-pcx.c" target="_blank">the sprite data</a> is generated from a 64x64 256-color pcx image using pcx2sprite.
+<br/>
+<a href="http://frozdsolid.dyns.cx:800/~scott/gba/plane-good.jpg">[Images not permitted - Click here to view it]</a>
+<br/>
+<br/>
+This works. However, when replacing this with the <a class="postlink" href="http://frozdsolid.dyns.cx:800/~scott/gba/plane-usenti.c" target="_blank">USENTI's generated code (tile mode 64x64 8bpp) </a>, the sprite is garbled. 
+<br/>
+<a href="http://frozdsolid.dyns.cx:800/~scott/gba/plane-bad.jpg">[Images not permitted - Click here to view it]</a>
+<br/>
+(Usenti is a very cool paint-style app written by the guy who did the TONC tutorials. I like it, so i'd rather use that than pcx2sprite)
+<br/>
+<br/>
+I'm assuming the data is generated in a slightly different way, and there is some small nuance of this that i'm misunderstanding. Can anyone explain it? 
+<br/>
+<br/>
+Code is below, sprite data included in links above.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+   OAM_Entry oam_buffer[128];
+<br/>
+   int i;
+<br/>
+<br/>
+   //set video mode.. zero out oam
+<br/>
+   SetMode(MODE_0 | OBJ_ENABLE | OBJ_MAP_1D);
+<br/>
+<br/>
+   //sets that bit in all the oam entries so that the sprites will be hidden
+<br/>
+   initOAM(oam_buffer);
+<br/>
+<br/>
+   //init oam buffer;
+<br/>
+   oam_buffer[0].attribute[0] = COLOR_256 | SQUARE;
+<br/>
+   oam_buffer[0].attribute[1] = SIZE_64;
+<br/>
+   oam_buffer[0].attribute[2] = 0;
+<br/>
+   
+<br/>
+      //copy data from pcx2sprite into video memory
+<br/>
+   for(i = 0; i &lt; 64 * 64 / 2; i++)
+<br/>
+      OAMData[0 * 16 + i] = plane1Data[i];  
+<br/>
+   for(i = 0; i &lt; 256; i++)
+<br/>
+      OBJPaletteMem[i] = plane1Palette[i]; 
+<br/>
+<br/>
+   //update oam entry from buffer
+<br/>
+   updateOAM(oam_buffer);
+<br/>
+<br/>
+   while(1);
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+The TONC tutorials that use usenti-generated images use dma, and I'd rather get a grasp for things with simple for loop-style copying operations before i start relying on dma transfers.
+<br/>
+Thanks.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#25868 - Cearn - Mon Aug 30, 2004 9:06 am</h4>
+    <div class="postbody"><span class="postbody">I can't open the links to the images or code, but I might know what's going on.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code Monkey wrote:</b></span></td> </tr> <tr> <td class="quote">I'm assuming the data is generated in a slightly different way, and there is some small nuance of this that i'm misunderstanding. Can anyone explain it?</td> </tr></table><span class="postbody">
+<br/>
+Usenti exports to 32bit data (u32), while pcx2sprite exports to 16bit (u16). Since VRAM (and hence OAMData, you might want to use another name for that, btw, to avoid confusion with the <span style="font-style: italic">real</span> OAM data at 0x700:0000) is usually defined via a u16 pointer/array, copying Usenti's data via a simple loop will miss half the data. To avoid this, either cast VRAM to an u32 pointer, or the exported data to u16*. (or use DMA)
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code Monkey wrote:</b></span></td> </tr> <tr> <td class="quote">The TONC tutorials that use usenti-generated images use dma, and I'd rather get a grasp for things with simple for loop-style copying operations before i start relying on dma transfers.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Yeah yeah, I know; I should have realised that when I started. My bad, sorry. I'm trying to get rid of a number of my idiosyncrasies in both Usenti and Tonc, but unfortunately time is something I currently lack so it might be a while before I get everything fixed.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#25946 - Code Monkey - Wed Sep 01, 2004 6:28 pm</h4>
+    <div class="postbody"><span class="postbody">Brilliant! 
+<br/>
+<br/>
+That was the exact problem. I casted the usenti data to u16* (as vram was defined as.) and magically, eveything works!  
+<br/>
+<br/>
+Sorry about my links, i host them on my internal webserver, the damn netgear router's been on the fritz lately, locking up and whatnot. It's ok now.  They should work now (although it doesn't really matter at this point).
+<br/>
+<br/>
+Thanks a lot! :)
+<br/>
+<br/>
+Btw: Usenti is amazing.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

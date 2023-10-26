@@ -1,0 +1,231 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>vCount interrupt question - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > vCount interrupt question</h2>
+<div id="posts">
+<div class="post">
+    <h4>#13703 - col - Sun Dec 21, 2003 1:07 am</h4>
+    <div class="postbody"><span class="postbody">I am getting glitches from a vcount fx system. The update code should be much less than the 228 cycles in hblank.
+<br/>
+<br/>
+can anyone tell me exactly when the vCount interrupt for a given scanline will be generated.
+<br/>
+<br/>
+will it be at the start of hblank for that line, at the end of hblank, some other point during that scanline.... ?
+<br/>
+<br/>
+Also, does the bios interrupt handler do anything odd with the vCount interrupt?
+<br/>
+<br/>
+thanks
+<br/>
+<br/>
+Col</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#13705 - DekuTree64 - Sun Dec 21, 2003 1:37 am</h4>
+    <div class="postbody"><span class="postbody">From my experience, it happens at the start of the scanline, which makes it less useful than it could have been. You can set up an HBlank interrupt to only do something if a variable is set to 1 or whatever, and set it on the VCount interrupt of the line before you want the thing to happen, so when it starts the line, it sets the flag, at the end of the line, it does the thing, and at the start of the next line you can see what happened. Big hassle.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#13709 - col - Sun Dec 21, 2003 4:26 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>DekuTree64 wrote:</b></span></td> </tr> <tr> <td class="quote">From my experience, it happens at the start of the scanline, which makes it less useful than it could have been. You can set up an HBlank interrupt to only do something if a variable is set to 1 or whatever, and set it on the VCount interrupt of the line before you want the thing to happen, so when it starts the line, it sets the flag, at the end of the line, it does the thing, and at the start of the next line you can see what happened. Big hassle.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+damn - thats what i was starting to suspect :(
+<br/>
+<br/>
+maybe i'll use the vCount to turn hBlank on and off. I only need every 8 scanlines or so.
+<br/>
+maybe a timer would be easier...
+<br/>
+<br/>
+- big hassle anyway
+<br/>
+<br/>
+cheers,
+<br/>
+<br/>
+Col</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#13710 - tepples - Sun Dec 21, 2003 5:12 am</h4>
+    <div class="postbody"><span class="postbody">Would it be possible to use HDMA to turn on and off the Hblank interrupt?<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#13711 - poslundc - Sun Dec 21, 2003 5:59 am</h4>
+    <div class="postbody"><span class="postbody">You might also consider just running the HBlank interrupt every cycle and quitting immediately if it's not needed. The extra overhead to jump to and from the ISR really isn't all that much, and usually the computations you're doing in VDraw aren't so tight that you can't afford it.
+<br/>
+<br/>
+If you're going to do this, though, it would be a good idea to optimize your ISR in ASM, and either use fast interrupts in DKA or write your own interrupt handler. You don't need to do that stuff until you get past the functionality and towards the optimization stage, though.
+<br/>
+<br/>
+The HDMA idea seems pretty clever, but I would wager that the cost of halting the CPU, starting and stopping the DMA, and returning to the CPU wouldn't save a significant number of cycles over just branching to and from the interrupt.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#13712 - Miked0801 - Sun Dec 21, 2003 6:11 am</h4>
+    <div class="postbody"><span class="postbody">I disagree with interrupts not costing that much - you have to run through that big function in crt0.s everytime any interrupt is generated. Even well optimized, you'll lose roughly 60 (probably more) cycles getting into the interrupt code itself.  
+<br/>
+<br/>
+When doing HBlank tricks in our games, we always interrupt a tick early, setup as much stuff as possible for the hblank period (var loading, flag prepping and all non-hblank critical stuff) then sit in a tight while loop waiting for the hblank flag in the stat register to be set.  When set, you do your thing and bail.  
+<br/>
+<br/>
+HDMA thing: interesting Idea, but why?  :) 
+<br/>
+<br/>
+On the timing - I wish it was like the GBC where you could tell it to interrupt either on OAM or HBlank - that way you get time to prep for free - but I believe it is on HBlank that the interrupt occurs which sucks.
+<br/>
+<br/>
+Also, beware if you have other large interrupts running and don't allow nested interrupts.  If this is the case, you have no guarentee when an interrupt will occur.  We have ours setup such that hblanks will interrupt all interrupts and won't be interrupted.
+<br/>
+<br/>
+Mike</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#13714 - tepples - Sun Dec 21, 2003 7:15 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Miked0801 wrote:</b></span></td> </tr> <tr> <td class="quote">I disagree with interrupts not costing that much - you have to run through that big function in crt0.s everytime any interrupt is generated. Even well optimized, you'll lose roughly 60 (probably more) cycles getting into the interrupt code itself.</td> </tr></table><span class="postbody">
+<br/>
+Sixty cycles in the default ISR or in the BIOS? If the former, a custom ISR compiled to ARM code in IWRAM could make things run faster.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">On the timing - I wish it was like the GBC where you could tell it to interrupt either on OAM or HBlank - that way you get time to prep for free</td> </tr></table><span class="postbody">
+<br/>
+Set up a timer with a period of 1232 cycles (i.e. one scanline), and start it counting about 900 cycles after VCOUNT becomes 0. This should give you a couple hundred cycles to get ready.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#13723 - poslundc - Sun Dec 21, 2003 4:39 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Miked0801 wrote:</b></span></td> </tr> <tr> <td class="quote">I disagree with interrupts not costing that much - you have to run through that big function in crt0.s everytime any interrupt is generated.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+That's why I suggested writing your own ISR... :P
+<br/>
+<br/>
+Besides, if you enable fast interrupts, all the crt0.S function does is branch to your function anyway. But you may as well lose the middleman when you reach the optimization stage.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Even well optimized, you'll lose roughly 60 (probably more) cycles getting into the interrupt code itself.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I don't know how long the interrupt code in the BIOS takes, but I doubt it takes 60 cycles.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">When doing HBlank tricks in our games, we always interrupt a tick early, setup as much stuff as possible for the hblank period (var loading, flag prepping and all non-hblank critical stuff) then sit in a tight while loop waiting for the hblank flag in the stat register to be set.  When set, you do your thing and bail.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Are you saying you use a VCOUNT interrupt and wait throughout the entire HDraw period until HBlank occurs? I should hope not, unless you're only using the extremely occasional HBlank effect (a few times per VDraw, maybe?). Otherwise you are wasting about 1000 cycles each time, and stealing that time away from other interrupts (timers, etc).
+<br/>
+<br/>
+HBlank is there for a reason; you'd be surprised what you can get done in 228 cycles if you code it in ARM assembler in IWRAM and do all of your prep for it during VDraw/VBlank. Then code your own ISR, and just make sure you prioritize HBlank over all of the other interrupts so it gets handled first.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">HDMA thing: interesting Idea, but why?  :)</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Well, you could save about a thousand cycles of sitting around, for one ;)
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#13727 - DekuTree64 - Sun Dec 21, 2003 5:18 pm</h4>
+    <div class="postbody"><span class="postbody">By my cycle counting of what GBATEK says about the BIOS interrupt preparation, it takes about 17 cycles before your code actually starts, plus whatever code you have to decide which interrupt happened and call it, so if you use Jeff's handler and put HBlank as the first one to check for, that's another 12 cycles, so you should have about 199 cycles left of HBlank to get your stuff done. That's still plenty of time to do most things though, especially if you get it set up right to just do everything that will be visible on the screen immediately, and then do any of the next line's extra preparations that won't be visible before returning, so next time it gets calles, everything's already set up.
+<br/>
+<br/>
+And yeah, I'd say the easiest way to get around the VCount problem is to use HBlank and check REG_VCOUNT in that, although a timer set during VBlank to interrupt at just the right time during the HBlank before the line you're wanting the changes to be visible on would be more efficient if you could get it set to just the right time.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#13787 - Miked0801 - Mon Dec 22, 2003 8:50 pm</h4>
+    <div class="postbody"><span class="postbody">Ok, a meaty topic that everyone has knowledge of - time to dig in :)
+<br/>
+<br/>
+The Crt0.s that we use, which allows nested interrupts, is ARM and in IWRAM, takes 66 cycles to get into our VCount interrupt.  My 60 was a guess that turned out to be pretty darn accurate :)
+<br/>
+<br/>
+I'm then losing about 130 cycles (yikes) going through my hblank manager (time to optimize this code).
+<br/>
+<br/>
+Hmmm - No$gba tracing shows that an LYC generated interrupt is occuring before the hblank period starts (VDRAW is what you guys are calling it?) - nice.  Looks like I don't need to wait a line before starting if using LYC to interrupt.  BTW, I am setting up everything before the hblank period starts (for instance, for a scroll register effect, I get my values and pointer all set up, wait for HBLank to prevent shearing, set it and bail.  Palette reloads the same.  I agree that 228 cycles is more than sufficient for most things if done right (funny thing is 228 cycles is almost exactly how many cycles and entire OAM/VRAM/HBlank period was on the GBC - kinda funny how that worked out.)
+<br/>
+<br/>
+Other things:
+<br/>
+I'm not talking about SWI calls.  The BIOS overhead though doesn't seem to be too bad for VBlankIntrWait.  Including startup time, it only took 45 cycles to get into the body of the function (and 34 to get out when complete).  I can live with that for non-time critical functions.
+<br/>
+<br/>
+Other questions: Has anyone here got fast interrupts to work?  I'd love to get free storage of my registers before entering the interrupt handler and this seems to be a great way of doing it.  If so, what's involved?
+<br/>
+<br/>
+The timer idea is great as long as you restart it every vblank (or perhaps only every second or so) so that roundoff and clock-drift errors don't kill you.  
+<br/>
+<br/>
+I look forward to feedback :)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#13794 - DekuTree64 - Mon Dec 22, 2003 11:49 pm</h4>
+    <div class="postbody"><span class="postbody">Hardware FIQ's (fast interrupts) aren't possible on GBA, the 'fast interrupts' mode in Crt0.S just means that you specify your own handler function for it to call instead of the one that goes thruogh checking for things and branches to the pointers n IntrTable. That way if all your using is say an HBL interrupt, when any interrupt happens your HBL functionwill be called without any sort of checking what it was first, and therefore is faster. But it only makes sense to do it that way if you know only one kind of interrupt is going to be happening.
+<br/>
+However, you can use an msr/mrs (don't remember which is which...) instruction to switch the processor over to FIQ mode yourself and have all those extra regs. Not sure how safe it is to do, but the only possibility of trouble I've heard of is Nintendo's hardware debuggers generating real FIQ's to monitor things, but as long as you're not using one of those I don't see any reason it wouldn't work all the time.
+<br/>
+Still, the storing of r0-r3, r12 and r14 onto the IRQ stack before branching to your function is built into the BIOS, so you already have plenty of free regs to play with.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#13817 - torne - Tue Dec 23, 2003 11:29 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>DekuTree64 wrote:</b></span></td> </tr> <tr> <td class="quote">However, you can use an msr/mrs (don't remember which is which...) instruction to switch the processor over to FIQ mode yourself and have all those extra regs. Not sure how safe it is to do, but the only possibility of trouble I've heard of is Nintendo's hardware debuggers generating real FIQ's to monitor things, but as long as you're not using one of those I don't see any reason it wouldn't work all the time.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+It's completely safe. Knock yourself out. You have to return to IRQ mode before you return to the BIOS, tho.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Still, the storing of r0-r3, r12 and r14 onto the IRQ stack before branching to your function is built into the BIOS, so you already have plenty of free regs to play with.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+The overhead of running through the BIOS's IRQ handler, and then toggling to/from FIQ mode yourself as is probably going to knock out the performance benefit of having the extra banked registers unless you're doing some very odd stuff in your ISR. Try it both ways, if you like; but you'll probably find that just writing a neat, pure-assembly ISR by hand will suffice.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

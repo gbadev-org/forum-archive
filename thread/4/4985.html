@@ -1,0 +1,215 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>clearing the screen using DMA - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > clearing the screen using DMA</h2>
+<div id="posts">
+<div class="post">
+    <h4>#35482 - headspin - Sat Feb 05, 2005 10:32 am</h4>
+    <div class="postbody"><span class="postbody">Does anyone have a clue how to do this? I saw some code that had the following line
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">// -- clear screen data
+<br/>
+DMAClear(3, 0, VRAM, VRAM_SIZE, 16);</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Unfortunately the actual function was not included in the source. Any ideas?<br/>_________________<br/><a class="postlink" href="http://headsoft.com.au/index.php?category=warhawk" target="_blank">Warhawk DS</a> | <a class="postlink" href="http://headsoft.com.au/index.php?category=mmll" target="_blank">Manic Miner: The Lost Levels</a> | <a class="postlink" href="http://headsoft.com.au/index.php?category=tdg" target="_blank">The Detective Game</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#35486 - blinky465 - Sat Feb 05, 2005 1:08 pm</h4>
+    <div class="postbody"><span class="postbody">I was using something similar, but completely out of context.
+<br/>
+There's a post on "clearing the screen" at <a href="http://forum.gbadev.org/viewtopic.php?t=4916" target="_blank">http://forum.gbadev.org/viewtopic.php?t=4916</a>
+<br/>
+<br/>
+it gives a dma-based screen clearing function. It was no use to me, but if you're working in non-tiled mode, should be suitable.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#35495 - Cearn - Sat Feb 05, 2005 3:30 pm</h4>
+    <div class="postbody"><span class="postbody">The following thread may also be of some interest: <a class="postlink" href="http://forum.gbadev.org/viewtopic.php?t=1803" target="_blank">http://forum.gbadev.org/viewtopic.php?t=1803</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#35529 - headspin - Sun Feb 06, 2005 12:53 pm</h4>
+    <div class="postbody"><span class="postbody">Hmm... no joy, the code examples on those links are not for tile modes. Ok, I'll post some code I've been playing with..
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#define BG0 0
+<br/>
+#define BG1 1
+<br/>
+#define BG2 2
+<br/>
+#define BG3 3
+<br/>
+<br/>
+#define TILE_DATA 2
+<br/>
+#define TILE_MAP  8
+<br/>
+<br/>
+#define TileDataAddr(n) (((n)*0x4000)+0x6000000)
+<br/>
+#define TileMapAddr(n) (((n)*0x800)+0x6000000) 
+<br/>
+#define ColorPaletteAddr(n) (((n)*0x20)+0x5000000)
+<br/>
+<br/>
+#define bg_data_addr(i) ((*(u16*)(0x4000008+(i*2)))&gt;&gt;TILE_DATA) &amp; 0x3
+<br/>
+#define bg_map_addr(i) ((*(u16*)(0x4000008+(i*2)))&gt;&gt;TILE_MAP) &amp; 0x3</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Here is my original map clearing function, where you simply say clear_bg(BG0); and works fine, but is much slower than if we use DMA...
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void clear_bg(u8 bg)
+<br/>
+{
+<br/>
+   u16 loop=0;
+<br/>
+   u16 x, y;
+<br/>
+   u16 *pMap;
+<br/>
+<br/>
+   pMap = (u16 *) TileMapAddr(bg_map_addr(bg));
+<br/>
+   
+<br/>
+   for (y = 0; y&lt;32; y++)
+<br/>
+   {
+<br/>
+      for (x = 0; x&lt;32; x++) pMap[loop++] = 0;
+<br/>
+   }
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+And below is a very lame attempt at modifying the posted code from those links to clear a map instead of clearing screen pixels
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void DMAClearMap(u8 bg) { 
+<br/>
+   REG_DM3SAD     = (u32) 0; 
+<br/>
+   REG_DM3DAD     = TileMapAddr(bg_map_addr(bg));      //Destination Address 
+<br/>
+   (REG_DM3CNT_L) = 64; 
+<br/>
+   (REG_DM3CNT_H) = 0x9100;
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+And no it dosn't work, it seems to write over the maps with 'junk'. Generally I place a blank tile in the first tile for each char base. So setting each tile map to zero should point it to a blank tile.<br/>_________________<br/><a class="postlink" href="http://headsoft.com.au/index.php?category=warhawk" target="_blank">Warhawk DS</a> | <a class="postlink" href="http://headsoft.com.au/index.php?category=mmll" target="_blank">Manic Miner: The Lost Levels</a> | <a class="postlink" href="http://headsoft.com.au/index.php?category=tdg" target="_blank">The Detective Game</a></span><span class="gensmall"><br/><br/>Last edited by headspin on Sun Feb 06, 2005 8:45 pm; edited 2 times in total</span></div>    
+</div>
+<div class="post">
+    <h4>#35530 - Cearn - Sun Feb 06, 2005 1:10 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>headspin wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void DMAClearMap(u8 bg) { 
+<br/>
+   REG_DM3SAD     = (u32) 0; 
+<br/>
+   REG_DM3DAD     = TileMapAddr(bg_map_addr(bg));      //Destination Address 
+<br/>
+   (REG_DM3CNT_L) = 64; 
+<br/>
+   (REG_DM3CNT_H) = 0x9100; 
+<br/>
+}</td> </tr></table><span class="postbody"></span></td> </tr></table><span class="postbody">
+<br/>
+The source register of DMA needs an <span style="font-weight: bold">address</span>, not a value. You're filling with the contents of address 0, not 0 itself.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#35532 - headspin - Sun Feb 06, 2005 2:40 pm</h4>
+    <div class="postbody"><span class="postbody">Hmm in that case..
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">const u16 BLANK_TILE = 0;
+<br/>
+<br/>
+void DMAClearMap(u8 bg) { 
+<br/>
+   REG_DM3SAD     = (u32) &amp;BLANK_TILE; 
+<br/>
+   REG_DM3DAD     = TileMapAddr(bg_map_addr(bg));      //Destination Address 
+<br/>
+   (REG_DM3CNT_L) = 64; 
+<br/>
+   (REG_DM3CNT_H) = 0x9100; 
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Renders a black screen but then stops anything from displaying on the screen thereafter. Same problem the guy was having who used the function from those links.
+<br/>
+<br/>
+I'm guessing DMA copying uses REG_DM3SAD as a *starting* address and will copy the number of bytes (or whatever size it copies) from REG_DM3CNT_L. Which would mean I would have to have an array of zeros that size stored somewhere as the source. Unless I find an area in ROM or RAM I know is going to be blank. Perhaps I could allocate some in IWRAM to make it even faster.
+<br/>
+<br/>
+I still don't see why it stops everything else from displaying on the screen afterwards using the code above.
+<br/>
+<br/>
+Time to do some researching I think... get out my dusty old Cowbites print out and a cup of coffee ;) My GBA skills have gotten rusty, must have been all the XMas drinking from last year! Talk about a DMAClear() to my brain. I'm might also check out that swi 0xc BIOS function while I'm at it.<br/>_________________<br/><a class="postlink" href="http://headsoft.com.au/index.php?category=warhawk" target="_blank">Warhawk DS</a> | <a class="postlink" href="http://headsoft.com.au/index.php?category=mmll" target="_blank">Manic Miner: The Lost Levels</a> | <a class="postlink" href="http://headsoft.com.au/index.php?category=tdg" target="_blank">The Detective Game</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#35533 - Cearn - Sun Feb 06, 2005 2:50 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>headspin wrote:</b></span></td> </tr> <tr> <td class="quote">&lt;snip&gt;<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">   (REG_DM3CNT_H) = 0x9100; 
+<br/>
+</td> </tr></table><span class="postbody">&lt;/snip&gt;</span></td> </tr></table><span class="postbody">IIRC, 0x9100 means : 
+<br/>
+0x8000 : DMA_ENABLE 
+<br/>
+<span style="font-weight: bold">0x1000 : transfer on vblank</span>
+<br/>
+0x0100 : fixed source address.
+<br/>
+which would wipe the screen at every vblank. Shouldn't that be 0x8100?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#35538 - blinky465 - Sun Feb 06, 2005 8:10 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>headspin wrote:</b></span></td> </tr> <tr> <td class="quote">Renders a black screen but then stops anything from displaying on the screen thereafter. </td> </tr></table><span class="postbody">
+<br/>
+I've also had this problem using dma screen blanking - which I why I shy away from it now! It think it was something to do with clearing vram completely and wiping out all my sprites/objects(?) or was it the palettes?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#35539 - headspin - Sun Feb 06, 2005 8:42 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Cearn wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>headspin wrote:</b></span></td> </tr> <tr> <td class="quote">&lt;snip&gt;<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">   (REG_DM3CNT_H) = 0x9100; 
+<br/>
+</td> </tr></table><span class="postbody">&lt;/snip&gt;</span></td> </tr></table><span class="postbody">IIRC, 0x9100 means : 
+<br/>
+0x8000 : DMA_ENABLE 
+<br/>
+<span style="font-weight: bold">0x1000 : transfer on vblank</span>
+<br/>
+0x0100 : fixed source address.
+<br/>
+which would wipe the screen at every vblank. Shouldn't that be 0x8100?</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Well I'll be darned, it bloody worked!
+<br/>
+<br/>
+And I can totally see (or should I say hear) the difference. There was a buzz in the audio before when clearing the maps... that's now gone cos its very fast. Perfect! Thanks :)
+<br/>
+<br/>
+So there ya go blinky, give my code a try if you like!<br/>_________________<br/><a class="postlink" href="http://headsoft.com.au/index.php?category=warhawk" target="_blank">Warhawk DS</a> | <a class="postlink" href="http://headsoft.com.au/index.php?category=mmll" target="_blank">Manic Miner: The Lost Levels</a> | <a class="postlink" href="http://headsoft.com.au/index.php?category=tdg" target="_blank">The Detective Game</a></span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

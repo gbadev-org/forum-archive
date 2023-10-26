@@ -1,0 +1,403 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>[devKitARM] needing logarithm function - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > [devKitARM] needing logarithm function</h2>
+<div id="posts">
+<div class="post">
+    <h4>#134511 - spacy51 - Fri Jul 13, 2007 2:49 pm</h4>
+    <div class="postbody"><span class="postbody">Hi there!
+<br/>
+<br/>
+I am currently working on an OGG Vorbis player for my NDS.
+<br/>
+<br/>
+Unfortunately, there is a problem when calculating the frequency of my timer in the sound output. I #included &lt;math.h&gt; and used either log() or log10(), but the linker(!) throws the following error:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">1&gt;d:/Dokumente/Development/nds/ogg/source/main.c(131): undefined reference to `log'</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I guess it is related to the DS not having floating point support. Fortunately, I neither need floating point parameters nor return values of the log() function. A plain integer-only function would do for my purposes. If you know of a workaround to set the TIMER0_DATA to specific frequency without using logarithm let me know.
+<br/>
+<br/>
+<br/>
+<br/>
+Here's the related source code:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void initTimer(int freq_kHz)
+<br/>
+{
+<br/>
+   //disable the timer before changing parameters
+<br/>
+   TIMER0_CR = 0;
+<br/>
+   TIMER0_DATA = TIMER_FREQ_1024( log((freq_kHz / 1000)) / log(2) ); // 1 - 1Hz, 2 - 2Hz, 3 - 4Hz
+<br/>
+   TIMER0_CR = TIMER_ENABLE | TIMER_DIV_1024 | TIMER_IRQ_REQ;
+<br/>
+   irqSet(IRQ_TIMER0, timerHandler);
+<br/>
+   irqEnable(IRQ_TIMER0);
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#134514 - simonjhall - Fri Jul 13, 2007 2:53 pm</h4>
+    <div class="postbody"><span class="postbody">Are you linking with -lm?<br/>_________________<br/><span style="font-weight: bold"><a class="postlink" href="https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&amp;business=simonjhall%40gmail%2ecom&amp;no_shipping=2&amp;no_note=1&amp;tax=0&amp;currency_code=GBP&amp;lc=GB&amp;bn=PP%2dDonationsBF&amp;charset=UTF%2d8" target="_blank">Big thanks to everyone who donated for Quake2</a></span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#134515 - spacy51 - Fri Jul 13, 2007 3:02 pm</h4>
+    <div class="postbody"><span class="postbody">I am using the arm9 template makefile of the latest devKitPro. I don't see a -lm option there. What does it do?
+<br/>
+<br/>
+EDIT: Oh, now I know what you meant. I had to add the "-lm" option and I guess it means "Link with math library".
+<br/>
+Thanks, it works now.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#---------------------------------------------------------------------------------
+<br/>
+.SUFFIXES:
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+<br/>
+ifeq ($(strip $(DEVKITARM)),)
+<br/>
+$(error "Please set DEVKITARM in your environment. export DEVKITARM=&lt;path to&gt;devkitARM")
+<br/>
+endif
+<br/>
+<br/>
+include $(DEVKITARM)/ds_rules
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+# TARGET is the name of the output
+<br/>
+# BUILD is the directory where object files &amp; intermediate files will be placed
+<br/>
+# SOURCES is a list of directories containing source code
+<br/>
+# DATA is a list of directories containing data files
+<br/>
+# INCLUDES is a list of directories containing header files
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+TARGET      :=   arm9
+<br/>
+BUILD      :=   build
+<br/>
+SOURCES      :=   source tremor
+<br/>
+DATA      :=   data
+<br/>
+INCLUDES   :=   include
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+# options for code generation
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+ARCH   :=   -mthumb -mthumb-interwork
+<br/>
+<br/>
+CFLAGS   :=   -g -Wall -O2\
+<br/>
+      -march=armv5te -mtune=arm946e-s \
+<br/>
+      -fomit-frame-pointer -ffast-math \
+<br/>
+      $(ARCH)
+<br/>
+<br/>
+CFLAGS   +=   $(INCLUDE) -DARM9
+<br/>
+CXXFLAGS   := $(CFLAGS) -fno-rtti -fno-exceptions
+<br/>
+<br/>
+ASFLAGS   :=   -g -march=armv5te -mtune=arm946e-s
+<br/>
+LDFLAGS   =   -specs=ds_arm9.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+# any extra libraries we wish to link with the project
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+LIBS   := -lnds9
+<br/>
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+# list of directories containing libraries, this must be the top level containing
+<br/>
+# include and lib
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+LIBDIRS   :=   $(LIBNDS)
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+# no real need to edit anything past this point unless you need to add additional
+<br/>
+# rules for different file extensions
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+ifneq ($(BUILD),$(notdir $(CURDIR)))
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+<br/>
+export OUTPUT   :=   $(CURDIR)/$(TARGET)
+<br/>
+<br/>
+export VPATH   :=   $(foreach dir,$(SOURCES),$(CURDIR)/$(dir)) \
+<br/>
+         $(foreach dir,$(DATA),$(CURDIR)/$(dir))
+<br/>
+<br/>
+export DEPSDIR   :=   $(CURDIR)/$(BUILD)
+<br/>
+<br/>
+CFILES      :=   $(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.c)))
+<br/>
+CPPFILES   :=   $(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.cpp)))
+<br/>
+SFILES      :=   $(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.s)))
+<br/>
+BINFILES   :=   $(foreach dir,$(DATA),$(notdir $(wildcard $(dir)/*.*)))
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+# use CXX for linking C++ projects, CC for standard C
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+ifeq ($(strip $(CPPFILES)),)
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+   export LD   :=   $(CC)
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+else
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+   export LD   :=   $(CXX)
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+endif
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+<br/>
+export OFILES   :=   $(addsuffix .o,$(BINFILES)) \
+<br/>
+         $(CPPFILES:.cpp=.o) $(CFILES:.c=.o) $(SFILES:.s=.o)
+<br/>
+<br/>
+export INCLUDE   :=   $(foreach dir,$(INCLUDES),-I$(CURDIR)/$(dir)) \
+<br/>
+         $(foreach dir,$(LIBDIRS),-I$(dir)/include) \
+<br/>
+         -I$(CURDIR)/$(BUILD)
+<br/>
+<br/>
+export LIBPATHS   :=   $(foreach dir,$(LIBDIRS),-L$(dir)/lib)
+<br/>
+<br/>
+.PHONY: $(BUILD) clean all
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+all: $(BUILD)
+<br/>
+<br/>
+$(BUILD):
+<br/>
+   @[ -d $@ ] || mkdir -p $@
+<br/>
+   @$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+clean:
+<br/>
+   @echo clean ...
+<br/>
+   @rm -fr $(BUILD) $(TARGET).elf $(TARGET).nds $(TARGET).arm9 $(TARGET).ds.gba
+<br/>
+<br/>
+run:
+<br/>
+   wmb -data $(OUTPUT).nds
+<br/>
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+else
+<br/>
+<br/>
+DEPENDS   :=   $(OFILES:.o=.d)
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+# main targets
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+$(OUTPUT).ds.gba   :    $(OUTPUT).nds
+<br/>
+$(OUTPUT).nds   :    $(OUTPUT).arm9
+<br/>
+$(OUTPUT).arm9   :   $(OUTPUT).elf
+<br/>
+$(OUTPUT).elf   :   $(OFILES)
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+%.bin.o   :   %.bin
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+   @echo $(notdir $&lt;)
+<br/>
+   @$(bin2o)
+<br/>
+<br/>
+<br/>
+-include $(DEPENDS)
+<br/>
+<br/>
+#---------------------------------------------------------------------------------------
+<br/>
+endif
+<br/>
+#---------------------------------------------------------------------------------------
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#134545 - tepples - Fri Jul 13, 2007 8:53 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>spacy51 wrote:</b></span></td> </tr> <tr> <td class="quote">Fortunately, I neither need floating point parameters nor return values of the log() function. A plain integer-only function would do for my purposes. If you know of a workaround to set the TIMER0_DATA to specific frequency without using logarithm let me know.</td> </tr></table><span class="postbody">
+<br/>
+How about making a lookup table?<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#134551 - wintermute - Fri Jul 13, 2007 9:46 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>spacy51 wrote:</b></span></td> </tr> <tr> <td class="quote">Hi there!
+<br/>
+<br/>
+I am currently working on an OGG Vorbis player for my NDS.
+<br/>
+<br/>
+Unfortunately, there is a problem when calculating the frequency of my timer in the sound output. I #included &lt;math.h&gt; and used either log() or log10(), but the linker(!) throws the following error:
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">1&gt;d:/Dokumente/Development/nds/ogg/source/main.c(131): undefined reference to `log'</td> </tr></table><span class="postbody">
+<br/>
+</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Why are you actually using log anyway?
+<br/>
+<br/>
+This code makes no sense to me at all, where did you get this from.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+   TIMER0_DATA = TIMER_FREQ_1024( log((freq_kHz / 1000)) / log(2) ); // 1 - 1Hz, 2 - 2Hz, 3 - 4Hz
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+<br/>
+The TIMER_FREQ_1024 macro takes a frequency in Hz and converts it into a timer count value which produces that frequency for a div 1024 timer.<br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#134556 - kusma - Fri Jul 13, 2007 10:23 pm</h4>
+    <div class="postbody"><span class="postbody">log(x) / log(2) for integers can be reimplemented with the CLZ instruction on the ARM9, or a LUT on the ARM7.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#134559 - wintermute - Fri Jul 13, 2007 10:46 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>kusma wrote:</b></span></td> </tr> <tr> <td class="quote">log(x) / log(2) for integers can be reimplemented with the CLZ instruction on the ARM9, or a LUT on the ARM7.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+But why?
+<br/>
+<br/>
+Why would you use that for setting a DS timer frequency?
+<br/>
+<br/>
+Did anyone look at his code and try to infer what he was trying to do?<br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#134567 - kusma - Sat Jul 14, 2007 2:54 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>wintermute wrote:</b></span></td> </tr> <tr> <td class="quote">But why?</td> </tr></table><span class="postbody">
+<br/>
+Because I prefer answering the question rather than telling him what's wrong with it based on assumptions. (Please, no old quotes. And yes, you probably are right about the need for the function. ;) )</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#134603 - LiraNuna - Sat Jul 14, 2007 5:18 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">The TIMER_FREQ_1024 macro takes a frequency in Hz and converts it into a timer count value which produces that frequency for a div 1024 timer.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">TIMER0_DATA = TIMER_FREQ_1024(freq_kHz * 1000);</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+?!<br/>_________________<br/>Private property.
+<br/>
+Violators will be shot, survivors will be shot again.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

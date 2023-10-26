@@ -1,0 +1,255 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Stuck on graphic mode requirements for lisp parser - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Stuck on graphic mode requirements for lisp parser</h2>
+<div id="posts">
+<div class="post">
+    <h4>#139217 - Ollie - Mon Sep 03, 2007 5:31 pm</h4>
+    <div class="postbody"><span class="postbody">Hi, not long ago I made a quick little lisp-like parser/enterpretter on the PC which was an interesting little toy. Out of interest I decided to quickly port it to the DS today and it worked fine. However, I thought it would be cool if you could make little graphical applications with it...
+<br/>
+<br/>
+Here is where I run into my problem. I'm a pc programmer and my knowledge of console programming is mind-bogglingly poor. I do not know what to do with all these VRAM settings and the such, so here is where I request some assistance.
+<br/>
+<br/>
+When the user presses the right shoulder button it enables "game mode", which basically tells my lisp enterpretter to execute the line:
+<br/>
+<br/>
+(main "placeholder\n")
+<br/>
+<br/>
+- in an infinate loop until the start key is pressed. This will act as a main game loop, as main can be defined by the user.
+<br/>
+<br/>
+However, the DS is currently running console on the top screen and a keyboard on the bottom screen. What I would like to do is to set the bottom screen to enable per-pixel drawing so I can make a double-buffer system. I have no idea how to mess with the drawing modes like this...
+<br/>
+<br/>
+So, would anyone mind helping me out? I will paste my main.cpp below, it is not too long and hopefully should be fairly simple to understand:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#include &lt;nds.h&gt;
+<br/>
+#include &lt;stdio.h&gt;
+<br/>
+#include &lt;stdlib.h&gt;
+<br/>
+#include &lt;unistd.h&gt;
+<br/>
+#include &lt;string.h&gt;
+<br/>
+#include &lt;string&gt;
+<br/>
+<br/>
+#include &lt;nds/arm9/console.h&gt; //basic print funcionality
+<br/>
+#include "keyboard.h"
+<br/>
+#include "lisp_parse.h"
+<br/>
+<br/>
+#define ECHO_ON    0
+<br/>
+#define ECHO_OFF 1
+<br/>
+<br/>
+#define MAX_TEXT 256
+<br/>
+<br/>
+bool game_mode;
+<br/>
+<br/>
+void waitForVBlank(void)
+<br/>
+{
+<br/>
+   while(!(REG_DISPSTAT &amp; DISP_IN_VBLANK));
+<br/>
+   while((REG_DISPSTAT &amp; DISP_IN_VBLANK));
+<br/>
+}
+<br/>
+<br/>
+int main(void)
+<br/>
+{
+<br/>
+   game_mode = false;
+<br/>
+<br/>
+   videoSetMode(MODE_0_2D | DISPLAY_BG0_ACTIVE);   // bg 0 will be used to print text
+<br/>
+   videoSetModeSub(MODE_0_2D | DISPLAY_BG0_ACTIVE);
+<br/>
+   vramSetBankA(VRAM_A_MAIN_BG);
+<br/>
+   vramSetBankC(VRAM_C_SUB_BG);
+<br/>
+<br/>
+   BG0_CR = BG_MAP_BASE(31);
+<br/>
+<br/>
+   BG_PALETTE[255] = RGB15(31,31,31);   //by default font will be rendered with color 255
+<br/>
+<br/>
+   //consoleInit() is a lot more flexible but this gets you up and running quick
+<br/>
+   consoleInitDefault((u16*)SCREEN_BASE_BLOCK(31), (u16*)CHAR_BASE_BLOCK(0), 16);
+<br/>
+   
+<br/>
+   initKeyboard();
+<br/>
+   
+<br/>
+   iprintf("&gt; ");
+<br/>
+   
+<br/>
+   char str[MAX_TEXT] = "";
+<br/>
+   std::string input;
+<br/>
+   lispToken ret;             //This is just me setting up the lisp stuff.
+<br/>
+   lispProgram prog("");
+<br/>
+   lispLoadDefault(prog);
+<br/>
+   lispEnableVars(prog);
+<br/>
+   lispEnableString(prog);
+<br/>
+<br/>
+   while(input != "quit")
+<br/>
+   {
+<br/>
+      scanKeys();
+<br/>
+      
+<br/>
+      if((keysHeld() &amp; KEY_R) &amp;&amp; !game_mode)   // for enabling game mode
+<br/>
+      {
+<br/>
+         printf("\nGame mode:\n");
+<br/>
+         game_mode = true;
+<br/>
+      }
+<br/>
+      
+<br/>
+      if(game_mode)                 // game mode, will clear the screen
+<br/>
+      {                             // then it will set the lower screen to be able to use double-buffering
+<br/>
+         for(int i = 0; i &lt; 256*192; ++i)
+<br/>
+         {
+<br/>
+            VRAM_C[i] = RGB15(0,0,0) | 0x8000;   //clear the bottom screen? :S Beyond me.
+<br/>
+         }
+<br/>
+         
+<br/>
+         while(!(keysHeld() &amp; KEY_START))        // infinately executes "(main "placeholder\n")" until start is pressed
+<br/>
+         {
+<br/>
+            scanKeys();
+<br/>
+            prog.do_line("(main \"placeholder\")");
+<br/>
+         }
+<br/>
+         
+<br/>
+         printf("Programming mode:\n&gt; ");
+<br/>
+         game_mode = false;
+<br/>
+      }
+<br/>
+      
+<br/>
+      if(processKeyboard(&amp;str[0], MAX_TEXT, ECHO_ON)=='\n')     //this is just the command-line enterpretting stuff
+<br/>
+      {
+<br/>
+         input = str;
+<br/>
+         strcpy(str,"");
+<br/>
+         
+<br/>
+         if(input != "quit")
+<br/>
+         {
+<br/>
+            ret = prog.do_line(input);
+<br/>
+            std::cout &lt;&lt; ret.text;
+<br/>
+            
+<br/>
+            if(ret.text[ret.text.size()-1] != '\n') std::cout &lt;&lt; std::endl;
+<br/>
+            
+<br/>
+            printf("&gt; ");
+<br/>
+         }
+<br/>
+      }
+<br/>
+<br/>
+      waitForVBlank();
+<br/>
+   }
+<br/>
+   
+<br/>
+   printf("Exited!");
+<br/>
+<br/>
+   return 0;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Thank you for reading this :)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#139226 - DragonMinded - Mon Sep 03, 2007 6:55 pm</h4>
+    <div class="postbody"><span class="postbody">If you simply wanted double buffered mode, you could set up the sub screen to use a dual ex-rot mode.  Each has a simple 256x256 drawing surface, and you can set the priority on one or the other, instantly "flipping" the buffer.  All you would have to do is keep a buffer cursor so that you knew which was in the back and flip when done drawing.  The added benefit of an ex-rot buffer is that you can rotate and scale them as well.  
+<br/>
+<br/>
+I put together a demo of how this would work years ago when I was learning the stuff myself.  The link is <a href="http://www.dragonminded.com/ndsdev/dualBG.rar" target="_blank">http://www.dragonminded.com/ndsdev/dualBG.rar</a> and it incudes a .nds to play with as well as the source.  It requires libfb to compile, but since the majority of the console code uses the sub screen to display anyhow, you could easily rip it out and replace it with a subscreen console.<br/>_________________<br/>Enter the mind of the dragon.
+<br/>
+<br/>
+<a href="http://dragonminded.blogspot.com" target="_blank">http://dragonminded.blogspot.com</a>
+<br/>
+<br/>
+Seriously guys, how hard is it to simply TRY something yourself?</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

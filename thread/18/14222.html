@@ -1,0 +1,134 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Multiple timer interrupts and sound corruption - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Multiple timer interrupts and sound corruption</h2>
+<div id="posts">
+<div class="post">
+    <h4>#141498 - ingramb - Wed Sep 26, 2007 9:40 am</h4>
+    <div class="postbody"><span class="postbody">Still working on sound streaming.  I have several different streaming channels, with 2 possible frequencies.  So I need 2 timers for each different frequency, like so (all of this is on the arm7):
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">TIMER_DATA(0) = TIMER_FREQ(freq1);
+<br/>
+TIMER_CR(0) = TIMER_ENABLE;
+<br/>
+   
+<br/>
+TIMER_DATA(1) = 65536 - streamSize1;
+<br/>
+TIMER_CR(1) = TIMER_ENABLE | TIMER_IRQ_REQ | TIMER_CASCADE;
+<br/>
+<br/>
+TIMER_DATA(2) = TIMER_FREQ(freq2);
+<br/>
+TIMER_CR(2) = TIMER_ENABLE;
+<br/>
+<br/>
+TIMER_DATA(3) = 65536 - streamSize2;
+<br/>
+TIMER_CR(3) = TIMER_ENABLE | TIMER_IRQ_REQ | TIMER_CASCADE;</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+My timer interrupt handlers look like this:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void Timer1Handler()
+<br/>
+{
+<br/>
+   NEOIPC-&gt;audioStreamCount++;
+<br/>
+}
+<br/>
+<br/>
+void Timer3Handler()
+<br/>
+{
+<br/>
+   NEOIPC-&gt;audioStreamCount2++;
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Everything is fine if I just use timer0 and timer1.  I don't have any audio streaming hooked up to timer2 and timer3 yet, but if I even enable them, the audio I have gets hosed.  It's like the timer3Handler is causing everything to get out of sync.
+<br/>
+<br/>
+But this doesn't make sense to me, because at worst, the timer1Handler will only be delayed a few instructions by the timer3Handler.  And I'm only polling these counters on the arm9 once per vblank, so if the counter is slightly delayed, it shouldn't matter (as long as the timer resets itself and continues counting with no delay).
+<br/>
+<br/>
+Any ideas as to what's causing this?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#141501 - simonjhall - Wed Sep 26, 2007 10:07 am</h4>
+    <div class="postbody"><span class="postbody">I'd avoid the interrupts - have them as infrequently as possible! It looks to me that you're going to get two interrupts (one from each stream) after every single sample that's played. I don't think you want this! As the interrupts handlers are just doing counts, stick cascaded timers after the sample count timers THEN use interrupts. That way you'll get an interrupt every time a much larger amount of music is played (eg half a buffer's worth, telling you that it's time to copy in new data).
+<br/>
+<br/>
+Another thing with the interrupts - since you're starting the timers for both streams at the same time they'll both have their interrupts at pretty much the same time, assuming both streams have the same sample frequency. Given the frequency of your interrupts (they occur after every sample played) I'd expect these interrupts to collide, causing you to lose them often.
+<br/>
+<br/>
+I appreciate you won't have enough timers to have three timers per stream - just get it working properly with one stream first, then when you're happy merge some of the timer definitions together so you need only one or two timers per stream.
+<br/>
+<br/>
+Finally, one thing I had was that I had my timer definitions off by just one clock cycle per sample - this meant that even though I wasn't using any interrupts and the rest of the system was idle, the sound would get out of sync within a few minutes. I realised that I was missing out one clock cycle per sample played, and this was causing my timers to go very slightly faster than the sound hardware timers!
+<br/>
+I'm at work at the moment, so I can't look up the specifics that I used - sorry!
+<br/>
+<br/>
+EDIT: I think I may have mis-read the timer definitions a bit (I'm so tired...) but even if the interrupts are not as frequent as I think, I'd still not use interrupts. In the end I found the best solution is to get the main thread to spin on the timer which says whether the buffer is empty or not.<br/>_________________<br/><span style="font-weight: bold"><a class="postlink" href="https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&amp;business=simonjhall%40gmail%2ecom&amp;no_shipping=2&amp;no_note=1&amp;tax=0&amp;currency_code=GBP&amp;lc=GB&amp;bn=PP%2dDonationsBF&amp;charset=UTF%2d8" target="_blank">Big thanks to everyone who donated for Quake2</a></span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#141522 - ingramb - Wed Sep 26, 2007 5:35 pm</h4>
+    <div class="postbody"><span class="postbody">I wish I didn't need to use interrupts, but as you say, I don't have enough timers.  It may turn out that I have to play all my streams at the same hardware frequency, and then manually resampe whenever the actual frequency changes.  I was hoping to avoid this though (I need all the cycles I can get).
+<br/>
+<br/>
+It does work properly with the interrupt and only 2 timers, although it gets out of sync after a few minutes.  I'd appreciate if you could look at your actual code, because it sounds like I may be having the same problem that you were having.
+<br/>
+<br/>
+Adding the second timer interrupt corrupts the sound streaming off the first timer interrupt; I'm not even reading the second counter on the arm9 yet.
+<br/>
+<br/>
+(I have vblank and vcount interrupts enabled on the arm7 as well, but the handlers are empty.  The timer interrupts are the only ones that acutally do anything.)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#141527 - DekuTree64 - Wed Sep 26, 2007 6:05 pm</h4>
+    <div class="postbody"><span class="postbody">Actually, I prefer to only use 2 timers because it's a little simpler. One timer at the sample frequency, one cascaded off it. Then in your VBlank handler, read the upper timer and compare against what its value was last VBlank to see how many samples you need to mix.
+<br/>
+<br/>
+Also, using the TIMER_FREQ macro can cause out-of-sync, because CPU timers run at twice the frequency of sound timers. Try using SOUND_FREQ(freq1) * 2 to guarantee that it matches exactly.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#141584 - ingramb - Thu Sep 27, 2007 6:06 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Try using SOUND_FREQ(freq1) * 2 to guarantee that it matches exactly</td> </tr></table><span class="postbody">
+<br/>
+Yes, thank you!  This was indeed the source of my sync issues.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Then in your VBlank handler, read the upper timer and compare against what its value</td> </tr></table><span class="postbody">
+<br/>
+I'm doing this more or less now and it's working very nicely.
+<br/>
+<br/>
+Thanks so much for your help.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

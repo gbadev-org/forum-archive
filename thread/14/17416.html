@@ -1,0 +1,203 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>generating a smooth looping palette [solved] - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Beginners > generating a smooth looping palette [solved]</h2>
+<div id="posts">
+<div class="post">
+    <h4>#175449 - zelbo - Wed Nov 24, 2010 12:39 pm</h4>
+    <div class="postbody"><span class="postbody">Running into a problem getting a looping palette set up, for something like a plasma, say.
+<br/>
+<a class="postlink" href="http://imgur.com/k8cgM" target="_blank">This image</a> shows what is happening. What i am getting is on the left, what i want is on the right.
+<br/>
+The first three are from <a class="postlink" href="http://www.student.kuleuven.be/~m0216922/CG/" target="_blank">Lode's tutorials</a>. The fourth one is from <a class="postlink" href="http://rel.betterwebber.com/junk.php?id=98" target="_blank">Relminator's plasma</a>, i don't know what it should actually look like, was just looking for a different take on the problem. (i'm guessing it should look better than it does here)
+<br/>
+<br/>
+Some potential suspects:
+<br/>
+	I'm using ant512's <a class="postlink" href="http://bitbucket.org/ant512/woopsigfx/wiki/Home" target="_blank">WhoopsiGfx library</a> for drawing lines, maybe that is handling colors strangely? i kinda doubt it, but don't know.
+<br/>
+	Using a few functions stolen from Lode's quickcg library, maybe these don't work the same on the DS for some reason?
+<br/>
+	Testing with emulator (no$gba, desmume), my ability to test on hardware is currently impared. Most likely problem?
+<br/>
+	Using MODE_5_2D. Is this limited to 256 colors?
+<br/>
+	Maybe some math errors in these algorithms? I know there are some int/u16 type mismatches, but i don't think that's causing it.
+<br/>
+<br/>
+Setting up the hardware:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">   videoSetMode( MODE_5_2D | DISPLAY_BG3_ACTIVE );
+<br/>
+   vramSetBankA( VRAM_A_MAIN_BG );
+<br/>
+   bgInit(3, BgType_Bmp16, BgSize_B16_256x256, 0, 0);
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Generate the palettes:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">   u16 palette_0[256];
+<br/>
+   u16 palette_1[256];
+<br/>
+   u16 palette_2[256];
+<br/>
+   u16 palette_3[256];
+<br/>
+<br/>
+   ColorRGB colorRGB;
+<br/>
+   for(int x = 0; x &lt; 256; x++)
+<br/>
+   {
+<br/>
+      // lode 1 http://www.student.kuleuven.be/~m0216922/CG/plasma.html#Plasmas_with_Palette_Looping_
+<br/>
+      colorRGB = HSVtoRGB(ColorHSV(x, 255, 255));
+<br/>
+      palette_0[x] = RGB15(colorRGB.r, colorRGB.g, colorRGB.b);
+<br/>
+      
+<br/>
+      // lode 2
+<br/>
+      colorRGB.r = int(128.0 + 128 * sinLerp(3.1415 * x / 32.0));
+<br/>
+      colorRGB.g = int(128.0 + 128 * sinLerp(3.1415 * x / 64.0));
+<br/>
+      colorRGB.b = int(128.0 + 128 * sinLerp(3.1415 * x / 128.0));
+<br/>
+      palette_1[x] = RGB15(colorRGB.r, colorRGB.g, colorRGB.b);
+<br/>
+      
+<br/>
+      // lode 3
+<br/>
+      colorRGB.r = int(128.0 + 128 * sinLerp(3.1415 * x / 16.0));
+<br/>
+      colorRGB.g = int(128.0 + 128 * sinLerp(3.1415 * x / 128.0));
+<br/>
+      colorRGB.b = 0;
+<br/>
+      palette_2[x] = RGB15(colorRGB.r, colorRGB.g, colorRGB.b);
+<br/>
+      
+<br/>
+      // Relminator's translucent plasma sample http://rel.betterwebber.com
+<br/>
+      u8 r = (u8)(abs(int(16 - 15 * sinLerp(x * M_PI / 16.0f))));
+<br/>
+      u8 g = (u8)(abs(int(16 - 15 * sinLerp(x * M_PI / 12.0f))));
+<br/>
+      u8 b = (u8)(abs(int(16 - 15 * sinLerp(x * M_PI / 18.0f))));
+<br/>
+      palette_3[x] = RGB15(r,g,b);
+<br/>
+   }
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Using a third party library here, maybe part of the problem?:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">   WoopsiGfx::FrameBuffer topScreen((u16*)BG_BMP_RAM(0), 256, 192);
+<br/>
+   WoopsiGfx::Graphics* topGfx = topScreen.newGraphics();
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Drawing lines (if WoopsiGfx does somehow turn out to be the problem, i reckon i could build my own line drawing functions, hoping to save some time while using functions written by someone that most likely knows their stuff better than yours truly:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">      for(int x = 0; x &lt; 256; x++)
+<br/>
+      {
+<br/>
+         topGfx-&gt;drawLine(x, 0, x, 5, palette_0[x]);
+<br/>
+         topGfx-&gt;drawLine(x, 6, x, 11, palette_1[x]);
+<br/>
+         topGfx-&gt;drawLine(x, 12, x, 17, palette_2[x]);
+<br/>
+         topGfx-&gt;drawLine(x, 18, x, 23, palette_3[x]);
+<br/>
+      }
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+I'm know this is something i should be able to figure out if i knew what i was doing, but if you've read any of my previous posts, you would know that's not the case as of yet. I've googled everything i can think of regarding ds framebuffer mode, seem to be hitting a wall here. Anyone point me in the right direction?</span><span class="gensmall"><br/><br/>Last edited by zelbo on Wed Nov 24, 2010 8:53 pm; edited 1 time in total</span></div>    
+</div>
+<div class="post">
+    <h4>#175450 - sverx - Wed Nov 24, 2010 4:14 pm</h4>
+    <div class="postbody"><span class="postbody">RGB15() doesn't do what you expect. Try RGB8() instead :)
+<br/>
+<br/>
+Then you need to turn on the MSB, to say that the pixel has to be nontransparent, so add 0x8000 to that RGB8() result.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#175452 - Exophase - Wed Nov 24, 2010 8:50 pm</h4>
+    <div class="postbody"><span class="postbody">Wow, RGB15 and RGB5 are the same thing. Kind of misleading. Seems like it'd be more clear with names like RGB_555, RGB_888, etc.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#175453 - zelbo - Wed Nov 24, 2010 8:51 pm</h4>
+    <div class="postbody"><span class="postbody">Cool, that pretty much fixed it. I was certain RGB15 was what i wanted. palette_1 and palette_2 still look pretty clunky (palette_1 has a big black chunk in the middle), but this definitely gives me a working palette. Thank you very much.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#175454 - kusma - Wed Nov 24, 2010 9:11 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>zelbo wrote:</b></span></td> </tr> <tr> <td class="quote">Cool, that pretty much fixed it. I was certain RGB15 was what i wanted. palette_1 and palette_2 still look pretty clunky (palette_1 has a big black chunk in the middle), but this definitely gives me a working palette. Thank you very much.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+128 + 128 = 256, not 255 as the highest unsigned byte is. Try "127.5 + 127.5 * cos(...)" instead.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#175456 - zelbo - Thu Nov 25, 2010 2:19 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>kusma wrote:</b></span></td> </tr> <tr> <td class="quote">128 + 128 = 256, not 255 as the highest unsigned byte is. Try "127.5 + 127.5 * cos(...)" instead.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+That makes sense, but still doesn't give me quite what i was hoping for.
+<br/>
+<br/>
+Anyone have any good looping palettes? formulas or pre-calculated LUTs?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#175457 - zelbo - Thu Nov 25, 2010 2:23 am</h4>
+    <div class="postbody"><span class="postbody">Dur. I think part of the problem is that i'm using floats with fixed-point sinLerp. Might help if i do some actual LUTs.
+<br/>
+<br/>
+edit:
+<br/>
+you know what just hit me? i've been away from this long enough i need to re-read tonc at this point.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#175472 - relminator - Tue Nov 30, 2010 12:27 am</h4>
+    <div class="postbody"><span class="postbody">A little late but this might help:
+<br/>
+<br/>
+<a href="http://petesqbsite.com/sections/zines/qbcm/issues/4-1/default.html#plasmas" target="_blank">http://petesqbsite.com/sections/zines/qbcm/issues/4-1/default.html#plasmas</a>
+<br/>
+<br/>
+It's a very old tutorial I made for Qbasic on how to generate real-time plasmas.
+<br/>
+<br/>
+If you download the example files, there is a routine there to generate a looping palette that can be changed depending on its parameters.<br/>_________________<br/><a href="http://rel.betterwebber.com" target="_blank">http://rel.betterwebber.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#175504 - zelbo - Mon Dec 06, 2010 11:37 pm</h4>
+    <div class="postbody"><span class="postbody">Certainly not too late. I'll be sure to play around with this when i get a chance. Thanks, relminator.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

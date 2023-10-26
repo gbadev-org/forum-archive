@@ -1,0 +1,214 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Howto place the GBA in HALT mode!! - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > Howto place the GBA in HALT mode!!</h2>
+<div id="posts">
+<div class="post">
+    <h4>#16439 - NeoGeo - Mon Feb 16, 2004 4:12 pm</h4>
+    <div class="postbody"><span class="postbody">Can anyone pleace help me, I need to get detailed instructions on how to place the GBA in HALT mode. Code examples would be great !!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#16441 - tepples - Mon Feb 16, 2004 4:21 pm</h4>
+    <div class="postbody"><span class="postbody">To go into halt mode, which stops the CPU until an interrupt occurs:
+<br/>
+1. Set up a working ISR.
+<br/>
+2. Call the following function (assuming Thumb mode):
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void gba_halt(void)
+<br/>
+{
+<br/>
+  asm volatile("swi 0x02");
+<br/>
+}</td> </tr></table><span class="postbody"><br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#16447 - dagamer34 - Mon Feb 16, 2004 7:15 pm</h4>
+    <div class="postbody"><span class="postbody">I am guessing you want to put your GBA in "sleep" mode, right?
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+// Puts the GBA in sleep until certain keys are pressed
+<br/>
+void GBASleep (u16 keys)
+<br/>
+{
+<br/>
+   u16 sound;
+<br/>
+   u16 interupt;
+<br/>
+   u16 savedkeys;
+<br/>
+   
+<br/>
+   // Save sound if turned on, then turn it off
+<br/>
+   sound = REG_SOUNDCNT_X;
+<br/>
+   REG_SOUNDCNT_X = 0;
+<br/>
+   
+<br/>
+   // Save previous interrupts, then turn off all except joypad
+<br/>
+   REG_IME = 0;
+<br/>
+   interupt = REG_IE;
+<br/>
+   REG_IE = INT_KEYBOARD; // INT_KEYBOARD = 0x1000
+<br/>
+   savedkeys = REG_P1CNT;
+<br/>
+   REG_P1CNT = keys | BIT14 | BIT15;
+<br/>
+   REG_IME = 1; 
+<br/>
+   
+<br/>
+   // Wait 2 blanks
+<br/>
+   WaitBlanks (2);
+<br/>
+      
+<br/>
+   // Disable video
+<br/>
+   ForceBlank (1); // Sets the 7th bit in REG_DISPCNT
+<br/>
+   
+<br/>
+   // Wait for 420 VBlanks (7 seconds)
+<br/>
+   WaitBlanks (420);
+<br/>
+   
+<br/>
+   // Stop the GBA and all processes
+<br/>
+   Stop ();
+<br/>
+   
+<br/>
+   // Reinitialize video
+<br/>
+   ForceBlank (0); // Clears the 7th bit in REG_DISPCNT
+<br/>
+   
+<br/>
+   // Restore the interupt flags
+<br/>
+   REG_IE = interupt;
+<br/>
+   
+<br/>
+   // Restore the key interrupt flags
+<br/>
+   REG_P1CNT = savedkeys;
+<br/>
+      
+<br/>
+   // Turn on sound if it was on
+<br/>
+   REG_SOUNDCNT_X = sound;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+and Stop is defined as what tepples wrote.
+<br/>
+<br/>
+You're welcome.<br/>_________________<br/>Little kids and Playstation 2's don't mix. :(</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#16450 - poslundc - Mon Feb 16, 2004 8:27 pm</h4>
+    <div class="postbody"><span class="postbody">Curious... I have a few questions:
+<br/>
+<br/>
+1. What's the reason for waiting 7 seconds after forcing the display to blank?
+<br/>
+<br/>
+2. I understand the interrupt will reactivate the CPU and resume the code wherever the PC last was at, but will it also attempt to load/jump to code at 0x03007FFC, or does being in halt mode prevent this?
+<br/>
+<br/>
+3. Isn't there a danger that the interrupt will be activated (if the correct keys are pressed) before the 7 seconds elapse, thus causing an ISR to activate instead of reactivating the CPU? (Implying a complementary ISR ought to be setup in order to handle this scenario, perhaps setting a flag in a global variable that prevents Stop() from being called?)
+<br/>
+<br/>
+Thanks,
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#16500 - dagamer34 - Wed Feb 18, 2004 12:53 am</h4>
+    <div class="postbody"><span class="postbody">1) For some reason on my GBA, if I immediately call Stop (), it quickly kills the screen such that it looks as if you are turning it off. I am doing it like Golden Sun does it. It first makes the screen turn white, waits some seconds, and THEN calls the bios function.
+<br/>
+<br/>
+2) No clue.
+<br/>
+<br/>
+3) My keyboard (button) interrupt doesn't do anything. I think that the bios call will start capturing input after its called. Before that point in my code, nothing else will happen if the button interrupt occurs.<br/>_________________<br/>Little kids and Playstation 2's don't mix. :(</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#16507 - poslundc - Wed Feb 18, 2004 5:56 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>dagamer34 wrote:</b></span></td> </tr> <tr> <td class="quote">1) For some reason on my GBA, if I immediately call Stop (), it quickly kills the screen such that it looks as if you are turning it off. I am doing it like Golden Sun does it. It first makes the screen turn white, waits some seconds, and THEN calls the bios function.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+OK, I getcha. I think I would actually prefer the former method over the latter, though... aside from it avoiding the potential conflicts I detailed earlier, I think I like the way the screen sort of de-interlaces and dies as though it had been turned off when you put the majority of games to sleep. It's kind of a cool effect, making it look as though you are able to physically switch the unit off through software. :)
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#16552 - NeoGeo - Thu Feb 19, 2004 2:01 pm</h4>
+    <div class="postbody"><span class="postbody">I dont know how to set up a 'working ISR' can anyone please help ???</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#16555 - poslundc - Thu Feb 19, 2004 3:53 pm</h4>
+    <div class="postbody"><span class="postbody"><a class="postlink" href="http://www.thepernproject.com" target="_blank">http://www.thepernproject.com</a> - see Day 5 of the tutorial.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#16588 - dagamer34 - Fri Feb 20, 2004 12:30 am</h4>
+    <div class="postbody"><span class="postbody">To save you some trouble, ISR, i think, stands for Interrupt Service Routice, aka interrupt.
+<br/>
+<br/>
+If you have MSVC++ 6.0, go download the GBA AppWizard. It has some good novice code in there for you to use. Don't re-invent the wheel.<br/>_________________<br/>Little kids and Playstation 2's don't mix. :(</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#18218 - Lupin - Mon Mar 22, 2004 6:48 pm</h4>
+    <div class="postbody"><span class="postbody">Uhm, i tried to just use the gba_halt function posted by tepples to replace it with my main loop (that loop did nothing at all...), but VBA seems to have troubles with it because i get very strange output...
+<br/>
+<br/>
+It only works on emu if i do both, the halt and right after it my endless loop... I will try it on hardware, maybe VBA needs the loop as some kind of backup because it doesn't understand the halt function...<br/>_________________<br/><a class="postlink" href="http://pokeme.shizzle.it/" target="_blank">Team Pokeme</a>
+<br/>
+<a class="postlink" href="http://lupin.shizzle.it/" target="_blank">My blog and PM ASM tutorials</a></span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

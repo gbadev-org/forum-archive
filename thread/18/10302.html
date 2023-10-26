@@ -1,0 +1,447 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Advise on fast pixel manipulation - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Advise on fast pixel manipulation</h2>
+<div id="posts">
+<div class="post">
+    <h4>#91864 - TheRain - Mon Jul 10, 2006 8:22 am</h4>
+    <div class="postbody"><span class="postbody">I'm looking for some tips for speeding up pixel manipulation on the DS including common math functions used for 2-d effects.   I have been working the past few days on some simple pixel color grabbing and writing routines and trying to use these to draw effects such as blurring pixels, water effect and other simple effects... and I'm finding my functions are running quite slow.   I am using mode 5 graphics and doing buffer flipping.   if it helps, here are my 16 bit color pixel read and write routines:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+<br/>
+void set_Pixel(u16* buffer,u8 x, u8 y, u8 R,u8 G,u8 B)
+<br/>
+{
+<br/>
+   buffer[y * 256 + x] = RGB15(R, G, B) | BIT(15);
+<br/>
+}
+<br/>
+<br/>
+<br/>
+u8 get_R(u16* buffer,u8 x,u8 y)
+<br/>
+{u8 r;
+<br/>
+r=buffer[y * 256 + x];
+<br/>
+r=r &amp; 0x1F;
+<br/>
+   return r;
+<br/>
+}
+<br/>
+u8 get_G(u16* buffer, u8 x,u8 y)
+<br/>
+{u8 g;
+<br/>
+g=buffer[y * 256 + x] &lt;&lt;5;
+<br/>
+g=g &amp; 0x1F;
+<br/>
+   return g;
+<br/>
+}
+<br/>
+u8 get_B(u16* buffer,u8 x,u8 y)
+<br/>
+{u8 b;
+<br/>
+b=buffer[y * 256 + x] &lt;&lt;10;
+<br/>
+b=b &amp; 0x1f;
+<br/>
+   return b;
+<br/>
+}
+<br/>
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+<br/>
+additionally, I am using this code to write the backbuffer to the frontbuffer, and I'm not sure if it's the right thing to use...
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+dmaCopy(backBuffer,frontBuffer,256*256*2);
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#91866 - Dwedit - Mon Jul 10, 2006 8:48 am</h4>
+    <div class="postbody"><span class="postbody">Verify that optimizations are turned on, and look at the asm output to see if the compiler is inlining the functions or not.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#91874 - kevinc - Mon Jul 10, 2006 9:43 am</h4>
+    <div class="postbody"><span class="postbody">Minimize load operations. Read only once from the buffer, and from that value extract the R, G and B (instead of reading thrice). I.e.:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+col = buffer[y * 256 + x];
+<br/>
+R = getRed(col);
+<br/>
+G = getGreen(col);
+<br/>
+B = getBlue(col);
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+and so on.
+<br/>
+<br/>
+Prioritize linear accesses (i.e., read a pixel, then the next, then the next, and so on), instead of random readings. And try using pointers instead of array accesses:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+u16 *buf = &amp;buffer[y * 256 + x];
+<br/>
+col1 = *buf; buf++;
+<br/>
+col2 = *buf; buf++;
+<br/>
+col3 = *buf; buf++;
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+And try to make all variables used for handing data ints instead, ints work faster. I.e.:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+void set_Pixel(u16* buffer,int x, int y, int R,int G,int B);
+<br/>
+<br/>
+int get_B(u16* buffer, int x, int y) {
+<br/>
+int b;
+<br/>
+...
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I'd say about inlining the code and convert multiplications to shifting... but I guess that's the compiler's work. Go for mantainability.
+<br/>
+<br/>
+And, well, that's my noob advice :)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#91885 - Mighty Max - Mon Jul 10, 2006 12:17 pm</h4>
+    <div class="postbody"><span class="postbody">If you use mode5, you should not copy the backbuffer to the frontbuffer at all.
+<br/>
+<br/>
+Just tell the hardware that the backbuffer is now the frontbuffer and vice versa. Iirc there is an example how to do that in the libnds examples<br/>_________________<br/><a class="postlink" href="http://mightymax.org/gbamp_multiboot.html" target="_blank">GBAMP Multiboot</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#91890 - Cearn - Mon Jul 10, 2006 1:08 pm</h4>
+    <div class="postbody"><span class="postbody">Inline functions (or macros) FTW.
+<br/>
+<br/>
+As normal functions, set_Pixel and get_R/G/B act completely as separate entities, even though their functionality has many common elements. As such, the compiler can't do the kind of optimizations that kevinc was talking about (nor a few others). That the overhead that is a good deal larger than the actual content of the functions here probably doesn't do you much good either. As a mild estimate, inlining these functions will speed up set_Pixel calls with a factor 5, and get_R/G/B combos with 8 or more.
+<br/>
+<br/>
+The compiler would inline these functions under -O3 and if the functions were in the same files as the functions that use them, but it's probably better to do inline them manually:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+// 'static inline' makes it inline, then put it in a header file. 
+<br/>
+// Also, ints instead of u8 makes it faster.
+<br/>
+static inline void set_Pixel(u16 *buffer,  u32 x,  u32 y,  u32 R, u32 G, u32 B)
+<br/>
+{
+<br/>
+   buffer[y * 256 + x] = RGB15(R, G, B) | BIT(15);
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+I'd almost suggest doing the whole thing manually anyway, it's not exactly much work. Depending on the effect, you might be able to work on 2 pixels at once too.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#91947 - TheRain - Mon Jul 10, 2006 6:48 pm</h4>
+    <div class="postbody"><span class="postbody">Why is int faster than u8?   Isn't u8 unsigned integer 0-255?    Also... why does simply adding static inline to the function speed it up??</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#91953 - kusma - Mon Jul 10, 2006 7:16 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>TheRain wrote:</b></span></td> </tr> <tr> <td class="quote">Why is int faster than u8?   Isn't u8 unsigned integer 0-255?    Also... why does simply adding static inline to the function speed it up??</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+becasue the arm-cpu has 32bit registers.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#91957 - TheRain - Mon Jul 10, 2006 7:34 pm</h4>
+    <div class="postbody"><span class="postbody">yes, but... u8 is 8 bits, right?   so it shouldn't take MORE register access than using a 32 bit value, right?   or is the point simply that it's not necessary to call it 8 bits when it's in a 32 bit register...  
+<br/>
+<br/>
+I feel like I need to study ARM architecture now...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#91960 - DekuTree64 - Mon Jul 10, 2006 8:02 pm</h4>
+    <div class="postbody"><span class="postbody">All of the registers are 32-bit, so in order to pass the value as if it were only 8 bits, the compiler generates instructions to mask off the upper bits of the value. That's why it's slower.
+<br/>
+<br/>
+On the GBA, doing 32-bit accesses to VRAM/EWRAM was a bit slower since they're on a 16-bit bus. On DS, I think the cache always loads and stores 32 byte chunks anyway, so it makes no difference. And on either system, during calculations when a variable will be kept in a register, 32-bit is much better.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#91962 - Cearn - Mon Jul 10, 2006 8:03 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>TheRain wrote:</b></span></td> </tr> <tr> <td class="quote">Why is int faster than u8?</td> </tr></table><span class="postbody">Because ints are the native datatype of ARM processors. In fact, ints are the <span style="font-style: italic">only</span> datatypes of ARM processors; everything else (i.e., bytes and halfwords) has to be forces to their respective sizes with extra instructions.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>TheRain wrote:</b></span></td> </tr> <tr> <td class="quote">Isn't u8 unsigned integer 0-255?</td> </tr></table><span class="postbody">Yeah, but that doesn't matter. What matters is the CPU register size.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>TheRain wrote:</b></span></td> </tr> <tr> <td class="quote">Also... why does simply adding static inline to the function speed it up??</td> </tr></table><span class="postbody">'static inline' is the way you tell GCC to insert the routines directly into the callers at compile-time. They're basically macros with function syntax, but without the safety issues that macros are subject to. 
+<br/>
+As to why this would matter, consider this example:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">// 16bit color via function
+<br/>
+u16 rgbFun(u8 r, u8 g, u8 b)
+<br/>
+{    return r | (g&lt;&lt;5) | (b&lt;&lt;10) | BIT(15);   }
+<br/>
+<br/>
+// 16bit color via inline function
+<br/>
+static inline u16 rgbInl(u8 r, u8 g, u8 b)
+<br/>
+{    return r | (g&lt;&lt;5) | (b&lt;&lt;10) | BIT(15);   }
+<br/>
+<br/>
+// Usage:
+<br/>
+clr1= rgbFun(31,0,0);
+<br/>
+clr2= rgbInl(31,0,0);</td> </tr></table><span class="postbody">
+<br/>
+Both clr1 and clr2 would be 31 (full red), but one call would be <span style="font-style: italic">much</span> faster than the other. As I said earlier, functions are standalone items and GCC has to compile them as generic as possible because it can't guess at what the input would be. Also, when calling a function it never knows what that function will do, so it can't make assumptions on that front either. The upshot of this is that there are no optimizations that GCC is allowed to do. In this case, the whole procedure for the call to rgbFun() would be
+<br/>
+<ul><li>putting the function arguments (31,0,0) into registers.</li><li>Possibly marking the input down to u8 instead of the usual u32.</li><li>Call the function (slow compared to normal instuctions)</li><li>Do the function's actual work, piece by piece</li><li>set-up the return value</li><li>Jump back to the caller (slow)</li><li>(both caller and called function may have to perform (slow) stackwork)</li></ul>In contrast, the inline function is integrated into the caller, at which time it becomes possible to do optimizations, and in this case the call to rgbInl() amounts to <ul><li>clr2= 0x801F;</li></ul>which is a single instruction.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>TheRain wrote:</b></span></td> </tr> <tr> <td class="quote">yes, but... u8 is 8 bits, right? so it shouldn't take MORE register access than using a 32 bit value, right? or is the point simply that it's not necessary to call it 8 bits when it's in a 32 bit register...
+<br/>
+<br/>
+I feel like I need to study ARM architecture now...</td> </tr></table><span class="postbody">These things are not specific to ARM architecture, these are general programming concepts, usually covered in (game)programming books or sites. <a class="postlink" href="http://www.google.nl/search?q=C+optimization+techniques" target="_blank">Google</a> can help you with basic optimization tips.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#91963 - TheRain - Mon Jul 10, 2006 8:35 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Cearn wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>TheRain wrote:</b></span></td> </tr> <tr> <td class="quote">Why is int faster than u8?</td> </tr></table><span class="postbody">.</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+You are a brilliant person!   thanks, much sense is made now and perhaps hopefully more sense can be made in the future because of this.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#91970 - TheRain - Mon Jul 10, 2006 9:41 pm</h4>
+    <div class="postbody"><span class="postbody">just another quick question... how can I take a look at the assembly code?  I'm using makefiles from the libnds example code to compile and I don't see any assembler files being generated... are they being deleted?
+<br/>
+<br/>
+also, if I'm doing divisions... will it be much more optimal to use div32 than to use the / operator??</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#91988 - wintermute - Mon Jul 10, 2006 11:40 pm</h4>
+    <div class="postbody"><span class="postbody">add -save-temps to your CFLAGS, this will save the assembly files in the build directory.
+<br/>
+<br/>
+div32 will be faster than the / operator but be careful, these functions are neither atomic nor reentrant. At one time libnds and libgba used the bios functions to override the /  and % operators but this proved problematic with unsigned numbers.<br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#92023 - HyperHacker - Tue Jul 11, 2006 4:45 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>TheRain wrote:</b></span></td> </tr> <tr> <td class="quote">additionally, I am using this code to write the backbuffer to the frontbuffer, and I'm not sure if it's the right thing to use...
+<br/>
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+dmaCopy(backBuffer,frontBuffer,256*256*2);
+<br/>
+</td> </tr></table><span class="postbody"></span></td> </tr></table><span class="postbody">
+<br/>
+You'll probably get better performance with a ldmia/stmia loop:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+//in a C file somewhere
+<br/>
+extern void FastCopy(void* Src, void* Dest, u32 NumBytes, u32 Size);
+<br/>
+<br/>
+@ in an ASM (.s) file
+<br/>
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+<br/>
+@ FastCopy
+<br/>
+@ Copies memory really fast.
+<br/>
+@ Inputs:
+<br/>
+@  -r0: Source
+<br/>
+@  -r1: Destination
+<br/>
+@  -r2: # of bytes
+<br/>
+@  -r3: Copy size (0=byte, 1=short (2 bytes), 2=int (4 bytes))
+<br/>
+@ Notes:
+<br/>
+@  -When there are less than 44 bytes remaining, they're copied one at a time.
+<br/>
+@   You can copy less than 44 bytes, but it's not going to be very fast.
+<br/>
+@  -The size parameter is provided to get around memory access limitations of
+<br/>
+@   the Nintendo DS. Limitations that I know of are:
+<br/>
+@   -Cannot write 8 bits to VRAM
+<br/>
+@   -Cannot write 8 or 32 bits to GBA ROM
+<br/>
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+<br/>
+<br/>
+.global FastCopy
+<br/>
+.type FastCopy,function
+<br/>
+FastCopy:
+<br/>
+stmfd sp!, {r3-r12, lr}
+<br/>
+sub sp, sp, #4
+<br/>
+str r3, [sp] @We need this later, but for now, r3 can assist in copying.
+<br/>
+<br/>
+.loop:
+<br/>
+cmp r2, #44
+<br/>
+blt .part2 @by checking here, we can copy less than 44 bytes in one call (but it's slow)
+<br/>
+ldmia r0!, {r3-r12, lr}
+<br/>
+stmia r1!, {r3-r12, lr}
+<br/>
+sub r2, r2, #44 @copy 44 bytes at a time (!), and we need those flags updated
+<br/>
+b .loop
+<br/>
+<br/>
+<br/>
+@copy remaining bytes one byte/short/int at a time, so we get them all.
+<br/>
+.part2:
+<br/>
+@add r2, r2, #4
+<br/>
+ldr r3, [sp] @Find unit size
+<br/>
+add sp, sp, #4
+<br/>
+cmp r3, #0
+<br/>
+beq .loop2_byte @0=byte
+<br/>
+subs r3, r3, #1
+<br/>
+beq .loop2_short @1=short
+<br/>
+@otherwise it must be 2=int (we'll just pretend anything else is 2)
+<br/>
+<br/>
+<br/>
+.loop2_int:
+<br/>
+subs r2, r2, #1
+<br/>
+bmi .end
+<br/>
+ldr r3, [r0, #1]!
+<br/>
+str r3, [r1, #1]!
+<br/>
+b .loop2_int
+<br/>
+<br/>
+<br/>
+.loop2_short:
+<br/>
+subs r2, r2, #1
+<br/>
+bmi .end
+<br/>
+ldrh r3, [r0, #1]!
+<br/>
+strh r3, [r1, #1]!
+<br/>
+b .loop2_short
+<br/>
+<br/>
+<br/>
+.loop2_byte:
+<br/>
+subs r2, r2, #1
+<br/>
+bmi .end
+<br/>
+ldrb r3, [r0, #1]!
+<br/>
+strb r3, [r1, #1]!
+<br/>
+b .loop2_byte
+<br/>
+<br/>
+<br/>
+.end:
+<br/>
+@add r2, r2, #1
+<br/>
+ldmfd sp!,{r3-r12,lr}
+<br/>
+bx lr
+<br/>
+<br/>
+.pool</td> </tr></table><span class="postbody"><br/>_________________<br/>I'm a PSP hacker now, but I still &lt;3 DS.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#92048 - TheRain - Tue Jul 11, 2006 9:34 am</h4>
+    <div class="postbody"><span class="postbody">Thanks everyone.... all of your advise has been a big help!   I have an opacity algorithm that's running decently now and hopefully I can improve it even more soon.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

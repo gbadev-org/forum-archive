@@ -1,0 +1,324 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>questions about vram, copying data and other - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > questions about vram, copying data and other</h2>
+<div id="posts">
+<div class="post">
+    <h4>#161973 - vuurrobin - Thu Aug 21, 2008 11:48 pm</h4>
+    <div class="postbody"><span class="postbody">hello everybody
+<br/>
+<br/>
+I have some questions (again), and some stuff that I wan't to check if I understand them correctly. seeing as I got some good help the last few times, I'm posting here again. 
+<br/>
+<br/>
+the first thing isn't really a question, but I want to make sure that I understand mapping vram and that virtual memory good and correctly, seeing as I haven't found a place that explained it well, IMHO. now the best way to test if you know it correctly is to explain it to someone else so you will have to force it into words. so that is exactly what I am going to do :). this way, I can see if I know everything good enough to put it into words, you can check if it is correct, and other people who have trouble understanding this will have a place to read an explanation about this. plus if I ever decide to write a tutorial, I'll have a part already done (although I would probably need to rewrite it). 
+<br/>
+so here go's:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>me wrote:</b></span></td> </tr> <tr> <td class="quote">To use the main and sub graphics engines, we need to put our data into video ram (vram) memory. but the engines don't have vram reserved for them. Instead, the DS has 9 seperated vram banks (called A-I) that you first have to asign to them. This way you can decide how much memory you want to give to each engine and where they should use it for, backgrounds, sprites, tilemaps or something else. 
+<br/>
+<br/>
+However, we can't asign vram to an engine directly. The DS has some virtual vram memory to keep track which vram bank is asigned to which engine. so we must first asign a vram bank to an adress in the virtual vram, point the engine to the same place, and then store our data there. so when the engine is going to look for its data, it going to look at the adress in the virtual vram, which will point the engine to the vram bank we have chosen. 
+<br/>
+<br/>
+to asign a vram bank we use an function from libnds, vramSetBankX(), with X being the bank we want to set/asign to virtual vram. in the brackets () we place the memory adress where we want to asign the vram bank to. thankfully, libnds provides some defines to make it easier for us. an example of setting vram bank A (which is 128 kb) for a background on the main engine to adress 0x06040000 is this:
+<br/>
+<br/>
+vramSetBankA(VRAM_A_MAIN_BG_0x06000000)
+<br/>
+<br/>
+pretty simple right. now lets asign bank B also to main background right next to A, so it will form 1 block of 256 kb (usefull for big backgrounds), and bank C to sub background. we wont use this much further along, but it is good to see it anyway:
+<br/>
+<br/>
+vramSetBankB(VRAM_B_MAIN_BG_0x06020000)
+<br/>
+vramSetBankC(VRAM_C_SUB_BG_0x06200000)
+<br/>
+<br/>
+now we point bg3 (the one we turned on when we turned the mode for the engine on) to the adress in virtual memory. we do this by asigning the adress into the controll register of the background we're using. while we are asigning the adress into the register, we will also specefy what kind of background we're using and what the priority of showing is by ORing "|" them on. here is an example of asigning the adress into the controll register:
+<br/>
+<br/>
+BG3_CR= 
+<br/>
+BG_BMP16_128x128 | //the kind of background
+<br/>
+BG_BMP_BASE(0)    | //the memory adress of the virtual vram where we placed vram bank A
+<br/>
+BG_PRIORITY(3)     //the priority of the background, 
+<br/>
+<br/>
+the first part asigns the kind of background, in this case a 16 bit bmp with a size of 128*128. the second part is the adress of the virtual vram. it currently point to 0x06000000, where we asigned vram bank A, if you would increase the number in the brackets, you would point the background 16 kb further. so BG_BMP_BASE(4) would point (4*16 =) 64 kb further. this way you can have 2 64 kb backgrounds in bank A. BG_BMP_BASE(8) would point to just after bank A and to the start of where we asigned bank B. 
+<br/>
+with the priority of a background, the ds knows if it should display the background on top of the other backgrounds or below them. it is a number between 0 and 3, 3 being the lowest and thus being displayed on bottem, and 0 being the highest and displayed on top.
+<br/>
+<br/>
+after setting the background, we need to put our data into vram. we will be using the direct memory acces (DMA), since it allows the reading and writing of memory independently of the CPU.
+<br/>
+<br/>
+dmaCopy(vuurrobinBitmap,         // This variable is generated for us by grit.
+<br/>
+	(uint16 *)BG_BMP_RAM(0), // Our address for sub background 3.
+<br/>
+vuurrobinBitmapLen)      // This length (in bytes) is generated for us by grit.
+<br/>
+<br/>
+the first argument is the start of our data that we want to copy from. seeing as we converted the picture with grit, it was nice enough to also give a pointer to its starting point. the second argument is the place in vram where would like the data to be copy'd to. it works just like BG_BMP_BASE() works with setting the background register, so make sure that the number in the brackets of (uint16 *)BG_BMP_RAM() is the same as the number with BG_BMP_BASE(). the thirth argument is the length of the data we want to copy. grit will also give the length in bytes so we can use that (thank you grit :) ). 
+<br/>
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I know that I am going through this very fast and that I am skipping some stuff. but, AFAIK, that is the only thing you need to do to set up a background that involves the vram. so my question is, is my idea of how vram mapping works correct or am I way off? 
+<br/>
+<br/>
+<br/>
+and now for the other questions:
+<br/>
+<br/>
+2. I looked at a <a class="postlink" href="http://www.dev-scene.com/NDS/NDS_Tutorials_VramTable" target="_blank">vram table on dev-scene</a> and I notised that vram A and B can't be used for sub backgrounds but vram C can. why is that, what does vram C has that vram A and B doesn't have (besides a libnds function). some hardware restriction? also the adress of VRAM_A_LCD and VRAM_A_TEXTURE_SLOT0 is the same?
+<br/>
+<br/>
+<br/>
+3. <a class="postlink" href="http://patater.com/manual" target="_blank">pataters manual</a> uses dmacopyhalfwords instead of dmacopy because it expicity tells the dma that we want to copy 16 bits at a time (?). it also says that it uses priority channel 3 because dmacopy uses it automaticly. however it doesn't say what the priority channel does so I know when to change it. I looked at <a class="postlink" href="http://nocash.emubase.de/gbatek.htm#dsdmatransfers" target="_blank">gbatek</a>, but I coudn't really figure it out. it says something about when the transfer starts, but then go's to the cardridge slots? so where is the channel used for and how important is it?
+<br/>
+<br/>
+<br/>
+4. after looking through different tutorials, I found 3 different ways to move data, using the dma, using swiCopy() and using a for loop. what is the best way to use, or, when should I use what?
+<br/>
+<br/>
+<br/>
+5. when I was looking trough console.h from libnds, I notised that the body of the functions weren't included. I tried searching for the bodys, but I coudn't find them. where are the bodys of the functions declared? if I would see the code, I would probably know better what the consoleDemoInit() uses and how to change that. 
+<br/>
+<br/>
+<br/>
+6. what program(s) do you use for tilemap editing, tile/sprite/background editing, palette editing ect. just wondering what other people are using.
+<br/>
+<br/>
+<br/>
+I really hope someone can help me with these questions.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#161975 - chuckstudios - Fri Aug 22, 2008 12:18 am</h4>
+    <div class="postbody"><span class="postbody">5. The 'body' of the functions are inside a compiled library file; by default this is located at devkitPro/libnds/lib/libnds9.a when the Windows updater is used. The source code is available at the devkitPro SourceForge site.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#161976 - TwentySeven - Fri Aug 22, 2008 1:17 am</h4>
+    <div class="postbody"><span class="postbody">2. Yes, its a hardware restriction.
+<br/>
+<br/>
+This should be your bible:
+<br/>
+<br/>
+<a href="http://nocash.emubase.de/gbatek.htm" target="_blank">http://nocash.emubase.de/gbatek.htm</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#161978 - DekuTree64 - Fri Aug 22, 2008 1:52 am</h4>
+    <div class="postbody"><span class="postbody">2. The VRAM bank mappings are very confusing. I find it easiest to draw up a grid of what VRAM banks can be used for what purposes, and reference that when trying to decide on the best configuration for what I want to do.
+<br/>
+<br/>
+3. DMA channels on DS are less specialized than on GBA, so you can use whichever one you want. But it's a good idea to make, say, HBlanks effects use a higher priority channel than general purpose memory transfers (which can be large and time consuming).
+<br/>
+<br/>
+16-bit transfers are handy if you only want to guarantee 16-bit alignment, like for loading a few colors to palette memory. But generally you should use 32-bit if possible because it's faster.
+<br/>
+<br/>
+4. Depends on the situation. DMA is good for main RAM to VRAM, but terrible for main RAM to main RAM, due to cache/sequential access timings. You also have to deal with cache coherency.
+<br/>
+<br/>
+memcpy/swiCopy/for loop should all be pretty comparable in speed, use whichever you like.
+<br/>
+<br/>
+6. I use GraphicsGale. It's a nice pixel-friendly editor with layers and animation support, so it's great for 2D games. Not the best palette editor, but better than most.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#161980 - gauauu - Fri Aug 22, 2008 3:06 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>vuurrobin wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+6. what program(s) do you use for tilemap editing, tile/sprite/background editing, palette editing ect. just wondering what other people are using.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+For <a class="postlink" href="http://www.tolberts.net/anguna" target="_blank">Anguna</a>, I used (and am currently using for the DS port) <a class="postlink" href="http://www.tilemap.co.uk/mappy.php" target="_blank">Mappy Tile Editor</a> for tilemap editing, combined with my own system of text files for placing enemies/game objects, etc.  For graphics and palette editing, I used Cearn's Usenti.  Then to convert/build the graphics, I used a customized version of grit (Actually, customized from wingit to add command-line functionality, since grit didn't exist when I started) -- I'd just use grit if I was starting now.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#162005 - vuurrobin - Sat Aug 23, 2008 1:12 am</h4>
+    <div class="postbody"><span class="postbody">thanks everyone for the reply's, good to see people that are willing to help :)
+<br/>
+<br/>
+about 1. can someone please say if the vram works with virtual memory, like I posted. because searching gbateck or pataters tutorial for 'virtual' didn't result into anything (however, <a class="postlink" href="http://www.dev-scene.com/NDS/Tutorials_Day_2#Video_Ram" target="_blank">dev-scene's tutorial</a> does speak of it. 
+<br/>
+<br/>
+<br/>
+2. if its a hardware restriction, then there's nothin to do about it. and I think that the table on dev-scene is meant for planning the vram layout.
+<br/>
+<br/>
+<br/>
+about 3:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">But generally you should use 32-bit if possible because it's faster.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+pataters tutorial uses 16 bits to copy the data of a picture. 
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">We use the function dmaCopyHalfWords  instead of dmaCopy  because it is more explicit as to how it is copying.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+so you're saying it would be better to use dmacopy instead? weard to see since most people recommand this. you would expect that someone would correct it.
+<br/>
+<br/>
+<br/>
+no questions about 4 :)
+<br/>
+<br/>
+<br/>
+5. I downloaded the source from sourceforge, but that had just the same files I already had. however, I did found the sourcecode <a class="postlink" href="http://devkitpro.cvs.sourceforge.net/devkitpro/libnds/source/arm9/console.c?view=markup" target="_blank">online at sourceforge</a>. so that solves it :) .
+<br/>
+<br/>
+<br/>
+6. I downloaded the programs so I'll try them out, but from what I saw it might be just be what I wanted :)
+<br/>
+<br/>
+<br/>
+about gbatek being my bible/invaluable to me/whatever, I don't understand most of it. it may work for some of you, but I am not that hardware savy (and I doubt that I am the only person out there that wants to program for the nds). I prefer a good tutorial or example than the documentation of the hardware specifications.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#162016 - TwentySeven - Sat Aug 23, 2008 10:11 am</h4>
+    <div class="postbody"><span class="postbody">Use 32bits for your datatypes because thats what the arm works best with.
+<br/>
+<br/>
+Vram, however, has to be written to 16bits at a time.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#162017 - keldon - Sat Aug 23, 2008 10:41 am</h4>
+    <div class="postbody"><span class="postbody">I see a future tutorial writer here; your writing style is amazing! I don't think I've seen an explanation as good as that.
+<br/>
+<br/>
+2: How many people have a problem with VRAM assignment? I was under the assumption that it was all plain sailing for most people!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#162019 - vuurrobin - Sat Aug 23, 2008 12:04 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>TwentySeven wrote:</b></span></td> </tr> <tr> <td class="quote">Use 32bits for your datatypes because thats what the arm works best with.
+<br/>
+<br/>
+Vram, however, has to be written to 16bits at a time.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+so use dma with 16 bits for main to vram, use dma with 32 bits for main to any other kind of memory and use memcpy/swiCopy/for loop for main to main memory.
+<br/>
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>keldon wrote:</b></span></td> </tr> <tr> <td class="quote">I see a future tutorial writer here; your writing style is amazing! I don't think I've seen an explanation as good as that.
+<br/>
+<br/>
+2: How many people have a problem with VRAM assignment? I was under the assumption that it was all plain sailing for most people!</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+thanks :D. I was afraid that it would be to boring or dry.
+<br/>
+I have been thinking about writing one, but that wont happen until I have alot more experience. but maybe some day...
+<br/>
+<br/>
+and I think that alot more people has trouble with vram than you would think. I think that they eather move further and get themselves into troubles later on when they don't place the vram banks correctly, move to palib where they don't have to worry about vram, or quit nds programming altoegether.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#162027 - Cearn - Sat Aug 23, 2008 4:09 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>TwentySeven wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+Vram, however, has to be written to 16bits at a time.</td> </tr></table><span class="postbody">This isn't quite true. Yes, VRAM has a 16-bit bus, but that doesn't mean you can't access it in 32-bit chunks from a programmer perspective. It just means that the hardware accesses it in two passes (with the expected wait-state that comes with that). Because of this there's no difference in writing to VRAM between 16- or 32-bits, but there still seems to be a difference in reading from Main RAM, presumably due to a difference between sequential vs non-sequential cycle times. dmaCopyWords seems to be about 25% faster. 
+<br/>
+<br/>
+This is an old thread with discussions on various copying methods: <a class="postlink" href="http://forum.gbadev.org/viewtopic.php?t=13242" target="_blank">http://forum.gbadev.org/viewtopic.php?t=13242</a>
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>keldon wrote:</b></span></td> </tr> <tr> <td class="quote">2: How many people have a problem with VRAM assignment? I was under the assumption that it was all plain sailing for most people!
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Well, it's not difficult per se, but with the various different options it can be hard to see the forest from the trees. Like Deku said, a table could be helpful:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">VRAM Configuration table, based on GBATek data.
+<br/>
+<br/>
+   |      MAIN        |      SUB         |   TEX    |  WRAM
+<br/>
+   |  BVm OVm BPm OPm |  BVs OVs BPs OPs |  TV  TP  |   W7
+<br/>
+---+------------------+------------------+----------+--------
+<br/>
+A  |   4   2          |                  |   4      |
+<br/>
+B  |   4   2          |                  |   4      |
+<br/>
+C  |   4              |   1              |   4      |   2
+<br/>
+D  |   4              |       1          |   4      |   2
+<br/>
+E  |   1   1   1      |                  |       1  |
+<br/>
+F  |   4   2   2   1  |                  |       4  |
+<br/>
+G  |   4   2   2   1  |                  |       4  |
+<br/>
+H  |                  |   1       1      |          |
+<br/>
+I  |                  |   1       1   1  |          |
+<br/>
+<br/>
+B : Background
+<br/>
+O : Object
+<br/>
+T : Texture
+<br/>
+V : video
+<br/>
+P : Palette
+<br/>
+m : main
+<br/>
+s : sub
+<br/>
+W7: ARM7 WRAM
+<br/>
+<br/>
+The numbers inside the table are the number of offsets for each configuration</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#162028 - tepples - Sat Aug 23, 2008 5:06 pm</h4>
+    <div class="postbody"><span class="postbody">Here are three common setups to start from:
+<br/>
+<ul><li><span style="font-weight: bold">2D:</span> A main bg; B main sprite; C sub bg; D sub sprite </li><li><span style="font-weight: bold">3D:</span> A-D textures; E texture palettes; F main bg; G main sprite; H sub bg; I sub sprite </li><li><span style="font-weight: bold">Dual screen 3D:</span> A-B textures; C-D frame buffers (double buffered using sub bg and sub sprite); E texture palettes </li></ul><br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

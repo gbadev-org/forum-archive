@@ -1,0 +1,141 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>reason for wierd texture warp in Driv3r - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>OffTopic > reason for wierd texture warp in Driv3r</h2>
+<div id="posts">
+<div class="post">
+    <h4>#80635 - Ant6n - Mon Apr 24, 2006 7:17 am</h4>
+    <div class="postbody"><span class="postbody">did anybody ever figure out the reason for those weird texture warps in the second driver gba game? 
+<br/>
+It seems that they use affine texture mapping, but when an object is partially offscreen the effects become totally wierd - too wierd even for linear mapping. I'd post a pig but i dont have webspace right now...
+<br/>
+<br/>
+Anton</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#80641 - tepples - Mon Apr 24, 2006 12:39 pm</h4>
+    <div class="postbody"><span class="postbody">Sounds like bad clipping of texture coordinates.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#80663 - DekuTree64 - Mon Apr 24, 2006 4:54 pm</h4>
+    <div class="postbody"><span class="postbody">Yeah, I've seen that before too. I think it happens when a twisted quad is clipped.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#81534 - Ant6n - Sat Apr 29, 2006 8:31 pm</h4>
+    <div class="postbody"><span class="postbody">o, i think i figured it.
+<br/>
+apparently driv3r renders polygons with multiple sides, not just triangles. but apparently it interpolates between two points of the edges that are the beginning and end of each scanline, and then interpolates between those points to get the scanline. That'd explain it.
+<br/>
+The irony is that after 10 minutes playing the wierd textures arent the thing that makes you kind of dislike the game (i.e. you get used to it), but the fad story, which is badly told and real plump, the wierd handling (sliding at 5 mph?) and that all the time you bounce like a rubber ball of things that pop out of noewhere (i.e. cars)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#81566 - keldon - Sun Apr 30, 2006 2:29 am</h4>
+    <div class="postbody"><span class="postbody">If it was affine mapping then warping is inevitable. The method you described introduces serious accuracy problems when floating points are not used. I had a similar problem when I converted my floating point texture mapper to a fixed point texture mapper that interpolated with the textures delta and the point from one side.
+<br/>
+<br/>
+The problem you get when using fixed point is that your delta is slightly innacurate, plus the u/v values your are interpolating with from the edge. Combined they can quite easily make your texture warp.
+<br/>
+<br/>
+Why interpolate between two points on each line to calculate the texture's uv. The delta across any flat shape will be constant. Instead they would - if using this method - interpolate with an edge on one side, along with the shapes delta.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#81579 - Ant6n - Sun Apr 30, 2006 7:32 am</h4>
+    <div class="postbody"><span class="postbody">"The delta across any flat shape will be constant"
+<br/>
+<br/>
+that is only true for triangles - because they have three points with three u,v coordinates, you can somehow stretch your texture across it... so i, too, would think that this would be the best approach with flat texturing.
+<br/>
+but if you want to render an arbitrary convex polygon, i.e.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+ e  ___ a
+<br/>
+   /    |
+<br/>
+  /     | b
+<br/>
+d \    /
+<br/>
+    \ / c</td> </tr></table><span class="postbody">
+<br/>
+you would just walk along the left side and the right side of the polygon, then interpolate between to points (i.e. a and b, as well as e and d) and then interpolate between the edges for each scanline. I think they do it in this way because if you dont use triangles, you cant just use one wrapping...
+<br/>
+mmmh... wierd, still, why not split it up in triangles and use constant delta values for each - maybe it produced wierder warps (like on the PS1)
+<br/>
+btw, if your delta values are too inaccurate with fixpoint, then use different radix point. I.e., for coordinates use q16, but for du and dv use q24</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#81583 - keldon - Sun Apr 30, 2006 10:10 am</h4>
+    <div class="postbody"><span class="postbody">Yes, I was thinking of implementing radix but just haven't got around to it.
+<br/>
+<br/>
+If you are rendering a polygon such that it fits perfectly on the polygon then you should divide it into smaller triangles. If you interpolate between the edges in the way specified then you will get a screwed up texture - but I haven't seen this warping so I couldn't tell what exactly is wrong, I will have to try it out.
+<br/>
+<br/>
+If you had a constant delta on your polygon - like how I said - the complete texture will not be drawn. I take it they are not drawing simple polygons, such that there exists no line in any direction such that no more than two edges of the polygon will touch - otherwise that method will fail.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#81602 - keldon - Sun Apr 30, 2006 3:10 pm</h4>
+    <div class="postbody"><span class="postbody">Just tried it out - for obvious reasons - and it just looks like affine texturing. Man that intro is long.
+<br/>
+<br/>
+Looks like:
+<br/>
+- affine texture mapping
+<br/>
+- haven't seen any difficult polygons [only put it on for a few minutes]
+<br/>
+- calculates uv using (a) delta + (b) uv value at beginning of a line. They have one of the same warping effects I get due to the innacuracy
+<br/>
+<br/>
+Okay, i'll get into a car and look around the town, I'll stop being lazy. Looks like the same routine I have in my texture mapper. I'll post the code if you want, in fact&gt;&gt;&gt;
+<br/>
+<a class="postlink" href="http://forum.gbadev.org/viewtopic.php?p=65505#65505" target="_blank">My thread on it happening to me</a>. It is an affine method, but the main problem is with the fixed point accuracy - you don't get that odd effect when it is floating point. Mine does not suffer to the full effect as driv3r, but one of its characteristics appear.
+<br/>
+<br/>
+p.s. I must have been tired talking about the constant deltas across the entire shape.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#81627 - Ant6n - Sun Apr 30, 2006 6:27 pm</h4>
+    <div class="postbody"><span class="postbody"><a href="http://www.cs.mcgill.ca/~adubra/driv3rwarp.png">[Images not permitted - Click here to view it]</a>
+<br/>
+you see it doesnt use triangles, because otherwise there would be some artifact diagonally across. and then area in the middle, where its a rectangle, there is no obvious artifact - except that its just flat mappin.
+<br/>
+the top and bottom, with the curves, implie that they interpolate across each scanline - otherwise they wouldnt get the curve</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#81642 - keldon - Sun Apr 30, 2006 8:55 pm</h4>
+    <div class="postbody"><span class="postbody">Yes true. That horizontal line looked angled when I looked at it, so I thought it was divided [weirdly].
+<br/>
+<br/>
+I guess the problem it gets is with the nearplane clipping giving the correct Z value at the bottom point of the texture, and the other warping is just due to it using the method you spoke of.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

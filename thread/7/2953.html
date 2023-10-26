@@ -1,0 +1,338 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Non-GBA problem meant to act like GBA sprite - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>C/C++ > Non-GBA problem meant to act like GBA sprite</h2>
+<div id="posts">
+<div class="post">
+    <h4>#17069 - DiscoStew - Sun Feb 29, 2004 5:48 pm</h4>
+    <div class="postbody"><span class="postbody">I am so frustrated by this problem that I have. I have this function written into a C DLL for use with a VB program (speed reasons), and it does not seem to work correctly. What this function does is takes pixel arrays of my sprite and the output window, and copies the sprite into the output window with scaling and rotation when needed. The result is supposed to be much like on the GBA, with only a specific drawing area unless Double_Flags is on (which is not implemented yet), and any scaling/rotation is always centered in the middle of the drawing area. My problem with the function is that the sprite can't stay centered.
+<br/>
+I really don't have much of a problem with equal x-y scaling and rotation, though at every 90 degrees other than 0 I'm loosing a single line of the sprite, but it's when the scaling of the x-y axises are not equal. At 0 degrees, scaling on either axis is ok, but as I rotate, the sprite does not stay centered in the area that is specified. It tends to lean out a bit, and it is very noticable when there is unequal scaling while at a constant rotation value.
+<br/>
+<br/>
+Here is the code for this...
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">----------------------------------------
+<br/>
+   //Initial values which are meant to come through a function's parameters
+<br/>
+   int Frame_Width = 32, Frame_Height = 32, Output_Width = 240;
+<br/>
+   int Sprite_ScaleX = 128, Sprite_ScaleY = 256, Sprite_RotationVal
+<br/>
+<br/>
+   //Get the midpoint of the sprite
+<br/>
+   int MidPointX = Frame_Width / 2;
+<br/>
+   int MidPointY = Frame_Height / 2;
+<br/>
+<br/>
+   //Get the actual scale values
+<br/>
+   double ActualScaleX = ((double)256 / Sprite_ScaleX);
+<br/>
+   double ActualScaleY = ((double)256 / Sprite_ScaleY);
+<br/>
+   double GrabScaleX = MidPointX / ActualScaleX;
+<br/>
+   double GrabScaleY = MidPointY / ActualScaleY;
+<br/>
+<br/>
+   //Get the distance of the hypotenuse from the center to the upper-left corner of the sprite, and the angle plus add the rotation value of the sprite
+<br/>
+   double AngleDist = sqrt((GrabScaleX * GrabScaleX) + (GrabScaleY * GrabScaleY));
+<br/>
+   double Angle = Radians(-Sprite_RotationVal) + atan2(-GrabScaleY,-GrabScaleX);
+<br/>
+<br/>
+   //Set where on the Sprite Image to begin grabbing pixels
+<br/>
+   double GrabStartX = (AngleDist * cos(Angle)) + MidPointX;
+<br/>
+   double GrabStartY = (AngleDist * sin(Angle)) + MidPointY;
+<br/>
+<br/>
+   //The X-Increments and Y-Increments associated with Scaling and Rotation
+<br/>
+   double GrabPixel_X = cos(Radians(-Sprite_RotationVal)) / ActualScaleX;
+<br/>
+   double GrabPixel_Y = sin(Radians(-Sprite_RotationVal)) / ActualScaleY;
+<br/>
+   double NextLine_X = cos(Radians(90 - Sprite_RotationVal)) / ActualScaleX;
+<br/>
+   double NextLine_Y = sin(Radians(90 - Sprite_RotationVal)) / ActualScaleY;
+<br/>
+<br/>
+   //Set where on the output array to start placing pixels
+<br/>
+   int StartX = Sprite_PositionX;
+<br/>
+   int StartY = Sprite_PositionY;
+<br/>
+   
+<br/>
+   //Loop through the output
+<br/>
+   for(int PositionY = 0; PositionY &lt; Frame_Height; PositionY++)
+<br/>
+   {
+<br/>
+      //Get the location of the next starting place to grab pixels
+<br/>
+      double CurrentX = GrabStartX + (NextLine_X * PositionY);
+<br/>
+      double CurrentY = GrabStartY + (NextLine_Y * PositionY);
+<br/>
+<br/>
+      for(int PositionX = 0; PositionX &lt; Frame_Width; PositionX++)
+<br/>
+      {
+<br/>
+         //Make sure what is being grabbed is within the sprite image
+<br/>
+         if((CurrentY &gt;= 0) &amp;&amp; (CurrentY &lt; Frame_Height) &amp;&amp; (CurrentX &gt;= 0) &amp;&amp; (CurrentX &lt; Frame_Width))
+<br/>
+            OutputArray[((StartX + PositionX) + ((StartY + PositionY) * Output_Width))] = SpriteArray[(int)(CurrentX + ((int)CurrentY * Frame_Width))];
+<br/>
+         else
+<br/>
+            OutputArray[((StartX + PositionX) + ((StartY + PositionY) * Output_Width))] = 0;
+<br/>
+<br/>
+         //Add X_Increments to the locations
+<br/>
+         CurrentX += GrabPixel_X;
+<br/>
+         CurrentY += GrabPixel_Y;
+<br/>
+      }
+<br/>
+   }
+<br/>
+-------------------------------
+<br/>
+double Radians(double Degrees)
+<br/>
+{
+<br/>
+   double Deg2Rad = Degrees * (PI / 180);
+<br/>
+   return (Deg2Rad);
+<br/>
+}
+<br/>
+-------------------------------</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+...I am using &lt;math.h&gt; for the sin, cos, and atan2 functions, which may be the culprit in the missing pixel line as mentioned earlier. As far as I know, I'm probably missing something that is needed to keep it centered, but I just don't know what. I've stared at this code for hours on end, and tried messing around with it to see if the result will lead up to me getting the problem fixed. Is anyone able to help me resolve this problem? thx for your help.<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#17073 - Miked0801 - Sun Feb 29, 2004 6:10 pm</h4>
+    <div class="postbody"><span class="postbody">Oh, oh - PC C code on the GBA forums.  Time to get out the disinfectent spray.  Pssssssssssst.
+<br/>
+<br/>
+1.  You don't ever expect to port this to GBA do you?  Your use of Float/Double precludes this from the go.
+<br/>
+<br/>
+2. Your life will get much easier if you use a rotation matrix instead of geometry fpr your rotation.
+<br/>
+<br/>
+3. Turn off the scaling until you get the rotation to work at all.  No sense in having 2 different unknowns at the same time.
+<br/>
+<br/>
+Just off the top of my head.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#17075 - tepples - Sun Feb 29, 2004 6:17 pm</h4>
+    <div class="postbody"><span class="postbody">In fact, it'd be straightforward to implement rot/scale on PC using <span style="font-style: italic">exactly the same matrices</span> that you use for rot/scale on the GBA.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#17077 - poslundc - Sun Feb 29, 2004 6:32 pm</h4>
+    <div class="postbody"><span class="postbody">I don't know if it matters at all to you when it comes to your peecee/windoze programming, but just so you're aware, if you're making a C program then declaring a variable inside a for statement is downright illegal.
+<br/>
+<br/>
+It's fine if you're programming in C++, and it's clear enough that your compiler is letting you get away with it, but if you want your code to be at all compatible with other C compilers (including gcc) you should nix that.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#17084 - Lupin - Sun Feb 29, 2004 9:19 pm</h4>
+    <div class="postbody"><span class="postbody">if you keep coding like that it ain't VBs fault that your code is slow...
+<br/>
+<br/>
+There are a lot of ways to implement fast sprite scaling/rotating without c or asm help...
+<br/>
+<br/>
+If you want fast code, you should get rid of these floating point stuff in first place :)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#17088 - poslundc - Sun Feb 29, 2004 10:04 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Lupin wrote:</b></span></td> </tr> <tr> <td class="quote">If you want fast code, you should get rid of these floating point stuff in first place :)</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Almost every type of personal computers since the mid-90's comes equipped with a floating-point unit (FPU) that co-processes any floating-point math in parallel to the main CPU, which in most cases makes floating-point math as fast as fixed-point math, if not faster.
+<br/>
+<br/>
+Likewise, you can have an ARM computer with a math co-processor; it just so happens that the GBA doesn't have (or really require) one.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#17093 - DiscoStew - Sun Feb 29, 2004 11:28 pm</h4>
+    <div class="postbody"><span class="postbody">For one thing, this code is not going to be ported to the GBA in any shape or form. This is part of a PC application written in VC++ 6, not GBA and gcc. The actual interface is written in VB. The program I'm making will ease up some of the frustration with having to do things manually.
+<br/>
+<br/>
+The reason why it's in a C DLL and not in the VB program itself is because I plan to call this area of code 60 times per second for each sprite I want displayed.
+<br/>
+<br/>
+Now, about using the same matrices as the GBA uses, if I were to use this, I'd need to figure out is how to display a sprite using that. The GBA does it through hardware, while I have to figure it out how to display a sprite through software. Would anyone out there happen to know that is done? If anyone understand how my code works (although it doesn't display a sprite completely correctly), could matrices be incorporated into it without trouble? thx<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#17095 - DekuTree64 - Mon Mar 01, 2004 12:02 am</h4>
+    <div class="postbody"><span class="postbody">I think the matrix is just the increment values it uses for each x/y pixel increment. So something like
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">loop y
+<br/>
+{
+<br/>
+ x = xOut
+<br/>
+ y = yOut
+<br/>
+ loop x
+<br/>
+ {
+<br/>
+  dest = pixel(x, y)
+<br/>
+  x += pa
+<br/>
+  y += pb
+<br/>
+ }
+<br/>
+ xOut += pc
+<br/>
+ yOut += pd
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+Since you want your sprite center to always stay in the same place, just take the center coords, and subtract multiples of those increments like 
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">xTopLeft = width/2 - width/2*pa - height/2*pc
+<br/>
+yTopLeft = height/2 - width/2*pb - height/2*pd</td> </tr></table><span class="postbody">
+<br/>
+So after pc gets added height/2 times (half way down the sprite) in the outer loop, and then pa gets added width/2 times in the inner loop, x will be at exactly width/2, which is where you want it. 
+<br/>
+<br/>
+That's all untested though, but I'm pretty sure that's how it works. The GBA's hardware doesn't actually rotate things, only skews and scales them by adding different x and y increment values each vertical and horizontal pixel on the screen. Lucky for us programmers that's all it needs to do to LOOK like rotation.
+<br/>
+Oh, and that will tile the sprite, not just draw one copy and fill the rest with transparent. Although if you zoom out really far on a sprite on GBA you can see that it tiles too, just with a lot of space inbetween. Not sure how/why it does that though, so you can just check and make sure x and y are between 0 and width/height before copying the pixel. Or use some fancy math to trace the edges of the rotated sprite, but then you have to do lots of multiplying/adding the increments and it gets kind of confusing.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#17098 - DiscoStew - Mon Mar 01, 2004 1:57 am</h4>
+    <div class="postbody"><span class="postbody">Thanks DekuTree64, after looking at what you showed, my GrabPixel and NextLine variables are almost set up the same way as the p matrix on the GBA. However, I had to change my last three p matrix variables to practically be like the GBA's p matrix. Now it is centered correctly, but the scaling is still having problems. It is scaling in relation to the output's x/y axis, not the sprites altered x/y matrix. At 45 degrees and the sprite's x-scale is *2, the sprite is rotated (or made to look like it did) correctly, but the scaling is not going along with the alteration. It is scaling on the output's x-scale as shown below...
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+_____*_____
+<br/>
+____*_*____
+<br/>
+&lt;-_*___*_-&gt;
+<br/>
+____*_*____
+<br/>
+_____*_____</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+...Is there still something I'm doing wrong?<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#17106 - DekuTree64 - Mon Mar 01, 2004 5:08 am</h4>
+    <div class="postbody"><span class="postbody">According to my tests, that's exactly how the GBA does it as well, so it sounds to me like it's working. Pretty surprising actually, considering that was just off the top of my head.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#17107 - DiscoStew - Mon Mar 01, 2004 9:13 am</h4>
+    <div class="postbody"><span class="postbody">I still am having trouble with this. My code is the same, but with the following modification...
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+//The X-Increments and Y-Increments associated with Scaling and Rotation 
+<br/>
+   double GrabPixel_X = cos(Radians(-Sprite_RotationVal)) / ActualScaleX; 
+<br/>
+   double GrabPixel_Y = sin(Radians(-Sprite_RotationVal)) / ActualScaleX; 
+<br/>
+   double NextLine_X = -sin(Radians(-Sprite_RotationVal)) / ActualScaleY; 
+<br/>
+   double NextLine_Y = cos(Radians(-Sprite_RotationVal)) / ActualScaleY; 
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Heck, I even checked my GBA code and my PC code just about matches it, other than the fact that they use different names. I don't know what to do.
+<br/>
+For the time being, I have no reason to use un-equal x/y scaling, so I could just continue with the rest of my program. I just wish I was able to figure this out.
+<br/>
+On another note, perhaps someone could teach me a few speed tricks in VB (I'm using DX7 or DirectDraw7 for the graphics of the program). The way that my program deals with drawing one or more sprites is that it first locks my output surface so that I can use the GetLockedArray function, locks the first sprite surface for the frame and gets its array, then I send the first sprite and its transformation data into my C DLL function, with my arrays passed ByRef into SAFEARRAY types so that I can get the actual reference for reading and ploting pixels, calculate everything in the C DLL and plot pixels as shown in my code, then after unlocking the SAFEARRAYs, exit the function, unlock the current sprite surface, and start on the next sprite until all have been done. I then unlock the output surface and then use the BltToDC to copy the surface to one of VBs picture objects. This process is done every frame. Now with my current method, as the number of sprites increases (starting at 5 sprites), my program begins to slow down.
+<br/>
+Now more than likely I'm doing too many wrong things with this method, and as Lupin said, it doesn't require c or asm to have fast scaling/rotation. I'd like to know how if possible, especially in VB (6.0 preferred). Perhaps direction to a web site would help? I appreciate all comments and suggestions everyone has given, and I hope to help others with their problems as you all are helping me. thx<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#17136 - DiscoStew - Tue Mar 02, 2004 2:00 am</h4>
+    <div class="postbody"><span class="postbody">ok, now I finally got it working as it should. My GrabPixel_Y variable was supposed to use ActualScaleY, and the NextLine_Y used ActualScaleX. Now I need to find a faster way of drawing than having to continually call Lock functions. It's just so easy having arrays to work with.
+<br/>
+<br/>
+*EDIT*
+<br/>
+Actually, I tested my VB code for speed, and the whole Locking portion is not the problem. In my C DLL, the speed holdup is right at the center of the whole pixel-plotting function, the array I'm reading, and the array I'm writing. Could it have something to do with the SAFEARRAY? My GetLockedArray in VB gets a DX7 surface's array in BYTE form, yet as my C code shows, it converts access to it by LONG. Could something about that be the problem?
+<br/>
+Anyhow, I'm glad I got this working while learning some logic behind it, but because of this odd speed bug, I think I'll give GDI+ a try with a VB wrapper.<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"><br/><br/>Last edited by DiscoStew on Tue Mar 02, 2004 10:08 pm; edited 3 times in total</span></div>    
+</div>
+<div class="post">
+    <h4>#17163 - SmileyDude - Tue Mar 02, 2004 7:05 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>poslundc wrote:</b></span></td> </tr> <tr> <td class="quote">I don't know if it matters at all to you when it comes to your peecee/windoze programming, but just so you're aware, if you're making a C program then declaring a variable inside a for statement is downright illegal.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Not defending the rest of his code, but actually, declaring a variable in a for statement is legal if you are using the C99 standard.  I actually use C99 mode for all of my GBA programming now.<br/>_________________<br/>dennis</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

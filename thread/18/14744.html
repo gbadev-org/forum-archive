@@ -1,0 +1,122 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>malloc or memalign? - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > malloc or memalign?</h2>
+<div id="posts">
+<div class="post">
+    <h4>#147905 - Bloodypriest - Sun Dec 30, 2007 5:47 am</h4>
+    <div class="postbody"><span class="postbody">Yesterday, I had an odd problem with my sprites. They came out as random garbage. I couldn't figure it out at first, but in the end I realized that it was the dmaCopy that was going awry.
+<br/>
+<br/>
+The only reason I could think of was "memory alignment". So I changed my original code from:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">dmaCopy(spr_tmp,&amp;SPRITE_GFX[_id*16],size);
+<br/>
+free(spr_tmp);
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+to:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">if ((unsigned int)(spr_tmp) &amp; 3) {
+<br/>
+    MemCopy32CPU(spr_tmp,&amp;SPRITE_GFX[_id*16],size);  // from moonshell's memtool.cpp
+<br/>
+}
+<br/>
+else {
+<br/>
+    DC_FlushAll();
+<br/>
+    dmaCopy(spr_tmp,&amp;SPRITE_GFX[_id*16],size);
+<br/>
+}
+<br/>
+free(spr_tmp);
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+and it finally worked. But I'm wondering if that alignment check could have been averted if I had used <span style="font-weight: bold">memalign(4,buffer_size)</span> instead of <span style="font-weight: bold">malloc(buffer_size)</span> to allocate the buffer I was copying from.
+<br/>
+<br/>
+Can anybody tell me?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#147907 - sajiimori - Sun Dec 30, 2007 6:23 am</h4>
+    <div class="postbody"><span class="postbody">The flush is probably what fixed it, not the alignment check.  After all, a 32 bit copy is exactly what <span style="font-style: italic">doesn't</span> work with unaligned addresses.
+<br/>
+<br/>
+Besides, no sane implementation of malloc is going to return an unaligned address.
+<br/>
+<br/>
+Also, you only need to flush the source and destination regions, not the whole data cache.  In fact, you can just invalidate the destination region, since writebacks will be overwritten by the DMA anyway.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#147919 - Bloodypriest - Sun Dec 30, 2007 4:04 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">The flush is probably what fixed it, not the alignment check. After all, a 32 bit copy is exactly what doesn't work with unaligned addresses.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+But MemCopy32CPU should work in any circumstances since it's basically just a for loop (I'm just too lazy to write it in full since I'm also using Moonshell's text system which relies on the functions in memtool.cpp).
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Besides, no sane implementation of malloc is going to return an unaligned address.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Can someone confirm whether the malloc in DevKitPro return aligned addresses? And if so, on what boundary?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#147921 - simonjhall - Sun Dec 30, 2007 4:36 pm</h4>
+    <div class="postbody"><span class="postbody">Always comes back aligned for me, and it looks like 32-bit alignment.
+<br/>
+Can anyone verify this?<br/>_________________<br/><span style="font-weight: bold"><a class="postlink" href="https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&amp;business=simonjhall%40gmail%2ecom&amp;no_shipping=2&amp;no_note=1&amp;tax=0&amp;currency_code=GBP&amp;lc=GB&amp;bn=PP%2dDonationsBF&amp;charset=UTF%2d8" target="_blank">Big thanks to everyone who donated for Quake2</a></span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#147940 - sajiimori - Sun Dec 30, 2007 8:22 pm</h4>
+    <div class="postbody"><span class="postbody">Bloodypriest, 'for' loops aren't immune to alignment requirements.  All 32-bit reads and writes must be aligned or you'll get weird results.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#147959 - chishm - Mon Dec 31, 2007 4:04 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>simonjhall wrote:</b></span></td> </tr> <tr> <td class="quote">Always comes back aligned for me, and it looks like 32-bit alignment.
+<br/>
+Can anyone verify this?</td> </tr></table><span class="postbody">
+<br/>
+As long as the implementation of malloc obeys the <a class="postlink" href="http://www.opengroup.org/onlinepubs/009695399/functions/malloc.html" target="_blank">standard</a>, it is guaranteed to return a pointer that is "suitably aligned so that it may be assigned to a pointer to any type of object". On the ARM CPUs used in the DS, it shall be aligned to 32 bits in order to fulfil this requirement.<br/>_________________<br/><a class="postlink" href="http://chishm.drunkencoders.com" target="_blank">http://chishm.drunkencoders.com</a>
+<br/>
+<a class="postlink" href="http://dldi.drunkencoders.com" target="_blank">http://dldi.drunkencoders.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#147962 - Bloodypriest - Mon Dec 31, 2007 4:36 am</h4>
+    <div class="postbody"><span class="postbody">@sajiimori:
+<br/>
+Didn't know that. Thanks for the tip.
+<br/>
+<br/>
+@chishm:
+<br/>
+Thanks for the clarification. I guess this means that we can safely use malloc for all our memory allocations.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#148019 - sajiimori - Mon Dec 31, 2007 8:12 pm</h4>
+    <div class="postbody"><span class="postbody">After reading simonjhall's thread about FIFO DMAs, I guess I should correct myself on two things: Flushing a range is not always faster than flushing the whole cache (which was news to me), and invalidating the cache is dangerous for ranges that aren't aligned to 32 <span style="font-style: italic">bytes</span> (a cache line).
+<br/>
+<br/>
+I admit, I've never used cache invalidation in real life, mostly because I use DMA for the geometry FIFO and little else.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

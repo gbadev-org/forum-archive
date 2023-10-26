@@ -1,0 +1,212 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Text system not working! - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > Text system not working!</h2>
+<div id="posts">
+<div class="post">
+    <h4>#139552 - Ruben - Fri Sep 07, 2007 12:23 pm</h4>
+    <div class="postbody"><span class="postbody">I was recently programming a text system into my demo but I just can't seem to get it to work! It's driving me CRAZY! I'm using variable widths which explains why it's harder. All my font data is stored in a 'const u8' array which is acessed when needed. The text is drawn onto the screen by copying the required tiles into the VRAM so I can get the variable width thing. But whenever I try it, it fails! Here's the code I'm currently using:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+//This Draws Text onto the Screen
+<br/>
+void DrawText(char* Text) {
+<br/>
+ //Return if Text isn't Initialized
+<br/>
+ if(!TextInitialized) return;
+<br/>
+ u16 i, j, k;
+<br/>
+ u16 CurrentChar;
+<br/>
+ u16 CurrentOffset = 0;
+<br/>
+ u16 CurrentWidth;
+<br/>
+ u16* charBaseBlock = (u16*)0x6004000;
+<br/>
+ 
+<br/>
+ for(i=0;Text[i]!=0;i++) {
+<br/>
+  CurrentChar = Text[i]-32;
+<br/>
+  CurrentWidth = TextWidths[CurrentChar];
+<br/>
+  for(j=0;j&lt;8;j++) { //Height
+<br/>
+   for(k=0;k&lt;CurrentWidth;k++) { //Width
+<br/>
+    charBaseBlock[CurrentOffset+(j*CurrentWidth)+k] = FontData[(CurrentChar*64)+(j*CurrentWidth)+k];
+<br/>
+   }
+<br/>
+  }
+<br/>
+  CurrentOffset += 8*CurrentWidth;
+<br/>
+ }
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+'TextWidths[]' is an array containing all the character widths. 'FontData[]' is the u8 array containing the image. Can someone please tell me what I'm doing wrong as it is REALLY annoying when you can't get it to work! Thanks guys!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#139570 - Cearn - Fri Sep 07, 2007 4:44 pm</h4>
+    <div class="postbody"><span class="postbody">A lot depends on the video mode, background mode and formatting of VRAM here, which you're not explicitly mentioning here. I'm assuming you're using a tiled background with 8bit tiles and that FontData contains 8x8 bitmaps for the glyph pixels. If so, there are several problems, mostly to do with this line:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Ruben wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">    charBaseBlock[CurrentOffset+(j*CurrentWidth)+k] = FontData[(CurrentChar*64)+(j*CurrentWidth)+k]; 
+<br/>
+</td> </tr></table><span class="postbody"></span></td> </tr></table><span class="postbody"><ul><li>charBaseBlock is a u16 pointer, FontData is u8*. This means you're going to skip every other pixel in VRAM. 
+<br/>
+</li><li>In the tiled modes, VRAM, isn't linear, it's composed of 8x8 tiles. going from coordinates to memory offsets is a little trickier in that case and I don't see any code that does that here.
+<br/>
+</li><li>Even though it depends on your specific formatting of FontData and VRAM, I highly doubt that (j*CurrentWidth) gives the correct pixel offset for either the source and destination pixels. If the source glyphs are all on a 8x8 canvas, glyph-scanlines will be 8 bytes apart, not CurrentWidth. And I'm <span style="font-style: italic">very</span> sure that the scanlines in VRAM won't be CurrentWidth apart.
+<br/>
+</li><li>I'm also wondering about 'CurrentOffset += 8*CurrentWidth'. This should probably just be 'CurrentOffset += CurrentWidth' because you'll probably want to step to the next right of the glyph, not the bottom-right.</li></ul>As a side note, some of these errors would have been more visible if the inner-loop wasn't so long -- it's hard to see the forest from the trees here. By using pointers and shorter names, it becomes much clearer:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">int i, ch, charW;      // DON'T use u16 for locals. int or u32 are better.
+<br/>
+int ix, iy;         // For 2D things, use x and y so you can see what's what.
+<br/>
+int x0= 0;
+<br/>
+const u8 *src;
+<br/>
+u16 *dst= (u16*)0x06000400;
+<br/>
+<br/>
+for(i=0; Text[i] != '\0'; i++)
+<br/>
+{
+<br/>
+    ch = Text[i]-' ';
+<br/>
+    src= &amp;FontData[ch*64];      // Pointer to the current char's pixels
+<br/>
+    charW = TextWidths[ch];
+<br/>
+<br/>
+    for(iy=0; iy&lt;8; iy++)
+<br/>
+        for(ix=0; ix&lt;charW; ix++)
+<br/>
+            dst[iy*charW + ix+x0] = src[iy*charW + ix];
+<br/>
+<br/>
+    x0 += 8*charW;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Of course it still doesn't work, but at least you can see why more easily.
+<br/>
+<br/>
+IMHO, 8bit tiled rendering happen to be pretty much the most annoying mode to work with due to the tiling and the fact that you can't write in byte-size chunks to VRAM. Still, if you must ...
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">//! Draw onto an 8bit tile canvas. dstPitch is the distance
+<br/>
+/*! in bytes between successive tile rows.
+<br/>
+*/
+<br/>
+static inline void chr8_plot(int x, int y, u8 color, void *dstBase, u32 dstPitch)
+<br/>
+{
+<br/>
+   u32 ofs= (y&gt;&gt;3)*dstPitch + (y&amp;7)*8 + (x&gt;&gt;3)*64;
+<br/>
+   u16 *dst= (u16*)(dstBase + ofs + (x&amp;6));
+<br/>
+<br/>
+   if(x&amp;1)
+<br/>
+      *dst = (*dst &amp; 0x00FF) | color&lt;&lt;8;
+<br/>
+   else
+<br/>
+      *dst = (*dst &amp;~0x00FF) | color;
+<br/>
+}
+<br/>
+<br/>
+//! Draws a string at position x, y.
+<br/>
+/*! \note   Assumptions: 
+<br/>
+      - VRAM tiles are 8bpp and formatted as a 32x32 grid of tiles, row major.
+<br/>
+      - input is ascii text.
+<br/>
+*/
+<br/>
+void DrawText(int x, int y, const char *str)
+<br/>
+{
+<br/>
+   int ix, iy;
+<br/>
+   int ch, charW;
+<br/>
+   const u8 *src;
+<br/>
+   u16 *dst= (u16*)0x06004000;
+<br/>
+<br/>
+   while((ch= *str++) != '\0')
+<br/>
+   {
+<br/>
+      ch -= ' ';
+<br/>
+      src= &amp;FontData[ch*64];
+<br/>
+      charW = FontWidths[ch];
+<br/>
+      
+<br/>
+      for(ix=0; ix&lt;charW; ix++)
+<br/>
+         for(iy=0; iy&lt;8; iy++)
+<br/>
+            if(src[iy*8+ix])   // Only plot if there's something to do
+<br/>
+               chr8_plot(x+ix, y+iy, src[iy*8+ix], dst, TILE_PITCH);
+<br/>
+            
+<br/>
+      x += charW;
+<br/>
+   }
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+I've tested it a little and it seems to work. It's going to be very, very slow though because of all the coordinate corrections in chr8_plot(). There are ways around it, but they're not pretty. If the font permits it and you need more speed, I'd recommend going to 4bpp tiles which allow for much faster rendering because you can cover 8 pixels at once (but it requires some fairly fancy bitslinging to get it done efficiently). Cydrax' post <a class="postlink" href="http://forum.gbadev.org/viewtopic.php?p=139327#139327" target="_blank">here</a> is an example of that, which should work for any-sized glyphs as well.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#139612 - Ruben - Sat Sep 08, 2007 4:04 am</h4>
+    <div class="postbody"><span class="postbody">Oh! Sorry. I had actually forgot to mention that as I was a bit sleepy last night so yeah. Umm... thanks for the link to that example code as I actually DO use 4bpp tiles. Also, that code seems to be very good. I'll see what I can do with it :P. And yeah. I probably should've described what my glyph image is. It starts at ASCII character 32 (space) and each character is written as an 8x8 tile... and coming to think of it, it really wouldn't give the right offset as well... hmm... probably should've triple checked the code before posting :P! Hehehe... thanks Cearn!</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

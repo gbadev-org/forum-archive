@@ -1,0 +1,241 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Collision detection techniques - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > Collision detection techniques</h2>
+<div id="posts">
+<div class="post">
+    <h4>#42726 - uman - Sat May 14, 2005 8:46 am</h4>
+    <div class="postbody"><span class="postbody">Hi all,
+<br/>
+<br/>
+What is the best way to implement collision detection in a GBA game? e.g., I need a sprite to be able to discover if it has moved into the same location as another sprite. Any suggestions?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#42735 - yaustar - Sat May 14, 2005 1:40 pm</h4>
+    <div class="postbody"><span class="postbody">The easiest method to start would probably be Box/Boundary collision detection.. have a search around for it, there plenty of topics on this...<br/>_________________<br/>[<a class="postlink" href="http://parabellumgames.no-ip.org" target="_blank">Blog</a>] [<a class="postlink" href="http://yaustar.no-ip.org" target="_blank">Portfolio</a>]</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#42754 - Suboptimal - Sat May 14, 2005 5:46 pm</h4>
+    <div class="postbody"><span class="postbody">GameDev.net has some good articles on this. 
+<br/>
+<br/>
+Here's one:
+<br/>
+<br/>
+<a class="postlink" href="http://www.gamedev.net/reference/articles/article735.asp" target="_blank">http://www.gamedev.net/reference/articles/article735.asp</a>
+<br/>
+<br/>
+At the bottom, their per-pixel routine goes and loops over every pixel of both objects, which is slow. Instead, you could define bit-vectors which represent the collideable pixels for each sprite and just AND those together to check for colisions at the pixel level.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#42756 - sajiimori - Sat May 14, 2005 6:16 pm</h4>
+    <div class="postbody"><span class="postbody">Very few real games use per-pixel collision.  Beginners are often attracted to the idea (possibly because it seems more "correct") but even if you had unlimited CPU, the method often produces awkward results in terms of gameplay.  It's not very fun to get caught on every little detail of every object -- it's nicer to move fluidly.
+<br/>
+<br/>
+Also, per-pixel collision algorithms are only run after culling out the object pairs whose bounding boxes don't overlap, so you have to do that anyway.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#42764 - Suboptimal - Sat May 14, 2005 8:23 pm</h4>
+    <div class="postbody"><span class="postbody">Yeah, you would always want to run the trivial rejection tests first. 
+<br/>
+<br/>
+As far as per-pixel collisions, I can see how that would suck for a lot of games.  For some games, it might be good to have a compromise, like "shrink-wrapping" the outermost pixels of the sprites, and checking those.  Then you're essentially checking against smoothed collision hulls.  Keep in mind that any time you're using collision information that is more complex than the bounds of the box, you'd want to precompute it. 
+<br/>
+<br/>
+The nice thing about this problem is that you can just drop in a box collision routine to get things started, and then increase accuracy later on if it's needed.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#42986 - Miked0801 - Tue May 17, 2005 8:30 pm</h4>
+    <div class="postbody"><span class="postbody">Use axis aligned boxes or circle checks depending on the objects tested.  Circles BTW, are as fast if not faster to check.  Store the square of each objects radius then just square the X and Y distance between the objects and compare.  2 subtracts, 2 muls, 2 adds, a compare per object (no branching),  and 6 numbers to track.  Where as box testing requires 4 adds (to align the box to world), 1 to 4 compares with a branch on exit and 8-12 numbers to track (2 boxes can be pre-adjusted to world)
+<br/>
+<br/>
+Hmmm.  Which is faster:
+<br/>
+r0 = address of box struct (xyxy - 32 bits each)
+<br/>
+r1 = adress of 2nd box struct
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+<br/>
+(thumb)
+<br/>
+boxbox: (assume pre-added to world coords)
+<br/>
+push r4-r7
+<br/>
+ldmia [r1]!, r5,r6,r7,r12
+<br/>
+ldmia [r0]!, r1,r2,r3,r4
+<br/>
+mov r0,0
+<br/>
+<br/>
+cmp r1,r5
+<br/>
+blt  end
+<br/>
+cmp r3, r7
+<br/>
+bgt end
+<br/>
+cmp r6,r2
+<br/>
+blt  end
+<br/>
+cmp r12,r4
+<br/>
+blt end
+<br/>
+mov r0,1
+<br/>
+end:
+<br/>
+pop r4-r7
+<br/>
+bx lr
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+r0 = adress of xpos,ypos,squared radius of 1st check
+<br/>
+r1 = adress of xpos,ypos,squared radius of 2nd check
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+circlecircle:
+<br/>
+push r4-r7
+<br/>
+ldmia [r0]!, r2,r3,r4
+<br/>
+ldmia [r1]!, r5,r6,r7
+<br/>
+<br/>
+mov r0,0
+<br/>
+sub r2,r5,r2
+<br/>
+sub r3,r6,r3
+<br/>
+mul r2,r2
+<br/>
+mul r3,r3   @arm would be a mla instruction
+<br/>
+add r2,r2,r3
+<br/>
+add r4,r4,r7
+<br/>
+cmp r2,r4
+<br/>
+bgt end
+<br/>
+mov r0,1 @
+<br/>
+end:
+<br/>
+pop r4-r7
+<br/>
+bx lr
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+So they are pretty equal.  Keep in mind that this will be in a loop and as such will have other registers pulled away - therefore the circle code will tend to be more efficient in terms of register spillage.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#43043 - Puffin - Wed May 18, 2005 4:30 pm</h4>
+    <div class="postbody"><span class="postbody">In addition to the actual code that checks the collisions, if you have a lot of objects, the number of checks you have to do will become very large and you will want to write code to cut these out.
+<br/>
+<br/>
+n objects against n-1 other objects will mean about n?/2 total if you try to check everything.  So, you need to throw out some of these checks.
+<br/>
+<br/>
+Initially, someone suggested the "sector" method to me.  This consists of breaking up the screen into sectors and checking only objects that shared sectors (or neighbor sectors...)  Turns out that this is pretty useless, given the small screen size of the GBA.
+<br/>
+<br/>
+What I've ended up going with is a vertical sorting technique.  First, sort all of the objects by their y coordinates.  Then, you can test to see if objects are within the correct range vertically.  Generally (yes, that's a warning) when one object is out of range, then the rest after it are as well.  So, once the list has been sorted, you can weed out objects that don't need to be tested.
+<br/>
+<br/>
+This is the best idea I've heard so far for eliminating object on object collision tests for the GBA.  Let me know if you all have any improvements or ideas on the matter.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#43051 - sajiimori - Wed May 18, 2005 6:06 pm</h4>
+    <div class="postbody"><span class="postbody">Sectors can still be useful if your world is larger than the screen.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#43057 - Miked0801 - Wed May 18, 2005 7:20 pm</h4>
+    <div class="postbody"><span class="postbody">Yes - sectors work very well in map coords.  For instance, assume that your world is 2048x2048 pixels in size (somewhat small.)  Next assume no actor is larger than say 64x64 pixels (choose your largest actor type base 2).  Now we can do very, very quick cull check.  For each actor, take its outside collision box corner positions  and divide its x and y by 64 (shift of course) then multiply one of the terms (say Y) by an appropriate amount to create an index (here  2048/64 = 32).  This will yield 1 to 4 sectors this actor occupies.  Add it to your favorite data type (me, an array of linked lists with the sector as an index - can you say hash table) and then go through it and only check the actors that are in the same sector against each other.  I've had projects where a couple hundred actors are active at the same time and this technique saved an absolute ton of time (sped up the collision detection by an order of magnitude).</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#43058 - tepples - Wed May 18, 2005 7:26 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sajiimori wrote:</b></span></td> </tr> <tr> <td class="quote">Sectors can still be useful if your world is larger than the screen.</td> </tr></table><span class="postbody">
+<br/>
+Unless you do the typical 1-player scrolling game optimization of returning enemy characters that go off screen to the map and then respawning them when the player scrolls back over them.
+<br/>
+<br/>
+And in the sector method, what do you do when a sprite overlaps a sector boundary, potentially overlapping sprites whose centers lie in an adjacent sector?<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#43060 - sajiimori - Wed May 18, 2005 7:28 pm</h4>
+    <div class="postbody"><span class="postbody">Check them into both sectors.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#43453 - Steve++ - Mon May 23, 2005 6:23 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">And in the sector method, what do you do when a sprite overlaps a sector boundary, potentially overlapping sprites whose centers lie in an adjacent sector?</td> </tr></table><span class="postbody">
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Check them into both sectors.</td> </tr></table><span class="postbody">
+<br/>
+That was my initial solution. An actor could occupy one, two or four sectors. Bad idea. In my collision system, an actor can request a list of actors it collides with. What if actor A occupies sectors 0 and 1 and actor B also occupies sectors 0 and 1? That means when actor A requests a collision list, actor B will occur twice. Eliminating duplicate elements in a list will waste CPU time.
+<br/>
+<br/>
+So instead of checking all sectors to which an actor belongs, make it so an actor belongs to only one sector (where its top-left is positioned) and check neighbouring sectors.
+<br/>
+<br/>
+I like the idea of Y-coordinate sorting. Perhaps that could be combined with X-coordinate sorting in some way.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#43561 - Miked0801 - Tue May 24, 2005 6:49 pm</h4>
+    <div class="postbody"><span class="postbody">So instead of occasionally having to check up to 4 sectors with an actor, you make it so you always have to check 4 sectors?  How does this save time?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#43608 - sajiimori - Wed May 25, 2005 2:55 am</h4>
+    <div class="postbody"><span class="postbody">Collisions are rare compared to non-collisions, and the list of current collisions will hardly ever exceed a few objects, so searching the list before adding a new object is fast compared to checking more sectors than you need to.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#43676 - Steve++ - Wed May 25, 2005 6:09 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">So instead of occasionally having to check up to 4 sectors with an actor, you make it so you always have to check 4 sectors? How does this save time?</td> </tr></table><span class="postbody">
+<br/>
+Actually, nine sectors. I agree, it's not perfect. It's just an idea; a way of avoiding duplicate elements in collision lists. Seriously, there are benefits and trade-offs. The main trade-off is looking at all those sectors. One benefit is less space required to store pointers to objects; the space is also consistent - one pointer per object instead of 1, 2 or 4. Another benefit is that there is no need to check if each element is in the collision list. Yet another benefit is that whenever a sprite is moved, the object manager only needs to calculate the sector location of the top-left corner instead of all four.
+<br/>
+<br/>
+I have tried both methods and I find this one much tidier to implement. A nine-sector collision check isn't really that expensive. It's not like I'm checking all objects against each other anyway. All objects are given a group ID. Objects not having the target group ID are not tested for collision.
+<br/>
+<br/>
+The great thing about these forums is that I often get an idea to improve my own code when I help others. At the moment, I'm using my very own object-pooled linked list code to keep all sorts of lists for actor management. I just thought of writing a class (template actually) whereby the user adds linked lists instead of elements. The iterator will be able to iterate each element in each list seamlessly, as if it was one big list of elements instead of a list of lists of elements. This should make my nine-sector code more pretty. Each sector will have one of these lists of lists, containing that sector's list and the lists of the surrounding sectors.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

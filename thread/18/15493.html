@@ -1,0 +1,1121 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Scrolling scanlines of bitmap bg - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Scrolling scanlines of bitmap bg</h2>
+<div id="posts">
+<div class="post">
+    <h4>#156007 - pawob - Tue May 06, 2008 8:22 am</h4>
+    <div class="postbody"><span class="postbody">I understand that sometimes pasting here a snippet can be like a waste of time, but I have found by myself by trial and error practically all the code I need, the matter is that people voted in my blog that there's a way to:
+<br/>
+<br/>
+1.- Scroll strips using registers or Dma copy, does some patient mind explain or put the code to take a look to know the way to do it?
+<br/>
+<br/>
+I promise I'll do some really interesting things ?Have you play Metal Slug, or Mario vs Luigi?, yeah I'm creating a library that makes possible to do both of them in a easy way and if I knew a better code to improve that it could enhance my free library.
+<br/>
+<br/>
+Thanks everyone<br/>_________________<br/><a href="http://overrider.blogspot.com" target="_blank">http://overrider.blogspot.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#156165 - pawob - Wed May 07, 2008 10:55 am</h4>
+    <div class="postbody"><span class="postbody">I have found a bit information about how to do that, the things to do can be:
+<br/>
+<br/>
+A possibility:
+<br/>
+1.- Change the wait for VBlank function to:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+irqInit(); 
+<br/>
+irqEnable(IRQ_VBLANK); 
+<br/>
+....
+<br/>
+while(1)
+<br/>
+{
+<br/>
+...
+<br/>
+<br/>
+WaitForVBlank() ;
+<br/>
+}
+<br/>
+<br/>
+}
+<br/>
+...
+<br/>
+void WaitForVBlank() 
+<br/>
+{ 
+<br/>
+   #define ScanlineCounter *(volatile u16*)0x4000006 //Counts through the vertical scanlines until we get a blank 
+<br/>
+   while(ScanlineCounter &gt;= 160){ 
+<br/>
+<br/>
+//Here I change  scroll register of the bitmap BG if (Scanline&lt; 30) for instance
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+B possibility
+<br/>
+<br/>
+To do...after every hblank and remove the WaitForVblank and count them, but I think is better the A.
+<br/>
+<br/>
+So, do you recommend to do like the A way?<br/>_________________<br/><a href="http://overrider.blogspot.com" target="_blank">http://overrider.blogspot.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#156167 - eKid - Wed May 07, 2008 11:30 am</h4>
+    <div class="postbody"><span class="postbody">The 'A' way isn't a very good way... Usually your program logic is still being processed during the rendering period (maybe you'll start waiting for vblank at line 50+ or so). Also, it's not very good to poll the scanline counter like that when waiting for vblank, it uses up more battery power. You should be using interrupts and the swiWaitForVBlank() function.
+<br/>
+<br/>
+You can use HDMA to set the scroll register every hblank for you. This way you can write all the values into a small buffer (192 entries, 1 for each line), and tell dma to copy 1 value every hblank.
+<br/>
+<br/>
+psuedocode:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+u16 scroll_buffer[192];
+<br/>
+<br/>
+during program:
+<br/>
+  fill scroll_buffer with values
+<br/>
+<br/>
+during vblank:
+<br/>
+  DMA1CNT = 0;
+<br/>
+  SCROLL_REGISTER = scroll_buffer[0]; // the first line must be set manually
+<br/>
+  DMA1SAD = scroll_buffer+1; // start copying from second line
+<br/>
+  DMA1DAD = &amp;SCROLL_REGISTER;
+<br/>
+  DMA1CNT = ENABLE | START_HBLANK | SRC_INCREMENT | DEST_FIXED;
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+It's a bit hard to explain.. :)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#156275 - pawob - Thu May 08, 2008 11:53 am</h4>
+    <div class="postbody"><span class="postbody">I have found an interesting post:
+<br/>
+<a class="postlink" href="http://forum.gbadev.org/viewtopic.php?t=300&amp;start=0&amp;postdays=0&amp;postorder=asc&amp;highlight=hdma" target="_blank">http://forum.gbadev.org/viewtopic.php?t=300&amp;start=0&amp;postdays=0&amp;postorder=asc&amp;highlight=hdma</a>
+<br/>
+<br/>
+Inside, headspin makes a really interesting snippet (I've been reviewing the video.h... and the registers exists in the NDS, so I suppose can be used.
+<br/>
+<br/>
+But I would modify the code to a snippet like this:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+const u16 offset_data[192] = 
+<br/>
+{ 
+<br/>
+  128,  131,  134,  137,  140,  143,  146,  149, 
+<br/>
+  152,  155,  158,  161,  164,  167,  170,  173, 
+<br/>
+  176,  179,  182,  185,  187,  190,  193,  196, 
+<br/>
+  198,  201,  203,  206,  208,  211,  213,  215, 
+<br/>
+  217,  220,  222,  224,  226,  228,  230,  232, 
+<br/>
+  233,  235,  237,  238,  240,  241,  243,  244, 
+<br/>
+  245,  246,  247,  248,  249,  250,  251,  252, 
+<br/>
+...
+<br/>
+<br/>
+}; 
+<br/>
+<br/>
+#define REG_DISPSTAT   *(u16*)0x4000004 
+<br/>
+#define REG_VCOUNT     *(vu16*)0x4000006 
+<br/>
+#define REG_BG0HOFS    *(u16*)0x4000010 
+<br/>
+#define REG_IE         *(u16*)0x4000200 
+<br/>
+#define REG_IF         *(u16*)0x4000202 
+<br/>
+#define REG_IME        *(u16*)0x4000208 
+<br/>
+<br/>
+#define INT_VBLANK 0x0001 
+<br/>
+#define INT_HBLANK 0x0002 
+<br/>
+typedef void (*fnptr)(void);
+<br/>
+#define REG_INTERRUPT *(fnptr*)(0x03007FFC) //That wasnt in headspin code
+<br/>
+<br/>
+void effect() 
+<br/>
+{ 
+<br/>
+   REG_IME=0; //Desactivate interrupt control
+<br/>
+   REG_IE|=INT_HBLANK; //Flagging up the hblank interrupts
+<br/>
+   REG_DISPSTAT|=(1&lt;&lt;4); //Necessary to use hblank register
+<br/>
+   REG_IME=1; //Activate interrupt control
+<br/>
+} 
+<br/>
+<br/>
+void InterruptHandler(void) 
+<br/>
+{ 
+<br/>
+  u16 temp_reg_if=REG_IF; 
+<br/>
+  
+<br/>
+  REG_IME=0; //Disable interrupt control
+<br/>
+<br/>
+  *((u16*)0x03007ff8) = REG_IF; //We put in BIOS the state of the interrupts activated?
+<br/>
+  
+<br/>
+  if(temp_reg_if &amp; INT_HBLANK) 
+<br/>
+  { 
+<br/>
+      REG_IF |= INT_HBLANK; 
+<br/>
+      REG_BG3HOFS = (offset_data[REG_VCOUNT]) &gt;&gt; 3; // bit shifting makes a smaller wave 
+<br/>
+  } 
+<br/>
+  
+<br/>
+  REG_IME=1; //Activate interrupt control
+<br/>
+} 
+<br/>
+<br/>
+main() 
+<br/>
+{ 
+<br/>
+   REG_INTERRUPT=(u32)&amp;InterruptHandler; 
+<br/>
+<br/>
+   effect(); 
+<br/>
+<br/>
+   for(;;); 
+<br/>
+} 
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+<br/>
+and I have some questions:
+<br/>
+<br/>
+1.- Where is defined REG_INTERRUPT in main, it should be 
+<br/>
+#define REG_INTERRUPT *(fnptr*)(0x03007FFC) for NDS too, is the address of the BIOS interrupts?
+<br/>
+<br/>
+2.- *((u16*)0x03007ff8) = REG_IF; //We put in BIOS the state of the interrupts activated?
+<br/>
+<br/>
+3.- How can I keep the rest of graphics the swiforVblank?<br/>_________________<br/><a href="http://overrider.blogspot.com" target="_blank">http://overrider.blogspot.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#156276 - eKid - Thu May 08, 2008 12:17 pm</h4>
+    <div class="postbody"><span class="postbody">1) REG_INTERRUPT isn't really a register, its a vector that the bios jumps to when an interrupt triggers.
+<br/>
+<br/>
+2) This is for the bios IntrWait SWI's (like swiWaitForVBlank), if you don't write the interrupt flags there then your program will hand when it reaches the vblank wait.
+<br/>
+<br/>
+3) ?
+<br/>
+<br/>
+And um....coding the main interrupt handler in C makes me ill :P
+<br/>
+libnds saves you a bit of hassle with a nice interrupt handler.
+<br/>
+This is a bit more elegant <span style="font-style: italic">in my opinion</span>:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#include &lt;nds.h&gt;
+<br/>
+#include &lt;registers_alt.h&gt; // this wont be needed soon!
+<br/>
+<br/>
+const u16 offset_data[160] = // &lt;- error? ds has 192 lines, not 160
+<br/>
+{
+<br/>
+   128,  131,  134,  137,  140,  143,  146,  149,
+<br/>
+   152,  155,  158,  161,  164,  167,  170,  173,
+<br/>
+   176,  179,  182,  185,  187,  190,  193,  196,
+<br/>
+   198,  201,  203,  206,  208,  211,  213,  215,
+<br/>
+   217,  220,  222,  224,  226,  228,  230,  232,
+<br/>
+   233,  235,  237,  238,  240,  241,  243,  244,
+<br/>
+   245,  246,  247,  248,  249,  250,  251,  252,
+<br/>
+...
+<br/>
+<br/>
+};
+<br/>
+<br/>
+void HBlank_Interrupt(void)
+<br/>
+{
+<br/>
+   REG_BG3HOFS = (offset_data[REG_VCOUNT]) &gt;&gt; 3; // bit shifting makes a smaller wave
+<br/>
+}
+<br/>
+<br/>
+main()
+<br/>
+{
+<br/>
+   irqInit(); // initialize libnds irq handler
+<br/>
+   irqSet( IRQ_HBLANK, HBlank_Interrupt ); // set hblank interrupt
+<br/>
+   irqEnable( IRQ_HBLANK ); // enable hblank interrupt
+<br/>
+   
+<br/>
+   for(;;);
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#156308 - pawob - Thu May 08, 2008 8:51 pm</h4>
+    <div class="postbody"><span class="postbody">I have follow your steps and I have my main like:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+int _val=0;
+<br/>
+<br/>
+void HBlank_Interrupt(void) 
+<br/>
+{ 
+<br/>
+<br/>
+   REG_BG2HOFS =_val;
+<br/>
+<br/>
+}
+<br/>
+      
+<br/>
+int main()
+<br/>
+{
+<br/>
+   
+<br/>
+   REG_POWERCNT = POWER_ALL_2D;
+<br/>
+   
+<br/>
+   irqInit(); // initialize libnds irq handler 
+<br/>
+    
+<br/>
+   irqSet( IRQ_HBLANK, HBlank_Interrupt ); // set hblank interrupt 
+<br/>
+    irqEnable( IRQ_HBLANK ); // enable hblank interrupt 
+<br/>
+   
+<br/>
+   FullMainVideo();
+<br/>
+   
+<br/>
+   Levels level;
+<br/>
+               //BG0      //BG1        //BG2      //BG3
+<br/>
+   level.Load(tileset0_bmp,tileset1_bmp,park0_bmp,park1_bmp,Map1,Map2,208,16);
+<br/>
+   level.Show();
+<br/>
+   
+<br/>
+<br/>
+   while(1)
+<br/>
+   {
+<br/>
+   
+<br/>
+   if(++_val&gt;100)
+<br/>
+    _val=0;
+<br/>
+   
+<br/>
+   //swiWaitForVBlank();
+<br/>
+   }
+<br/>
+<br/>
+   return 0;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+When I run it, the bg2 doesn't scroll any line but theorically it should
+<br/>
+Is necessary to activate another register or something special?<br/>_________________<br/><a href="http://overrider.blogspot.com" target="_blank">http://overrider.blogspot.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#156313 - Maxxie - Thu May 08, 2008 9:00 pm</h4>
+    <div class="postbody"><span class="postbody">Your val is not volatile, and thus kept in register rather then writing it back to the memory in your loop.
+<br/>
+So that your hblank never notice any change in val, as it looks at the memory.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#156387 - pawob - Fri May 09, 2008 8:28 am</h4>
+    <div class="postbody"><span class="postbody">In my whole life as developer I used volatile (I don't renember using that), so I have to put sth like:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+volatile int _val=0; 
+<br/>
+<br/>
+void HBlank_Interrupt(void) 
+<br/>
+{ 
+<br/>
+<br/>
+   REG_BG2HOFS =_val; 
+<br/>
+<br/>
+} ...
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+And that's all? I'll try and I'll tell.
+<br/>
+<br/>
+P.S. After looking for "volatile" I found out that is to be able to change the value when there are subprocesses in the machine, so... NDS has sth like threads and processes? A bit more and has an OS :)<br/>_________________<br/><a href="http://overrider.blogspot.com" target="_blank">http://overrider.blogspot.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#156389 - Maxxie - Fri May 09, 2008 9:37 am</h4>
+    <div class="postbody"><span class="postbody">No there is no threading in the default setup (there are some libs, but most times you dont need them)
+<br/>
+<br/>
+But IRQs can happen at any time too, which requires consistency in the memory corresponding to the variable. However non volatile data can be optimized so that read/writes are reduced as it is not expected that the value will be changed or read by "others" like the IRQ.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#156390 - Dwedit - Fri May 09, 2008 9:38 am</h4>
+    <div class="postbody"><span class="postbody">No threads or processes, just interrupts.  Interrupts make a program sort-of "threaded", but there's no operating system.  Usually the stack for interrupts is very tiny.
+<br/>
+<br/>
+For better performance, it is usually better to use HBlank DMA instead of hblank IRQs.
+<br/>
+<br/>
+With hblank IRQs, the processor gets interrupted, goes to the BIOS interrupt handler, goes to the libnds interrupt handler, then finally gets to your interrupt handler.  Lots of overhead.  Use HDMA instead, so instead of all that stack pushing and popping, it (possibly) pauses the CPU for the short duration to transfer 1 word.  Only downside to HDMA is that it uses up one of the four DMA channels.
+<br/>
+<br/>
+To do hblank DMA:
+<br/>
+You build an array of scroll values per scanline
+<br/>
+Make a vblank interrupt handler
+<br/>
+At vblank:
+<br/>
+  Write the first value to the register (because HDMA starts with the second scanline)
+<br/>
+  Set up your HDMA transfer.  Set the source to be the address of the second item in the array.  Set the destination to be the register.  Set the word count to 1, width to 16 bits.  Make the destination address either fixed or increment/reload.  Make the dma happen on HBlank.
+<br/>
+<br/>
+sorry, too tired to provide code right now...<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#156396 - eKid - Fri May 09, 2008 12:12 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Dwedit wrote:</b></span></td> </tr> <tr> <td class="quote">Only downside to HDMA is that it uses up one of the four DMA channels.</td> </tr></table><span class="postbody">
+<br/>
+Not much else to use DMA on. :P
+<br/>
+Unlike GBA which had two channels used up for sound...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#156409 - pawob - Fri May 09, 2008 1:45 pm</h4>
+    <div class="postbody"><span class="postbody">Thanks Dwedit, I understand with the las method I stop for 192 times the CPU and its a nonsense, If dma works is the best way I suppose if I made only a small code with the bitmaps.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Make the dma happen on HBlank </td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I'll look for in the older posts about, thanks again[/quote]<br/>_________________<br/><a href="http://overrider.blogspot.com" target="_blank">http://overrider.blogspot.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#156449 - pawob - Fri May 09, 2008 10:39 pm</h4>
+    <div class="postbody"><span class="postbody">Before trying HDMA i want to try hblank. The goal I want is to scroll only a strip of the bg2, so I want to explain myself:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+volatile int _val=0;
+<br/>
+<br/>
+void HBlank_Interrupt(void) 
+<br/>
+{ 
+<br/>
+   BG2_CX =_val&lt;&lt;8;
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+1.- I dont know why REG_BG2HOFS doesn't work and BG2_CX works, is deprecated? only for gba?
+<br/>
+2.-  BG2_CX works but of course makes a tangled effect, but the idea is:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+volatile int _val=0;
+<br/>
+<br/>
+void HBlank_Interrupt(void) 
+<br/>
+{ 
+<br/>
+if(REG_VCOUNT&lt;30)
+<br/>
+   BG2_CX =_val&lt;&lt;8;
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Is REG_VCOUNT unreadable for DS?, is deprecated?<br/>_________________<br/><a href="http://overrider.blogspot.com" target="_blank">http://overrider.blogspot.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#156453 - Dwedit - Sat May 10, 2008 1:09 am</h4>
+    <div class="postbody"><span class="postbody">Are you scrolling a bitmap, tilemap, or affine layer?  Tilemaps and affine layers scroll differently.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#156463 - eKid - Sat May 10, 2008 4:27 am</h4>
+    <div class="postbody"><span class="postbody">HOFS/VOFS are for scrolling a tilemap layer.
+<br/>
+CX/CY (reference point registers) are for offsetting bitmap layers. They are in fixed point format so 256 = 1 pixel.
+<br/>
+Also, be careful with setting those registers during hblank, they might not work as you expect:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>GBATEK wrote:</b></span></td> </tr> <tr> <td class="quote"><span style="font-weight: bold">Internal Reference Point Registers</span>
+<br/>
+The above reference points are automatically copied to internal registers during each vblank, specifying the origin for the first scanline. The internal registers are then incremented by dmx and dmy after each scanline.
+<br/>
+<span style="font-style: italic">Caution: Writing to a reference point register by software outside of the Vblank period does immediately copy the new value to the corresponding internal register, that means: in the current frame, the new value specifies the origin of the &lt;current&gt; scanline (instead of the topmost scanline).</span></td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#156657 - pawob - Mon May 12, 2008 8:43 am</h4>
+    <div class="postbody"><span class="postbody">I'm scrolling a bitmap bg (when I control this I'll try with the tile bgs). Well the code "works" with CX, the matter is of course is uncontrollable, because I put only to scroll if VCOUNT&lt;100 (for instance), but the result is a scrolling maddness, I'm not sure exactly why, because in theory, in hblank if I set the scroll it should scroll only the next or actual line, am I wrong?.
+<br/>
+<br/>
+Well taking care, this is not working as I want, I'll do via HDMA, so if a charming soul :p, places a snnipet in libnds way, I'll try to make shaking, water and else effects. 
+<br/>
+<br/>
+Thanks everyone<br/>_________________<br/><a href="http://overrider.blogspot.com" target="_blank">http://overrider.blogspot.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#156673 - pawob - Mon May 12, 2008 3:31 pm</h4>
+    <div class="postbody"><span class="postbody">I have just found a good example about what I'm trying to do and I'll try to port using only libnds:
+<br/>
+<br/>
+<a href="http://www.dev-fr.org/demos-techniques/" target="_blank">http://www.dev-fr.org/demos-techniques/</a>(demo)-hbl-et-scrolling/
+<br/>
+<br/>
+So I have to take care of the code of the next functions:
+<br/>
+<br/>
+1.- PA_InitVBL();
+<br/>
+2.- irqSet(IRQ_HBLANK, HBL_function);  
+<br/>
+     irqEnable(IRQ_HBLANK);
+<br/>
+3.- PA_BGScrollX(0, 1, layerscroll);
+<br/>
+4.- PA_WaitForVBL();
+<br/>
+<br/>
+If those functions are similar to the libnds, it will be a piece of cake, Does anyone knows if any of this functions has something special?<br/>_________________<br/><a href="http://overrider.blogspot.com" target="_blank">http://overrider.blogspot.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#156674 - eKid - Mon May 12, 2008 3:45 pm</h4>
+    <div class="postbody"><span class="postbody">1) PA_InitVBL is probably something like irqEnable( IRQ_VBLANK )
+<br/>
+2) is already libnds functions
+<br/>
+3) not sure which scroll registers it sets
+<br/>
+4) probably equivalent to swiWaitForVBlank()</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#156707 - Dwedit - Mon May 12, 2008 11:34 pm</h4>
+    <div class="postbody"><span class="postbody">You can also use a Vcount interrupt to start and stop DMA.  So if you want a wavy scrolling background between scanlines 32 and 100, you can set up a VCOUNT interrupt for scanline 32, copy initial register value and set up hblank DMA, and also set a vcount interrupt for line 100.  Then at scanline 100, cancel HDMA, and maybe write a new scrolling value.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#156714 - pawob - Tue May 13, 2008 7:47 am</h4>
+    <div class="postbody"><span class="postbody">Well, here come the good news, the next code WORKS!! (on emulator and Real hardware):
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+u16 _val=0;
+<br/>
+<br/>
+void HBL_function(void){
+<br/>
+   s16 vcount = REG_VCOUNT; if(vcount &gt; 192) vcount = 0; // Loop
+<br/>
+<br/>
+   if((vcount &gt;= 0)&amp;&amp;(vcount &lt; 67)) BG2_CX =_val&lt;&lt;8; // Normal
+<br/>
+   else if(vcount &lt; 78) BG2_CX =_val&lt;&lt;6; 
+<br/>
+   else if(vcount &lt; 86) BG2_CX =_val&lt;&lt;4; 
+<br/>
+   else if(vcount &lt; 145) BG2_CX =_val&lt;&lt;6;   
+<br/>
+   else BG2_CX =_val&lt;&lt;8; // Normal  
+<br/>
+}   
+<br/>
+<br/>
+int main()
+<br/>
+{
+<br/>
+   
+<br/>
+   REG_POWERCNT = POWER_ALL_2D;
+<br/>
+   
+<br/>
+   irqInit(); // initialize libnds irq handler 
+<br/>
+    
+<br/>
+   irqSet(IRQ_VBLANK, 0); 
+<br/>
+   irqEnable(IRQ_VBLANK);
+<br/>
+   
+<br/>
+   irqSet( IRQ_HBLANK, HBL_function ); // set hblank interrupt 
+<br/>
+       irqEnable( IRQ_HBLANK ); // enable hblank interrupt 
+<br/>
+   
+<br/>
+   FullMainVideo();
+<br/>
+   
+<br/>
+   Levels level;
+<br/>
+               //BG0      //BG1        //BG2      //BG3
+<br/>
+   level.Load(tileset0_bmp,tileset1_bmp,park0_bmp,park1_bmp,Map1,Map2,208,16);
+<br/>
+   level.Show();
+<br/>
+   
+<br/>
+<br/>
+   while(1)
+<br/>
+   {
+<br/>
+   
+<br/>
+   if(++_val&gt;255)
+<br/>
+    _val=0;
+<br/>
+   swiWaitForVBlank();
+<br/>
+   }
+<br/>
+<br/>
+   return 0;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I hope you find interesting, because you can try experiments, but now the bad news. As Dwedit said it consumes CPU a lot, because if I use the emulator DSmume, tell its at 120% more or less, So it's interesting but now I have to find out how to do with hdma because we dont want a one minute game :p<br/>_________________<br/><a href="http://overrider.blogspot.com" target="_blank">http://overrider.blogspot.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#156715 - Dwedit - Tue May 13, 2008 8:06 am</h4>
+    <div class="postbody"><span class="postbody">If you're dividing the screen into sections like that, you probably should use Vcount interrupts instead of HDMA.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#156716 - pawob - Tue May 13, 2008 8:23 am</h4>
+    <div class="postbody"><span class="postbody">Do you think it'll reduce the CPU using the VCOUNT interrupt? is not another interrupt consuming CPU? What I want know is a way to do reducing the consumption. Do you got any interesting snippet?<br/>_________________<br/><a href="http://overrider.blogspot.com" target="_blank">http://overrider.blogspot.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#156717 - Dwedit - Tue May 13, 2008 8:40 am</h4>
+    <div class="postbody"><span class="postbody">I think the cost of doing vcount interrupts is probably less than the cost of filling a 384 byte buffer and using HDMA, but I haven't worked out the exact cycle cost of both approaches.
+<br/>
+Vcount interrupts let you trigger an interrupt on a specific scanline number, then inside the interrupt handler, you set a new interrupt and scanline number.
+<br/>
+<br/>
+Edit: Now that I think about it, HDMA is probably faster in the end.  I guess you should just go for HDMA, since you can use any scroll pattern with the same code.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#156719 - eKid - Tue May 13, 2008 9:06 am</h4>
+    <div class="postbody"><span class="postbody">Using Vcount gets a bit messy because the interrupt triggers at the beginning of the line (while its rendering). Thus you need to add the overhead of enabling the hblank interrupt inside the vcount interrupt. Then change the scroll register in the hblank interrupt, and then finally disable the hblank interrupt. Filling an HDMA buffer would probably be much less work.
+<br/>
+<br/>
+EDIT: Or, if you want to be tricky, you can enable a tiny HDMA transfer in vcount interrupt to write the next value of the scroll register. :P</span><span class="gensmall"><br/><br/>Last edited by eKid on Tue May 13, 2008 9:09 am; edited 1 time in total</span></div>    
+</div>
+<div class="post">
+    <h4>#156720 - Dwedit - Tue May 13, 2008 9:08 am</h4>
+    <div class="postbody"><span class="postbody">I didn't test this:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+u16 _val=0;
+<br/>
+u16 hdma_scroll_data[192];
+<br/>
+<br/>
+void vblank_handler()
+<br/>
+{
+<br/>
+   //fill hdma_scroll_data with your scrolling data
+<br/>
+   int line;
+<br/>
+   int limit;
+<br/>
+<br/>
+   u16 val=_val;
+<br/>
+   u16 scroll_value;
+<br/>
+<br/>
+   line=0;
+<br/>
+   
+<br/>
+   scroll_value=val&lt;&lt;8;
+<br/>
+   limit=67;
+<br/>
+   for (line=line;line&lt;limit;line++) hdma_scroll_data[line]=scroll_value;
+<br/>
+<br/>
+   scroll_value=val&lt;&lt;6;
+<br/>
+   limit=78;
+<br/>
+   for (line=line;line&lt;limit;line++) hdma_scroll_data[line]=scroll_value;
+<br/>
+<br/>
+   scroll_value=val&lt;&lt;4;
+<br/>
+   limit=86;
+<br/>
+   for (line=line;line&lt;limit;line++) hdma_scroll_data[line]=scroll_value;
+<br/>
+<br/>
+   scroll_value=val&lt;&lt;6;
+<br/>
+   limit=145;
+<br/>
+   for (line=line;line&lt;limit;line++) hdma_scroll_data[line]=scroll_value;
+<br/>
+<br/>
+   scroll_value=val&lt;&lt;8;
+<br/>
+   limit=192;
+<br/>
+   for (line=line;line&lt;limit;line++) hdma_scroll_data[line]=scroll_value;
+<br/>
+   
+<br/>
+   //flush cache so that you don't get old data
+<br/>
+   DC_FlushRange(&amp;hdma_scroll_data[0],192*2);
+<br/>
+   
+<br/>
+   //copy first line
+<br/>
+   BG2_CX = hdma_scroll_data[0];
+<br/>
+   
+<br/>
+   //Do the HDMA, will happen during hblank
+<br/>
+   DMA0_SRC=(u32) &amp;hdma_scroll_data[1];
+<br/>
+   DMA0_DEST=(u32) &amp;BG2_CX;
+<br/>
+   DMA0_CR = 1 | DMA_ENABLE | DMA_START_HBL | DMA_16_BIT | DMA_SRC_INC | DMA_DST_RESET | DMA_REPEAT;   //transfer 1 halfword of data
+<br/>
+   
+<br/>
+}
+<br/>
+<br/>
+<br/>
+</td> </tr></table><span class="postbody"><br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#156726 - pawob - Tue May 13, 2008 10:29 am</h4>
+    <div class="postbody"><span class="postbody">I haven't tried the next code:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+u16 _val=0; 
+<br/>
+u16 hdma_scroll_data[192];
+<br/>
+int limits[10]; //Define up to 10 strips////Thats just a example, you can use malloc
+<br/>
+int speeds[10]; //Define up to 10 speeds
+<br/>
+<br/>
+void vblank_handler() 
+<br/>
+{ 
+<br/>
+   //fill hdma_scroll_data with your scrolling data 
+<br/>
+   int line; 
+<br/>
+   int limit; i;
+<br/>
+<br/>
+   u16 val=_val; 
+<br/>
+   u16 scroll_value; 
+<br/>
+<br/>
+   line=0; 
+<br/>
+<br/>
+int n_limits=5;
+<br/>
+limits[0]=67;limits[1]=78;limits[2]=86;limits[3]=145;limits[4]=192;
+<br/>
+speeds[0]=8; speeds[1]=6; speeds[2]=4; speeds[3]=6;  speeds[4]=8;
+<br/>
+<br/>
+while (line&lt;193) {
+<br/>
+<br/>
+  if(line&lt;=limits[i])
+<br/>
+     scroll_value=val&lt;&lt;speeds[i];
+<br/>
+  else { //if(i&lt;n_limits-1) {
+<br/>
+     i++; scroll_value=val&lt;&lt;speeds[i]; }
+<br/>
+<br/>
+hdma_scroll_data[line]=scroll_value;
+<br/>
+line++;
+<br/>
+}
+<br/>
+<br/>
+//flush cache so that you don't get old data 
+<br/>
+   DC_FlushRange(&amp;hdma_scroll_data[0],192*2); 
+<br/>
+    
+<br/>
+   //copy first line 
+<br/>
+   BG2_CX = hdma_scroll_data[0]; 
+<br/>
+    
+<br/>
+   //Do the HDMA, will happen during hblank 
+<br/>
+   DMA0_SRC=(u32) &amp;hdma_scroll_data[1]; 
+<br/>
+   DMA0_DEST=(u32) &amp;BG2_CX; 
+<br/>
+   DMA0_CR = 1 | DMA_ENABLE | DMA_START_HBL | DMA_16_BIT | DMA_SRC_INC | DMA_DST_RESET | DMA_REPEAT;   //transfer 1 halfword of data 
+<br/>
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I'll try both of them to take a look about performance (Since I was a noob  I learned the simplest operations are logic ops and the for creates a maddness plenty of code). It's only optimization not rowing. Obviously thanks for your great help Dwedit<br/>_________________<br/><a href="http://overrider.blogspot.com" target="_blank">http://overrider.blogspot.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#156727 - pawob - Tue May 13, 2008 11:22 am</h4>
+    <div class="postbody"><span class="postbody">I thinks is better:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+while (line&lt;193) { 
+<br/>
+<br/>
+  if(line&gt;limits[i])
+<br/>
+     i++; 
+<br/>
+<br/>
+hdma_scroll_data[line]=val&lt;&lt;speeds[i]; 
+<br/>
+line++; 
+<br/>
+} 
+<br/>
+</td> </tr></table><span class="postbody"><br/>_________________<br/><a href="http://overrider.blogspot.com" target="_blank">http://overrider.blogspot.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#156745 - pawob - Tue May 13, 2008 4:38 pm</h4>
+    <div class="postbody"><span class="postbody">I have tested your code Dwedit both in dsemume and real hardware:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+u16 _val=0; 
+<br/>
+u16 hdma_scroll_data[192]; 
+<br/>
+<br/>
+void vblank_handler() 
+<br/>
+{ 
+<br/>
+   //fill hdma_scroll_data with your scrolling data 
+<br/>
+   int line; 
+<br/>
+   int limit; 
+<br/>
+<br/>
+   u16 val=_val; 
+<br/>
+   u16 scroll_value; 
+<br/>
+<br/>
+   line=0; 
+<br/>
+    
+<br/>
+   scroll_value=val&lt;&lt;8; 
+<br/>
+   limit=67; 
+<br/>
+   for (line=line;line&lt;limit;line++) hdma_scroll_data[line]=scroll_value; 
+<br/>
+<br/>
+   scroll_value=val&lt;&lt;6; 
+<br/>
+   limit=78; 
+<br/>
+   for (line=line;line&lt;limit;line++) hdma_scroll_data[line]=scroll_value; 
+<br/>
+<br/>
+   scroll_value=val&lt;&lt;4; 
+<br/>
+   limit=86; 
+<br/>
+   for (line=line;line&lt;limit;line++) hdma_scroll_data[line]=scroll_value; 
+<br/>
+<br/>
+   scroll_value=val&lt;&lt;6; 
+<br/>
+   limit=145; 
+<br/>
+   for (line=line;line&lt;limit;line++) hdma_scroll_data[line]=scroll_value; 
+<br/>
+<br/>
+   scroll_value=0&lt;&lt;8; 
+<br/>
+   limit=192; 
+<br/>
+   for (line=line;line&lt;limit;line++) hdma_scroll_data[line]=scroll_value; 
+<br/>
+    
+<br/>
+   //flush cache so that you don't get old data 
+<br/>
+   DC_FlushRange(&amp;hdma_scroll_data[0],192*2); 
+<br/>
+    
+<br/>
+   //copy first line 
+<br/>
+   BG2_CX = hdma_scroll_data[0]; 
+<br/>
+    
+<br/>
+   //Do the HDMA, will happen during hblank 
+<br/>
+   DMA0_SRC=(u32) &amp;hdma_scroll_data[1]; 
+<br/>
+   DMA0_DEST=(u32) &amp;BG2_CX; 
+<br/>
+   DMA0_CR = 1 | DMA_ENABLE | DMA_START_HBL | DMA_16_BIT | DMA_SRC_INC | DMA_DST_RESET | DMA_REPEAT;   //transfer 1 halfword of data 
+<br/>
+    
+<br/>
+} 
+<br/>
+<br/>
+      
+<br/>
+int main()
+<br/>
+{
+<br/>
+   
+<br/>
+   REG_POWERCNT = POWER_ALL_2D;
+<br/>
+   
+<br/>
+   irqInit(); // initialize libnds irq handler 
+<br/>
+    
+<br/>
+   irqSet(IRQ_VBLANK, vblank_handler); 
+<br/>
+   irqEnable(IRQ_VBLANK);
+<br/>
+   
+<br/>
+   //irqSet( IRQ_HBLANK, HBL_function ); // set hblank interrupt 
+<br/>
+    //irqEnable( IRQ_HBLANK ); // enable hblank interrupt 
+<br/>
+   
+<br/>
+   FullMainVideo();
+<br/>
+   
+<br/>
+   Levels level;
+<br/>
+               //BG0      //BG1        //BG2      //BG3
+<br/>
+   level.Load(tileset0_bmp,tileset1_bmp,park0_bmp,park1_bmp,Map1,Map2,208,16);
+<br/>
+   level.Show();
+<br/>
+   
+<br/>
+<br/>
+   while(1)
+<br/>
+   {
+<br/>
+   
+<br/>
+   if(++_val&gt;255)
+<br/>
+    _val=0;
+<br/>
+    
+<br/>
+    
+<br/>
+   
+<br/>
+   swiWaitForVBlank();
+<br/>
+   }
+<br/>
+<br/>
+   return 0;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+The code is like BG2_CX affects to the whole bg2, not by scanlines strips, so might be have to be in another interrupt time?<br/>_________________<br/><a href="http://overrider.blogspot.com" target="_blank">http://overrider.blogspot.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#156928 - pawob - Fri May 16, 2008 8:32 am</h4>
+    <div class="postbody"><span class="postbody">At the end I try my snippet in the last version of dsmume, working at 64 fps so I think 192 interrupts per second are not enough for our strong NDS. I have decided to use as good enough, if you are interested, take a look on my blog on the weekend, I'll put some videos to show its real.
+<br/>
+<br/>
+Only a question, if you have a link to a web (like oldies dos scene projects) with routines of making scanline effects I'll try to add to my code.
+<br/>
+<br/>
+Thanks for the help of everyone, "It's all in the details, Sawyer"<br/>_________________<br/><a href="http://overrider.blogspot.com" target="_blank">http://overrider.blogspot.com</a></span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

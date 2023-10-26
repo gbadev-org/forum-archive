@@ -1,0 +1,657 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>SMF Library (Timer issue & maybe some other problems) - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > SMF Library (Timer issue & maybe some other problems)</h2>
+<div id="posts">
+<div class="post">
+    <h4>#177414 - hacker013 - Thu May 31, 2012 5:05 pm</h4>
+    <div class="postbody"><span class="postbody">I was bored so I started again trying to get the spinal movie player code to work and in lib form. This where my results (is using gba-jpeg &amp; libfb from dragonminded (fixed to work with latest libnds)):
+<br/>
+<br/>
+smf.h
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#ifndef IMLIB_SMF
+<br/>
+#define IMLIB_SMF
+<br/>
+<br/>
+#include &lt;nds.h&gt;
+<br/>
+#include "gba-jpeg.h"
+<br/>
+#include "gba-jpeg-decode.h"
+<br/>
+#include "libcommon.h"
+<br/>
+<br/>
+struct VIDEO_HEADER
+<br/>
+{
+<br/>
+  short   height;
+<br/>
+  int      framecount;
+<br/>
+  int      vidoffset;
+<br/>
+  int      taboffset;
+<br/>
+} vidhead;
+<br/>
+<br/>
+FILE* vidFile;
+<br/>
+u32 rawSize = 11500; // 22050/12 = 1/12 second of sound?
+<br/>
+u32 audio_offset = 0; //was 58
+<br/>
+u16 sndBufPointer = 0;
+<br/>
+u32 frame_offset;
+<br/>
+u16 frame_count=0;
+<br/>
+u16 pixSize=0;
+<br/>
+<br/>
+char* pixBuf;
+<br/>
+char* buffer;
+<br/>
+char* bitmap;
+<br/>
+<br/>
+bool smf_play(char* filename);
+<br/>
+void smf_update_frame();
+<br/>
+void smf_update_sound();
+<br/>
+void smf_stop();
+<br/>
+<br/>
+#endif
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+smf.c
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#include "smf.h"
+<br/>
+<br/>
+/*
+<br/>
+  Original movie player by Spinal
+<br/>
+  Redesign by Faust IMetal
+<br/>
+  
+<br/>
+  Requires timer 1 and 2
+<br/>
+  
+<br/>
+  - Rewritten for LibFB
+<br/>
+  - Removed PALib depedencie
+<br/>
+  - 
+<br/>
+*/
+<br/>
+<br/>
+void smf_update_frame()
+<br/>
+{
+<br/>
+   fseek (vidFile , frame_offset, SEEK_SET);
+<br/>
+   fread(&amp;pixSize,2,1,vidFile);
+<br/>
+   memset(pixBuf,0,16000);   // 98304
+<br/>
+   fread(pixBuf, 1, pixSize, vidFile);
+<br/>
+   frame_offset+=2+pixSize;
+<br/>
+   JPEG_DecompressImage(pixBuf, &amp;bitmap, 256, 192);
+<br/>
+         
+<br/>
+   fb_setBG(&amp;bitmap);
+<br/>
+   frame_count++;
+<br/>
+   if(vidhead.framecount &lt; frame_count)
+<br/>
+   {
+<br/>
+      smf_stop();
+<br/>
+   }
+<br/>
+}
+<br/>
+<br/>
+void smf_update_sound()
+<br/>
+{
+<br/>
+   soundPlaySample(&amp;buffer[sndBufPointer * rawSize], SoundFormat_16Bit, (u32)rawSize, 11025, 127, 64, 0, 0);
+<br/>
+   sndBufPointer++;
+<br/>
+   if (sndBufPointer == 4) sndBufPointer = 0;
+<br/>
+   audio_offset=(58+(float)1837.5*(frame_count+6)); // 1837.5 = 22050/12
+<br/>
+   audio_offset = audio_offset &gt;&gt;1 &lt;&lt;1; // must be even number for some reason.
+<br/>
+   fseek (vidFile , audio_offset , SEEK_SET);
+<br/>
+   fread(&amp;buffer[sndBufPointer * rawSize],1,rawSize,vidFile);
+<br/>
+}
+<br/>
+<br/>
+void smf_stop()
+<br/>
+{
+<br/>
+   fclose(vidFile);
+<br/>
+   free(bitmap);
+<br/>
+   free(buffer);
+<br/>
+   free(pixBuf);
+<br/>
+   timerStop(1);
+<br/>
+   timerStop(2);
+<br/>
+}
+<br/>
+<br/>
+bool smf_play(char* filename)
+<br/>
+{
+<br/>
+   soundEnable();
+<br/>
+<br/>
+   pixBuf = (char*) malloc(16000);
+<br/>
+   if(pixBuf==NULL) return false;
+<br/>
+   buffer = (char*) malloc (sizeof(char)*rawSize*4);
+<br/>
+   if(buffer==NULL) return false;
+<br/>
+   bitmap = (char*) malloc(256*192*2);
+<br/>
+   if(buffer==NULL) return false;
+<br/>
+<br/>
+<br/>
+   int frm_number[250]; // 250 frame numbers for progress bar
+<br/>
+   int frm_offset[250]; // 250 locations for progress bar
+<br/>
+   
+<br/>
+   vidFile = fopen (filename, "rb"); //rb = read
+<br/>
+   if(vidFile==NULL) return false;
+<br/>
+   
+<br/>
+   // read the file header
+<br/>
+   fread(&amp;vidhead.height,2,1,vidFile); // either 192 or 144   
+<br/>
+   fread(&amp;vidhead.framecount,4,1,vidFile);
+<br/>
+   fread(&amp;vidhead.vidoffset,4,1,vidFile);
+<br/>
+   fread(&amp;vidhead.taboffset,4,1,vidFile);
+<br/>
+   // read the progress bar data
+<br/>
+   fseek (vidFile , vidhead.taboffset , SEEK_SET);
+<br/>
+   fread(&amp;frm_offset[0],4,250,vidFile);
+<br/>
+   fread(&amp;frm_number[0],4,250,vidFile);
+<br/>
+<br/>
+    frame_offset = vidhead.vidoffset;
+<br/>
+<br/>
+   // Set timers
+<br/>
+   timerStart(1, ClockDivider_1024, TIMER_FREQ_1024(12), smf_update_sound);
+<br/>
+   timerStart(2, ClockDivider_1024, TIMER_FREQ_1024(12), smf_update_frame); // 1024/12=85.3333333 (from old palib based code for calc the timer :S
+<br/>
+   return true;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+ - <a class="postlink" href="http://imetal.tk/data/ndsdev/smf/test.smf" target="_blank">Some test smf file</a> This one does work correctly in the spinal movie player (made in 2008 for neo contest)
+<br/>
+ - <a class="postlink" href="http://imetal.tk/data/ndsdev/smf/originalsourcespinal.zip" target="_blank">Original source from Spinal</a>
+<br/>
+<br/>
+First the whole code was in the smf_play function, it did run but after a few seconds it hung (I ques it is a memory leak). Then I tried to move it in a library from with easy to use functions and instead of counting the ticks from the timer to use the timer callbacks. But now it doesn't play anymore. Does someone see where I could have made a mistake ?
+<br/>
+<br/>
+~Hacker013
+<br/>
+<br/>
+EDIT:
+<br/>
+- Added Original source from Spinal.
+<br/>
+- Added some test smf file.
+<br/>
+<br/>
+EDIT2:
+<br/>
+<br/>
+I fixed the code some bit, it now hangs after a few seconds. I hope you guys can see whats wrong ^^
+<br/>
+<br/>
+smf.h
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#ifndef SMF_LIB_INCLUDE
+<br/>
+#define SMF_LIB_INCLUDE
+<br/>
+<br/>
+#ifdef __cplusplus
+<br/>
+extern "C" {
+<br/>
+#endif
+<br/>
+<br/>
+#include &lt;nds.h&gt;
+<br/>
+<br/>
+bool smf_play(char* filename);
+<br/>
+void smf_update_frame();
+<br/>
+void smf_update_sound();
+<br/>
+void smf_update();
+<br/>
+void smf_stop();
+<br/>
+<br/>
+#ifdef __Cplusplus
+<br/>
+}
+<br/>
+#endif
+<br/>
+<br/>
+#endif
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+smf.c
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+/*
+<br/>
+  Original movie player by Spinal
+<br/>
+  Redesign by Faust IMetal
+<br/>
+  
+<br/>
+  Requires timer 1 and 2
+<br/>
+  
+<br/>
+  - Rewritten for LibFB
+<br/>
+  - Removed PALib depedencie
+<br/>
+*/
+<br/>
+<br/>
+#include "smf.h"
+<br/>
+<br/>
+#ifdef __cplusplus
+<br/>
+extern "C" {
+<br/>
+#endif
+<br/>
+<br/>
+#include &lt;nds.h&gt;
+<br/>
+#include "libcommon.h" //Frame Buffer
+<br/>
+#include "gba-jpeg-decode.h" //JPEG Decoding
+<br/>
+<br/>
+struct VIDEO_HEADER
+<br/>
+{
+<br/>
+  short   height;
+<br/>
+  int      framecount;
+<br/>
+  int      vidoffset;
+<br/>
+  int      taboffset;
+<br/>
+} vidhead;
+<br/>
+<br/>
+FILE* vidFile;
+<br/>
+u32 rawSize = 11500; // 22050/12 = 1/12 second of sound?
+<br/>
+u32 audio_offset = 0; //was 58
+<br/>
+u16 sndBufPointer = 0;
+<br/>
+u32 frame_offset;
+<br/>
+u16 frame_count=0;
+<br/>
+u16 pixSize=0;
+<br/>
+<br/>
+bool smf_playing=false;
+<br/>
+<br/>
+char* pixBuf;
+<br/>
+char* buffer;
+<br/>
+u16* bitmap;
+<br/>
+<br/>
+void smf_update_frame()
+<br/>
+{
+<br/>
+   fseek (vidFile , frame_offset, SEEK_SET);
+<br/>
+   fread(&amp;pixSize,2,1,vidFile);
+<br/>
+   memset(pixBuf,0,16000);   // 98304
+<br/>
+   fread(pixBuf, 1, pixSize, vidFile);
+<br/>
+   frame_offset+=2+pixSize;
+<br/>
+   JPEG_DecompressImage((const unsigned char*)pixBuf, bitmap, 256, 192);
+<br/>
+         
+<br/>
+   fb_setBG(bitmap);
+<br/>
+   frame_count++;
+<br/>
+}
+<br/>
+<br/>
+void smf_update_sound()
+<br/>
+{
+<br/>
+   soundPlaySample(&amp;buffer[sndBufPointer * rawSize], SoundFormat_16Bit, (u32)rawSize, 11025, 127, 64, 0, 0);
+<br/>
+   sndBufPointer++;
+<br/>
+   if (sndBufPointer == 4) sndBufPointer = 0;
+<br/>
+   audio_offset=(58+(float)1837.5*(frame_count+6)); // 1837.5 = 22050/12
+<br/>
+   audio_offset = audio_offset &gt;&gt;1 &lt;&lt;1; // must be even number for some reason.
+<br/>
+   fseek (vidFile , audio_offset , SEEK_SET);
+<br/>
+   fread(&amp;buffer[sndBufPointer * rawSize],1,rawSize,vidFile);
+<br/>
+}
+<br/>
+<br/>
+void smf_update()
+<br/>
+{
+<br/>
+   if(vidhead.framecount &gt;= frame_count)
+<br/>
+   {
+<br/>
+      if(timerTick(1)&gt;=512)
+<br/>
+      {
+<br/>
+         timerStop(1);
+<br/>
+         timerStart(1, ClockDivider_1024, TIMER_FREQ_1024(2), NULL);
+<br/>
+         
+<br/>
+         smf_update_sound();
+<br/>
+      }
+<br/>
+      
+<br/>
+      if(timerTick(2)&gt;85)
+<br/>
+      {
+<br/>
+         timerStop(2);
+<br/>
+         timerStart(2, ClockDivider_1024, TIMER_FREQ_1024(12), NULL);
+<br/>
+         
+<br/>
+         smf_update_frame();
+<br/>
+      }
+<br/>
+   } else {
+<br/>
+      smf_stop();
+<br/>
+   }
+<br/>
+}
+<br/>
+<br/>
+void smf_stop()
+<br/>
+{
+<br/>
+   if(smf_playing)
+<br/>
+   {
+<br/>
+      fclose(vidFile);
+<br/>
+      free(bitmap);
+<br/>
+      free(buffer);
+<br/>
+      free(pixBuf);
+<br/>
+      timerStop(1);
+<br/>
+      timerStop(2);
+<br/>
+   
+<br/>
+      smf_playing=false;
+<br/>
+   }
+<br/>
+}
+<br/>
+<br/>
+bool smf_play(char* filename)
+<br/>
+{
+<br/>
+   if(smf_playing) return false;
+<br/>
+   
+<br/>
+   soundEnable();
+<br/>
+   
+<br/>
+   frame_count=0;
+<br/>
+   audio_offset=0;
+<br/>
+<br/>
+   pixBuf = (char*) malloc(16000);
+<br/>
+   if(pixBuf==NULL) return false;
+<br/>
+   buffer = (char*) malloc (sizeof(char)*rawSize*4);
+<br/>
+   if(buffer==NULL) return false;
+<br/>
+   bitmap = malloc(256*192*2);
+<br/>
+   if(buffer==NULL) return false;
+<br/>
+<br/>
+<br/>
+   int frm_number[250]; // 250 frame numbers for progress bar
+<br/>
+   int frm_offset[250]; // 250 locations for progress bar
+<br/>
+   
+<br/>
+   vidFile = fopen (filename, "rb"); //rb = read
+<br/>
+   if(vidFile==NULL) return false;
+<br/>
+   
+<br/>
+   // read the file header
+<br/>
+   fread(&amp;vidhead.height,2,1,vidFile); // either 192 or 144   
+<br/>
+   fread(&amp;vidhead.framecount,4,1,vidFile);
+<br/>
+   fread(&amp;vidhead.vidoffset,4,1,vidFile);
+<br/>
+   fread(&amp;vidhead.taboffset,4,1,vidFile);
+<br/>
+   // read the progress bar data
+<br/>
+   fseek (vidFile , vidhead.taboffset , SEEK_SET);
+<br/>
+   fread(&amp;frm_offset[0],4,250,vidFile);
+<br/>
+   fread(&amp;frm_number[0],4,250,vidFile);
+<br/>
+<br/>
+    frame_offset = vidhead.vidoffset;
+<br/>
+<br/>
+   // Set timers
+<br/>
+   timerStart(1, ClockDivider_1024, TIMER_FREQ_1024(2), NULL);
+<br/>
+   timerStart(2, ClockDivider_1024, TIMER_FREQ_1024(12), NULL); // 1024/12=85.3333333 (from old palib based code for calc the timer :S
+<br/>
+   
+<br/>
+   smf_playing=true;
+<br/>
+   
+<br/>
+   return true;
+<br/>
+}
+<br/>
+<br/>
+#ifdef __Cplusplus
+<br/>
+}
+<br/>
+#endif
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Moved the vars to the .c file, because of a wierd reason they conflicted if they where defined within the header (the gave conflicts within a random function and didn't want to compile).
+<br/>
+<br/>
+Hope you guys can help me out ^^
+<br/>
+<br/>
+~Hacker013<br/>_________________<br/><a class="postlink" href="http://imetal.nl/" target="_blank">Website / Blog</a>
+<br/>
+<br/>
+Let the nds be with you.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177423 - headspin - Fri Jun 01, 2012 4:54 am</h4>
+    <div class="postbody"><span class="postbody">I haven't checked out why it's hanging but the jpeg decompressor needs modification to work on the DS. You can download the updated source from <a class="postlink" href="http://headsoft.com.au/index.php?category=nds" target="_blank">here</a> (bottom of the page).<br/>_________________<br/><a class="postlink" href="http://headsoft.com.au/index.php?category=warhawk" target="_blank">Warhawk DS</a> | <a class="postlink" href="http://headsoft.com.au/index.php?category=mmll" target="_blank">Manic Miner: The Lost Levels</a> | <a class="postlink" href="http://headsoft.com.au/index.php?category=tdg" target="_blank">The Detective Game</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177424 - hacker013 - Fri Jun 01, 2012 7:53 am</h4>
+    <div class="postbody"><span class="postbody">I'm already using that version ^^ That's not the problem, the decompression works fine and also the sound for a few seconds and then both will hang.
+<br/>
+<br/>
+EDIT:
+<br/>
+After some debugging I found out it hangs within the 25th frame after the sound decode :S<br/>_________________<br/><a class="postlink" href="http://imetal.nl/" target="_blank">Website / Blog</a>
+<br/>
+<br/>
+Let the nds be with you.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177439 - hacker013 - Tue Jun 05, 2012 8:18 pm</h4>
+    <div class="postbody"><span class="postbody">Fixed both bugs, the sound only is still stuttering... After I fixed that I will release the source ^^<br/>_________________<br/><a class="postlink" href="http://imetal.nl/" target="_blank">Website / Blog</a>
+<br/>
+<br/>
+Let the nds be with you.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

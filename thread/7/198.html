@@ -1,0 +1,287 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Clicks and pops when playing sound - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>C/C++ > Clicks and pops when playing sound</h2>
+<div id="posts">
+<div class="post">
+    <h4>#1236 - Vortex - Wed Jan 15, 2003 9:48 pm</h4>
+    <div class="postbody"><span class="postbody">I am working on a small sound program, based on the <a href="http://www.belogic.com" target="_blank">www.belogic.com</a> sample code. Sometimes when a sound sample is played there is a clicking sound. From my Windows sound card programming experience I can conclude that at least one byte of sample data is being lost during the DMA transfer. The symptom is not consistent and it may be a problem with the emulator (VBA) or there is a high-priority interrupt which in some way causes data lost. 
+<br/>
+<br/>
+Your input will be appreciated.
+<br/>
+<br/>
+Thanks
+<br/>
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#include "gba.h" 
+<br/>
+#include "screenmode.h" 
+<br/>
+#include "keypad.h" 
+<br/>
+<br/>
+#include "sound21.c"
+<br/>
+#include "sound25.c"
+<br/>
+<br/>
+#define FIFO_A (0x040000A0)
+<br/>
+#define FIFO_B (0x040000A4)
+<br/>
+<br/>
+void InterruptProcess(void) __attribute__ ((section(".iwram"))); //the interrupt handler from crt0.s
+<br/>
+<br/>
+void InterruptProcess(void)
+<br/>
+{
+<br/>
+   //sample finished!,stop Direct sound
+<br/>
+   REG_TM0CNT_H  = 0; //disable timer 0
+<br/>
+   REG_TM1CNT_H  = 0; //disable timer 1
+<br/>
+<br/>
+   REG_DMA1CNT_H = 0; //stop DMA
+<br/>
+<br/>
+   //clear the interrupt(s)
+<br/>
+   REG_IF |= REG_IF;
+<br/>
+}
+<br/>
+<br/>
+void PlaySample( const u32* sound_data, u16 num_samples, u32 playbackFreq )
+<br/>
+{
+<br/>
+   const u32 cpuFreq = 16777216lu;
+<br/>
+<br/>
+   //play a mono sound at 16khz
+<br/>
+   //uses timer 0 as sampling rate source
+<br/>
+   //uses timer 1 to count the samples played in order to stop the sound 
+<br/>
+<br/>
+   // Direct Sound Channel A
+<br/>
+   REG_DMA1SAD   = (unsigned long) sound_data; //dma1 source
+<br/>
+   REG_DMA1DAD   = FIFO_A; //write to FIFO A address
+<br/>
+   REG_DMA1CNT_H = 0xb600;   //dma control: DMA enabled+ start on FIFO+32bit+repeat+increment source&amp;dest
+<br/>
+   REG_DMA1CNT_L = 0;
+<br/>
+<br/>
+   REG_TM1CNT_L = 0xFFFF - num_samples; //0xffff-the number of samples to play
+<br/>
+   REG_TM1CNT_H = 0xC4;   //enable timer1 + irq and cascade from timer 0
+<br/>
+<br/>
+   REG_IE = 0x10; //enable irq for timer 1 
+<br/>
+   REG_IME = 1;   //master enable interrupts
+<br/>
+<br/>
+   //Formula for playback frequency is: 0xFFFF-round(cpuFreq/playbackFreq)
+<br/>
+<br/>
+   REG_TM0CNT_L = 0xFFFF - (cpuFreq/playbackFreq);
+<br/>
+   REG_TM0CNT_H = 0x0080; //enable timer0
+<br/>
+}
+<br/>
+<br/>
+struct SountCntH
+<br/>
+{
+<br/>
+   int Ch1to4OutputRatio          : 2;
+<br/>
+   int DSndAOutRatio              : 1;
+<br/>
+   int DSndBOutRatio              : 1;
+<br/>
+   int unused                     : 4;
+<br/>
+<br/>
+   int EnableDSndAToRightSpeaker  : 1;
+<br/>
+   int EnableDSndAToLeftSpeaker   : 1;
+<br/>
+   int DSndASampleRateTimer       : 1;
+<br/>
+   int DSndAFIFOReset             : 1;
+<br/>
+<br/>
+   int EnableDSndBToRightSpeaker  : 1;
+<br/>
+   int EnableDSndBToLeftSpeaker   : 1;
+<br/>
+   int DSndBSampleRateTimer       : 1;
+<br/>
+   int DSndBFIFOReset             : 1;
+<br/>
+<br/>
+};
+<br/>
+<br/>
+void AgbMain (void)
+<br/>
+{
+<br/>
+   u32 playbackFreq = 16384;
+<br/>
+<br/>
+   // u32 SoundCntXMask = 0x080C0;
+<br/>
+<br/>
+   struct SountCntH snd_ctrl;
+<br/>
+<br/>
+   snd_ctrl.Ch1to4OutputRatio          = 0;
+<br/>
+   snd_ctrl.DSndAOutRatio              = 1;   // 100%
+<br/>
+   snd_ctrl.DSndBOutRatio              = 0;   
+<br/>
+   snd_ctrl.unused                     = 0;
+<br/>
+<br/>
+   snd_ctrl.EnableDSndAToRightSpeaker  = 1;
+<br/>
+   snd_ctrl.EnableDSndAToLeftSpeaker   = 1;
+<br/>
+   snd_ctrl.DSndASampleRateTimer       = 0;   //Timer 0
+<br/>
+   snd_ctrl.DSndAFIFOReset             = 1;
+<br/>
+<br/>
+   snd_ctrl.EnableDSndBToRightSpeaker  = 0;
+<br/>
+   snd_ctrl.EnableDSndBToLeftSpeaker   = 0;
+<br/>
+   snd_ctrl.DSndBSampleRateTimer       = 0;   // Timer 0
+<br/>
+   snd_ctrl.DSndBFIFOReset             = 0;
+<br/>
+<br/>
+   //play a mono sound at 16khz
+<br/>
+   //uses timer 0 as sampling rate source
+<br/>
+   //uses timer 1 to count the samples played in order to stop the sound 
+<br/>
+<br/>
+   // REG_SOUNDCNT_H = 0x0b0F; //enable DS A&amp;B + fifo reset + use timer0 + max volume to L and R
+<br/>
+   // REG_SOUNDCNT_H = SoundCntXMask | ENABLE_DSA_TO_LEFT | ENABLE_DSB_TO_RIGHT;
+<br/>
+<br/>
+   REG_SOUNDCNT_H = * (u16*) &amp;snd_ctrl; 
+<br/>
+   REG_SOUNDCNT_X = 0x0080; //turn sound chip on
+<br/>
+<br/>
+   SetMode( MODE_3 | BG2_ENABLE );
+<br/>
+<br/>
+   while(1)
+<br/>
+   {
+<br/>
+      if( REG_TM1CNT_H == 0 )
+<br/>
+      {
+<br/>
+         if(!(*KEYS &amp; KEY_A))
+<br/>
+         {
+<br/>
+            while(!(*KEYS &amp; KEY_A));
+<br/>
+<br/>
+            PlaySample((const u32*) SOUND25_DATA, SOUND25_LENGTH, playbackFreq );
+<br/>
+         }
+<br/>
+         else if(!(*KEYS &amp; KEY_B))
+<br/>
+         {
+<br/>
+            while(!(*KEYS &amp; KEY_B));
+<br/>
+<br/>
+            PlaySample((const u32*) SOUND21_DATA, SOUND21_LENGTH, playbackFreq );
+<br/>
+         }
+<br/>
+      }
+<br/>
+<br/>
+      if(!(*KEYS &amp; KEY_UP))
+<br/>
+      {
+<br/>
+         while(!(*KEYS &amp; KEY_UP));
+<br/>
+         playbackFreq *= 2;
+<br/>
+      }
+<br/>
+      else if(!(*KEYS &amp; KEY_DOWN))
+<br/>
+      {
+<br/>
+         while(!(*KEYS &amp; KEY_DOWN));
+<br/>
+         playbackFreq /= 2;
+<br/>
+      }
+<br/>
+   }
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#1244 - Splam - Wed Jan 15, 2003 10:26 pm</h4>
+    <div class="postbody"><span class="postbody">None of the emulators are quite accurate enough to presume any sound clicking wouldn't be due to them but having said that a straight "stream" like this shouldn't cause as many problems as using a buffer (as would be needed for a mod player) because the streaming will just keep doing dma copys into the FIFO until the timers run their length and the interrupt happens. 
+<br/>
+<br/>
+This code may well work perfectly on hardware and fiddling with it to work on an emu would just break the hardware version.
+<br/>
+<br/>
+The only thing I can see that would maybe cause clicks on vboy is in the interrupt code you could try moving the Stop DMA to be the 1st thing it does.  Like I say though, if this stuff works on hardware you're only going to break it messing with it ;)
+<br/>
+<br/>
+To sum up, emulators aren't perfect, you have to put up with popping sound, glitching smooth scrolls and other problems :(</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

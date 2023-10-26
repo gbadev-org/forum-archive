@@ -1,0 +1,145 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Interrupt Problem - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Interrupt Problem</h2>
+<div id="posts">
+<div class="post">
+    <h4>#89303 - ProblemBaby - Sat Jun 24, 2006 3:11 am</h4>
+    <div class="postbody"><span class="postbody">Hi
+<br/>
+<br/>
+I think my interrupt service routine isn't correct when it comes to nested interrupts. It looks like this:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+   u32 i;
+<br/>
+   for (i = 0; i &lt; 25; i++)
+<br/>
+   {
+<br/>
+      if (REG_IF &amp; BIT(i))
+<br/>
+      {
+<br/>
+         g_Interrupt[i].pFunction();
+<br/>
+<br/>
+<br/>
+      }
+<br/>
+   }
+<br/>
+   INTERRUPT_WAITFLAGS |= REG_IE &amp; REG_IF;
+<br/>
+   REG_IF |= REG_IE &amp; REG_IF;
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I tried to use the one provided my libnds but it seems to handle just the VBLANK with my irqSet, irqInit etc routines. I've looked thorugh the code a few times and can't see anything that is different from my own. Is it something like memory placement that Ive missed from the things in interrupt.c? my table is also Identical with the routine and then a mask, so I cant understand why it just takes care about the vblank (and not a timer that is enabled, for example).
+<br/>
+<br/>
+My question is, would it be easy to fix my own routine to make it correct or do you have any ideas why the IntrMain function doesnt works for me?
+<br/>
+<br/>
+thanks</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#89315 - DekuTree64 - Sat Jun 24, 2006 4:51 am</h4>
+    <div class="postbody"><span class="postbody">If you really mean nested interrupts, as in like allowing hblank to interrupt your vblank handler if it happens to run over, then you'll have to use a bit of assembly.
+<br/>
+<br/>
+If you just want normal interrupt handling, try this instead:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">   u32 flags = REG_IF | REG_IE;
+<br/>
+   u32 i; 
+<br/>
+   for (i = 0; i &lt; 25; i++) 
+<br/>
+   { 
+<br/>
+      if (flags &amp; BIT(i)) 
+<br/>
+      { 
+<br/>
+         g_Interrupt[i].pFunction(); 
+<br/>
+      } 
+<br/>
+   } 
+<br/>
+<br/>
+   // BIOS flags, really just a variable. OR in the ones we handled.
+<br/>
+   INTERRUPT_WAITFLAGS |= flags;
+<br/>
+   // Hardware flags. Write 1 to each bit that we handled to clear them.
+<br/>
+   REG_IF = flags;</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Note that it only writes to REG_IF. ORing with it is bad, because if something happened to set a bit in IF between the time you read it to decide which handlers to call, and the time you acknowledge them, that interrupt would then be missed.
+<br/>
+<br/>
+Personally I prefer this way though:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">   u32 flags = REG_IF | REG_IE;
+<br/>
+   u32 i; 
+<br/>
+   for (i = 0; i &lt; 25; i++) 
+<br/>
+   { 
+<br/>
+      if (flags &amp; BIT(i)) 
+<br/>
+      { 
+<br/>
+         INTERRUPT_WAITFLAGS |= BIT(i);
+<br/>
+         REG_IF = BIT(i);
+<br/>
+         g_Interrupt[i].pFunction(); 
+<br/>
+         return; // Only handle the first one we found
+<br/>
+      } 
+<br/>
+   }</td> </tr></table><span class="postbody">
+<br/>
+Differences being that it only handles the first interrupt it found, leaving the rest to fire off after it finishes (saves time iterating over all the bits every time), and that it acknowledges the interrupt BEFORE calling the handler. Then for example if have an enormous VBlank handler that takes over an entire frame to finish, the VBlank bit in IF will be set again even while you're blocking things up. Then as soon as you return, the next VBlank will fire off, rather than being missed entirely.
+<br/>
+<br/>
+Either way works though, it's up to your personal preference.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#89339 - ProblemBaby - Sat Jun 24, 2006 11:51 am</h4>
+    <div class="postbody"><span class="postbody">Thanks Deku! The second method solves my problems perfectly.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

@@ -1,0 +1,98 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Low Level Description of Interrupts - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > Low Level Description of Interrupts</h2>
+<div id="posts">
+<div class="post">
+    <h4>#27430 - ScottLininger - Tue Oct 12, 2004 10:05 pm</h4>
+    <div class="postbody"><span class="postbody">Can anyone point me at a reference that describes what actually happens when an interrupt fires? 
+<br/>
+<br/>
+Specifically, I'm trying to understand what happens if an HBLANK or VBLANK interrupt calls a function that takes too long to execute. I mean, if your VBLANK function contains a lot of calculations that go beyond the length of the VBLANK, will the next VBlank INTERRUPT the function? Similarly, will an HBLANK interrupt itself if it goes too many cycles? Might this cause a crash?
+<br/>
+<br/>
+I have a bug where I am changing the blending register every HBLANK to create a fog effect, and on hardware it seems to be causing a crash. Here's the code:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void HBLANK(void)
+<br/>
+{
+<br/>
+   // alter the transparency of our "fog" layer
+<br/>
+   REG_COLV = FogAmount[REG_VCOUNT+80-(statusWindowTop&gt;&gt;1)];
+<br/>
+<br/>
+   REG_IF |= INT_HBLANK;
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+FogAmount is a pre-calculated array of valid REG_COLV values that creates a gradient of transparency.
+<br/>
+<br/>
+statusWindowTop contains a u16 that changes as a "window" appears on the bottom of the screen, which offsets the fog. 
+<br/>
+<br/>
+With this code in place, my game will run for anywhere from 1-12 minutes before it totally crashes on hardware. With it commented out, no crash. I'm assuming it has something to do with how my interrupts are playing together. I'm running a VBLANK and a TIMER interrupt besides this one.
+<br/>
+<br/>
+Thanks!
+<br/>
+<br/>
+-Scott</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#27433 - abilyk - Tue Oct 12, 2004 10:44 pm</h4>
+    <div class="postbody"><span class="postbody">Scott,
+<br/>
+<br/>
+I made a post a little while ago that went in depth into how interrupts work... or, at least, how I believe they work from the research I've done.  Take a look, and if you still have questions afterwards, let me know and I'll see if I can help.
+<br/>
+<br/>
+<a class="postlink" href="http://forum.gbadev.org/viewtopic.php?p=27057#27057" target="_blank">http://forum.gbadev.org/viewtopic.php?p=27057#27057</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#27434 - DekuTree64 - Tue Oct 12, 2004 11:00 pm</h4>
+    <div class="postbody"><span class="postbody">Check out the last post in <a class="postlink" href="http://forum.gbadev.org/viewtopic.php?t=4063" target="_blank">this topic</a> for everything you ever wanted to know about interrupts. I learned a lot of little details about them that I didn't know about from that.
+<br/>
+<br/>
+Normally when say the HBlank interrupt runs so long that it's still going when the next HBlank fires, the next one will set the HBlank bit in REG_IF, but not actually interrupt the CPU. Then as soon as you return from the first HBlank, the second will fire off because its bit it still set in IF. 
+<br/>
+<br/>
+Well, that's how it should work anyway. The way you're doing it now it sets IF just before returning, so it would just cancel out the second HBlank entirely. It's better to clear the flag you're handling in IF as soon as possible after the interrupt was triggered, although it doesn't make any difference unless an interrupt of the same type occurrs before you're finished processing. 
+<br/>
+<br/>
+What could cause problems though, is that REG_IF |= INT_HBLANK. I think that will acknowledge the HBlank, as well as any other interrupts that have occurred since your HBlank started, so they will get skipped. Instead, just do REG_IF = INT_HBLANK and it will leave the other bits alone, to re-interrupt the CPU as soon as your HBlank returns.
+<br/>
+<br/>
+EDIT: Dangit, the very guy I was pointing you to beat me to it. 
+<br/>
+BTW, thanks a lot for writing up that post, Abilyk. It should be preserved in the GBADev docs section, I think, or maybe put into the FAQ.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#27436 - abilyk - Tue Oct 12, 2004 11:14 pm</h4>
+    <div class="postbody"><span class="postbody">Thanks for the comments, Deku.  I've learned a ton from this board, so I'm glad to be able to contribute.  I'll convert the post to a document and submit it to Simon sometime soon.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

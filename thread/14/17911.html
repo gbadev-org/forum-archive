@@ -1,0 +1,125 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>DMA transfers during VBlank - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Beginners > DMA transfers during VBlank</h2>
+<div id="posts">
+<div class="post">
+    <h4>#177776 - Bregalad - Wed Mar 06, 2013 6:05 pm</h4>
+    <div class="postbody"><span class="postbody">I'd like to transfer data from RAM to VRAM during VBlank to avoid tearing or other kind of artifacts on the screen.
+<br/>
+<br/>
+Since I think DMA1 and 2 should be reserved for sound (in a future usage) and DMA0 for HBlank effects (for a future usage), I think the best option is to use DMA3 for all kind of VRAM updates.
+<br/>
+<br/>
+As you can set the DMA channel so that the transfer automatically starts on interrupt, it is very easy to use. The problem is if I want to use multiple DMA transfers. For example if I want to update some graphics and the palette during the same VBlank.
+<br/>
+<br/>
+What is the best way to do it ?
+<br/>
+<br/>
+1) Start DMA in the VBlank interrupt, poll the complete flag, then start the other DMA.
+<br/>
+2) Only do the most consequent (=largest) transfter by DMA and do other transfters by software
+<br/>
+3) Use other DMA channels too
+<br/>
+<br/>
+Bonus question : What is the advantage to use a 16-bit DMA transfter over a 32-bit one ? Since you transfer 32 bit at a time, it seems like it'd be 2x more efficient to use the 32-bit DMA, isn't it ?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177777 - Dwedit - Wed Mar 06, 2013 6:43 pm</h4>
+    <div class="postbody"><span class="postbody">You can have DMA transfers happen immediately, and they will halt the CPU, so you don't have to do anything besides start the transfer.  Set the destination, source, word count, and control registers.  Then the transfer just happens.  No need for any polling anywhere.
+<br/>
+<br/>
+So since DMA halts the CPU, you can keep doing DMA copies as much as you want.  You only need the other channels for DMA events that happen at particular times. (sound, hblank, etc.)
+<br/>
+<br/>
+You can also use a fast memcpy loop, and it will be 72% as fast as DMA.  So if you need all 4 DMA channels for things like HDMA and sound, you can still do fast memory transfers in software.  Setting/Clearing memory is faster when done in software than with DMA on the GBA.  (But not on the NDS, which has DMA fill mode)
+<br/>
+<br/>
+(72% as fast assuming it's a transfer from IWRAM to IWRAM.  This margin improves when the memory reads and writes are slower than executing the loop code)
+<br/>
+<br/>
+You can also transfer to VRAM outside of vblank time, but you can get tearing if the parts updated are above the current scanline.
+<br/>
+<br/>
+On the NDS, you need to flush the cache before using any DMA, otherwise DMA will pull outdated memory out of RAM instead of the newest data from the data cache.  You also need to invalidate the data cache if you will be reading memory back.  You don't need to do this on the GBA which has no cache.  Also on the NDS, DMA does not halt the CPU if the CPU is not accessing RAM.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177778 - elhobbs - Wed Mar 06, 2013 8:16 pm</h4>
+    <div class="postbody"><span class="postbody">both the gba and the nds support a flag to auto start dma on vblank (and hblank too) - so you do not need an interrupt handler just to start it at the right time.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177785 - Bregalad - Wed Mar 06, 2013 10:29 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">On the NDS, you need to flush the cache before using any DMA, otherwise DMA will pull outdated memory out of RAM instead of the newest data from the data cache. You also need to invalidate the data cache if you will be reading memory back. You don't need to do this on the GBA which has no cache. Also on the NDS, DMA does not halt the CPU if the CPU is not accessing RAM.</td> </tr></table><span class="postbody">
+<br/>
+This probably explains why I failed to use DMA on the DS last year... now I'm going to try it on the GBA since it seems much much easier (ironically....)
+<br/>
+<br/>
+So in the end it sounds very easy, if I have a single transfer to do in VBlank I don't need an handler I can just setup the DMA to happen on thext VBlank, otherwise I just have to make a handler that spams VRAM updates with a single DMA channel and that's it.
+<br/>
+Sounds really convenient.
+<br/>
+<br/>
+EDIT :
+<br/>
+Can't the DMA be used to fill a part of the memory by setting the source address to "fixed" ?
+<br/>
+<br/>
+EDIT 2 : If I want to use both direct sound channels in the future, do I need to have BOTH DMA1 and DMA2 used for sound, or just one DMA can do both direct sound channels ?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177787 - Dwedit - Thu Mar 07, 2013 12:04 am</h4>
+    <div class="postbody"><span class="postbody">You can use a fixed source address to do memory filling, but it will read that word every time, so using an optimized memset function is actually faster.
+<br/>
+<br/>
+I think you need both DMA channels to do two channel DMA sound.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177788 - sverx - Thu Mar 07, 2013 1:48 pm</h4>
+    <div class="postbody"><span class="postbody">I don't see why an handler should be needed :| Isn't is sufficient to have a main cycle that simply does someting like that?
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">loop {
+<br/>
+  doEverything();
+<br/>
+  waitForVBlank();
+<br/>
+  dmaTransfer1();
+<br/>
+  dmaTransfer2();
+<br/>
+  ...
+<br/>
+  dmaTransferN();
+<br/>
+}</td> </tr></table><span class="postbody"><br/>_________________<br/><a class="postlink" href="http://bit.ly/yiQrz9" target="_blank">libXM7</a>|<a class="postlink" href="http://bit.ly/yJwcOo" target="_blank">NDS programming tutorial (Italiano)</a>|<a class="postlink" href="http://disjointedstudio.blogspot.com/" target="_blank">Waimanu DS / GBA</a>|<a class="postlink" href="http://adshomebrewersdiary.blogspot.com" target="_blank">A DS Homebrewer's Diary</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177790 - Bregalad - Thu Mar 07, 2013 2:08 pm</h4>
+    <div class="postbody"><span class="postbody">Yes, I imagine it is sufficient, but a handler could still have 2 purpose :
+<br/>
+1) In the (rare) case when your game is lagging and you'd want the CPU to continue to do calculations and avoid the waitForVblank() dead time.
+<br/>
+2) If you are doing this in a lot of different places in your game engine, it can be very ROM-inefficient to have all those DMA transfers list copied and pasted everywhere. This can also easily be solved by having a function which does this and no handler though.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177791 - Dwedit - Thu Mar 07, 2013 2:30 pm</h4>
+    <div class="postbody"><span class="postbody">With the right techniques, you can make a game run at a more flexible framerate, so it won't slow down to 30FPS when it can't run at 60FPS.  Even when it runs at 55FPS, it still moves smoothly and runs fine.  With triple buffering, you can even do this without any tearing at all.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

@@ -1,0 +1,191 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Simple Interrupt Question - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > Simple Interrupt Question</h2>
+<div id="posts">
+<div class="post">
+    <h4>#45807 - AkumaATR - Wed Jun 15, 2005 7:23 am</h4>
+    <div class="postbody"><span class="postbody">Working w/ interrupts is new to me. I am making the following assumptions:
+<br/>
+<br/>
+If I turn off interrupts via REG_IME (interrupts won't reach the CPU), but that an interrupt (different one) occurs that I have turned on while handling the first interrupt, the second interrupt will still launch the interrupt handler (the source of the second interrupt is still trying to get it handled) after I'm done handling the first one and have returned.
+<br/>
+In other words, I don't need care about priority or nested interrupts at this time. And I believe at this time that's fine for what I want to do.
+<br/>
+<br/>
+So I'm wondering -- why can't REG_IME not be disabled at the beginning of the handler (turning off interrupts) to allow for nested interrupts to occur and be handled (why can't the handler just be called recursively) to handle all of the interrupts in LIFO manner? I'm sure there is an obvious answer to this regarding how interrupt/interrupt handlers work, but I can't think of it.
+<br/>
+<br/>
+And my final question -- what happens if you enter the interrupt handler but that another interrupt occurs before the machine instruction comprised from the line REG_IME = 0x00 can actually be executed?
+<br/>
+<br/>
+Thanks,
+<br/>
+Jason</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#45808 - DekuTree64 - Wed Jun 15, 2005 9:14 am</h4>
+    <div class="postbody"><span class="postbody">Yeah, interrupts will naturally 'nest' themselves that way, if they're all fast enough. 
+<br/>
+<br/>
+You actually don't need to disable IME in your handler at all, because there's a bit in the CPSR that also disables interrupts. 
+<br/>
+<br/>
+When one of the interrupt-generating things fires off (such as VBlank), it puts a 1 on whatever bit of IF that it's hooked to. Until you clear that bit by writing a 1 to it, it will stay set.
+<br/>
+If that bit is set, and the corresponding bit in IE is set, and IME is set, and interrupts aren't disabled in the CPSR, an interrupt is generated.
+<br/>
+<br/>
+When interrupted, the CPU does the following things:
+<br/>
+* CPSR saves to SPSR_irq.
+<br/>
+* CPU gets switched to IRQ mode, ARM instruction set, and IRQ/FIQ disabled (nothing on GBA/DS can generate an FIQ, so you can ignore that).
+<br/>
+* Current pc saved to lr_irq.
+<br/>
+* pc set to address 0x00000018 (the hardware IRQ vector).
+<br/>
+<br/>
+On GBA, that puts you in the BIOS. It then branches to a small IRQ handler, which pushes r0-r3, r12 and lr onto the IRQ stack, loads the user handler address from address 0x03fffffc and branches to it.
+<br/>
+<br/>
+Now your interrupt handler executes, still in IRQ mode with the IRQ/FIQ disable bits in the CPSR set. To do nested interrupts, you have to do lots of careful stuff here, including clearing that IRQ disable bit.
+<br/>
+<br/>
+When you return from your handler, you're actually returning to that middle-man handler in the BIOS. It then pops all those registers back off the stack, and returns to where the interrupt originally happened.
+<br/>
+<br/>
+<br/>
+Anyway, even when interrupts are disabled by the CPSR/IME/IE, things like VBlank will still put a 1 on their bit in IF. As soon as you reenable everything for that interrupt, it will happen. 
+<br/>
+<br/>
+So for example, if you're in the middle of a VBlank handler (with interrupts disabled in the CPSR), and a timer interrupt fires, it will set its bit in IF, but not actually do anything. As soon as you return from the VBlank handler, the timer will interrupt the CPU again.
+<br/>
+<br/>
+The only time you need true nested interrupts is when you'll miss something entirely during a long handler. 
+<br/>
+Like, if your VBlank processing runs until 10 lines of the screen have been drawn, then HBlank interrupts on those 10 lines would have been missed. It would still trigger once as soon as your VBlank finishes, but those other lines have already been drawn and can't be changed.
+<br/>
+<br/>
+Check <a class="postlink" href="http://forum.gbadev.org/viewtopic.php?t=4063&amp;highlight=" target="_blank">this topic</a> for discussion of nested handlers. It's pretty tricky stuff though, so don't worry too much about it yet.
+<br/>
+<br/>
+And if you're feeling adventurous, check <a class="postlink" href="http://forum.gbadev.org/viewtopic.php?t=5950" target="_blank">my post</a> about how to bypass that little BIOS IRQ handler if you're working on the DS :)
+<br/>
+Fun stuff if you play with it for a while and really get to understand how and why it all works.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#45841 - AkumaATR - Wed Jun 15, 2005 6:58 pm</h4>
+    <div class="postbody"><span class="postbody">Thanks Deku --
+<br/>
+<br/>
+Really helpful info. None of the GBA materials I have mentioned that the disable bit in CPSR was automatically set before interrupt handling code executes.
+<br/>
+<br/>
+I'm glad I won't have to deal with the nested IRQ stuff (at least yet) as it looked kind of messy.
+<br/>
+<br/>
+Thanks Again,
+<br/>
+Jason</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#45852 - jormundgard - Wed Jun 15, 2005 9:12 pm</h4>
+    <div class="postbody"><span class="postbody">I have a slightly different question about interrupts - hopefully it's OK to shove it into this topic.
+<br/>
+<br/>
+I'm using gcc and I made my own interrupt handler, and put the function pointer into 0x3007ffc (I think that's it). Even though I don't tell this function to restore the PC when it's finished, it seems to work fine. My question is: does the gcc compiler know to treat any function at 0x3007ffc as an interrupt handler, or is something in crt0.S taking care of this for me?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#45857 - tepples - Wed Jun 15, 2005 9:53 pm</h4>
+    <div class="postbody"><span class="postbody">The GBA BIOS takes care of it for you.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#45867 - jormundgard - Wed Jun 15, 2005 10:35 pm</h4>
+    <div class="postbody"><span class="postbody">I know there are bios routines to backup and restore certain registers (including the pc) but I'm having trouble understanding how the bios would know when the interrupt handler was finished, and when it should restore the pc. I figure the interrupt handler must end with some sort of jump statement to the bios restoration code. Is the return address taken from the stack in some way?
+<br/>
+<br/>
+Maybe this is very standard stuff... sorry if I'm beating a dead horse. I guess that in the end I don't even need to worry about it!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#45868 - AkumaATR - Wed Jun 15, 2005 10:50 pm</h4>
+    <div class="postbody"><span class="postbody">"My question is: does the gcc compiler know to treat any function at 0x3007ffc as an interrupt handler, or is something in crt0.S taking care of this for me?"
+<br/>
+<br/>
+That is the address of the register on the GBA that stores the address of the interrupt handler that is to be executed whenever any interrupt occurs.
+<br/>
+<br/>
+See section 8: Hardware Interrupts at
+<br/>
+<a href="http://www.cs.rit.edu/~tjh8300/CowBite/CowBiteSpec.htm#Windowing" target="_blank">http://www.cs.rit.edu/~tjh8300/CowBite/CowBiteSpec.htm#Windowing</a>
+<br/>
+<br/>
+for more info.
+<br/>
+<br/>
+I think this information is mostly correct but I think there is a typo -- I think 8. should read:
+<br/>
+<br/>
+8. It is the responsiblity of the code at that address to return once finished, 
+<br/>
+using BX LR   &lt;- not LR_irq
+<br/>
+<br/>
+- Jason
+<br/>
+<br/>
+<br/>
+<br/>
+Jason</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#45870 - jormundgard - Wed Jun 15, 2005 11:02 pm</h4>
+    <div class="postbody"><span class="postbody">Reading this is what initially confused me, because I'm sure not telling the system to return! But I'm also not writing the assembly.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#45872 - AkumaATR - Wed Jun 15, 2005 11:17 pm</h4>
+    <div class="postbody"><span class="postbody">Saving/restoring the program counter when functions are called is automatic (in most higher-level languages) -- notice that if LR (the address for the next instruction in the BIOS, not in your code) is saved in the manner that the program counter is normally saved when calling traditional functions, the BIOS can continue running at LR at the end of the interrupt handler (the same way that program code can continue after a function call). The reason that "It is the responsiblity of the code at that address to return once finished, using BX LR" is explicitly stated there is that they are speaking an a machine code (ARM assemby) context (in which you are tasked with doing most everything).
+<br/>
+<br/>
+- Jason</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#45875 - jormundgard - Wed Jun 15, 2005 11:25 pm</h4>
+    <div class="postbody"><span class="postbody">I was starting to suspect something like this as I was reading along here. I'd really like to better understand how compilers do their job someday. Thanks for clarifying this, and I hope I didn't highjack your topic too badly :).</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#45880 - AkumaATR - Wed Jun 15, 2005 11:46 pm</h4>
+    <div class="postbody"><span class="postbody">no worries. glad i could help a little. i am amazed with these forums/the people who frequent them thus far (in terms of how willing people are to assist others/response times) -- i look forward to helping more once i learn more!
+<br/>
+<br/>
+- jason</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

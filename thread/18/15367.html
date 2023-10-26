@@ -1,0 +1,105 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Malloc sucks, leaks like hell if you do this - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Malloc sucks, leaks like hell if you do this</h2>
+<div id="posts">
+<div class="post">
+    <h4>#154267 - Dwedit - Sun Apr 13, 2008 10:07 pm</h4>
+    <div class="postbody"><span class="postbody">So it appears that I <span style="font-weight: bold">can not</span>:
+<br/>
+<br/>
+Use malloc to allocate a bunch of memory to hold a directory listing
+<br/>
+Init libfat
+<br/>
+Open a file
+<br/>
+Close a file
+<br/>
+Use free to release the memory from the first malloc
+<br/>
+<br/>
+I get a huge memory leak when I do this.
+<br/>
+Where's an updated version of "gba_nds_fat" when you need it?  At least that library never calls malloc.
+<br/>
+<br/>
+Edit:
+<br/>
+I'm just making this post because I finished tracking down a memory leak in my program.  Malloc sucks because it only frees once everything has been freed, so you get memory leaks otherwise.
+<br/>
+Libfat really shouldn't use malloc until this has been straightened out.  Or at least, put in big warning messages in libfat:
+<br/>
+"WARNING: this code uses malloc.  Don't use malloc on your own until you've called fatinit, and you must free everything before you open a file!  Otherwise you get memory leaks!  Mwahahaha!"<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#154268 - Dwedit - Sun Apr 13, 2008 10:30 pm</h4>
+    <div class="postbody"><span class="postbody">Looks like libfat just leaks memory regardless of what you do, because malloc never frees anything unless everything allocated after it is freed.
+<br/>
+<br/>
+I guess it's time to switch to gba_nds_fat until malloc's issues get resolved.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#154270 - simonjhall - Sun Apr 13, 2008 10:39 pm</h4>
+    <div class="postbody"><span class="postbody">Code example?
+<br/>
+<br/>
+Not sure if it's related but I had similar things with Q1. On certain flash cards after fatinit() there was varying amounts of heap space left, which I found very strange... Uh...<br/>_________________<br/><span style="font-weight: bold"><a class="postlink" href="https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&amp;business=simonjhall%40gmail%2ecom&amp;no_shipping=2&amp;no_note=1&amp;tax=0&amp;currency_code=GBP&amp;lc=GB&amp;bn=PP%2dDonationsBF&amp;charset=UTF%2d8" target="_blank">Big thanks to everyone who donated for Quake2</a></span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#154271 - Cydrak - Sun Apr 13, 2008 11:27 pm</h4>
+    <div class="postbody"><span class="postbody">Yes, example please! If there's some crazy pathological case I want to know about it... but I haven't run into problems thus far. The only heap I'm aware of libfat using is for the partition and a small number of cache entries. Both seem confined to mount time, and should be freed on unmount.
+<br/>
+(Ed: Of course I'm forgetting stdio and friends, eesh... :P)
+<br/>
+<br/>
+Are you sure it's not just fragmentation, though..? malloc only has about 3MB non-virtual space to work with. And, since it can't exactly move the pointers it returns, the situation you describe (small long-lived allocation between large temporary ones) could cause problems. I had to account for this pulling textures in and out of VRAM, so I imagine it's just a caveat of these small systems...
+<br/>
+<br/>
+If the DLDIs are somehow calling malloc then that is more worrisome... eep. o_o</span><span class="gensmall"><br/><br/>Last edited by Cydrak on Mon Apr 14, 2008 12:20 am; edited 1 time in total</span></div>    
+</div>
+<div class="post">
+    <h4>#154276 - Dwedit - Mon Apr 14, 2008 12:01 am</h4>
+    <div class="postbody"><span class="postbody">Okay, looks like I just have a memory leak in my code from not closing dir iterators...  Apologies for any wild acquisitions.
+<br/>
+I realized my mistake when I tried to make an example, and failed to get the leak.
+<br/>
+<br/>
+But needing to free temporary buffers before opening a file really sucks.  What if the file open returns NULL and I need the temporary buffers back?  I just deallocated them!
+<br/>
+Not only does memory get fragmented, it makes absolutely no attempt to use freed memory which is behind allocated memory, even if the memory block is the exact same size as before.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#154283 - Doom5 - Mon Apr 14, 2008 2:34 am</h4>
+    <div class="postbody"><span class="postbody">Dwedit: Are you still actively working on porting your GBA emulators over to DS, or has that work halted due whatever reasons?
+<br/>
+<br/>
+I'm just curious, as Goomba color is excellent, and would be great in native DS mode.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#154286 - M3d10n - Mon Apr 14, 2008 2:56 am</h4>
+    <div class="postbody"><span class="postbody">Well, unless libfat leaks memory internally, the solution to avoid it messing your own allocations is to pre-allocate a large chunk of RAM (like 3MBs or so, depending on how large is your binary and how much RAM libfat and other libraries need to work) and have a memory allocator of your own allocate from that chunk instead. This is a good thing to do specially if you port your code to other platforms (like PC), so you don't stay at mercy of the default allocators and their shenanigans.
+<br/>
+<br/>
+I have yet to do it myself, but I'm halfway there since I finally got to write an allocator to take care of VRAM banks for me (I can finally delete textures, heh).</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#154289 - Dwedit - Mon Apr 14, 2008 3:02 am</h4>
+    <div class="postbody"><span class="postbody">Yes, I'm actively working on Goomba Color DS right now.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

@@ -1,0 +1,120 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Internal or External RAM? - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>C/C++ > Internal or External RAM?</h2>
+<div id="posts">
+<div class="post">
+    <h4>#1878 - loopy - Fri Jan 24, 2003 10:54 pm</h4>
+    <div class="postbody"><span class="postbody">I understand that the GBA's RAM is broken into two parts: CPU External Work RAM and CPU Internal Work RAM.  My question is, if I am using devkit advance, into which parts of RAM are my resources going?  Does the compiler already know what to do and where to put things?  And if not, how do I chose where I want my resources allocated?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#1881 - NEiM0D - Fri Jan 24, 2003 11:43 pm</h4>
+    <div class="postbody"><span class="postbody">To define where your res is going :
+<br/>
+&lt;asm&gt;
+<br/>
+.section .iwram
+<br/>
+.section .ewram
+<br/>
+<br/>
+There's something similar in C, but with __attribute__ (( )).
+<br/>
+<br/>
+I don't know what the default section is, but my guess is iwram.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#1885 - Touchstone - Fri Jan 24, 2003 11:56 pm</h4>
+    <div class="postbody"><span class="postbody">The old indian-trick is the generate a .map file when linking your exe, in that map file you can see where all your labels end up.
+<br/>
+<br/>
+Add the '-Map nameofmapfile.map' option when linking and you're set.
+<br/>
+<br/>
+With absolutely no experience of devkitadvance I'd guess your code and constant ends up in ROM (yeah!) and local and global variables in IWRAM.<br/>_________________<br/>You can't beat our meat</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#1889 - tepples - Sat Jan 25, 2003 2:35 am</h4>
+    <div class="postbody"><span class="postbody">By default, everything declared 'const' gets placed in ROM, and everything else is placed in IWRAM.
+<br/>
+<br/>
+Don't try using __attribute__ to put things in EWRAM; it'll bloat your binary with 0's.  Instead, write static or dynamic allocators.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#1897 - loopy - Sat Jan 25, 2003 4:38 am</h4>
+    <div class="postbody"><span class="postbody">Forgive me for asking, but how does one write an allocator for external RAM?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#1901 - tepples - Sat Jan 25, 2003 6:20 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>loopy wrote:</b></span></td> </tr> <tr> <td class="quote">Forgive me for asking, but how does one write an allocator for external RAM?</td> </tr></table><span class="postbody">
+<br/>
+Static allocation within C looks like this:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+struct EWRAM_GLOBALS
+<br/>
+{
+<br/>
+  struct Player foo;
+<br/>
+  int bar;
+<br/>
+  /* stick lots more variables here */
+<br/>
+};
+<br/>
+<br/>
+#define EW (*(struct EWRAM_GLOBALS *)0x02000000)
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Then access variables in EWRAM with EW.foo, EW.bar, etc.  If you're making a multiboot program, you will have to change EW so that it definitely comes after the end of your program.  I tend to use 0x02030000, which gives me 192 KB for program and constant data and 64 KB for work RAM, and I use most of work RAM as a temporary area for decompressing data.
+<br/>
+<br/>
+Here are examples of dynamic allocators: <a class="postlink" href="http://www.cs.colorado.edu/~zorn/Malloc.html" target="_blank">http://www.cs.colorado.edu/~zorn/Malloc.html</a>
+<br/>
+There's one built into Newlib (malloc() and free() from devkit advance's C library), but static allocation will step on its data structures, causing a hard crash if you use them together.  You can fix this by moving the beginning of the EWRAM heap in the link script, but editing link scripts is a pretty advanced topic.
+<br/>
+<br/>
+Just don't use garbage collection.  It's overkill for an embedded system like the GBA.  In fact, you can probably get away with an allocator that works with fixed size blocks of 1024 bytes or so.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#1905 - loopy - Sat Jan 25, 2003 10:20 am</h4>
+    <div class="postbody"><span class="postbody">Thanks- that's really simple!  I guess I could have figured it out had I not forgotten that all of the memory is accessible through simple pointers.  Duh!
+<br/>
+<br/>
+I probably won't be using library routines like malloc() on the GBA, especially not if I'm using static allocation already.  But just in case I have to I've already messed with the link scripts in order to get a larger interrupt stack.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#2046 - MrMr[iCE] - Tue Jan 28, 2003 6:07 am</h4>
+    <div class="postbody"><span class="postbody">Thanks for the tip, that helped drop over 20k off the game im working on..very cool stuff.<br/>_________________<br/>Does the corpse have a familiar face?</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

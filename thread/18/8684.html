@@ -1,0 +1,392 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>TGA file reading with GBFS - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > TGA file reading with GBFS</h2>
+<div id="posts">
+<div class="post">
+    <h4>#72937 - genfish - Wed Feb 22, 2006 3:18 pm</h4>
+    <div class="postbody"><span class="postbody">Hi, I have a TGA file reader which i have used for reading 24bit and 32bit images before. I have modified it to read 16bit TGA's, and made my own fopen and fread functions for gbfs. Would this work to load images onto the main screen in framebuffer mode if i copy the 16bit values from the tga file?
+<br/>
+<br/>
+thanks.<br/>_________________<br/>there is no rl only afk</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#72954 - genfish - Wed Feb 22, 2006 4:42 pm</h4>
+    <div class="postbody"><span class="postbody">ok, i whipped up some test code and i just seem to get a black square where the sprite should be...
+<br/>
+<br/>
+(code removed)
+<br/>
+<br/>
+in main i have set wait_cr, and called the loadtexture function.
+<br/>
+All i can think of is that im doing something wrong with the filreading/gbfs
+<br/>
+<br/>
+any input would be appreciated :) thanks<br/>_________________<br/>there is no rl only afk</span><span class="gensmall"><br/><br/>Last edited by genfish on Fri Mar 03, 2006 4:10 pm; edited 1 time in total</span></div>    
+</div>
+<div class="post">
+    <h4>#72969 - Cearn - Wed Feb 22, 2006 6:48 pm</h4>
+    <div class="postbody"><span class="postbody">I may have simply missed it in all this code, but it seems like you're never allocating memory for <span style="font-style: italic">image</span>; it always points to NULL. Putting things in NULL is usually bad.
+<br/>
+<br/>
+Also, this ...
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">while (count &lt; (w * h))                                       
+<br/>
+   {
+<br/>
+      word bpp16;
+<br/>
+<br/>
+      if (header.pixelDepth != 16)
+<br/>
+      {
+<br/>
+         // Unsupported colour depth
+<br/>
+         //fprintf(stderr, "TGA_Read: Unsupported Pixel Depth", filename);
+<br/>
+      }
+<br/>
+      else if (header.pixelDepth == 16)
+<br/>
+      {
+<br/>
+         // Read image data from file
+<br/>
+         fread(&amp;bpp16, 2, 1, fp);
+<br/>
+<br/>
+         // Move to image variable
+<br/>
+         image[count]      =   bpp16;
+<br/>
+      }
+<br/>
+<br/>
+      count++;
+<br/>
+   }
+<br/>
+   fclose(fp);
+<br/>
+</td> </tr></table><span class="postbody"></span></td> </tr></table><span class="postbody">
+<br/>
+can probably be sped up by a whole lot (something like 10*<span style="font-style: italic">w</span> times faster, but that's just a guess) by taking the bpp-check out of the loop and copying per scanline instead of per pixel.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+   if(header.pixelDepth == 16)
+<br/>
+   {
+<br/>
+      while(h--)
+<br/>
+      {   
+<br/>
+         fread(image, 2, width, fp);
+<br/>
+         image += width;
+<br/>
+      }
+<br/>
+   }
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+If the TGA doesn't necessarily have the same dimensions as the arguments of load_image() (i.e., if <span style="font-style: italic">w</span> != <span style="font-style: italic">header.width</span> or <span style="font-style: italic">h</span> != <span style="font-style: italic">header.height</span>), you will have add code for those differences as well.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#73322 - genfish - Fri Feb 24, 2006 7:42 pm</h4>
+    <div class="postbody"><span class="postbody">i've made these updates, thanks. Im still getting a black square, think its something to do with the filereading functions, because im trying to test it with a text file and it isn't working either. ill post if i find the solution.<br/>_________________<br/>there is no rl only afk</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#74214 - genfish - Fri Mar 03, 2006 4:08 pm</h4>
+    <div class="postbody"><span class="postbody">update on this, plus ill remove all the code above.
+<br/>
+<br/>
+I now seem to have a purple coloured square where the sprite should be, i have been looking for tga file format specs for how the pixels are arranged. The best i can find is, if u make a photoshop 16bit targe image, and hover over it, it says 'A1R5G5B5'. Assuming this was how the pixels were organised, i did this:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+image[count] = (uint16)(image[count]&lt;&lt;1);
+<br/>
+image[count] = BIT(15);
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+<br/>
+i thought this would sort it out, but nope, still got a purple square. Anyone know why? thanks<br/>_________________<br/>there is no rl only afk</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#74235 - Cearn - Fri Mar 03, 2006 7:40 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>genfish wrote:</b></span></td> </tr> <tr> <td class="quote">update on this, plus ill remove all the code above.
+<br/>
+<br/>
+I now seem to have a purple coloured square where the sprite should be, i have been looking <span style="font-weight: bold">for</span> tga file format specs for how the pixels are arranged.</td> </tr></table><span class="postbody">
+<br/>
+Looking 'for' or 'at' specs? If you need something on the TGA format, <a class="postlink" href="http://www.wotsit.org" target="_blank">wotsit</a> has a large collection of file formats including this one.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>genfish wrote:</b></span></td> </tr> <tr> <td class="quote">The best i can find is, if u make a photoshop 16bit targe image, and hover over it, it says 'A1R5G5B5'. </td> </tr></table><span class="postbody">
+<br/>
+a1r5g5b5 means that it's the same kind of format as you want, only with the red and blue components switched. 
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">// assuming 'image' is the buffer with the a1r5g5b5 formatted pixels:
+<br/>
+u32 clr_org, clr_new;
+<br/>
+clr_org= image[count];
+<br/>
+clr_new  =(clr_org&gt;&gt;10)&amp;31;  // shift red to lowest 5 bits
+<br/>
+clr_new |= clr_org&amp;(31&lt;&lt;5);  // add green
+<br/>
+clr_new |=(clr_org&amp;31)&lt;&lt;10;  // shift blue up
+<br/>
+clr_new |= 1&lt;&lt;15;
+<br/>
+image[count]= clr_new;
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Of course, this is going to slow down the TGA loader by a whole lot. Have you considered converting the image on the PC and using that instead?
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>genfish wrote:</b></span></td> </tr> <tr> <td class="quote">Assuming this was how the pixels were organised, i did this:
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">image[count] = (uint16)(image[count]&lt;&lt;1);
+<br/>
+image[count] = BIT(15);
+<br/>
+</td> </tr></table><span class="postbody"></span></td> </tr></table><span class="postbody">
+<br/>
+May I ask why you did this? Because this code doesn't make any kind of sense at all. What is it supposed to do? I'm a little surprised that it oes anything at all with this code
+<br/>
+<br/>
+Even with the red-blue swap, this doesn't explain the purple square, though, as purple has equal values for red and blue. A uniformly colored  square probably means two things: either you're not updating the counter when loading the pixels, so you always fill VRAM with the first pixel; or if you're using an affine sprite, you forgot to set the affine matrix.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#74246 - tepples - Fri Mar 03, 2006 8:14 pm</h4>
+    <div class="postbody"><span class="postbody">Or there could be other problems. A lot of programs use purple for all totally transparent pixels.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#74364 - genfish - Sat Mar 04, 2006 8:20 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Cearn wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>genfish wrote:</b></span></td> </tr> <tr> <td class="quote">Assuming this was how the pixels were organised, i did this:
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">image[count] = (uint16)(image[count]&lt;&lt;1);
+<br/>
+image[count] = BIT(15);
+<br/>
+</td> </tr></table><span class="postbody"></span></td> </tr></table><span class="postbody">
+<br/>
+May I ask why you did this? Because this code doesn't make any kind of sense at all. What is it supposed to do? I'm a little surprised that it oes anything at all with this code
+<br/>
+</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+i came up with this by thinking about it for a little while. I wanted to shift all the bits left by 1 to eradicate the alpha bit, which i then thought was R5G5B5 and the 1 extra at the end. And i read somewhere that the last bit needs to be set to 1 for it to display, and i took the BIT(15) line from doublec's tutorials, which is explained there to set the last bit in a 16bit variable.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Cearn wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+Looking 'for' or 'at' specs? 
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Well, both, i looked at the TGA file format details from wotsit, and i couldnt find the part with pixel arrangements for 16bit.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Cearn wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+Of course, this is going to slow down the TGA loader by a whole lot. Have you considered converting the image on the PC and using that instead? 
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I'll try putting in the code you suggested, see how it fares. If i were to go about doing this conversion on the pc, what would i do? Write a converter to run the tga's through before i add them to the .gbfs file?
+<br/>
+<br/>
+Thanks to everyone for your input by the way, its quite important that i get this right as its for my university dissertation :)<br/>_________________<br/>there is no rl only afk</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#74520 - Cearn - Sun Mar 05, 2006 4:37 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>genfish wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Cearn wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>genfish wrote:</b></span></td> </tr> <tr> <td class="quote">Assuming this was how the pixels were organised, i did this:
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">image[count] = (uint16)(image[count]&lt;&lt;1);
+<br/>
+image[count] = BIT(15);
+<br/>
+</td> </tr></table><span class="postbody"></span></td> </tr></table><span class="postbody">
+<br/>
+May I ask why you did this? Because this code doesn't make any kind of sense at all. What is it supposed to do? I'm a little surprised that it oes anything at all with this code
+<br/>
+</span></td> </tr></table><span class="postbody">
+<br/>
+i came up with this by thinking about it for a little while. I wanted to shift all the bits left by 1 to eradicate the alpha bit, which i then thought was R5G5B5 and the 1 extra at the end. And i read somewhere that the last bit needs to be set to 1 for it to display, and i took the BIT(15) line from doublec's tutorials, which is explained there to set the last bit in a 16bit variable.</span></td> </tr></table><span class="postbody">
+<br/>
+The first line in the code does indeed get rid of the TGA's alpha bit, (which is indeed bit 15), but by shifting all of it you're also shifting the highest  r,g,b bits into alpha, r and g channels, which can't be good. None of that really matters here anyway, though, beause the second line fills the whole pixel with BIT(15) because you're using an assignment instead of inserting the bit.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>genfish wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Cearn wrote:</b></span></td> </tr> <tr> <td class="quote">Looking 'for' or 'at' specs? 
+<br/>
+</td> </tr></table><span class="postbody">Well, both, i looked at the TGA file format details from wotsit, and i couldnt find the part with pixel arrangements for 16bit.
+<br/>
+</span></td> </tr></table><span class="postbody">
+<br/>
+I'll agree that it's hidden a bit, but it's there:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tga.txt wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">color map data
+<br/>
+<br/>
+...
+<br/>
+<br/>
+|        |        |  The 2 byte entry is broken down as follows:               |
+<br/>
+|        |        |  ARRRRRGG GGGBBBBB, where each letter represents a bit.    |
+<br/>
+|        |        |  But, because of the lo-hi storage order, the first byte   |
+<br/>
+|        |        |  coming from the file will actually be GGGBBBBB, and the   |
+<br/>
+|        |        |  second will be ARRRRRGG. "A" represents an attribute bit. |
+<br/>
+</td> </tr></table><span class="postbody"></span></td> </tr></table><span class="postbody">
+<br/>
+In other words, a little-endian halfword, a1r5g5b5, whereas the NDS uses a1b5g5r5.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>genfish wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Cearn wrote:</b></span></td> </tr> <tr> <td class="quote">Of course, this is going to slow down the TGA loader by a whole lot. Have you considered converting the image on the PC and using that instead? 
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+I'll try putting in the code you suggested, see how it fares. If i were to go about doing this conversion on the pc, what would i do? Write a converter to run the tga's through before i add them to the .gbfs file?</span></td> </tr></table><span class="postbody">
+<br/>
+Something like that yeah.
+<br/>
+First make sure your code can read a TGA properly, by putting it on a screen or converting it to a BMP or something. At least you'll know that that part of the code won't be a problem. If that is ok, you can simply do the conversion to the preferred NDS format (switch red and blue components), then dump the whole thing into a binary file that you then add to the GBFS. Or you could add GBFS capabilities to the converter as well; it's not that hard.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#74537 - genfish - Sun Mar 05, 2006 8:11 pm</h4>
+    <div class="postbody"><span class="postbody">Ok cool, i think im getting the hang of it now.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">the first byte coming from the file will actually be GGGBBBBB, and the second will be ARRRRRGG.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Does this mean that i ignore the first byte, or have to read 2 bytes in and swap them for every pixel?
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+// assuming 'image' is the buffer with the a1r5g5b5 formatted pixels:
+<br/>
+u32 clr_org, clr_new;
+<br/>
+clr_org= image[count];
+<br/>
+clr_new  =(clr_org&gt;&gt;10)&amp;31;  // shift red to lowest 5 bits
+<br/>
+clr_new |= clr_org&amp;(31&lt;&lt;5);  // add green
+<br/>
+clr_new |=(clr_org&amp;31)&lt;&lt;10;  // shift blue up
+<br/>
+clr_new |= 1&lt;&lt;15;
+<br/>
+image[count]= clr_new; </td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Also, i've not done any bit manipulation before, is there a reason this is u32 when we're dealing with 16bit values?
+<br/>
+<br/>
+thanks again<br/>_________________<br/>there is no rl only afk</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#74540 - Cearn - Sun Mar 05, 2006 8:34 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>genfish wrote:</b></span></td> </tr> <tr> <td class="quote">Ok cool, i think im getting the hang of it now.
+<br/>
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">the first byte coming from the file will actually be GGGBBBBB, and the second will be ARRRRRGG.</td> </tr></table><span class="postbody">
+<br/>
+Does this mean that i ignore the first byte, or have to read 2 bytes in and swap them for every pixel?</span></td> </tr></table><span class="postbody">
+<br/>
+It means you need to do a little more research on how data is kept in computer memory, in particular <a class="postlink" href="http://www.google.nl/search?hl=nl&amp;q=endianness&amp;btnG=Google+zoeken&amp;meta=" target="_blank">endianness</a>.  :P
+<br/>
+<br/>
+Reading in 2 bytes and swapping may or may not be required; it depends on the platform you are working on. Little endian means that for multi-byte types, the lower bytes appear first. For example, the byte pattern "0x01 0x02" would form 0x0201 on little-endian systems, but 0x0102 on big-endian systems. TGA is little endian, so are intel and GBA/NDS, so that would work out nicely. Open VBA's memory viewer anywhere and switch between byte (u8), halfword (u16) and word (u32) interpretations and look at the differences <span style="font-style: italic">in notation</span>; the data itself remains the same.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>genfish wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">// assuming 'image' is the buffer with the a1r5g5b5 formatted pixels:
+<br/>
+u32 clr_org, clr_new;
+<br/>
+clr_org= image[count];
+<br/>
+clr_new  =(clr_org&gt;&gt;10)&amp;31;  // shift red to lowest 5 bits
+<br/>
+clr_new |= clr_org&amp;(31&lt;&lt;5);  // add green
+<br/>
+clr_new |=(clr_org&amp;31)&lt;&lt;10;  // shift blue up
+<br/>
+clr_new |= 1&lt;&lt;15;
+<br/>
+image[count]= clr_new; </td> </tr></table><span class="postbody">
+<br/>
+Also, i've not done any bit manipulation before, is there a reason this is u32 when we're dealing with 16bit values?</span></td> </tr></table><span class="postbody">
+<br/>
+The datatype isn't about bit manipulation. Because the NDS is a 32bit system, 32bit variables are to be preferred. If you use anything else, GCC will have to add extra instructions to keep the values in their datatype boundaries, slowing down the routine. As a general rule, (unsigned) ints are preferable.
+<br/>
+<br/>
+Also: <a class="postlink" href="http://user.chem.tue.nl/jakvijn/tonc/numbers.htm#sec-bitops" target="_blank">this</a> may come in hand if you're new to bit ops.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#74544 - genfish - Sun Mar 05, 2006 8:49 pm</h4>
+    <div class="postbody"><span class="postbody">lol i didnt realise it would be THAT complicated:/ maybe i've gone over my head with this one...
+<br/>
+<br/>
+do you, or anyone else know a program that converts any popular graphics format into files with raw 16bit values i can directly transfer into a DS framebuffer?
+<br/>
+<br/>
+I know about bmp2spr etc but dont they only use 256 colours. I was hoping to utilize a larger palette.
+<br/>
+<br/>
+once again thanks for your help... if i find another method ill look into this again when i dont only have 4 weeks to complete the project!<br/>_________________<br/>there is no rl only afk</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#74638 - genfish - Mon Mar 06, 2006 6:27 pm</h4>
+    <div class="postbody"><span class="postbody">For anyone interested, the way i've decided to go is, make the sprites in photoshop on 16bit canvases, Then convert them to 24 bit so there is 1 byte per channel. I have a working reader for 24bit files so i can then read in a pixel at a time and convert each channel from a 0-255 number to a 0-31 number.
+<br/>
+<br/>
+Then im going to have a raw image file full of this 0-31 data which i can then use to get a colour using the RGB function in ndslib. RGB(31,31,31) for example :)<br/>_________________<br/>there is no rl only afk</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

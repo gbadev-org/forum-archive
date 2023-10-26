@@ -1,0 +1,335 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Malloc fails - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Beginners > Malloc fails</h2>
+<div id="posts">
+<div class="post">
+    <h4>#170632 - Azenris - Thu Oct 08, 2009 7:40 pm</h4>
+    <div class="postbody"><span class="postbody">Hi, just wondering if anyone knows why :/
+<br/>
+<br/>
+I have the code below which just basically loads a sprite at a point in the level.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">// =================================================================================
+<br/>
+// _LoadSprite:
+<br/>
+// @ cursor:   position to load the sprite
+<br/>
+// @ spriteID:    id of the sprite
+<br/>
+void CLevelManager::_LoadSprite(u16 cursor, u16 spriteID)
+<br/>
+{
+<br/>
+   if (spriteID != 0)                                             // ensure it isnt a blank id
+<br/>
+   {
+<br/>
+      CMobile *pMobile = NULL;                                    // pointer to a mobile
+<br/>
+      location loc(cursor, LEVEL_TILES_X, LEVEL_TILES_Y);                  // change a mappoint into x, y values
+<br/>
+      
+<br/>
+      switch (_GetSpriteType(spriteID))
+<br/>
+      {
+<br/>
+      // this sprite is not specified, it will be further checked to
+<br/>
+      // see if it is in anyway special or not
+<br/>
+      case SPRITE_TYPE_UNDEF:
+<br/>
+<br/>
+         if (IS_ITEM_CHERRY(spriteID))
+<br/>
+            ++m_cherriesOnScreen;
+<br/>
+<br/>
+         pMobile = new MEMORY_LEVEL CObject(this, spriteID, 1, loc, false);
+<br/>
+         m_mobiles.push_back(pMobile);
+<br/>
+         break;
+<br/>
+<br/>
+      // the sprite is required to load offscreen
+<br/>
+      case SPRITE_TYPE_OFFSCREEN:
+<br/>
+         pMobile = new MEMORY_LEVEL CObject(this, spriteID, 1, loc, false);
+<br/>
+         pMobile-&gt;MakeInvisible();
+<br/>
+         m_mobiles.push_back(pMobile);
+<br/>
+         break;
+<br/>
+<br/>
+      // the sprite is an enemy
+<br/>
+      case SPRITE_TYPE_ENEMY:
+<br/>
+         pMobile = new MEMORY_LEVEL CEnemy(this, spriteID, 10, loc, false);
+<br/>
+         m_mobiles.push_back(pMobile);
+<br/>
+         ++m_enemiesOnScreen;
+<br/>
+         break;
+<br/>
+<br/>
+      // the sprite is an enemy NYI
+<br/>
+      case SPRITE_TYPE_BOSS:
+<br/>
+         ++m_bossesOnScreen;
+<br/>
+         break;
+<br/>
+<br/>
+      // the sprite is the player
+<br/>
+      case SPRITE_TYPE_PLAYER:
+<br/>
+         m_startingPoint = loc;
+<br/>
+         m_pPlayer = new MEMORY_LEVEL CPlayer(this, spriteID, STARTING_HEALTH, loc);
+<br/>
+         m_mobiles.push_back(m_pPlayer);
+<br/>
+         break;
+<br/>
+<br/>
+      default:
+<br/>
+         DEBUG_HALT("LVL:_LoadSprite - Unidentified Mobile");
+<br/>
+         break;
+<br/>
+      }
+<br/>
+<br/>
+      if (m_mobiles.size() == MAX_MOBILES)
+<br/>
+         DEBUG_HALT("LVL:_LoadSprite - Mobile Overflow");
+<br/>
+   }
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+below is my new/delete
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">// =================================================================================
+<br/>
+// OPERATOR: new
+<br/>
+void *operator new(size_t size)
+<br/>
+{
+<br/>
+#ifndef _RELEASE_BUILD
+<br/>
+   g_objectCount += 1;
+<br/>
+   g_memorySize += size;
+<br/>
+   size_t memNeeded = size + sizeof(DataHeader);
+<br/>
+   g_memoryHeaderSize += sizeof(DataHeader);
+<br/>
+   char *pMemory = (char*)malloc(memNeeded);
+<br/>
+   
+<br/>
+   if (pMemory == NULL)
+<br/>
+   {
+<br/>
+      PREP_TEST_PRINT
+<br/>
+         printf("\n MEMORY FAILURE\n\n mem header:--%d\n mem data:----%d\n mem total:---%d\n mem objects:-%d\n",
+<br/>
+            GetTotalHeaderMemorySize(), GetTotalMemorySize(), GetTotalHeaderMemorySize() + GetTotalMemorySize(), GetObjectCount());
+<br/>
+      printf("\n ATTEMPTED ALLOCATION\n\n data size:--------%d\n header size:------%d\n total mem needed:-%d", size, sizeof(DataHeader), size + sizeof(DataHeader));
+<br/>
+      while(1){}
+<br/>
+   }
+<br/>
+<br/>
+   DataHeader *pHeader = (DataHeader*)pMemory;
+<br/>
+   pHeader-&gt;dataSize = size;
+<br/>
+   void *pStart = pMemory + sizeof(DataHeader);
+<br/>
+   return pStart;
+<br/>
+#else
+<br/>
+   return malloc(size);
+<br/>
+#endif
+<br/>
+}
+<br/>
+<br/>
+// =================================================================================
+<br/>
+// OPERATOR: delete
+<br/>
+void operator delete(void *pData)
+<br/>
+{
+<br/>
+#ifndef _RELEASE_BUILD
+<br/>
+   g_objectCount -= 1;
+<br/>
+   DataHeader *pHeader = (DataHeader*)((char*)pData - sizeof(DataHeader));
+<br/>
+   g_memorySize -= pHeader-&gt;dataSize;
+<br/>
+   g_memoryHeaderSize -= sizeof(DataHeader);
+<br/>
+   free(pHeader);
+<br/>
+#else
+<br/>
+   free(pData);
+<br/>
+#endif
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+When I run my program I get a a failure outputting:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+=============================
+<br/>
+=
+<br/>
+= MEMORY FAILURE
+<br/>
+=
+<br/>
+= mem header:--64
+<br/>
+= mem data:----28239
+<br/>
+= mem total:---28303
+<br/>
+= mem objects:-16
+<br/>
+=
+<br/>
+= ATTEMPTED ALLOCATION
+<br/>
+=
+<br/>
+= data size:--------52
+<br/>
+= header size:------4
+<br/>
+= total mem needed:-56
+<br/>
+=============================</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+the failed new is the first mobile of the level, the player. This is the failing call </span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">m_pPlayer = new MEMORY_LEVEL CPlayer(this, spriteID, STARTING_HEALTH, loc); </td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Am I out of memory or something? What should I do :/
+<br/>
+<br/>
+<br/>
+Ty for any help<br/>_________________<br/><a class="postlink" href="http://sacredpotion.blogspot.com/" target="_blank"><span style="color: red">My Homebrew Games</span></a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#170650 - Azenris - Fri Oct 09, 2009 3:13 pm</h4>
+    <div class="postbody"><span class="postbody">Hmm, might be onto something. Just gonna test sommet! Sorry for post
+<br/>
+<br/>
+EDIT:
+<br/>
+<br/>
+I checked a previous allocation, it was big and included an array of u16, 2000 elements. I changed that to a pointer and dynamically allocated that.
+<br/>
+<br/>
+Is it because I tried to allocate something to big at once? or because the array was to big.
+<br/>
+<br/>
+Well anyway it works now, thought id post how I changed it to work incase anyone else has the same problem<br/>_________________<br/><a class="postlink" href="http://sacredpotion.blogspot.com/" target="_blank"><span style="color: red">My Homebrew Games</span></a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#170652 - sverx - Fri Oct 09, 2009 3:35 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Azenris wrote:</b></span></td> </tr> <tr> <td class="quote">I checked a previous allocation, it was big and included an array of u16, 2000 elements.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+that's barely 4KB...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#170671 - Azenris - Sat Oct 10, 2009 2:43 pm</h4>
+    <div class="postbody"><span class="postbody">ok I made a stupid question :( Its just that it was my biggest allocation. but anyway I was re-looking at some of my code and I found a loop which was writing past the end of an array. This was probably my real problem.<br/>_________________<br/><a class="postlink" href="http://sacredpotion.blogspot.com/" target="_blank"><span style="color: red">My Homebrew Games</span></a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#170672 - keldon - Sat Oct 10, 2009 7:13 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Azenris wrote:</b></span></td> </tr> <tr> <td class="quote">ok I made a stupid question :( Its just that it was my biggest allocation. but anyway I was re-looking at some of my code and I found a loop which was writing past the end of an array. This was probably my real problem.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+<a class="postlink" href="http://www.parashift.com/c++-faq-lite/containers.html#faq-34.1" target="_blank">Arrays are evil</a>!
+<br/>
+<br/>
+Ok, I use them very often; but just be aware of the evil you are doing ;)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#170921 - Azenris - Mon Oct 26, 2009 5:00 pm</h4>
+    <div class="postbody"><span class="postbody">OK I got a problem recently with weird behaviour, and I bet its an array causing the problem!
+<br/>
+<br/>
+I just made an enemy spawner, and it crashes on making its third enemy, but if my character collects an item it wont, also if my level has more items on to start with the problem doesn't show. blah.
+<br/>
+<br/>
+I'm going to start using more of the containers cos its annoying me!
+<br/>
+<br/>
+EDIT:
+<br/>
+Well I found my bad code and fixed it. It was actually some older code too, meaning it was hiding the whole time and only just became a noticeable problem :/<br/>_________________<br/><a class="postlink" href="http://sacredpotion.blogspot.com/" target="_blank"><span style="color: red">My Homebrew Games</span></a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#170930 - keldon - Tue Oct 27, 2009 12:20 am</h4>
+    <div class="postbody"><span class="postbody">Was it a bug that could have been caught with an assertion? Arrays are fine when used properly; just be sure that all variables/pointers are initialized before they are accessed and the state accepts your command (be it array index, or function).
+<br/>
+<br/>
+Be sure to use sparingly; there is no need to (for example) assert something that has already been proved true already.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#170950 - Azenris - Tue Oct 27, 2009 4:15 pm</h4>
+    <div class="postbody"><span class="postbody">I actually caught the bug with an assert, I didn't have many in my code, but went through it adding them and caught it.<br/>_________________<br/><a class="postlink" href="http://sacredpotion.blogspot.com/" target="_blank"><span style="color: red">My Homebrew Games</span></a></span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

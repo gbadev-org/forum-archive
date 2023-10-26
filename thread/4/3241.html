@@ -1,0 +1,139 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Problem with our college project - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > Problem with our college project</h2>
+<div id="posts">
+<div class="post">
+    <h4>#19310 - slboytoy - Fri Apr 16, 2004 10:09 pm</h4>
+    <div class="postbody"><span class="postbody">Hi, my group and I are doing a handheld logic analyzer, which we are using the GBA to read memory and display the waveforms accordingly.  The one problem is our zooming.  We have a bunch of waveforms and we can zoom in and out to give the user a better view of what they sampled.  To do this, we just sample more or less spots of memory, but here is the problem.
+<br/>
+<br/>
+When we try to sample more then 30 spots of memory into an array, our waveforms screw up.  The code can be downloaded from..
+<br/>
+<br/>
+<a href="http://www.slboytoy.com/program.zip" target="_blank">www.slboytoy.com/program.zip</a>
+<br/>
+<br/>
+?Saving.c? is where we are sampling the test data.
+<br/>
+<br/>
+?Input.c? has 18 zooms, the first two don?t work.  It?s when Mem_length (the length in size of memory being sampled) goes more then 30.
+<br/>
+<br/>
+Even our C++/java teacher can?t figure this one out.  If anyone could fix it, I?ll call them GBA king.  Lol.  Thanks if anyone takes a look.  Just post back, if you have any questions.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#19346 - sajiimori - Sat Apr 17, 2004 7:13 pm</h4>
+    <div class="postbody"><span class="postbody">I posted this last night, but to the wrong thread. ;P  I've been staying up too late...
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+   for(i=0; i &lt; 7; i++)
+<br/>
+   {
+<br/>
+      for(b=0; b &lt; Mem_Length; b++)
+<br/>
+      {
+<br/>
+         if(Data[b] &amp; (1 &lt;&lt; i ))
+<br/>
+            channels[i] |= 1 &lt;&lt; ((Mem_Length - 1) - b);
+<br/>
+      }
+<br/>
+   }
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+If Mem_Length is greater than 32, you're shifting off the edge of the 32-bit long.  Try long long for 64 bits (if your compiler supports it), or use a custom structure.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#19404 - slboytoy - Mon Apr 19, 2004 5:29 am</h4>
+    <div class="postbody"><span class="postbody">Thanks, that was one of the main things we were looking at.  We tried a long, but still got the same effect, so we didn't think about it.  
+<br/>
+<br/>
+By long long, don't you mean a double?  Over the weekend, that part is what I was thinking about looking into again, about shifting off the edge.  I'll post back and let you know if we got it or not tomorrow.
+<br/>
+Thanks again.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#19415 - slboytoy - Mon Apr 19, 2004 4:22 pm</h4>
+    <div class="postbody"><span class="postbody">well, i tried using long long AND double but neither of them work.  you mentioned using a custom structure....will that allow us to define a 64 bit variable or is it literally a structure containing multiple ints????</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#19421 - poslundc - Mon Apr 19, 2004 7:27 pm</h4>
+    <div class="postbody"><span class="postbody">long long is not the same as a double. long long is an integer data type, and double is a floating-point type. Although they technically both consume two 64-bit registers, as a general rule floating point types do not go well with GBA programming.
+<br/>
+<br/>
+long long - in my experience with GCC - is kind of a finicky bugger and really only designed to do a few special-case things you can't do with 32-bit data types. You should not use long long for general-purpose calculations like the kind you are doing.
+<br/>
+<br/>
+You should rework your code so that you cannot shift past the end of a variable. Eg. if the shift is too big, move on to the next entry in the array. Or however your application is designed.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#19422 - sajiimori - Mon Apr 19, 2004 7:28 pm</h4>
+    <div class="postbody"><span class="postbody">Long long is an integer type, and on ARM-GCC it's 64 bits.  Long and int are both 32 bits.  Double is a floating point type, so it's totally different.
+<br/>
+<br/>
+I think the problem is that the compiler assumes the result of this expression is an int:</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">1 &lt;&lt; ((Mem_Length - 1) - b);</td> </tr></table><span class="postbody">I tried get it to treat that expression as a long long by putting LL on the 1 and casting the whole expression, but it didn't work.  Unless somebody else has an answer, this seems like a reasonable solution:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+typedef struct { unsigned int hi, lo; } DoubleWord;
+<br/>
+<br/>
+void GetChannels(...)
+<br/>
+{
+<br/>
+  ...
+<br/>
+  // does this initialize all?
+<br/>
+  DoubleWord channels[7] = {{0,0}};
+<br/>
+<br/>
+  ...
+<br/>
+  {
+<br/>
+    int shift = Mem_Length - 1 - b;
+<br/>
+    if(shift &gt; 31)
+<br/>
+      channels[i].hi |= 1 &lt;&lt; (shift - 31);
+<br/>
+    else
+<br/>
+      channels[i].lo |= 1 &lt;&lt; shift;
+<br/>
+  }
+<br/>
+  ...
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Of course, you'll also have to modify Display() to handle the new type.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

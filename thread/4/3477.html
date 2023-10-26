@@ -1,0 +1,872 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Mixing 8ad and Apex - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > Mixing 8ad and Apex</h2>
+<div id="posts">
+<div class="post">
+    <h4>#21323 - DiscoStew - Thu May 27, 2004 8:54 pm</h4>
+    <div class="postbody"><span class="postbody">Is it possible? I haven't taken much of a look at the Apex Sound System, but I am hoping that I might be able to use 8ad for long audio streams, while using Apex for multiple sfx. I'm using DevkitAdv r5-beta3 in C.<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#21349 - tepples - Fri May 28, 2004 3:16 am</h4>
+    <div class="postbody"><span class="postbody">My 8ad and GSM codecs decode to a signed 16-bit buffer in RAM. You can easily convert this to a signed 8-bit buffer in RAM. (In fact, it may be fastest to use a bit of otherwise unused VRAM for these buffers, as VRAM has lower wait state than EWRAM.) I haven't used AAS, but <a class="postlink" href="http://www.apex-designs.net/AASDocs/api_sfx.html" target="_blank">this document</a> should prove helpful in playing arbitrary 8-bit buffers.
+<br/>
+<br/>
+CORRECTION: 8ad as provided decodes to a signed 8-bit buffer. Still, changing the decoder output word length is trivial.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"><br/><br/>Last edited by tepples on Wed Oct 20, 2004 8:10 pm; edited 1 time in total</span></div>    
+</div>
+<div class="post">
+    <h4>#21391 - DiscoStew - Fri May 28, 2004 6:19 pm</h4>
+    <div class="postbody"><span class="postbody">Would converting just be a simple rightshift of 8 bits, with also taking into consideration of the buffers being signed, or am I completely wrong? I have no previous knowledge of audio whatsoever, which is why I want to mix the two things together. I'm learning as I go along.<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#21394 - jd - Fri May 28, 2004 6:37 pm</h4>
+    <div class="postbody"><span class="postbody">If you just want to exclusively switch between using one or the other then you shouldn't need to do anything too tricky. If you want to mix 8ad's output using AAS then that won't be so straightforward. Tepples' suggestion should work if you've got enough space to decompress the entire 8ad sound in one go. (However, note that as well as converting to 8-bit signed format you'll also need to clip the output to -127 to 127 (rather than -128 to 127) for the sound to work properly with AAS.)
+<br/>
+<br/>
+If you haven't got enough room to decompress the entire 8ad sound file and you still want AAS to mix 8ad's output then it might be possible to bodge something together by getting 8ad to output an appropriate chunk of data (freq/50 bytes, where freq is the frequency you're telling AAS to play 8ad's output at) in the right format and setting the 8ad channel back to beginning of 8ad's new output with an AAS_SFX_Play() command each time a Timer 1 interrupt occurs before calling AAS_Timer1InterruptHandler(). A possible problem is that Timer 1 interrupts need to be handled quickly so you might find you need to do AAS_Timer1InterruptHandler() first and then do all the other stuff afterwards to avoid clicks in the audio.</span><span class="gensmall"><br/><br/>Last edited by jd on Fri May 28, 2004 7:16 pm; edited 5 times in total</span></div>    
+</div>
+<div class="post">
+    <h4>#21395 - jd - Fri May 28, 2004 6:45 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>DiscoStew wrote:</b></span></td> </tr> <tr> <td class="quote">Would converting just be a simple rightshift of 8 bits, with also taking into consideration of the buffers being signed, or am I completely wrong?
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+That would almost work, although you won't get correct rounding and, in the case of AAS, the sample data rather unusually needs to be clipped to -127 to 127. You'd need to do something like:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+s16* in_8ad_pos;
+<br/>
+s8* out_aas_pos;
+<br/>
+int temp;
+<br/>
+<br/>
+...
+<br/>
+<br/>
+temp = (*in_8ad_pos++ + 128)&gt;&gt;8;
+<br/>
+if ( temp == - 128 )
+<br/>
+  temp = -127;
+<br/>
+*out_aas_pos++ = temp;
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>DiscoStew wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+I have no previous knowledge of audio whatsoever, which is why I want to mix the two things together. I'm learning as I go along.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+It's your choice, but mixing two different audio systems together is a fairly difficult thing to do when you're still learning the ropes. It might be best if you focussed on doing one or the other on its own first.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#21403 - DiscoStew - Fri May 28, 2004 8:25 pm</h4>
+    <div class="postbody"><span class="postbody">jd, you just gave me an idea, but it all depends on the answer to this question. If I were to set AAS_SetConfig with AAS_CONFIG_SPATIAL_MONO, would that free up one of the sound channels? If only one channel is used with this configuration, then the other can be used for 8ad. I'd rather have mono in this configuration than deal with something I don't know much about for the moment. I pretty much use 8ad for streamed audio, whether it be music or voice dialogue, and would use AAS for sfx, and probably mono MODs.<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#21429 - jd - Sat May 29, 2004 1:26 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>DiscoStew wrote:</b></span></td> </tr> <tr> <td class="quote">jd, you just gave me an idea, but it all depends on the answer to this question. If I were to set AAS_SetConfig with AAS_CONFIG_SPATIAL_MONO, would that free up one of the sound channels?
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I'm afraid not. Even in mono, AAS still uses both Direct Sound outputs for better quality.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#21462 - tepples - Sat May 29, 2004 4:18 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>jd wrote:</b></span></td> </tr> <tr> <td class="quote">If you haven't got enough room to decompress the entire 8ad sound file and you still want AAS to mix 8ad's output then it might be possible to bodge something together by getting 8ad to output an appropriate chunk of data (freq/50 bytes, where freq is the frequency you're telling AAS to play 8ad's output at)</td> </tr></table><span class="postbody">
+<br/>
+That's very doable. The example player included with the 8ad decoder decompresses in chunks of 304 samples (one buffer per vblank at 18157 Hz), but the codec's caller can specify any number of samples to decode to IWRAM or EWRAM. The GSM decoder always generates 160 samples per call; its player uses a ring buffer to turn it into 304-byte blocks.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">A possible problem is that Timer 1 interrupts need to be handled quickly so you might find you need to do AAS_Timer1InterruptHandler() first and then do all the other stuff afterwards to avoid clicks in the audio.</td> </tr></table><span class="postbody">
+<br/>
+Easily solvable by decoding to a double buffer or ring buffer.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#21486 - DiscoStew - Sat May 29, 2004 11:25 pm</h4>
+    <div class="postbody"><span class="postbody">I understand what you mean, jd. The more you mix together, the lower the quality can be, which is why you decided to use both channels. Even in 4 chn mono, audio would sound better if the groups are split into 2 groups, each using a channel.
+<br/>
+<br/>
+tepples, that was exactly what I was thinking before the whole mono idea I had. If I'm correct in my assumption, I can do the following. Since your 8ad decoder outputs to buffers, I can use jd's AAS's SFX_Play function to play the current buffer, and perhaps ever VBlank switch the play function to read from the other buffer. Of course I'd have to see this actually work with correct timing.
+<br/>
+<br/>
+However, since 8ad decodes to 16-bit signed, I guess I would have to do a bit of tweeking of the decoder's code internally to convert it to 8-bit signed. Also, I guess I'd have to edit all sounds so that instead of being in the 8-bit range of -128 to 127, they will be ranged from -127 to 127. I guess in 16-bit signed terms the lowest value should be -32512. Hopefully this difference won't affect sound too much.
+<br/>
+<br/>
+All in all, this is still theory, as I have only worked with 8ad and editing outside it's decoding code. I'm going to get right on this, and report back later if this works successfully. I would be extremely thrilled if it does.<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#21491 - jd - Sun May 30, 2004 12:26 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>DiscoStew wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+tepples, that was exactly what I was thinking before the whole mono idea I had. If I'm correct in my assumption, I can do the following. Since your 8ad decoder outputs to buffers, I can use jd's AAS's SFX_Play function to play the current buffer, and perhaps ever VBlank switch the play function to read from the other buffer. Of course I'd have to see this actually work with correct timing.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+That should work, although you'll need to use Timer 1 to switch between buffers rather than VBlank.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>DiscoStew wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+However, since 8ad decodes to 16-bit signed, I guess I would have to do a bit of tweeking of the decoder's code internally to convert it to 8-bit signed. Also, I guess I'd have to edit all sounds so that instead of being in the 8-bit range of -128 to 127, they will be ranged from -127 to 127. I guess in 16-bit signed terms the lowest value should be -32512. Hopefully this difference won't affect sound too much.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+The code above should do the conversion for 8ad's output. Regular sound effects should be converted via the Conv2AAS utility. This will do the clipping for you as well as other things like automatically removing any redundancy between your samples and the samples in any MODs you might be using.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#21493 - DiscoStew - Sun May 30, 2004 12:43 am</h4>
+    <div class="postbody"><span class="postbody">tepples, after looking at the 8ad code again, I noticed that your code automatically converts to 8-bit signed. This should have been obvious to me in the first place since the Direct Sound channels are 8-bit DAC. That just means less fiddling around for me. Actually, perhaps I don't need to change each 8ad sound/music file to be in limits for use in AAS, if I can make a simple change in the decoder.
+<br/>
+<br/>
+jd, doesn't AAS use Timer0 and Timer1? Or is that just when using the stereo setting? Also, since I'm using DMA3 for my other stuff in my program, do I have to switch over to AAS_DoDMA3? At the moment, I'm only using DMA3 during the VBlank phase.<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#21497 - jd - Sun May 30, 2004 1:18 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>DiscoStew wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+jd, doesn't AAS use Timer0 and Timer1?
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Yes. To get AAS to work you need to make a Timer 1 interrupt (which occurs roughly 50 times a second) result in a call to AAS_Timer1InterruptHandler() (or a call to AAS_FastTimer1InterruptHandler() - see below). However, this doesn't mean that you can't also have other things happen when a Timer 1 interrupt occurs (like creating the next batch of 8ad data, for example).
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>DiscoStew wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+Also, since I'm using DMA3 for my other stuff in my program, do I have to switch over to AAS_DoDMA3?
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+If you're using AAS then you must use AAS_DoDMA3 or write out all the parameters for a DMA3 transfer yourself using a single stmia instruction (which is all AAS_DoDMA3 does). This is because the mixer uses DMA3 which would cause problems if your code was halfway through initialising a DMA3 transfer when the mixer was called.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>DiscoStew wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+At the moment, I'm only using DMA3 during the VBlank phase.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+AAS is syncronised via Timers 0 and 1, it doesn't use VBlanks. (Timer 0 ticks at a rate determined by the mixing frequency and Timer 1 overflows roughly 50 times a second. This is slightly more efficient than syncronising to VBlank as it fits in better with MOD timing and allows the audio to be mixed in bigger batches.)
+<br/>
+<br/>
+I should perhaps clarify a bit here. AAS can be used in one of two ways:
+<br/>
+<br/>
+1) The easy way - see "AASExample". A Timer 1 interrupt must result in a call to AAS_Timer1InterruptHandler(). This routine gets the GBA to play a new batch of audio and mixes the next batch. Pros: Easy to use. Cons: Won't work if you have other CPU intensive interrupts.
+<br/>
+<br/>
+2) The slightly harder way - see "AASExample2". A Timer 1 interrupt must result in a call to AAS_FastTimer1InterruptHandler(). Additionally, AAS_DoWork() must be called at least 50 times a second (although it is safe to call it more often than this) - this usually means putting it in VBlank. Also, the special "AAS_MultipleInterrupts" mode in the supplied crt0.s file must be used to give priority to Timer 1 interrupts. Pros: Works in all situations. Cons: Harder to set up, slightly less efficient.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#21501 - DiscoStew - Sun May 30, 2004 2:18 am</h4>
+    <div class="postbody"><span class="postbody">Thanks for the info. I'll try that.
+<br/>
+The thing I see with 8ad is that decoding is processed every VBlank, which would roughly be about 60 times a second, compared to AAS's 50 times a second. I just need to work on it.
+<br/>
+<br/>
+I'm currently looking through the Make files included with the examples to see how you arranged compiling and linking so that later I can incorporate AAS and 8ad together into one library, though I still don't even know how to make a library file yet. First I need to get this all working however, so the library will have to wait.<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#21503 - jd - Sun May 30, 2004 4:46 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>DiscoStew wrote:</b></span></td> </tr> <tr> <td class="quote">Thanks for the info. I'll try that.
+<br/>
+The thing I see with 8ad is that decoding is processed every VBlank, which would roughly be about 60 times a second, compared to AAS's 50 times a second. I just need to work on it.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+You should obviously get the final word from Tepples on this, but my understanding was that 8ad could be made to work with any decoding period - it's just that the example player happens to use VBlank.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>DiscoStew wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+I'm currently looking through the Make files included with the examples to see how you arranged compiling and linking so that later I can incorporate AAS and 8ad together into one library, though I still don't even know how to make a library file yet. First I need to get this all working however, so the library will have to wait.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+In this context, libraries are just collections of object files - they're made with the "ar" command, although I'm not sure I see the benefit of putting AAS and 8ad into one library in this situation.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#21505 - tepples - Sun May 30, 2004 6:22 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>jd wrote:</b></span></td> </tr> <tr> <td class="quote">You should obviously get the final word from Tepples on this, but my understanding was that 8ad could be made to work with any decoding period - it's just that the example player happens to use VBlank.</td> </tr></table><span class="postbody">
+<br/>
+Right. The 8ad decoder lives in playad.iwram.c; here's its proto:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void decode_ad(signed char *dst, const unsigned char *src, unsigned int len);</td> </tr></table><span class="postbody">
+<br/>
+OOPS! After having worked with the GSM decoder for so long, I had forgotten that the 8ad decoder writes directly to 8-bit.
+<br/>
+<br/>
+Anyway, the <span style="font-weight: bold">len</span> argument specifies the (even) number of output samples to generate. No, the code is not reentrant; I will have to go refactor its use of ADGlobals before the next version if one wants to play multiple samples at once.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#21530 - DiscoStew - Mon May 31, 2004 2:10 am</h4>
+    <div class="postbody"><span class="postbody">I've just about got everything for having 8ad work with AAS, but obviously since AAS is what 8ad will use, I tried making a simple project with the first AAS example. However, I am having a rather difficult time with the MAK file in VC++. This is also my first time in using a library in a project.
+<br/>
+First, my project folder is set up just about like the AASExample is set up, with the AAS library and header in a subfolder, but the InterruptProcess function is in it's own file to be compiled as ARM in IWRAM, and the AAS functions in main() only go up to AAS_ShowLogo().
+<br/>
+Here is the log created, and the MAK file
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+Microsoft (R) Program Maintenance Utility   Version 6.00.8168.0
+<br/>
+Copyright (C) Microsoft Corp 1988-1998. All rights reserved.
+<br/>
+<br/>
+ C:\GBA\DEVKITADV-r5\bin\as -I C:\GBA\DEVKITADV-r5\arm-agb-elf\include -I C:\GBA\DEVKITADV-r5\lib\gcc-lib\arm-agb-elf\3.0.2\include -I LibAAS -mthumb-interwork E:\AUDIO_HANDLER\crt0.s -ocrt0.o
+<br/>
+------------------------------------------
+<br/>
+ASM-Sources Compiled
+<br/>
+------------------------------------------
+<br/>
+ C:\GBA\DEVKITADV-r5\bin\as -I C:\GBA\DEVKITADV-r5\arm-agb-elf\include -I C:\GBA\DEVKITADV-r5\lib\gcc-lib\arm-agb-elf\3.0.2\include -I LibAAS -mthumb-interwork E:\AUDIO_HANDLER\AAS_Data.s -oAAS_Data.o
+<br/>
+------------------------------------------
+<br/>
+ASM-Sources Compiled
+<br/>
+------------------------------------------
+<br/>
+ C:\GBA\DEVKITADV-r5\bin\gcc  -I C:\GBA\DEVKITADV-r5\arm-agb-elf\include -I C:\GBA\DEVKITADV-r5\lib\gcc-lib\arm-agb-elf\3.0.2\include -I LibAAS -I E:\AUDIO_HANDLER -marm -mthumb-interwork -c -g -O3 -Wall -fverbose-asm Interrupt.cpp   asm_Functions.cpp
+<br/>
+Interrupt.cpp:18:2: warning: no newline at end of file
+<br/>
+asm_Functions.cpp:33:15: warning: multi-line string literals are deprecated
+<br/>
+asm_Functions.cpp:289:14: warning: multi-line string literals are deprecated
+<br/>
+ C:\GBA\DEVKITADV-r5\bin\gcc  -I C:\GBA\DEVKITADV-r5\arm-agb-elf\include -I C:\GBA\DEVKITADV-r5\lib\gcc-lib\arm-agb-elf\3.0.2\include -I LibAAS -I E:\AUDIO_HANDLER -mthumb -mthumb-interwork -c -g -O3 -Wall -fverbose-asm Audio_Handler.cpp
+<br/>
+------------------------------------------
+<br/>
+CPP-Sources Compiled
+<br/>
+------------------------------------------
+<br/>
+ C:\GBA\DEVKITADV-r5\bin\ld -L C:\GBA\DEVKITADV-r5\lib\gcc-lib\arm-agb-elf\3.0.2\interwork -L C:\GBA\DEVKITADV-r5\arm-agb-elf\lib\interwork -L E:\AUDIO_HANDLER -T LinkScript -o Audio_Handler.elf crt0.o          crtbegin.o      crtend.o        AAS_Data.o    Interrupt.o    asm_Functions.o   Audio_Handler.o -lstdc++ -lc
+<br/>
+crt0.o: In function `intr_main':
+<br/>
+crt0.o(.iwram+0x8): undefined reference to `InterruptProcess'
+<br/>
+Interrupt.o:E:\AUDIO_HANDLER/Interrupt.cpp:12: undefined reference to `AAS_Timer1InterruptHandler'
+<br/>
+Audio_Handler.o:E:\AUDIO_HANDLER/Audio_Handler.cpp:12: undefined reference to `AAS_SetConfig'
+<br/>
+Audio_Handler.o:E:\AUDIO_HANDLER/Audio_Handler.cpp:15: undefined reference to `AAS_MOD_Play'
+<br/>
+Audio_Handler.o:E:\AUDIO_HANDLER/Audio_Handler.cpp:18: undefined reference to `AAS_ShowLogo'
+<br/>
+C:\GBA\DEVKITADV-r5\arm-agb-elf\lib\interwork\libc.a(agbmain.o): In function `AgbMain':
+<br/>
+../../../../../../../gcc-3.2.2/newlib/libc/sys/agb/agbmain.c:24: undefined reference to `_init'
+<br/>
+../../../../../../../gcc-3.2.2/newlib/libc/sys/agb/agbmain.c:25: undefined reference to `_fini'
+<br/>
+NMAKE : fatal error U1077: 'C:\GBA\DEVKITADV-r5\bin\ld' : return code '0x1'
+<br/>
+Stop.
+<br/>
+Error executing NMAKE.
+<br/>
+<br/>
+Results
+<br/>
+Audio_Handler.exe - 1 error(s), 3 warning(s)
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+# ------------------------------------------
+<br/>
+# Title:      Default Makefile for use in VC++
+<br/>
+# File:          Avenger.mak
+<br/>
+# Revision:     01/06/2002
+<br/>
+# 
+<br/>
+# Author:      Benjamin D. Hale
+<br/>
+# Orignally by:         Jaap Suter
+<br/>
+# Contributed to by:    Christer Andersson
+<br/>
+# 
+<br/>
+# Info:              This file is contains the make-instructions
+<br/>
+#         for the project. Replace DEVDIR with the appropriate
+<br/>
+#                       base directory for devkitadv. After you make the 
+<br/>
+#                       needed modifications here rename this file to
+<br/>
+#                       &lt;project_name&gt;.mak so Visual C++ does not get
+<br/>
+#                       confused.
+<br/>
+# -------------------------------------------
+<br/>
+<br/>
+# -------------------------------------------
+<br/>
+# Project name definition makes this whole thing 
+<br/>
+# a lot easier to use. Only two total modifications
+<br/>
+# (other than what .o files will be needed)
+<br/>
+# should be needed to get this working with your
+<br/>
+# compiler and Visual C++. Replace "Default" with
+<br/>
+# your project's name.
+<br/>
+# -------------------------------------------
+<br/>
+<br/>
+PROJECT = Audio_Handler
+<br/>
+<br/>
+# -------------------------------------------
+<br/>
+# Define some directories;
+<br/>
+# -------------------------------------------
+<br/>
+<br/>
+# -------------------------------------------
+<br/>
+# Base Directory for gcc arm-agb-elf replace with 
+<br/>
+# wherever you put your gba devkitadv files.
+<br/>
+# -------------------------------------------
+<br/>
+<br/>
+DEVDIR  = C:\GBA\DEVKITADV-r5\
+<br/>
+<br/>
+# -------------------------------------------
+<br/>
+# Source directory (where your project's source files are located.)
+<br/>
+# -------------------------------------------
+<br/>
+<br/>
+SRCDIR  = E:\AUDIO_HANDLER
+<br/>
+<br/>
+<br/>
+<br/>
+# -------------------------------------------
+<br/>
+# Compiler Directories for binaries, includes and libs.
+<br/>
+# -------------------------------------------
+<br/>
+<br/>
+CMPDIR  = $(DEVDIR)\bin
+<br/>
+LIBDIR  = $(DEVDIR)\lib\gcc-lib\arm-agb-elf\3.0.2\interwork
+<br/>
+LIBDIR2 = $(DEVDIR)\arm-agb-elf\lib\interwork
+<br/>
+INCDIR  = $(DEVDIR)\lib\gcc-lib\arm-agb-elf\3.0.2\include
+<br/>
+INCDIR2 = $(DEVDIR)\arm-agb-elf\include
+<br/>
+<br/>
+<br/>
+# -------------------------------------------
+<br/>
+# END of directory defines
+<br/>
+# -------------------------------------------
+<br/>
+<br/>
+# -------------------------------------------
+<br/>
+# Define what extensions we use;
+<br/>
+# -------------------------------------------
+<br/>
+.SUFFIXES : .cpp .c .s
+<br/>
+<br/>
+<br/>
+# -------------------------------------------
+<br/>
+# Define the flags for the compilers;
+<br/>
+# -------------------------------------------
+<br/>
+<br/>
+C_ARM_FLAGS = -I $(INCDIR2) -I $(INCDIR) -I LibAAS -I $(SRCDIR) -marm -mthumb-interwork -c -g -O3 -Wall -fverbose-asm
+<br/>
+C_THUMB_FLAGS = -I $(INCDIR2) -I $(INCDIR) -I LibAAS -I $(SRCDIR) -mthumb -mthumb-interwork -c -g -O3 -Wall -fverbose-asm
+<br/>
+<br/>
+SFLAGS  = -I $(INCDIR2) -I $(INCDIR) -I LibAAS -mthumb-interwork 
+<br/>
+LDFLAGS = -L $(LIBDIR) -L $(LIBDIR2) -L LibAAS -l AAS -T LinkScript 
+<br/>
+<br/>
+# -------------------------------------------
+<br/>
+# Define the list of all O files;
+<br/>
+# Just follow the syntax shown to add any 
+<br/>
+# other objects your project may need to
+<br/>
+# compile properly. You will need to add 
+<br/>
+# files to this part to make it work with 
+<br/>
+# your project add a \ to the end of all o
+<br/>
+# files except the last one. Like below.
+<br/>
+# -------------------------------------------
+<br/>
+<br/>
+<br/>
+C_ARM_FILES         = \
+<br/>
+               Interrupt.cpp      \
+<br/>
+               asm_Functions.cpp
+<br/>
+               
+<br/>
+               
+<br/>
+<br/>
+C_THUMB_FILES      = \
+<br/>
+               Audio_Handler.cpp
+<br/>
+<br/>
+<br/>
+O_FILES            = \
+<br/>
+                   crt0.o             \
+<br/>
+                      crtbegin.o         \
+<br/>
+                      crtend.o           \
+<br/>
+               AAS_Data.o         \
+<br/>
+               Interrupt.o         \
+<br/>
+               asm_Functions.o      \
+<br/>
+               Audio_Handler.o
+<br/>
+<br/>
+<br/>
+# -------------------------------------------
+<br/>
+# There should be no need to modify anything
+<br/>
+# below here.
+<br/>
+# -------------------------------------------
+<br/>
+<br/>
+# -------------------------------------------
+<br/>
+# Define the final dependecy;
+<br/>
+# -------------------------------------------
+<br/>
+all : $(PROJECT).gba
+<br/>
+<br/>
+# -------------------------------------------
+<br/>
+# Define the copy from .elf to .bin file
+<br/>
+# -------------------------------------------
+<br/>
+$(PROJECT).gba : $(PROJECT).elf
+<br/>
+   $(CMPDIR)\objcopy -v -O binary $(PROJECT).elf $(PROJECT).gba
+<br/>
+   -@echo ------------------------------------------ 
+<br/>
+   -@echo Done 
+<br/>
+   -@echo ------------------------------------------ 
+<br/>
+   
+<br/>
+# -------------------------------------------
+<br/>
+# Define the linker instruction;
+<br/>
+# -------------------------------------------
+<br/>
+$(PROJECT).elf : $(O_FILES)
+<br/>
+   $(CMPDIR)\ld $(LDFLAGS) -o $(PROJECT).elf $(O_FILES) -lstdc++ -lc  
+<br/>
+   -@echo ------------------------------------------ 
+<br/>
+   -@echo Linking Done
+<br/>
+   -@echo ------------------------------------------ 
+<br/>
+<br/>
+# -------------------------------------------
+<br/>
+# Define each compile;
+<br/>
+# -------------------------------------------
+<br/>
+{$(SRCDIR)}.cpp.o::
+<br/>
+   $(CMPDIR)\gcc  $(C_ARM_FLAGS) $(C_ARM_FILES)
+<br/>
+   $(CMPDIR)\gcc  $(C_THUMB_FLAGS) $(C_THUMB_FILES)
+<br/>
+   -@echo ------------------------------------------ 
+<br/>
+   -@echo CPP-Sources Compiled 
+<br/>
+   -@echo ------------------------------------------ 
+<br/>
+<br/>
+{$(SRCDIR)}.c.o::
+<br/>
+   $(CMPDIR)\gcc  $(C_ARM_FLAGS) $(C_ARM_FILES)
+<br/>
+   $(CMPDIR)\gcc  $(C_THUMB_FLAGS) $(C_THUMB_FILES)
+<br/>
+   -@echo ------------------------------------------
+<br/>
+   -@echo C-sources Compiled
+<br/>
+   -@echo ------------------------------------------
+<br/>
+<br/>
+# -------------------------------------------
+<br/>
+# Define each assemble;
+<br/>
+# -------------------------------------------
+<br/>
+{$(SRCDIR)}.s.o:
+<br/>
+   $(CMPDIR)\as $(SFLAGS) $(SRCDIR)\$*.s -o$@
+<br/>
+   -@echo ------------------------------------------ 
+<br/>
+   -@echo ASM-Sources Compiled 
+<br/>
+   -@echo ------------------------------------------ 
+<br/>
+<br/>
+# -------------------------------------------
+<br/>
+# EOF;</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+As you can see, I'm using the MAK file create from the GBA AppWizard, only I have made my own modifications. I have never really got the concept of MAK files, so bare with me. I looked through the MAK that came with the AASExample, and tried to see if I could make some more changes like adding a folder into the linking phase of the MAK file. However, as from the LOG, I am having difficulty.
+<br/>
+<br/>
+It can't seem to find the InterruptProcess function, which other than moving it into a different file, is exactly the same as the example shows. Also it can't seem to find any AAS functions, even though I added the folder it is located in. This is the only style of MAK files I've ever used, so almost every other MAK file is foreign to me. As I said before, I don't have a good concept with them.<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#21532 - jd - Mon May 31, 2004 3:16 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+Interrupt.cpp:18:2: warning: no newline at end of file
+<br/>
+asm_Functions.cpp:33:15: warning: multi-line string literals are deprecated
+<br/>
+asm_Functions.cpp:289:14: warning: multi-line string literals are deprecated
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+These errors are fairly self-explanatory, I guess you were going to fix them yourself.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+C:\GBA\DEVKITADV-r5\bin\ld -L C:\GBA\DEVKITADV-r5\lib\gcc-lib\arm- agb-elf\3.0.2\interwork -L C:\GBA\DEVKITADV-r5\arm-agb-elf\lib\interwork -L E:\AUDIO_HANDLER -T LinkScript -o Audio_Handler.elf crt0.o? ? ? ? ? crtbegin.o? ? ? crtend.o? ? ?  AAS_Data.o? ? Interrupt.o? ? asm_Functions.o? ?Audio_Handler.o -lstdc++ -lc
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+How come "-L LibAAS -l AAS" isn't included here? It's in the makefile. Is this output from an earlier version of the makefile?
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+crt0.o: In function `intr_main':
+<br/>
+crt0.o(.iwram+0x8): undefined reference to `InterruptProcess'
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+If you're using C++, InterruptProcess should be declared as extern "C" to prevent name-mangling.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+Interrupt.o:E:\AUDIO_HANDLER/Interrupt.cpp:12: undefined reference to `AAS_Timer1InterruptHandler'
+<br/>
+Audio_Handler.o:E:\AUDIO_HANDLER/Audio_Handler.cpp:12: undefined reference to `AAS_SetConfig'
+<br/>
+Audio_Handler.o:E:\AUDIO_HANDLER/Audio_Handler.cpp:15: undefined reference to `AAS_MOD_Play'
+<br/>
+Audio_Handler.o:E:\AUDIO_HANDLER/Audio_Handler.cpp:18: undefined reference to `AAS_ShowLogo'
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+These are probably due to the lack of "-L LibAAS -l AAS" mentioned above.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+C:\GBA\DEVKITADV-r5\arm-agb-elf\lib\interwork\libc.a(agbmain.o): In function `AgbMain':
+<br/>
+../../../../../../../gcc-3.2.2/newlib/libc/sys/agb/agbmain.c:24: undefined reference to `_init'
+<br/>
+../../../../../../../gcc-3.2.2/newlib/libc/sys/agb/agbmain.c:25: undefined reference to `_fini'
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I'm not sure what the cause of this is, but it might possibly be C++ related. Tepples?
+<br/>
+<br/>
+By the way, I also noticed that you're not calling Conv2AAS in your makefile. This isn't mandatory but it is recommended so that you're always building with completely up-to-date files.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#21535 - DiscoStew - Mon May 31, 2004 10:38 am</h4>
+    <div class="postbody"><span class="postbody">It is very late for me right now. However, I did manage to minimize the number of errors that were generate now.
+<br/>
+<br/>
+Because the InterruptProcess function was in a CPP file, it required the extern "C" syntax, which you stated jd.
+<br/>
+<br/>
+The _init and _fini errors were fixed just by changing the entry point "int main(void)" to "int AgbMain(void)". I figured that much since the error specifically addressed "agbmain", and not "main"
+<br/>
+<br/>
+However, the actual problem with the "undefined reference to '???' error still exist. I have done this and that, but still the same exact problems still show. I checked through the forums about this, and a few things popped up like linking library files after the object files. It is too late for me to do anything other than sleep right now. I'll try again in the morning.<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#21549 - jd - Mon May 31, 2004 6:37 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>DiscoStew wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+However, the actual problem with the "undefined reference to '???' error still exist. I have done this and that, but still the same exact problems still show. I checked through the forums about this, and a few things popped up like linking library files after the object files. It is too late for me to do anything other than sleep right now. I'll try again in the morning.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+It looks to me as though the problem is definitely caused by not linking in AAS, although I don't understand how the makefile you supplied could create the output you sent. Are you sure you're not accidentally using an older version of the makefile by mistake?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#21555 - DiscoStew - Mon May 31, 2004 9:48 pm</h4>
+    <div class="postbody"><span class="postbody">How do I know if I'm using an older makefile? Isn't it just a text file with a set of rules?
+<br/>
+Anyways, for the AAS library, I've tried linking it after my object files, and now those errors are gone. But now I'm getting an actual problem with the library. Here is the new LOG...
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+C:\GBA\DEVKITADV-r5\bin\ld -L C:\GBA\DEVKITADV-r5\lib\gcc-lib\arm-agb-elf\3.0.2\interwork -L C:\GBA\DEVKITADV-r5\arm-agb-elf\lib\interwork -T LinkScript -nostartfiles -o Audio_Handler.elf crt0.o          crtbegin.o      crtend.o        AAS_Data.o    Interrupt.o    asm_Functions.o   Audio_Handler.o -lstdc++ -lc -LLibAAS -lAAS
+<br/>
+LibAAS\libAAS.a(AAS_Main.o): In function `AAS_DoWork':
+<br/>
+AAS_Main.o(.text+0x466): undefined reference to `_call_via_r3'
+<br/>
+AAS_Main.o(.text+0x47c): undefined reference to `_call_via_r3'
+<br/>
+NMAKE : fatal error U1077: 'C:\GBA\DEVKITADV-r5\bin\ld' : return code '0x1'
+<br/>
+Stop.
+<br/>
+Error executing NMAKE.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I not even using AAS_DoWork, but I guess that since I'm using AAS_Mod_Play, it probably gets called. Remember, my code resembles the AASExample, except the code stops with a while loop right after the AAS_ShowLogo function (so no SFX), so I'm only using 3 functions (AAS_SetConfig, AAS_ModPlay, and AAS_ShowLogo) along with the InterruptProcess function. Since I'm guessing this is a problem within the library itself, I can't do anything, but hopefilly you do, jd.
+<br/>
+If it does have something to do the an old version makefile, I'd like to know how to change it.<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#21566 - jd - Tue Jun 01, 2004 1:05 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>DiscoStew wrote:</b></span></td> </tr> <tr> <td class="quote">How do I know if I'm using an older makefile?</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Just to clarify: makefiles and .MAK files are the same thing. The makefile/.MAK file you provided (which specified that AAS should be linked) didn't match the output you provided (which didn't link AAS). I don't know exactly why this was, but clearly something was amiss - although you seem to have fixed it now.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>DiscoStew wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+Isn't it just a text file with a set of rules?</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Yes.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>DiscoStew wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+C:\GBA\DEVKITADV-r5\bin\ld -L C:\GBA\DEVKITADV-r5\lib\gcc-lib\arm-agb-elf\3.0.2\interwork -L C:\GBA\DEVKITADV-r5\arm-agb-elf\lib\interwork -T LinkScript -nostartfiles -o Audio_Handler.elf crt0.o          crtbegin.o      crtend.o        AAS_Data.o    Interrupt.o    asm_Functions.o   Audio_Handler.o -lstdc++ -lc -LLibAAS -lAAS
+<br/>
+LibAAS\libAAS.a(AAS_Main.o): In function `AAS_DoWork':
+<br/>
+AAS_Main.o(.text+0x466): undefined reference to `_call_via_r3'
+<br/>
+AAS_Main.o(.text+0x47c): undefined reference to `_call_via_r3'
+<br/>
+NMAKE : fatal error U1077: 'C:\GBA\DEVKITADV-r5\bin\ld' : return code '0x1'
+<br/>
+Stop.
+<br/>
+Error executing NMAKE.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+You should probably add "-mthumb-interwork" above. The "_call_via_rX" functions are normally defined in libgcc.a - is this being linked to your project?
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>DiscoStew wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+I not even using AAS_DoWork, but I guess that since I'm using AAS_Mod_Play, it probably gets called.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+It doesn't get called, although it is in the same object file as functions you are using so it does get linked.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#21573 - DiscoStew - Tue Jun 01, 2004 2:44 am</h4>
+    <div class="postbody"><span class="postbody">WOOOOHOOOO!!!!! After all these changes, it finally compiled with no errors, and even the ROM works with playing just the mod file.
+<br/>
+<br/>
+I did try adding -mthumb-interwork into the linking flags, but another problem about "unrecognised emulation mode: thumb-interwork" occurred. So before asking about that problem, I search the forums and found this thread here: <a class="postlink" href="http://forum.gbadev.org/viewtopic.php?t=2697" target="_blank">AAS_SetConfig = crash</a>, which you, jd, stated that ld was not an alias for gcc, and that linking with gcc instead of ld would fix it, and for me it did.
+<br/>
+<br/>
+Now, during the times when I was waiting for replies, I have been making functions that use 8ad, and I hope that after working with AAS a little more with SFX converted for AAS, I can try using 8ad along with AAS for the audio handling I need for my demo.
+<br/>
+<br/>
+I would like to thank tepples and jd for their help and their knowledge on these matters. They will definetely see their names in the credits of any demos/game using 8ad and AAS.<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#21577 - jd - Tue Jun 01, 2004 4:05 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>DiscoStew wrote:</b></span></td> </tr> <tr> <td class="quote">WOOOOHOOOO!!!!! After all these changes, it finally compiled with no errors, and even the ROM works with playing just the mod file.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Great!
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>DiscoStew wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+Now, during the times when I was waiting for replies, I have been making functions that use 8ad, and I hope that after working with AAS a little more with SFX converted for AAS, I can try using 8ad along with AAS for the audio handling I need for my demo.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Ok, I suggest trying short 8ad files that you can decompress completely into RAM first, before moving on to the streaming code for larger sounds.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>DiscoStew wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+I would like to thank tepples and jd for their help and their knowledge on these matters. They will definetely see their names in the credits of any demos/game using 8ad and AAS.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Thanks!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#21580 - DiscoStew - Tue Jun 01, 2004 8:06 am</h4>
+    <div class="postbody"><span class="postbody">YAAAAAYYYYYYYYY!!!!!!! I didn't think I'd get it done so quickly, but I have actually added 8ad support to AAS (well, in a sense that 8ad can be used with AAS through AAS_SFX_Play). Sorry jd, but I skipped decompressing a short 8ad completely into RAM and went to buffers. I guess I had enough info to get me by. I even set it so that it runs off the same timer that AAS_Timer1InterruptHandler uses. Even though with 8ad I'm only getting 1/2 compression, it makes a big difference when dealing with a lot of audio.
+<br/>
+<br/>
+I know it to be buggy at the moment, and very unorganized, so don't expect a demo with code. Maybe I will someday when I make a program that will organize all 8ad audio into a single file for easy linking. I plan to use this audio combination for the demo I making (which I will not speak of until I actually release the demo) which will also use my sprite handler and my background handler (whenever I get to that).
+<br/>
+<br/>
+thx goes to everyone who has helped me thus far in my GBA programming.<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#21658 - tepples - Wed Jun 02, 2004 7:09 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>jd wrote:</b></span></td> </tr> <tr> <td class="quote">Ok, I suggest trying short 8ad files that you can decompress completely into RAM first, before moving on to the streaming code for larger sounds.</td> </tr></table><span class="postbody">
+<br/>
+That's a good idea.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>DiscoStew wrote:</b></span></td> </tr> <tr> <td class="quote">I know it to be buggy at the moment, and very unorganized, so don't expect a demo with code. Maybe I will someday when I make a program that will organize all 8ad audio into a single file for easy linking.</td> </tr></table><span class="postbody">
+<br/>
+I've written that for you as well: <a class="postlink" href="http://www.pineight.com/gba/#gbfs" target="_blank">GBFS</a>. Both the 8ad demo and the GSM demo use it.
+<br/>
+<br/>
+And thanks for the credit.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

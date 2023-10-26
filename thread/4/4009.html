@@ -1,0 +1,990 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Including different size arrays in a structure - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > Including different size arrays in a structure</h2>
+<div id="posts">
+<div class="post">
+    <h4>#25945 - funkeejeffou - Wed Sep 01, 2004 6:15 pm</h4>
+    <div class="postbody"><span class="postbody">Hi,
+<br/>
+<br/>
+I have a structure that is defined like this :
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+typedef struct {
+<br/>
+int *tab[8];
+<br/>
+int nb_elements;
+<br/>
+} EX_STRUCT;
+<br/>
+<br/>
+EX_STRUCT array[128];
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+And I would like to include in my ROM(in a .c file) the data from "array[128]", the problem is the "tab" inside each array elements can be of different size(the size is naturally "nb_elements").
+<br/>
+<br/>
+example :
+<br/>
+-- array[0].nb_elements = 4 so array[0].*tab[8] would be of the kind array[0].tab[4][8]
+<br/>
+-- array[1].nb_elements = 7 so array[0].*tab[8] would be of the kind array[0].tab[7][8]
+<br/>
+<br/>
+How can I include such data? Please this is really bugging me so if you do have an idea or even better, you've already done it, I would be glad to know how.
+<br/>
+<br/>
+Cheers, Jeff.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#25947 - DekuTree64 - Wed Sep 01, 2004 6:41 pm</h4>
+    <div class="postbody"><span class="postbody">I don't think there is any way to initialize it directly, but you can make the tab member of the struct an int** and declare the tab arrays outside the struct and then include that, like 
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">typedef struct { 
+<br/>
+   const int **tab; 
+<br/>
+   int nb_elements; 
+<br/>
+} EX_STRUCT;
+<br/>
+<br/>
+const int tabData1[8] = {0, 1, 2, 3, 4, 5, 6, 7};
+<br/>
+const int tabData2[8] = {8, 9, 10, 11, 12, 13, 14, 15};
+<br/>
+<br/>
+const int *tab[] = {tabData1, tabData2};
+<br/>
+<br/>
+const EX_STRUCT array[1] = 
+<br/>
+{
+<br/>
+   {
+<br/>
+      tab, 2
+<br/>
+   },
+<br/>
+};
+<br/>
+</td> </tr></table><span class="postbody"><br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#25948 - sajiimori - Wed Sep 01, 2004 7:13 pm</h4>
+    <div class="postbody"><span class="postbody">You don't have to make it of type <span style="font-weight: bold">int**</span>, if you know it will always be 8 pointers.  (Speed, you know.)  But it's true that you can't initialize like this:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+typedef struct
+<br/>
+{ 
+<br/>
+  int *tab[8]; 
+<br/>
+  int nb_elements; 
+<br/>
+} EX_STRUCT;
+<br/>
+<br/>
+EX_STRUCT x =
+<br/>
+{
+<br/>
+  {
+<br/>
+    { 1, 2, 3 },
+<br/>
+    { 4, 5, 6 },
+<br/>
+    ...
+<br/>
+  },
+<br/>
+<br/>
+  3
+<br/>
+};
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+The reason is that EX_STRUCT has to be of a specific size (flexible arrays in C99 notwithstanding), and so you can't have each instance of the struct be a different size.  If each one holds 8 pointers and an <span style="font-weight: bold">int</span>, then that's a well-defined size.
+<br/>
+<br/>
+Now, if C supported array literals (in addition to array initializers), you would be able to do the above initialization, and the compiler would automatically create the array elsewhere and insert its pointer in the struct.  As it is, you have to do it by hand:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+int x_array1[] = { 1, 2, 3 };
+<br/>
+int x_array2[] = { 4, 5, 6 };
+<br/>
+...
+<br/>
+<br/>
+EX_STRUCT x =
+<br/>
+{
+<br/>
+  {
+<br/>
+    x_array1,
+<br/>
+    x_array2,
+<br/>
+    ...
+<br/>
+  },
+<br/>
+<br/>
+  3
+<br/>
+};
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+You might clean it up like this:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+int x_arrays[8][3] =
+<br/>
+{
+<br/>
+  { 1, 2, 3 },
+<br/>
+  { 4, 5, 6 },
+<br/>
+  ...
+<br/>
+};
+<br/>
+<br/>
+EX_STRUCT x =
+<br/>
+{
+<br/>
+  {
+<br/>
+    x_arrays[0],
+<br/>
+    x_arrays[1],
+<br/>
+    ...
+<br/>
+  },
+<br/>
+<br/>
+  3
+<br/>
+};
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Look into flexible arrays for more options.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#25951 - jma - Wed Sep 01, 2004 7:40 pm</h4>
+    <div class="postbody"><span class="postbody">Do the following to get what you want:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">typedef struct {
+<br/>
+   int length;
+<br/>
+   int elements[0];
+<br/>
+} variable_int_array;
+<br/>
+<br/>
+variable_int_array *make_array(int size) {
+<br/>
+   variable_int_array *p = malloc(sizeof(variable_int_array) + sizeof(int) * size);
+<br/>
+   p -&gt; length = size;
+<br/>
+   return p;
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Jeff<br/>_________________<br/><a href="mailto:massung@gmail.com">massung@gmail.com</a>
+<br/>
+<a href="http://www.retrobyte.org" target="_blank">http://www.retrobyte.org</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#25952 - funkeejeffou - Wed Sep 01, 2004 8:23 pm</h4>
+    <div class="postbody"><span class="postbody">Sajimori you are misunderstanding double pointers and arrays :
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+You don't have to make it of type int**, if you know it will always be 8 pointers. 
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+No it is (nb_elements) pointers, each one referencing a tab[8] array.
+<br/>
+<br/>
+Besides an array of this kind : </span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">int tab[8]</td> </tr></table><span class="postbody"> is not 8 pointers but only one. 
+<br/>
+You can access each item in an array by using its base adress, its rank and the type of data it contains.
+<br/>
+If the adress of tab is 0x0000h; then the first element of the array is stocked at 0x0000h. The others will be stocked at :
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+tab[i] = *(0x0000 + i*sizeof(int)) = *(0x0000 + 4*i)
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Dekuthree64 figured out what i meant, and believe me there are no difference in speed with int **tab and int *tab[8](maybe during compilation though...not sure). 
+<br/>
+<br/>
+Anyway thanks guys, I figured out now how it is done but I was hoping for a simpler way to do it cause it will obviously complicate the code this way.
+<br/>
+<br/>
+Cheers, Jeff.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#25962 - sajiimori - Wed Sep 01, 2004 10:43 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+No it is (nb_elements) pointers, each one referencing a tab[8] array.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+If that was your intention then ok, but your original struct declaration specifies an array of 8 pointers.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+Besides an array of this kind :<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+int tab[8] </td> </tr></table><span class="postbody">
+<br/>
+is not 8 pointers but only one.
+<br/>
+</span></td> </tr></table><span class="postbody">
+<br/>
+Actually it's zero.  An array is not a pointer.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+believe me there are no difference in speed with int **tab and int *tab[8]</td> </tr></table><span class="postbody">
+<br/>
+There is an additional dereference per access with int**.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+int** a; // *a yields a pointer to the start of the array
+<br/>
+int *b[8]; // *b yields the start of the array itself.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Since arrays are not values in C, an expression can't really evaluate to an array (C only gives you a pointer to the start), but there is a difference interally.  Check some assembler dumps to prove it to yourself.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#25966 - jma - Wed Sep 01, 2004 11:23 pm</h4>
+    <div class="postbody"><span class="postbody">Ah, the post body and subject line were a bit misleading to each other. Try the following:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">int Data_0 [] = { 0, 1, 3, ... };
+<br/>
+int Data_1 [] = { 7, 8, ... };
+<br/>
+<br/>
+struct v_array {
+<br/>
+  int len;
+<br/>
+  int *elts;
+<br/>
+};
+<br/>
+<br/>
+#define V_ARRAY(p) { sizeof(p) / sizeof(int), p }
+<br/>
+<br/>
+v_array data[] = {
+<br/>
+  V_ARRAY(Data_0),
+<br/>
+  V_ARRAY(Data_1),
+<br/>
+};</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Untested, but the idea should work just fine. Your compiler may not like using sizeof() at compile-time, in which case, just provide the length youself -- or as the first element in the array like so:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+int Data_0 [] = { 3, 0, 1, 2 };
+<br/>
+int Data_1 [] = { 4, 0, 1, 2, 3 };
+<br/>
+<br/>
+#define V_ARRAY(p) { p[0], &amp;p[1] }</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Jeff<br/>_________________<br/><a href="mailto:massung@gmail.com">massung@gmail.com</a>
+<br/>
+<a href="http://www.retrobyte.org" target="_blank">http://www.retrobyte.org</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#25967 - funkeejeffou - Thu Sep 02, 2004 12:02 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sajiimori wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+No it is (nb_elements) pointers, each one referencing a tab[8] array.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+If that was your intention then ok, but your original struct declaration specifies an array of 8 pointers.
+<br/>
+</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Well no, it was more of a int (*tab)[8]  , if tab was of type int ** it would do :
+<br/>
+tab = (int **)malloc(nb_elements *sizeof(int*));
+<br/>
+for (i=0; i&lt;nb_elements; i++)
+<br/>
+     tab[i] = (int *)malloc(8 * sizeof(int));
+<br/>
+so it is not an array of 8 pointers.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sajiimori wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+Besides an array of this kind :<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+int tab[8] </td> </tr></table><span class="postbody">
+<br/>
+is not 8 pointers but only one.
+<br/>
+</span></td> </tr></table><span class="postbody">
+<br/>
+Actually it's zero.  An array is not a pointer.
+<br/>
+</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+lol. If an array is not a pointer for you, then you should seriously read some books on C or implement arrays in ASM.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sajiimori wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+believe me there are no difference in speed with int **tab and int *tab[8]</td> </tr></table><span class="postbody">
+<br/>
+There is an additional dereference per access with int**.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+int** a; // *a yields a pointer to the start of the array
+<br/>
+int *b[8]; // *b yields the start of the array itself.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Since arrays are not values in C, an expression can't really evaluate to an array (C only gives you a pointer to the start), but there is a difference interally.  Check some assembler dumps to prove it to yourself.
+<br/>
+</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I know what arrays are thanks :)
+<br/>
+int **a and int *b[8] are the same conceptually, they need two inderections to determine the value of the variable that is stocked. But of course if an array is not a pointer for you...
+<br/>
+Anyway it is getting a bit out of subject here.
+<br/>
+<br/>
+Thanks Jma by the way ;)
+<br/>
+<br/>
+Cheers, Jeff.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#25969 - sajiimori - Thu Sep 02, 2004 12:24 am</h4>
+    <div class="postbody"><span class="postbody">Ok, I'll try one more time despite your condescending tone.  If you don't get it after this then I'm sure you'll survive just fine, since arrays act like pointers in C.
+<br/>
+<br/>
+Compile this with -S:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+int array[10];
+<br/>
+int *pointer;
+<br/>
+void g(int);
+<br/>
+void f()
+<br/>
+{
+<br/>
+  g(array[5]);
+<br/>
+  g(pointer[5]);
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+To save you the trouble, here are the relevant portions in x86:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+   pushl   _array+20
+<br/>
+   call   _g
+<br/>
+</td> </tr></table><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+   movl   _pointer, %eax
+<br/>
+   addl   $20, %eax
+<br/>
+   pushl   (%eax)
+<br/>
+   call   _g
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Accessing arrays via pointers takes an extra indirection.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#25974 - LOst? - Thu Sep 02, 2004 4:54 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>jma wrote:</b></span></td> </tr> <tr> <td class="quote">Do the following to get what you want:
+<br/>
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">typedef struct {
+<br/>
+   int length;
+<br/>
+   int elements[0];
+<br/>
+} variable_int_array;
+<br/>
+<br/>
+variable_int_array *make_array(int size) {
+<br/>
+   variable_int_array *p = malloc(sizeof(variable_int_array) + sizeof(int) * size);
+<br/>
+   p -&gt; length = size;
+<br/>
+   return p;
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Jeff</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Is malloc really the answer to this question? I just think malloc has more to do with dynamic allocation than static arrays in memory. Also don't you need to cast malloc's returned pointer to the correct data type?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#25981 - tepples - Thu Sep 02, 2004 2:45 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>LOst? wrote:</b></span></td> </tr> <tr> <td class="quote">Also don't you need to cast malloc's returned pointer to the correct data type?</td> </tr></table><span class="postbody">
+<br/>
+In C++ you do, but C will automatically cast between (void *) and any other pointer type.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#25983 - MumblyJoe - Thu Sep 02, 2004 4:50 pm</h4>
+    <div class="postbody"><span class="postbody">I don't know if anybody has already suggested this....
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">template&lt;unsigned int SIZE&gt;
+<br/>
+class someclass
+<br/>
+{
+<br/>
+    public:
+<br/>
+    const unsigned int size(){return SIZE;}
+<br/>
+    int tab[SIZE];
+<br/>
+};
+<br/>
+<br/>
+someclass s&lt;4&gt; = {0,1,2,3};</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+should work fine (havent compiled it, not at home so I can't test it) might have to add more {}.
+<br/>
+<br/>
+As for the following, please take this in good humor and don't get upset, if you do you prove that you don't get a simple joke...
+<br/>
+<br/>
+IT IS 2004.... USE C++ FOR FUCKS SAKE, STOP TRYING TO SOLVE SIMPLE PROBLEMS WITH C'S LIMITED RESOURCES!!!<br/>_________________<br/><a class="postlink" href="http://www.hungrydeveloper.com" target="_blank">www.hungrydeveloper.com</a>
+<br/>
+Version 2.0 now up - guaranteed at least 100% more pleasing!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#25988 - poslundc - Thu Sep 02, 2004 5:07 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>MumblyJoe wrote:</b></span></td> </tr> <tr> <td class="quote">As for the following, please take this in good humor and don't get upset, if you do you prove that you don't get a simple joke...
+<br/>
+<br/>
+IT IS 2004.... USE C++ FOR FUCKS SAKE, STOP TRYING TO SOLVE SIMPLE PROBLEMS WITH C'S LIMITED RESOURCES!!!</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I don't understand... is it a joke because you're ignoring the inefficiency of C++ features or the banality of applying the OO paradigm to tasks that don't benefit from it?
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#25989 - MumblyJoe - Thu Sep 02, 2004 5:34 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>poslundc wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>MumblyJoe wrote:</b></span></td> </tr> <tr> <td class="quote">As for the following, please take this in good humor and don't get upset, if you do you prove that you don't get a simple joke...
+<br/>
+<br/>
+IT IS 2004.... USE C++ FOR FUCKS SAKE, STOP TRYING TO SOLVE SIMPLE PROBLEMS WITH C'S LIMITED RESOURCES!!!</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I don't understand... is it a joke because you're ignoring the inefficiency of C++ features or the banality of applying the OO paradigm to tasks that don't benefit from it?
+<br/>
+<br/>
+Dan.</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Really poslundc, I have seen alot of very clever things posted by you in the past, you are a top notch coder in all respects, so please don't take offence to this... but template params are all COMPILE TIME related, it has nothing to do with efficiency, besides the fact that templates have nothing more to do with OOP than int's. If you want to take random offence and try the solve to eternal C vs. C++ war, I am more than happy to do it, start a new thread "MumblyJoe(C++) vs. poslundc(C)" and get get somebody to lock it so only you and me can post in it and it does not get confused.
+<br/>
+<br/>
+Sorry if the above seems odd, I have been drinking and drooling over this picture <a class="postlink" href="http://is0.okcupid.com/graphics/us/danposluns.jpg" target="_blank">http://is0.okcupid.com/graphics/us/danposluns.jpg</a> :P<br/>_________________<br/><a class="postlink" href="http://www.hungrydeveloper.com" target="_blank">www.hungrydeveloper.com</a>
+<br/>
+Version 2.0 now up - guaranteed at least 100% more pleasing!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#25990 - sajiimori - Thu Sep 02, 2004 6:08 pm</h4>
+    <div class="postbody"><span class="postbody">Your template doesn't solve this problem because you can't have an array of that class where each has a different template argument, and the original post contained this line:</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">EX_STRUCT array[128];</td> </tr></table><span class="postbody">Then again, the problem was pretty unclear from the beginning so maybe the OP would accept that limitation.
+<br/>
+<br/>
+But I have to agree that templates needn't add any inefficiencies at runtime.  Yours certainly won't.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#25991 - poslundc - Thu Sep 02, 2004 6:29 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>MumblyJoe wrote:</b></span></td> </tr> <tr> <td class="quote">template params are all COMPILE TIME related, it has nothing to do with efficiency</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Templates tend to bloat code size, and increase compile times. The (relatively simple) code in my workplace is excessively templated, and it takes the better part of two hours to do a full recompile and we get absurdly huge object files. There is more to efficiency than simply how fast your code runs, especially on a platform like the GBA where multiboot programs must fit into 256KB.
+<br/>
+<br/>
+In the specific case of your templated array class: there will probably not be observable code bloat in the general, limited-use case (you are looking at just creator, destructor and copy methods I suppose), and it will therefore probably serve as a more than adequate solution. But this is far from a ringing endorsement of the blind use of C++ features on a limited platform such as the GBA that you made earlier.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Sorry if the above seems odd, I have been drinking and drooling over this picture <a class="postlink" href="http://is0.okcupid.com/graphics/us/danposluns.jpg" target="_blank">http://is0.okcupid.com/graphics/us/danposluns.jpg</a> :P</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I am the sexiest thing to hit the Internet since Graga. (<a class="postlink" href="http://www.danposluns.com/images/claudius.jpg" target="_blank">additional proof</a>)
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#25992 - MumblyJoe - Thu Sep 02, 2004 6:39 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sajiimori wrote:</b></span></td> </tr> <tr> <td class="quote">Your template doesn't solve this problem because you can't have an array of that class where each has a different template argument, and the original post contained this line:<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">EX_STRUCT array[128];</td> </tr></table><span class="postbody">Then again, the problem was pretty unclear from the beginning so maybe the OP would accept that limitation.
+<br/>
+<br/>
+But I have to agree that templates needn't add any inefficiencies at runtime.  Yours certainly won't.</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Good point sajiimori. My template doesn't solve the entire problem.
+<br/>
+<br/>
+Although... lets imagine the options we have here. imagine this:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">template&lt;unsigned int SIZE&gt;
+<br/>
+class someclass;</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+note that this class cannot be instantiated ever. If we then specialise this class as such:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">template&lt;&gt;
+<br/>
+class someclass&lt;1&gt;
+<br/>
+{};</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+We can then only make someclass&lt;1&gt;, any other number as the template param will fail at compile time (the best time to fail).
+<br/>
+<br/>
+Now while this also doesn't solve the problem, imagine we have classes for different types of backgrounds and sizes (I will post my library code later) that has specialised classes as above, then a lot of classes that use these. Imagine we have template container classes that construct encapsulated templated classes that use the params of the surrounding class. We have a type safe and compile-time error reporting system for many situations!
+<br/>
+<br/>
+Sorry, I know this isn't the point of this thread, just saying it is a road to follow towards a solution for this error.<br/>_________________<br/><a class="postlink" href="http://www.hungrydeveloper.com" target="_blank">www.hungrydeveloper.com</a>
+<br/>
+Version 2.0 now up - guaranteed at least 100% more pleasing!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#25993 - MumblyJoe - Thu Sep 02, 2004 6:44 pm</h4>
+    <div class="postbody"><span class="postbody">Sorry to dan, seems he does have a sense of humor :P And another sorry for linking to that picture :P<br/>_________________<br/><a class="postlink" href="http://www.hungrydeveloper.com" target="_blank">www.hungrydeveloper.com</a>
+<br/>
+Version 2.0 now up - guaranteed at least 100% more pleasing!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#25994 - sajiimori - Thu Sep 02, 2004 6:48 pm</h4>
+    <div class="postbody"><span class="postbody">There is one key phrase in your post, Dan:</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">...blind use of C++ features...</td> </tr></table><span class="postbody">The blind use of <span style="font-style: italic">any</span> feature of <span style="font-style: italic">any</span> language on <span style="font-style: italic">any</span> platform is a bad idea.
+<br/>
+<br/>
+What's wrong with this statement?: "Non-const C arrays are inefficient because if you blindly create a 40KB one on GBA you'll run out of IWRAM."
+<br/>
+<br/>
+1) The programmer has to know how arrays work.
+<br/>
+<br/>
+2) The programmer has to know the difference between non-const and const data in C.
+<br/>
+<br/>
+3) The programmer has to know the limitations of his platform.
+<br/>
+<br/>
+Are any of these things the fault of the language or the feature?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#25995 - poslundc - Thu Sep 02, 2004 7:10 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sajiimori wrote:</b></span></td> </tr> <tr> <td class="quote">There is one key phrase in your post, Dan:<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">...blind use of C++ features...</td> </tr></table><span class="postbody">The blind use of <span style="font-style: italic">any</span> feature of <span style="font-style: italic">any</span> language on <span style="font-style: italic">any</span> platform is a bad idea.</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+You're absolutely right, and the danger is certainly measurable in plain C as well (#include anyone?).
+<br/>
+<br/>
+But I am of the opinion that the C++ extensions to the C language were designed with an ideology and philosophy that are not often consistent with the objectives of embedded system programming. The remark was intended more as cautionary against the blind adoption of that philosophy - specifically, things like heavy abstraction and OOP - versus the philosophy of C, which I believe strives to keep things relatively low-level and procedural.
+<br/>
+<br/>
+Yes, you can produce C++ code that is just as efficient as C code on an embedded platform if you know how. But not without straddling the two different ideologies. So, do it if you so choose, but not blindly.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#25997 - sajiimori - Thu Sep 02, 2004 7:53 pm</h4>
+    <div class="postbody"><span class="postbody">The following code is very high level and abstract:</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">int main()
+<br/>
+{
+<br/>
+  init_engine();
+<br/>
+  start_main_menu();
+<br/>
+  while(1)
+<br/>
+    game_tick();
+<br/>
+}</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#25998 - funkeejeffou - Thu Sep 02, 2004 8:02 pm</h4>
+    <div class="postbody"><span class="postbody">Ok now it is totally out of subject...
+<br/>
+<br/>
+PS : Dan, everybody must admit that you are a the most sexiest model seen on the net ;)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#25999 - poslundc - Thu Sep 02, 2004 8:40 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sajiimori wrote:</b></span></td> </tr> <tr> <td class="quote">The following code is very high level and abstract:<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">int main()
+<br/>
+{
+<br/>
+  init_engine();
+<br/>
+  start_main_menu();
+<br/>
+  while(1)
+<br/>
+    game_tick();
+<br/>
+}</td> </tr></table><span class="postbody"></span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+... but it is strictly procedural and doesn't give a damn about encapsulation. ;)
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#26003 - sajiimori - Thu Sep 02, 2004 11:10 pm</h4>
+    <div class="postbody"><span class="postbody">It is very well encapsulated.  <span style="font-weight: bold">main()</span> knows nothing about the engine components that need initialization, or the current game state that needs to be updated.
+<br/>
+<br/>
+I'm not sure what alternative to "procedural" you're thinking about.  The alternatives that come to mind are "strict functional", "lazy functional", and "nondeterministic".  C++ is not well-suited to any of those styles.
+<br/>
+<br/>
+Or do you consider object orientation to be at odds with proceduralism?  I certainly don't.  C++ methods are just like regular C functions except the first argument is implicit, and it's passed by putting it on the left of the function name rather than inside the parentheses.  Virtual functions are just like const function pointers except they save space by sharing tables of them between instances of the same class.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#26004 - poslundc - Fri Sep 03, 2004 12:57 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sajiimori wrote:</b></span></td> </tr> <tr> <td class="quote">It is very well encapsulated.  <span style="font-weight: bold">main()</span> knows nothing about the engine components that need initialization, or the current game state that needs to be updated.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+You're right that main is insulated from its children, but its children clearly are not going to be insulated from each other and will be sharing common memory, potentially in an unprotected way.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Or do you consider object orientation to be at odds with proceduralism?  I certainly don't.  C++ methods are just like regular C functions except the first argument is implicit, and it's passed by putting it on the left of the function name rather than inside the parentheses.  Virtual functions are just like const function pointers except they save space by sharing tables of them between instances of the same class.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Strictly speaking, OO is procedural, but it follows a different paradigm than "traditional" procedural (or just non-OO, if you prefer) programming. It encourages the programmer to focus on the state of objects and their interactions rather than the flow of code.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#26005 - Miked0801 - Fri Sep 03, 2004 1:13 am</h4>
+    <div class="postbody"><span class="postbody">To backup Saji, arrays are techincally not pointers, although their name does represent a memory address.  An array is more than a pointer, it also includes inplied information about the size of lower dimensions in the array.  For 1D arrays, no big difference (add and deref) - for 2+D arrays, big difference.  If you ever try telling a compiler that a memory location you created is a 2D array, you'll get a better feel for this.  Also, **ptr does indeed cause 2 dereferences while ptr[0][0] is only 1 and an add( and a mul if needed.)  Minor difference, but when speed matter, it's important (of course when speed matters, why in Gods name are you using double dereferences anyways?)  BTW, ptr[0][0][0] still is only 1 deref.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#26008 - Marciano - Fri Sep 03, 2004 2:05 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Miked0801 wrote:</b></span></td> </tr> <tr> <td class="quote">If you ever try telling a compiler that a memory location you created is a 2D array, you'll get a better feel for this.</td> </tr></table><span class="postbody">
+<br/>
+This code demonstrates how to declare a pointer to a 2-D array:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+void
+<br/>
+foo()
+<br/>
+{
+<br/>
+        int (*p)[10][10];
+<br/>
+        int i, j;
+<br/>
+<br/>
+        p = malloc(100);
+<br/>
+        for (i = 0; i &lt; 10; i++)
+<br/>
+                for (j = 0; j &lt; 10; j++)
+<br/>
+                        (*p)[i][j] = i * j;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Works fine.  In fact, you can declare:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+int (*p)[][10];
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+If you don't want to tell the compiler how many rows there are.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Also, **ptr does indeed cause 2 dereferences while ptr[0][0] is only 1 and an add( and a mul if needed.)  Minor difference, but when speed matter, it's important (of course when speed matters, why in Gods name are you using double dereferences anyways?)  BTW, ptr[0][0][0] still is only 1 deref.</td> </tr></table><span class="postbody">
+<br/>
+You're right about pointers to pointers being multiple accesses, but what I've shown above is pretty much the same as an array access.  Consider the following code:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+extern int (*ptr)[10][10];
+<br/>
+<br/>
+extern int arr[10][10];
+<br/>
+<br/>
+void
+<br/>
+fill_ptr()
+<br/>
+{
+<br/>
+        int (*tp)[10][10] = ptr;
+<br/>
+        int i, j;
+<br/>
+<br/>
+        for (i = 0; i &lt; 10; i++)
+<br/>
+                for (j = 0; j &lt; 10; j++)
+<br/>
+                        (*tp)[i][j] = 0;
+<br/>
+}
+<br/>
+<br/>
+void
+<br/>
+fill_arr()
+<br/>
+{
+<br/>
+        int i, j;
+<br/>
+<br/>
+        for (i = 0; i &lt; 10; i++)
+<br/>
+                for (j = 0; j &lt; 10; j++)
+<br/>
+                        arr[i][j] = 0;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+It's basically filling each table (one through a pointer and one as an array).  Look at the ARM code:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+fill_ptr
+<br/>
+        LDR      a1,[pc, #L00003c-.-8]
+<br/>
+        MOV      a2,#0
+<br/>
+        LDR      ip,[a1,#0]
+<br/>
+        MOV      a3,#0
+<br/>
+|L000010.J4.fill_ptr|
+<br/>
+        ADD      a4,a2,a2,LSL #2
+<br/>
+        ADD      a4,ip,a4,LSL #3
+<br/>
+        MOV      a1,#0
+<br/>
+|L00001c.J5.fill_ptr|
+<br/>
+        STR      a3,[a4,a1,LSL #2]
+<br/>
+        ADD      a1,a1,#1
+<br/>
+        CMP      a1,#0xa
+<br/>
+        BLT      |L00001c.J5.fill_ptr|
+<br/>
+        ADD      a2,a2,#1
+<br/>
+        CMP      a2,#0xa
+<br/>
+        BLT      |L000010.J4.fill_ptr|
+<br/>
+        MOV      pc,lr
+<br/>
+L00003c
+<br/>
+        DCD      ptr
+<br/>
+<br/>
+fill_arr
+<br/>
+        LDR      ip,[pc, #L000078-.-8]
+<br/>
+        MOV      a2,#0
+<br/>
+        MOV      a3,#0
+<br/>
+|L00004c.J4.fill_arr|
+<br/>
+        ADD      a4,a2,a2,LSL #2
+<br/>
+        ADD      a4,ip,a4,LSL #3
+<br/>
+        MOV      a1,#0
+<br/>
+|L000058.J5.fill_arr|
+<br/>
+        STR      a3,[a4,a1,LSL #2]
+<br/>
+        ADD      a1,a1,#1
+<br/>
+        CMP      a1,#0xa
+<br/>
+        BLT      |L000058.J5.fill_arr|
+<br/>
+        ADD      a2,a2,#1
+<br/>
+        CMP      a2,#0xa
+<br/>
+        BLT      |L00004c.J4.fill_arr|
+<br/>
+        MOV      pc,lr
+<br/>
+L000078
+<br/>
+        DCD      arr
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+The main loop is identical, but the fill_ptr function has one extra load at the start.  A local variable, tp, was used so the compiler didn't think ptr could change through each iteration of the loop (and thus incur an extra load each time).
+<br/>
+<br/>
+What this comes down to is that, for random accesses, pointers to tables incur a single extra instruction (regardless of dimension), but in loops a smart compiler will optimize the difference out.
+<br/>
+<br/>
+This generated code isn't GCC, by the way.  I don't have GCC with me right now, so I can't tell if GCC optimiser works the same way.  The pointer syntax is ANSI C (K&amp;R too).
+<br/>
+<br/>
+Happy coding.
+<br/>
+<br/>
+Marciano.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#26022 - Marciano - Fri Sep 03, 2004 11:42 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Marciano wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+        p = malloc(100);
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+</span></td> </tr></table><span class="postbody">
+<br/>
+Make that: malloc(100 * sizeof(int))
+<br/>
+<br/>
+:-)</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

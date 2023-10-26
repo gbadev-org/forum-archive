@@ -1,0 +1,503 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Suggestion for 8TED to support XY-MINI format - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>OffTopic > Suggestion for 8TED to support XY-MINI format</h2>
+<div id="posts">
+<div class="post">
+    <h4>#158224 - zzo38computer - Sat Jun 07, 2008 8:01 pm</h4>
+    <div class="postbody"><span class="postbody">Suggestion for 8TED to support XY-MINI format. 1-bit (PC) mode is compatible with XY-MINI monochrome tile mode. The other modes don't work yet in 8TED. The other suggestion is to add some of the features of the DOS TILEMAKR that I made for editing monochrome XY-MINI tiles (the source-code is below). Some of these features are: AND/OR/XOR of tiles with the clipboard, and some functions for dealing with a whole row, flip/mirror/negative tiles, and a few others.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">DECLARE FUNCTION MirrorTile$ (t$)
+<br/>
+DECLARE FUNCTION FlipTile$ (t$)
+<br/>
+DECLARE FUNCTION SaveTile$ (BYVAL x!, BYVAL y!, BYVAL B%, BYVAL f%)
+<br/>
+DECLARE SUB DrawTile (BYVAL x!, BYVAL y!, t$, BYVAL B%, BYVAL f%)
+<br/>
+TYPE TileData
+<br/>
+ s AS STRING * 8
+<br/>
+END TYPE
+<br/>
+DIM tiles(0 TO 255) AS TileData, clip AS TileData, edittile AS TileData
+<br/>
+<br/>
+FILES
+<br/>
+INPUT filename$
+<br/>
+SCREEN 1
+<br/>
+OPEN filename$ FOR BINARY AS #1
+<br/>
+FOR i% = 0 TO 255
+<br/>
+ GET #1, , tiles(i%)
+<br/>
+NEXT i%
+<br/>
+CLOSE
+<br/>
+<br/>
+TileSelection:
+<br/>
+CLS
+<br/>
+LOCATE 1, 2: PRINT "0123456789ABCDEF"
+<br/>
+LOCATE 18, 2: PRINT "0123456789ABCDEF"
+<br/>
+FOR i% = 0 TO 15
+<br/>
+ LOCATE 2 + i%, 1: PRINT HEX$(i%);
+<br/>
+ LOCATE 2 + i%, 18: PRINT HEX$(i%);
+<br/>
+ FOR j% = 0 TO 15
+<br/>
+  DrawTile j% * 8 + 8, i% * 8 + 8, tiles(i% * 16 + j%).s, 0, 1
+<br/>
+ NEXT j%
+<br/>
+NEXT i%
+<br/>
+sel% = 0
+<br/>
+DO
+<br/>
+ a$ = INKEY$
+<br/>
+ IF LEN(a$) = 1 THEN a$ = LCASE$(a$)
+<br/>
+ DrawTile (sel% MOD 16) * 8 + 8, (sel% \ 16) * 8 + 8, tiles(sel%).s, 0, 1
+<br/>
+ SELECT CASE a$
+<br/>
+  CASE "q", CHR$(27)
+<br/>
+   OPEN filename$ FOR BINARY AS #1
+<br/>
+   FOR i% = 0 TO 255
+<br/>
+    PUT #1, , tiles(i%)
+<br/>
+   NEXT i%
+<br/>
+   CLOSE
+<br/>
+   END
+<br/>
+  CASE CHR$(3): END
+<br/>
+  CASE "s"
+<br/>
+   OPEN filename$ FOR BINARY AS #1
+<br/>
+   FOR i% = 0 TO 255
+<br/>
+    PUT #1, , tiles(i%)
+<br/>
+   NEXT i%
+<br/>
+   CLOSE
+<br/>
+  CASE CHR$(0) + CHR$(72): sel% = (sel% + 240) MOD 256
+<br/>
+  CASE CHR$(0) + CHR$(75): sel% = (sel% + 255) MOD 256
+<br/>
+  CASE CHR$(0) + CHR$(77): sel% = (sel% + 1) MOD 256
+<br/>
+  CASE CHR$(0) + CHR$(80): sel% = (sel% + 16) MOD 256
+<br/>
+  CASE "c": clip = tiles(sel%)
+<br/>
+  CASE "v": tiles(sel%) = clip
+<br/>
+  CASE "n"
+<br/>
+   FOR i% = 1 TO 8
+<br/>
+    MID$(tiles(sel%).s, i%, 1) = CHR$(255 - ASC(MID$(tiles(sel%).s, i%, 1)))
+<br/>
+   NEXT i%
+<br/>
+  CASE CHR$(0) + CHR$(83): tiles(sel%).s = STRING$(8, 0)
+<br/>
+  CASE "k"
+<br/>
+   LOCATE 1, 1: PRINT INPUT$(1);
+<br/>
+   tiles(sel%).s = SaveTile$(0, 0, 0, 3)
+<br/>
+   LOCATE 1, 1: PRINT " ";
+<br/>
+  CASE CHR$(1)
+<br/>
+   FOR i% = 0 TO 255
+<br/>
+    LOCATE 1, 1: PRINT CHR$(i%);
+<br/>
+    tiles(i%).s = SaveTile$(0, 0, 0, 3)
+<br/>
+   NEXT i%
+<br/>
+   GOTO TileSelection
+<br/>
+  CASE "`": GOTO TileSelection
+<br/>
+  CASE "e", CHR$(13): GOSUB TileEditor
+<br/>
+  CASE "f": tiles(sel%).s = FlipTile$(tiles(sel%).s)
+<br/>
+  CASE "m": tiles(sel%).s = MirrorTile$(tiles(sel%).s)
+<br/>
+  CASE "x"
+<br/>
+   FOR i% = 1 TO 8
+<br/>
+    k% = ASC(MID$(tiles(sel%).s, i%, 1))
+<br/>
+    k% = k% XOR ASC(MID$(clip.s, i%, 1))
+<br/>
+    MID$(tiles(sel%).s, i%, 1) = CHR$(k%)
+<br/>
+   NEXT i%
+<br/>
+  CASE "o"
+<br/>
+   FOR i% = 1 TO 8
+<br/>
+    k% = ASC(MID$(tiles(sel%).s, i%, 1))
+<br/>
+    k% = k% OR ASC(MID$(clip.s, i%, 1))
+<br/>
+    MID$(tiles(sel%).s, i%, 1) = CHR$(k%)
+<br/>
+   NEXT i%
+<br/>
+  CASE "a"
+<br/>
+   FOR i% = 1 TO 8
+<br/>
+    k% = ASC(MID$(tiles(sel%).s, i%, 1))
+<br/>
+    k% = k% AND ASC(MID$(clip.s, i%, 1))
+<br/>
+    MID$(tiles(sel%).s, i%, 1) = CHR$(k%)
+<br/>
+   NEXT i%
+<br/>
+  CASE "w": GOTO KeyInTiles
+<br/>
+  CASE "r"
+<br/>
+   sel% = sel% AND &amp;HF0
+<br/>
+   k% = VAL("&amp;H" + INPUT$(1))
+<br/>
+   FOR i% = 0 TO 15
+<br/>
+    tiles(sel% + i%).s = tiles(k% * 16 + i%).s
+<br/>
+   NEXT i%
+<br/>
+   GOTO TileSelection
+<br/>
+ END SELECT
+<br/>
+ DrawTile (sel% MOD 16) * 8 + 8, (sel% \ 16) * 8 + 8, tiles(sel%).s, 2, 3
+<br/>
+LOOP
+<br/>
+<br/>
+TileEditor:
+<br/>
+edittile = tiles(sel%)
+<br/>
+ei% = 0: ej% = 0
+<br/>
+RedrawTileEditor:
+<br/>
+FOR i% = 0 TO 7
+<br/>
+ FOR j% = 0 TO 7
+<br/>
+  k% = ASC(MID$(edittile.s, i% + 1, 1)) AND (2 ^ j%)
+<br/>
+  IF k% &gt; 0 THEN
+<br/>
+   LINE (200 + 8 * (7 - j%), 15 + 8 * i%)-STEP(6, 6), 2, BF
+<br/>
+  ELSE
+<br/>
+   LINE (200 + 8 * (7 - j%), 15 + 8 * i%)-STEP(6, 6), 0, BF
+<br/>
+  END IF
+<br/>
+  LINE (200 + 8 * (7 - j%), 15 + 8 * i%)-STEP(6, 6), 3, B
+<br/>
+ NEXT j%
+<br/>
+NEXT i%
+<br/>
+DrawTile (sel% MOD 16) * 8 + 8, (sel% \ 16) * 8 + 8, edittile.s, 2, 3
+<br/>
+DO
+<br/>
+ k% = ASC(MID$(edittile.s, ei% + 1, 1)) AND (2 ^ ej%)
+<br/>
+ IF k% &gt; 0 THEN
+<br/>
+  LINE (200 + 8 * (7 - ej%), 15 + 8 * ei%)-STEP(6, 6), 2, BF
+<br/>
+ ELSE
+<br/>
+  LINE (200 + 8 * (7 - ej%), 15 + 8 * ei%)-STEP(6, 6), 0, BF
+<br/>
+ END IF
+<br/>
+ LINE (200 + 8 * (7 - ej%), 15 + 8 * ei%)-STEP(6, 6), 3, B
+<br/>
+ a$ = INKEY$
+<br/>
+ IF LEN(a$) = 1 THEN a$ = LCASE$(a$)
+<br/>
+ SELECT CASE a$
+<br/>
+  CASE CHR$(27), CHR$(13): EXIT DO
+<br/>
+  CASE CHR$(0) + CHR$(72): ei% = (ei% + 7) MOD 8
+<br/>
+  CASE CHR$(0) + CHR$(75): ej% = (ej% + 1) MOD 8
+<br/>
+  CASE CHR$(0) + CHR$(77): ej% = (ej% + 7) MOD 8
+<br/>
+  CASE CHR$(0) + CHR$(80): ei% = (ei% + 1) MOD 8
+<br/>
+  CASE " "
+<br/>
+   k% = ASC(MID$(edittile.s, ei% + 1, 1))
+<br/>
+   MID$(edittile.s, ei% + 1, 1) = CHR$(k% XOR (2 ^ ej%))
+<br/>
+  CASE "n"
+<br/>
+   FOR i% = 1 TO 8
+<br/>
+    MID$(edittile.s, i%, 1) = CHR$(255 - ASC(MID$(edittile.s, i%, 1)))
+<br/>
+   NEXT i%
+<br/>
+   GOTO RedrawTileEditor
+<br/>
+  CASE CHR$(0) + CHR$(141)
+<br/>
+   edittile.s = MID$(edittile.s, 2) + edittile.s: GOTO RedrawTileEditor
+<br/>
+  CASE CHR$(0) + CHR$(115)
+<br/>
+   FOR i% = 1 TO 8
+<br/>
+    k% = ASC(MID$(edittile.s, i%, 1))
+<br/>
+    MID$(edittile.s, i%, 1) = CHR$(((2 * k%) AND 255) + k% \ 128)
+<br/>
+   NEXT i%
+<br/>
+   GOTO RedrawTileEditor
+<br/>
+  CASE CHR$(0) + CHR$(116)
+<br/>
+   FOR i% = 1 TO 8
+<br/>
+    k% = ASC(MID$(edittile.s, i%, 1))
+<br/>
+    MID$(edittile.s, i%, 1) = CHR$(k% \ 2 + (k% AND 1) * 128)
+<br/>
+   NEXT i%
+<br/>
+   GOTO RedrawTileEditor
+<br/>
+  CASE CHR$(0) + CHR$(145)
+<br/>
+   edittile.s = MID$(edittile.s, 8) + edittile.s: GOTO RedrawTileEditor
+<br/>
+  CASE "f": edittile.s = FlipTile$(edittile.s): GOTO RedrawTileEditor
+<br/>
+  CASE "m": edittile.s = MirrorTile$(edittile.s): GOTO RedrawTileEditor
+<br/>
+  CASE ELSE
+<br/>
+   'IF LEN(a$) = 2 THEN LOCATE 21: PRINT ASC(RIGHT$(a$, 1));
+<br/>
+ END SELECT
+<br/>
+ k% = ASC(MID$(edittile.s, ei% + 1, 1)) AND (2 ^ ej%)
+<br/>
+ IF k% &gt; 0 THEN
+<br/>
+  LINE (200 + 8 * (7 - ej%), 15 + 8 * ei%)-STEP(6, 6), 2, BF
+<br/>
+ ELSE
+<br/>
+  LINE (200 + 8 * (7 - ej%), 15 + 8 * ei%)-STEP(6, 6), 0, BF
+<br/>
+ END IF
+<br/>
+ LINE (200 + 8 * (7 - ej%), 15 + 8 * ei%)-STEP(6, 6), 1, B
+<br/>
+ IF a$ &lt;&gt; "" THEN DrawTile (sel% MOD 16) * 8 + 8, (sel% \ 16) * 8 + 8, edittile.s, 2, 3
+<br/>
+LOOP
+<br/>
+LINE (200, 15)-STEP(8 * 8, 8 * 8), 0, BF
+<br/>
+tiles(sel%) = edittile
+<br/>
+RETURN
+<br/>
+<br/>
+KeyInTiles:
+<br/>
+DO
+<br/>
+ a$ = INPUT$(1)
+<br/>
+ LOCATE (sel% \ 16) + 2, (sel% MOD 16) + 2: PRINT a$;
+<br/>
+ IF ASC(a$) &gt; 31 THEN
+<br/>
+  tiles(sel%).s = SaveTile$((sel% MOD 16) * 8 + 8, (sel% \ 16) * 8 + 8, 0, 3)
+<br/>
+ ELSE
+<br/>
+  EXIT DO
+<br/>
+ END IF
+<br/>
+ sel% = (sel% + 1) MOD 256
+<br/>
+LOOP
+<br/>
+GOTO TileSelection
+<br/>
+<br/>
+SUB DrawTile (BYVAL x!, BYVAL y!, t$, BYVAL B%, BYVAL f%)
+<br/>
+ FOR i% = 0 TO 7
+<br/>
+  FOR j% = 0 TO 7
+<br/>
+   k% = ASC(MID$(t$, i% + 1, 1)) AND (2 ^ j%)
+<br/>
+   IF k% &gt; 0 THEN k% = f% ELSE k% = B%
+<br/>
+   PSET (x! + 7 - j%, y! + i%), k%
+<br/>
+  NEXT j%
+<br/>
+ NEXT i%
+<br/>
+END SUB
+<br/>
+<br/>
+FUNCTION FlipTile$ (t$)
+<br/>
+a$ = ""
+<br/>
+FOR i% = 8 TO 1 STEP -1
+<br/>
+ a$ = a$ + MID$(t$, i%, 1)
+<br/>
+NEXT i%
+<br/>
+FlipTile$ = a$
+<br/>
+END FUNCTION
+<br/>
+<br/>
+FUNCTION MirrorTile$ (t$)
+<br/>
+a$ = ""
+<br/>
+FOR i% = 1 TO 8
+<br/>
+ k1% = ASC(MID$(t$, i%, 1)): k% = 0
+<br/>
+ FOR j% = 0 TO 7
+<br/>
+  k% = k% + (k1% AND (2 ^ j%)) * (2 ^ (7 - j%)) / (2 ^ j%)
+<br/>
+ NEXT j%
+<br/>
+ a$ = a$ + CHR$(k%)
+<br/>
+NEXT i%
+<br/>
+MirrorTile$ = a$
+<br/>
+END FUNCTION
+<br/>
+<br/>
+FUNCTION SaveTile$ (BYVAL x!, BYVAL y!, BYVAL B%, BYVAL f%)
+<br/>
+ t$ = STRING$(8, 0)
+<br/>
+ FOR i% = 0 TO 7
+<br/>
+  FOR j% = 0 TO 7
+<br/>
+   'k% = ASC(MID$(t$, i% + 1, 1)) AND (2 ^ j%)
+<br/>
+   'IF k% &gt; 0 THEN k% = f% ELSE k% = b%
+<br/>
+   'PSET (x! + 7 - j%, y! + i%), k%
+<br/>
+   k% = POINT(x! + 7 - j%, y! + i%)
+<br/>
+   IF k% = f% THEN MID$(t$, i% + 1, 1) = CHR$(ASC(MID$(t$, i% + 1, 1)) + (2 ^ j%))
+<br/>
+  NEXT j%
+<br/>
+ NEXT i%
+<br/>
+ SaveTile$ = t$
+<br/>
+END FUNCTION</td> </tr></table><span class="postbody"><br/>_________________<br/><span style="font-weight: bold">Important:</span> Please send messages about FWNITRO to the public forum, not privately to me.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#158238 - tepples - Sun Jun 08, 2008 2:20 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>zzo38computer wrote:</b></span></td> </tr> <tr> <td class="quote">Suggestion for 8TED to support XY-MINI format. 1-bit (PC) mode is compatible with XY-MINI monochrome tile mode. The other modes don't work yet in 8TED.</td> </tr></table><span class="postbody">
+<br/>
+That would break several assumptions in 8TED, such as the assumption that each tile is one contiguous block of data. If a platforms store bitplanes separately, how would 8TED know the distance in bytes between bitplanes of a single tile? But you can edit tiles in Game Boy (2-bit, row interleaved), NES (2-bit, tile interleaved), or SMS (4-bit, row interleaved) format and then deinterleave them either at build time or at runtime.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">The other suggestion is to add some of the features of the DOS TILEMAKR that I made for editing monochrome XY-MINI tiles (the source-code is below). Some of these features are: AND/OR/XOR of tiles with the clipboard, and some functions for dealing with a whole row, flip/mirror/negative tiles, and a few others.</td> </tr></table><span class="postbody">
+<br/>
+Mirror and flip are in. Press H, V, or R while a tile is loaded into the editor. In the build on my hard drive, I have been experimenting with a tool that exchanges the left-click and right-click colors in a given tile, which might match your "negative". AND and OR sound interesting, and I might figure out how to turn them into some sort of "overlay tool".<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

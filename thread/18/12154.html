@@ -1,0 +1,155 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>devoptab_t - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > devoptab_t</h2>
+<div id="posts">
+<div class="post">
+    <h4>#115182 - SukkoPera - Sat Jan 13, 2007 3:58 pm</h4>
+    <div class="postbody"><span class="postbody">I'm trying to make libfat and my libblockdev live together in the same application. Although I can't fully understand the whole device managemente in newlib.
+<br/>
+<br/>
+This is how _I THINK_ it works:
+<br/>
+- I register both both libfat and libblockdev using AddDevice(). I guess I should check its return value, so I assumed that anything &gt;= 0 is OK, while &lt; 0 means an error. This way it seems that both libraries get registered correctly.
+<br/>
+- I don't set either one as the "default device". I don't know exactly what a "default device" is. I guess it's the one used when dealing with paths that don't start either with "fat:" or "raw:" (which are the names declared in the first element of devoptab_t of the two libraries). Therefore I guess I have to use explicit pathnames when opening a file.
+<br/>
+- Problem is that all file operations are always performed with the library I register last, independently of the path name. Also, FindDevice() returns -1 for the previously registered library.
+<br/>
+<br/>
+Is this normal (maybe I cannot register more than one device at the same time, but then why the need of a name and of a default device?) or am I wrong somewhere?<br/>_________________<br/>Nintendo DS Lite (White) + Supercard Lite + R4 + Sandisk 1 GB MicroSD
+<br/>
+Sony PSP + Firmware 3.03 OE-A2</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#115185 - wintermute - Sat Jan 13, 2007 4:07 pm</h4>
+    <div class="postbody"><span class="postbody">Please supply a testcase illustrating the problem, preferably to the devkitARM mailing list.
+<br/>
+<br/>
+Reports like this are always best accompanied with source code.
+<br/>
+<br/>
+Note also: a testcase means a <span style="font-weight: bold">small</span> example. In this case two devices with just the open call implemented should be sufficient - i.e. just printing the name of the device on open.<br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#115190 - SukkoPera - Sat Jan 13, 2007 4:48 pm</h4>
+    <div class="postbody"><span class="postbody">OK, talking on IRC with wintermute, we found out there's a bug in a newlib patch:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">//---------------------------------------------------------------------------------
+<br/>
+int AddDevice( const devoptab_t* device) {
+<br/>
+//---------------------------------------------------------------------------------
+<br/>
+ 
+<br/>
+        int devnum;
+<br/>
+ 
+<br/>
+        for ( devnum = 3;devnum &lt;STD_MAX; devnum++ ) {
+<br/>
+ 
+<br/>
+                if ( (strcmp(devoptab_list[devnum]-&gt;name, device-&gt;name) &amp;&amp;
+<br/>
+                                        strlen(devoptab_list[devnum]-&gt;name) == strlen(device-&gt;name) ) ||
+<br/>
+                                       !strcmp(devoptab_list[devnum]-&gt;name, "stdnull")
+<br/>
+                         )
+<br/>
+                         break;
+<br/>
+        }
+<br/>
+ 
+<br/>
+        if ( devnum == STD_MAX ) {
+<br/>
+                devnum = -1;
+<br/>
+        } else {
+<br/>
+                devoptab_list[devnum] = device;
+<br/>
+        }
+<br/>
+        return devnum;
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Example case:
+<br/>
+- First I AddDevice() the "fat" device.
+<br/>
+- Then I AddDevice() the "raw" device. As of now, the first strcmp() is != 0, and the strlen()s are the same, which means that the "fat" entry will be overwritten.
+<br/>
+<br/>
+This is cause by a missing "!" in the first strcmp. Also, the bug can be worked around by making sure all the registered devices have a different-length name (which invalidates the first part of the if through the strlen() condition).<br/>_________________<br/>Nintendo DS Lite (White) + Supercard Lite + R4 + Sandisk 1 GB MicroSD
+<br/>
+Sony PSP + Firmware 3.03 OE-A2</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#115192 - wintermute - Sat Jan 13, 2007 4:51 pm</h4>
+    <div class="postbody"><span class="postbody">Nice catch.
+<br/>
+<br/>
+This will be applied in r20 which gets ever closer. I'm aiming for the end of January but hopefully a little sooner.<br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#115197 - simonjhall - Sat Jan 13, 2007 5:41 pm</h4>
+    <div class="postbody"><span class="postbody">I don't know really anything about this newlib lark (why is it called newlib anyway?) but from what I understand, this sort of stuff allows you to use things like fprintf without any extra (DS-specific) code - right?
+<br/>
+If so, would this be the interface to use if I were to write a wifi DS&lt;-&gt;PC filesystem?<br/>_________________<br/><span style="font-weight: bold"><a class="postlink" href="https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&amp;business=simonjhall%40gmail%2ecom&amp;no_shipping=2&amp;no_note=1&amp;tax=0&amp;currency_code=GBP&amp;lc=GB&amp;bn=PP%2dDonationsBF&amp;charset=UTF%2d8" target="_blank">Big thanks to everyone who donated for Quake2</a></span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#115265 - wintermute - Sun Jan 14, 2007 8:15 am</h4>
+    <div class="postbody"><span class="postbody">newlib is the C runtime library used by devkitARM, it's intended to be a "lighter" version of glibc for embedded systems, thus (new) C runtime (lib)rary.
+<br/>
+<br/>
+The interface we're talking about here is the pseudo device API I've written for it which allows the low level stdio support functions to be hooked for platform specific code.
+<br/>
+<br/>
+It will allow you to use stdio functions as intended on platforms where there is no OS support. I wouldn't go quite as far as saying "without any extra (DS-specific) code" since the code implementing the low level functions is quite platform specific. Initialising the device driver is currently pretty devkitARM specific but I intend to port this into devkitPPC at some point in the near future.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+If so, would this be the interface to use if I were to write a wifi DS&lt;-&gt;PC filesystem?
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Yes, it's absolutely ideal for this purpose.<br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

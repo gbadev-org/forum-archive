@@ -1,0 +1,333 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>New sound clipping algorithm - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Audio > New sound clipping algorithm</h2>
+<div id="posts">
+<div class="post">
+    <h4>#168603 - Ruben - Sat May 09, 2009 11:57 am</h4>
+    <div class="postbody"><span class="postbody">Hey guys.
+<br/>
+So I was trying to optimize the juice out of my latest sound mixer and I came up with a slightly faster clipping algorithm for signed samples. Here's the code (I'll try to comment it):
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">@ Before the loop . . .
+<br/>
+mov     ip, #0x7F               @ BYTE_MAX
+<br/>
+<br/>
+@ During the loop . . .
+<br/>
+<br/>
+mov     r5, r6, asr #0x14       @ Scale our data down (in this
+<br/>
+                                @ case, it's 0~127 volumed data
+<br/>
+                                @ and pre-scaled by .3, and
+<br/>
+                                @ packed as RRRRLLLL, so this
+<br/>
+                                @ would get the right data.)
+<br/>
+movs    lr, r5, asr #0x07       @ Ok, so we start off by getting
+<br/>
+                                @ the highest bits which we don't
+<br/>
+                                @ want
+<br/>
+mvnmis  lr, lr                  @ If it was negative, !x so we can
+<br/>
+                                @ see if the data really did
+<br/>
+                                @ overflow.
+<br/>
+subne   r5, ip, r5, asr #0x1F   @ This trick is similar to the one
+<br/>
+                                @ found in TONC for "safe" division.
+<br/>
+                                @ if(overflowed) move 127-sign
+<br/>
+                                @ Sign will be 0 or -1, and
+<br/>
+                                @ 127 - -1 = 127 + 1 = 0x80 = -128
+<br/>
+                                @ If it was 0 (or positive number)
+<br/>
+                                @ 127 - 0 = 127</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#168613 - kusma - Mon May 11, 2009 7:04 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Ruben wrote:</b></span></td> </tr> <tr> <td class="quote">and I came up with a slightly faster clipping algorithm</td> </tr></table><span class="postbody">
+<br/>
+Faster than what?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#168614 - Ruben - Mon May 11, 2009 7:11 pm</h4>
+    <div class="postbody"><span class="postbody">Faster than cmp, movgt, cmn, movlt ;)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#168615 - Tyler24 - Mon May 11, 2009 8:21 pm</h4>
+    <div class="postbody"><span class="postbody">If the # of instructions are the same, and they aren't accessing the memory, why are these faster? I thought all instructions that didn't involve memory and stuff took the same # of CC to run?
+<br/>
+<br/>
+... or not?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#168616 - Ruben - Mon May 11, 2009 9:01 pm</h4>
+    <div class="postbody"><span class="postbody">Please note that it says *before* loop and *during* loop.. :P
+<br/>
+The actual clipping with "standard" stuff is..
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">mov     r5, r6, asr #0x14
+<br/>
+cmp     r5, #0x7F
+<br/>
+movgt   r5, #0x7F
+<br/>
+cmn     r5, #0x80
+<br/>
+mvnlt   r5, #0x7F</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+EDIT: Oh and there's an instruction that doesn't necessarily run at 1c all the time: MUL (along with MLA, SMULL, UMULL, MLAL, etc). The mulitplication for 32-bit (MUL/MLA) is ~2 cycles, but takes longer depending on the amount of significant bits in the 2nd operand. MLA is MUL+ADD, so it's ~3 cycles, and I'm not sure about the timings for 64-bit multiply, but I think it was 1 or 2 extra cycles.
+<br/>
+Other than MUL and its friends, I think all non-memory instructions run at 1c + waitstate.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#168618 - FluBBa - Mon May 11, 2009 9:30 pm</h4>
+    <div class="postbody"><span class="postbody">I didn't quite understand it at first, but I see how it works now. Really good.
+<br/>
+Though I just got an idea but it's not as bulletproof as yours, it only works for values between -256 &amp; +255, instead of
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+movs    lr, r5, asr #0x07
+<br/>
+mvnmis  lr, lr
+<br/>
+subne   r5, ip, r5, asr #0x1F
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+you can do
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+teq    r5, r5, lsl #0x18
+<br/>
+subpl   r5, ip, r5, asr #0x1F
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+If I remember correctly the teq instruction is an eors without a destination, I think that should work.<br/>_________________<br/>I probably suck, my not is a programmer.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#168619 - Ruben - Mon May 11, 2009 9:50 pm</h4>
+    <div class="postbody"><span class="postbody">Yeah, teq is EOR[S] without a destination.. but.. @_________@
+<br/>
+<br/>
+Give me a few minutes to work that out :P</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#168620 - FluBBa - Mon May 11, 2009 10:03 pm</h4>
+    <div class="postbody"><span class="postbody">Hmm, that might have to be a
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+submi   r5, ip, r5, asr #0x1F
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+The code compares the sign bit of the byte with the sign bit of the whole (long)word. If they are the same the value has not overflown, if they differ the value has overflown.<br/>_________________<br/>I probably suck, my not is a programmer.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#168621 - kusma - Mon May 11, 2009 10:36 pm</h4>
+    <div class="postbody"><span class="postbody">Did you compare your clipper to <a class="postlink" href="http://pimpmobile.git.sourceforge.net/git/gitweb.cgi?p=pimpmobile;a=blob;f=src/pimp_mixer_clip_arm.S;h=797edbb4b2f4c2346d3d21ece8ee0c56363f7d4e;hb=ac42cd9ea366d713478fde493aac12aa476882de" target="_blank">mine</a>? ;) Pimpmobile does clipping of unsigned samples with DC-offset correction in 3.25 cycles per sample (not including memory accesses).</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#168622 - Ruben - Mon May 11, 2009 10:38 pm</h4>
+    <div class="postbody"><span class="postbody">kusma: Yeahuh :P It's pretty good, too, but I mixed in signed mode using yet another trick I came up with (namely, filling in the sign bits manually) so yeah. :P</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#168623 - kusma - Mon May 11, 2009 10:57 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Ruben wrote:</b></span></td> </tr> <tr> <td class="quote">I mixed in signed mode using yet another trick I came up with (namely, filling in the sign bits manually) so yeah. :P</td> </tr></table><span class="postbody">
+<br/>
+How do you do that efficiently? I mean, "ldrb, mla, add" is a pretty nice loop (when under-sampling). I can't see any room for manual sign-extension without loosing performance.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#168624 - Ruben - Mon May 11, 2009 11:02 pm</h4>
+    <div class="postbody"><span class="postbody">It's one cycle slower than unsigned mixing. Kinda like...
+<br/>
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">muls  lr, r2, lr @ lr = y0 + s(y1-y0), r2 = 00RR00LL, 0~127 each
+<br/>
+orrmi lr, lr, #0x7F0000
+<br/>
+bicpl lr, lr, #0x7F0000
+<br/>
+add   \Out, \Out, lr, asr #7 @ In interpolated mixing, pre-shifting sounds better :-S</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+And my mixer is more quality centered than speed centered; it uses Q23 linear interpolation and Q23 stepping</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#168625 - kusma - Mon May 11, 2009 11:22 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Ruben wrote:</b></span></td> </tr> <tr> <td class="quote">It's one cycle slower than unsigned mixing. Kinda like...</td> </tr></table><span class="postbody">That looks to me like it's two cycles slower. 
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Ruben wrote:</b></span></td> </tr> <tr> <td class="quote">And my mixer is more quality centered than speed centered; it uses Q23 linear interpolation and Q23 stepping</td> </tr></table><span class="postbody">
+<br/>
+I'm not sure what you mean by Q23. Care to explain?
+<br/>
+<br/>
+By the way, I've considered adding linear interpolation for the oversampling-case (since that's the only place it makes sense - aliasing is aliasing no matter if it's -slightly- low-pass filter-ish'ed by the lerping), at pretty low cost. I'm also considering adding stereo panning at only a constant performance cost in the clipper (and not by modifying the mixing-loop at all) by expanding the volume to 0xRRRRLLLL, and mixing the lower volume channels first. This is something you can't really do with signed samples ;)
+<br/>
+<br/>
+But first I've got to listen to the "crowd" and add a sensible API for sound effects.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#168626 - Ruben - Mon May 11, 2009 11:33 pm</h4>
+    <div class="postbody"><span class="postbody">Well, in most cases, when mixing unsigned you gotta clear the "bad" bits. In this case, I'm clearing/filling the bad bits, and only takes 1 cycle longer (cos it has to take care of both cases). The ldrb, mla, add is only useful for very little channels or very little volume difference, unless you've got mono, in which case you can just go ahead and mla all you want since you'll have 32 bits of data.
+<br/>
+<br/>
+And by Q23, I mean 9.23 fixed point. That is, something like..
+<br/>
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">@ Before loop
+<br/>
+mul    r4, ip, r4 @ r4 = Freq&lt;&lt;23/MFreq
+<br/>
+<br/>
+.macro MixSamp Out
+<br/>
+mul    lr, r3, r10 @ lr = s(y1-y0) (r3 = Error/Position, .23)
+<br/>
+add    lr, r9, lr, asr #23 @ lr = y0 + s(y1-y0)
+<br/>
+muls  lr, r2, lr @ 00RR00LL * Samp
+<br/>
+orrmi lr, lr, #0x7F0000 @ Fill sign
+<br/>
+bicpl lr, lr, #0x7F0000 @ Clear top bits
+<br/>
+add   \Out, \Out, lr, asr #7
+<br/>
+<br/>
+add   r3, r3, r4 @ Position += Delta
+<br/>
+movs  lr, r3, lsr #23 @ (int)Delta
+<br/>
+beq   1f @ (int)Delta == 0
+<br/>
+<br/>
+ldrsb r9,[r2, lr]! @ Get next sample
+<br/>
+<br/>
+cmp   r2, r1, lsr #4 @ if(Src &gt;= End)
+<br/>
+blge  .LOutOfData
+<br/>
+<br/>
+ldrsb r10, [r2, #1]
+<br/>
+<br/>
+<br/>
+1:
+<br/>
+.endm
+<br/>
+<br/>
+@ Then the mixing code...
+<br/>
+<br/>
+.LOutOfData:
+<br/>
+ldr       r2, [sp]
+<br/>
+tst       r1, #1
+<br/>
+ldrne    r2, [r2, #0x14-0x40]
+<br/>
+ldrnesb r9, [r2]
+<br/>
+movne   pc, lr
+<br/>
+<br/>
+mov  r0, #0
+<br/>
+strb r0, [r2, #-0x40]
+<br/>
+b    .LChannelKill</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+EDIT: Anyway, I'm off to school now.. I'll see if I can get in here during my business and accounting class.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#168627 - kusma - Tue May 12, 2009 12:01 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Ruben wrote:</b></span></td> </tr> <tr> <td class="quote">Well, in most cases, when mixing unsigned you gotta clear the "bad" bits. In this case, I'm clearing/filling the bad bits, and only takes 1 cycle longer (cos it has to take care of both cases). The ldrb, mla, add is only useful for very little channels or very little volume difference, unless you've got mono, in which case you can just go ahead and mla all you want since you'll have 32 bits of data.</td> </tr></table><span class="postbody">
+<br/>
+I'm not sure I understand / agree with you here. What I'm talking about is filling each 32 bit word with one left and one right sample. 16 bits should be enough headroom and sub-sample precision for 8 bit sounds output, so there's no need to clear anything, just let the multiplier move the bits where you need them.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Anyway, I'm off to school now.. I'll see if I can get in here during my business and accounting class.</td> </tr></table><span class="postbody">
+<br/>
+I'm going to bed myself - it's 01:00 AM here, and I have an important meeting in the morning ;)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#168631 - Ruben - Tue May 12, 2009 6:35 am</h4>
+    <div class="postbody"><span class="postbody">Ah, I see what you mean, but there's 3 problems with that:
+<br/>
+<br/>
+    -Speed: You have to multiply twice for left/right, and an extra 32-bit load/store, in which case I may as well as put the playback buffer in IWRAM and write to that
+<br/>
+    -You have to have double the caching buffer for left/right in 32-bit each
+<br/>
+    -ZOMG! ALIASING!! :-O
+<br/>
+     From what I've noticed, I'm not sure why it happens, but keeping precision gives the final sound a whistly quality, which sounds downright terrible, imo, which is why I'm doing ASR 7 now; only realized this ~3 days ago. I can hazard a guess though: Keeping the accuracy will introduce slight error from scaling at all, which, when added up with other channels, will create something rather awkward.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#168653 - Ruben - Wed May 13, 2009 9:42 am</h4>
+    <div class="postbody"><span class="postbody">FluBBa:
+<br/>
+Ohhhhh, now I see what it does. Yeah, it should be submi, because it's the last bit of the whole thing. Hm, I think that works with 16-bit, too
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">@ Before loop . . .
+<br/>
+mov   r5, #0x7F00           @ r5 = 0x7F00
+<br/>
+add   r5, r5, #0xFF         @ r5 = 0x7FFF = SHORT_MAX
+<br/>
+<br/>
+@ During loop . . .
+<br/>
+teq   r5, r5, lsl #0x10     @ Sign ^ gSign
+<br/>
+submi r5, ip, r5, asr #0x1F @ If bit 31 is on, then
+<br/>
+                            @ it means that the signs
+<br/>
+                            @ differ; clip </td> </tr></table><span class="postbody">
+<br/>
+<br/>
+EDIT: Oh and the teq/submi thing isn't --quite-- as fullproof, as it assumes that the 2nd last bit out of n+1 (where n is the number of bits) will be different than the sign. It usually will be, but if it isn't, it will fail.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

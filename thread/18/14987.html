@@ -1,0 +1,142 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>libfat not interrupt-safe? - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > libfat not interrupt-safe?</h2>
+<div id="posts">
+<div class="post">
+    <h4>#150565 - Noda - Thu Feb 07, 2008 6:29 am</h4>
+    <div class="postbody"><span class="postbody">hello!
+<br/>
+<br/>
+After having heard of some people experiencing problems while readinf files using libfat while playing a streamed mp3 (also using libfat), I made some tests.
+<br/>
+<br/>
+And it appears that it's working quite randomly :s The mp3 read buffer is refilled on the VBL interrupt. I think that may be the source of the problem, as while doing some reading/writing in the program, the reading migh be interrupted on VBL and another read is started to refill the buffer.
+<br/>
+<br/>
+I even went to completely corrupt my card (DSX) during my tests :(
+<br/>
+<br/>
+So anyone have suggestion, maybe confirmation for this problem?
+<br/>
+<br/>
+<br/>
+PS: found also another annoying bug in libfat: I open a file in rb+ mode, read 4 bytes then immediately after try to write 16 bytes. The 16 bytes written are then offseted in the file by 1024 bytes instead of 4!! If I close/reopen the file after the read, everything is fine...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#150566 - Lazy1 - Thu Feb 07, 2008 7:42 am</h4>
+    <div class="postbody"><span class="postbody">Yes, I can confirm that disk I/O during an interrupt can cause data corruption.
+<br/>
+What you can do is wrap all your open/read/write functions so you can disable interrupts before the call and re-enable them after.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#150567 - Noda - Thu Feb 07, 2008 8:21 am</h4>
+    <div class="postbody"><span class="postbody">Ouch, that's a serious issue then :/ When interrupts are disabled, any IRQ will be still throwed after they are enabled again or are they ignored? 
+<br/>
+<br/>
+Even in the first case, it may be an issue, as VBL-timed things like display refresh would not like being delayed... :(
+<br/>
+<br/>
+Isn't there a way to make the libfat IRQ safe, or it's something too much complicated to be bothered with? (Chism?)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#150570 - simonjhall - Thu Feb 07, 2008 12:04 pm</h4>
+    <div class="postbody"><span class="postbody">I do file access in a function called through a timer interrupt and I've never had problems...well I don't think I have anyway!
+<br/>
+I do know however that libfat is not thread-safe, so that's one thing you need to be aware of when using it in interrupts (assuming you're using it in other threads too).
+<br/>
+<br/>
+To catch stuff like this I have locks around all my file access to ensure that I never get into situations like this. This is also essential when you're reading into slot-2 memory which may or may not need to be disabled during disk access.
+<br/>
+<br/>
+Btw you're not using nested interrupts, right?<br/>_________________<br/><span style="font-weight: bold"><a class="postlink" href="https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&amp;business=simonjhall%40gmail%2ecom&amp;no_shipping=2&amp;no_note=1&amp;tax=0&amp;currency_code=GBP&amp;lc=GB&amp;bn=PP%2dDonationsBF&amp;charset=UTF%2d8" target="_blank">Big thanks to everyone who donated for Quake2</a></span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#150571 - PypeBros - Thu Feb 07, 2008 12:11 pm</h4>
+    <div class="postbody"><span class="postbody">Personnally, i wouldn't do any "disk" I/O in a timer or VBL interrupt... I'd rather just use the VBL to test wether more data are needed and read data in the "main" loop if this has been indicated to be required by the VBL handler.
+<br/>
+<br/>
+That seems preferable to the wrapping of all "main" I/O access with disabling of interrupts.<br/>_________________<br/><a class="postlink" href="http://sylvainhb.blogspot.com/p/sprite-editor.html" target="_blank"> SEDS: Sprite Edition on DS</a> :: <a class="postlink" href="http://sylvainhb.blogspot.com/search/label/modplayer" target="_blank">modplayer</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#150576 - Noda - Thu Feb 07, 2008 5:38 pm</h4>
+    <div class="postbody"><span class="postbody">simon&gt; no, the interrupt are not nested. do you do file access ONLY on interrupt or in interupt + main loop? using it only on interrupt should be safe...
+<br/>
+<br/>
+pypebros&gt; the libfat access I do in VBL is the buffer refill function for the mp3 decoder, and is very time critical, so putting it in an interrupt is the best solution here.
+<br/>
+<br/>
+Even on simple code I can make the libfat crashing the DS filesystem:
+<br/>
+<br/>
+- Launch an mp3 on the arm7 (refill buffer is done on arm9, on VBL IRQ)
+<br/>
+- After that, try to read / write some data and here it is.
+<br/>
+<br/>
+Can this be card-dependant (due to the dldi driver) or is it really a libfat problem?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#150579 - simonjhall - Thu Feb 07, 2008 8:05 pm</h4>
+    <div class="postbody"><span class="postbody">I do both file reading in both the main thread and in the timer interrupt. However I know that they're never gonna both happen at the same time so maybe that's why I've not had a problem.
+<br/>
+<br/>
+Some dldi drivers do (did?) use dma though, which I can attribute problems to. esp when it comes to locking/unlocking slot-2 memory...<br/>_________________<br/><span style="font-weight: bold"><a class="postlink" href="https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&amp;business=simonjhall%40gmail%2ecom&amp;no_shipping=2&amp;no_note=1&amp;tax=0&amp;currency_code=GBP&amp;lc=GB&amp;bn=PP%2dDonationsBF&amp;charset=UTF%2d8" target="_blank">Big thanks to everyone who donated for Quake2</a></span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#150583 - Dwedit - Thu Feb 07, 2008 9:15 pm</h4>
+    <div class="postbody"><span class="postbody">Wait... Wasn't one of the big changes to libfat (when it changed from gba_nds_fat) supposed to be support for re-enterence and multithreading?<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#150618 - Noda - Fri Feb 08, 2008 5:50 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Dwedit wrote:</b></span></td> </tr> <tr> <td class="quote">Wait... Wasn't one of the big changes to libfat (when it changed from gba_nds_fat) supposed to be support for re-enterence and multithreading?</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I thought so... :(</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#150643 - chishm - Sat Feb 09, 2008 6:46 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Dwedit wrote:</b></span></td> </tr> <tr> <td class="quote">Wait... Wasn't one of the big changes to libfat (when it changed from gba_nds_fat) supposed to be support for re-enterence and multithreading?</td> </tr></table><span class="postbody">
+<br/>
+It is re-entrant in the sense that you can perform more than one directory operation without it affecting other directory operations. For instance, in GBA_NDS_FAT, if you were scanning a directory for files and you opened a file between two successive filename read operations, the second filename read would be of the file after the one just opened, not the one after the previously read one. 
+<br/>
+<br/>
+Multi-threading support and interrupt safety is not easily doable for any I/O operation on the DS. I'd need to queue I/O operations so that they don't interfere, but this would reduce the responsiveness such that there'd be no point in even reading during an interrupt instead of the main loop.
+<br/>
+<br/>
+If you really must get data through quickly, read it into a large buffer in your main loop then copy it to the audio buffer as needed in the interrupt, or just use a bigger buffer to begin with.
+<br/>
+<br/>
+Noda:
+<br/>
+The write occurring 1024 into the file may be caused by newlib. Try using open/read/write/close instead of fopen/fread/fwrite/fclose and see if the problem remains.<br/>_________________<br/><a class="postlink" href="http://chishm.drunkencoders.com" target="_blank">http://chishm.drunkencoders.com</a>
+<br/>
+<a class="postlink" href="http://dldi.drunkencoders.com" target="_blank">http://dldi.drunkencoders.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#150645 - Dwedit - Sat Feb 09, 2008 8:38 am</h4>
+    <div class="postbody"><span class="postbody">Is it possible to make a generic "queueing" DLDI driver, which itself will accept a DLDI patch?<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#150667 - pas - Sun Feb 10, 2008 1:13 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Dwedit wrote:</b></span></td> </tr> <tr> <td class="quote">Is it possible to make a generic "queueing" DLDI driver, which itself will accept a DLDI patch?</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+ask chishim he should be able to answer this kind of question with ease cause he invented it.<br/>_________________<br/><a class="postlink" href="http://www.petitiononline.com/blizzds/petition.html" target="_blank">Starcraft DS ?</a></span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

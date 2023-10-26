@@ -1,0 +1,229 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>memcpy and tile background text - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Beginners > memcpy and tile background text</h2>
+<div id="posts">
+<div class="post">
+    <h4>#8949 - mtg101 - Thu Jul 24, 2003 7:14 pm</h4>
+    <div class="postbody"><span class="postbody">I'm trying to make a text engine for tile backgrounds. The idea is to have tiles in positions 32-126 which map to their respective ASCII chars.  Thus tile 57 is a '9' tile and tile 85 is 'U'.
+<br/>
+<br/>
+This is setup as follows:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+void BgTextInit(TileBg* aTileBg)
+<br/>
+{
+<br/>
+   for(int loop = 0; loop &lt; bgFont_NUM_PIXELS / 2; loop++)  //load tile image data
+<br/>
+      aTileBg-&gt;tileData[loop+((32*64)/2)] = nologo_bgFont_gfx[loop];
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Now ignoring cases of starting at odd tile positions or writing an odd number of characters, to write text to the background I have:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+void BgTextWrite(TileBg* aTileBg, int aX, int aY, char* aText)
+<br/>
+{
+<br/>
+   memcpy(&amp;aTileBg-&gt;mapData[(aX + (aY * width))/2], aText, strlen(aText));
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I thought using memcpy() rather than using a loop and assigning each pair of map entries one at a time would be much more efficient.
+<br/>
+<br/>
+However, things don't work as planned. If I call:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+BgTextWrite(bg2, 0, 0, "1234")
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+The output is "2244". My guess is that memcpy() is copying single bytes at a time, and when it tries to write just a byte both bytes of the 16bit entry are being set to the byte, hence the duplication in the output. Is this the case?
+<br/>
+<br/>
+So am I stuck having to loop over and over to copy my map data, or is there a way to use memcpy() to do it? Or is there another function that copies 2 bytes at a time?
+<br/>
+<br/>
+<br/>
+(FYI - I'm using DevKitAdv)
+<br/>
+<br/>
+Thanks in advance for any help.
+<br/>
+<br/>
+Cheers
+<br/>
+Russell<br/>_________________<br/>---
+<br/>
+Speaker for the Dead</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#8951 - niltsair - Thu Jul 24, 2003 7:58 pm</h4>
+    <div class="postbody"><span class="postbody">-Video Memory can only be read/written 2 bytes at a time.
+<br/>
+-1 Map entry takes 16bits.
+<br/>
+<br/>
+You thus can't write your 8bits string directly.  
+<br/>
+<br/>
+Example, string of 3 values:
+<br/>
+0x30, 0x31, 0x56 
+<br/>
+<br/>
+you need to write to the map data
+<br/>
+0x0030, 0x0031, 0x0056</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#8952 - mtg101 - Thu Jul 24, 2003 8:30 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>niltsair wrote:</b></span></td> </tr> <tr> <td class="quote">-Video Memory can only be read/written 2 bytes at a time.
+<br/>
+-1 Map entry takes 16bits.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Really? I thought map data was 8bits? If it were 16bit my code to draw the string "12" on the screen would index tile number 0x3132 (or maybe 0x3231 if I've got endians mixed up). However tile 0x32 it printed twice, which leads me to believe that map data is 8bit.
+<br/>
+<br/>
+I realise that map data can only be written 2 bytes at a time, which is why I specified the case of an even number of chars to write, and an even starting point to avoid any complications (I've got other code that works to deal with the odd cases).
+<br/>
+<br/>
+Cheers
+<br/>
+Russell<br/>_________________<br/>---
+<br/>
+Speaker for the Dead</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#8953 - niltsair - Thu Jul 24, 2003 8:43 pm</h4>
+    <div class="postbody"><span class="postbody">Map data are 16bits.
+<br/>
+<br/>
+The reason your data get displayed twice is because you're trying to write 8bits at a time. <span style="font-weight: bold"> aText </span> is of type char, so memcpy try to write in 8bits chunks.
+<br/>
+<br/>
+Check the Pern project for more info about Map and Tiles.
+<br/>
+<a class="postlink" href="http://www.thepernproject.com/index2.htm" target="_blank">http://www.thepernproject.com/index2.htm</a>
+<br/>
+<br/>
+A quick fix to your problem, do a loop that write your data to the map, one by one, casting each char to a (u16). Then try to find a way to optimize it afterward. One thing is for sure, each char need to take 16bits at the end, not 8bits.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#8954 - mtg101 - Thu Jul 24, 2003 8:56 pm</h4>
+    <div class="postbody"><span class="postbody">My apologies - I've just realised a rather important fact.  I'm doing this for rotation backgrounds.  I've only just realised that in text backgrounds you use 16bits for each tile.
+<br/>
+<br/>
+So given I'm using a rotation background, each tile is 8bits; I checked this in The Pern Project tutorials, and it's the way that works for me in other rotation backgrounds I've tried.<br/>_________________<br/>---
+<br/>
+Speaker for the Dead</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#8956 - niltsair - Thu Jul 24, 2003 10:12 pm</h4>
+    <div class="postbody"><span class="postbody">In this case, cast <span style="font-weight: bold"> aText </span> as a u16 pointer instead when in rotation maps and then copy only half of the string lenght (since you're copying 2 chars at a time). Then, you need to take care of the odd number of chars.
+<br/>
+<br/>
+memcpy(&amp;aTileBg-&gt;mapData[(aX + (aY * width))/2], (u16*)aText, strlen(aText)/2);
+<br/>
+<br/>
+<br/>
+If the number of chars to write is great, use dma instead. I'm not certain at what lenght it start being faster.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#8957 - mtg101 - Thu Jul 24, 2003 10:27 pm</h4>
+    <div class="postbody"><span class="postbody">I've just tried that and it didn't work - same output. I also tried cating all 3 arguments to (u16*) and that didn't work either.
+<br/>
+<br/>
+In otherinvestigations,I've comeacross 2 others things.
+<br/>
+<br/>
+1 - When using mode 4 I can use memcpy() to copy a bitmap to the screen with something like:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+memmove(BackBuffer, test_gfx, 240*160);
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+This works fine. Why can I write to VRAM in mode 4 using memcpy(), but in mode 1 it writes the same byte in both bytes of the 16bit addrress? Do they work differently, or am I doing something wrong?
+<br/>
+<br/>
+2 - There seems to be a wmemcpy() function (for moving around 16bit at a time) in the header files, but I can't get it to compile. Anyone got any experience of using this?
+<br/>
+<br/>
+<br/>
+Cheers
+<br/>
+Russell<br/>_________________<br/>---
+<br/>
+Speaker for the Dead</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#8958 - mtg101 - Thu Jul 24, 2003 10:33 pm</h4>
+    <div class="postbody"><span class="postbody">Arg - more mistakes from me.  I don't get quite the same output... I forogot to devide the length by 2...
+<br/>
+<br/>
+When I do that, and try to print "12", I get "11" instead of the previous "22". Which I think backs up my theory that memcpy() deals in bytes only.
+<br/>
+<br/>
+Where should I be including memcpy() from?  I'm using DevKitAdv and using #include &lt;string.h&gt; to get memcpy() - is that right?<br/>_________________<br/>---
+<br/>
+Speaker for the Dead</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#9398 - mtg101 - Sun Aug 03, 2003 8:12 pm</h4>
+    <div class="postbody"><span class="postbody">So... eventually I decided that memcpy deals in single bytes and wasn't any use to me in this case; so I just used a loop.
+<br/>
+<br/>
+Then I found out about DMA- which can copy either 16 or 32 bit chunks. So I've used that where I can - there are cases where the text input isn't 16bit aligned so I can't copy from it (eg drawing to an odd offest tile position).  Useful experience... but leaves me with a bgText system that is faster or slower depending on where and how long your text is.<br/>_________________<br/>---
+<br/>
+Speaker for the Dead</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#9408 - niltsair - Mon Aug 04, 2003 5:53 am</h4>
+    <div class="postbody"><span class="postbody">There is a bios command to copy a bunch of data too, beside DMA. Someone did some interesting speed tests compare between the two. You can try to find the post, it was around friday.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#9413 - mtg101 - Mon Aug 04, 2003 9:38 am</h4>
+    <div class="postbody"><span class="postbody">Yeah I noticed that thread too - IIRC it found that the speed depended on the memory type being copied to / from.  I'll look at that when I get round to optimizing my memory type usage I think, otherwise I'll just have to go back and change loads of stuff.<br/>_________________<br/>---
+<br/>
+Speaker for the Dead</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

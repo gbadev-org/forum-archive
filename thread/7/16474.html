@@ -1,0 +1,335 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Initialising class with a reference - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>C/C++ > Initialising class with a reference</h2>
+<div id="posts">
+<div class="post">
+    <h4>#166926 - Echo49 - Tue Feb 24, 2009 6:51 am</h4>
+    <div class="postbody"><span class="postbody">In the following code, do I need to write a copy constructor to make sure everything is copied correctly? Or will it work fine because it's a reference?
+<br/>
+<br/>
+I'm specifically looking at the use of references in the initialiser list in the ctor for Foo.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">class Bar
+<br/>
+{
+<br/>
+   public:
+<br/>
+      Bar() { /* do stuff */ }
+<br/>
+   protected:
+<br/>
+      int *a, b, *c, d;
+<br/>
+};
+<br/>
+<br/>
+class Foo
+<br/>
+{
+<br/>
+   public:
+<br/>
+      Foo(Bar&amp; bar);
+<br/>
+   protected:
+<br/>
+      Bar&amp; mBar;
+<br/>
+};
+<br/>
+<br/>
+Foo::Foo(Bar&amp; bar) : mBar(bar)
+<br/>
+{
+<br/>
+}</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#166930 - Dwedit - Tue Feb 24, 2009 8:05 am</h4>
+    <div class="postbody"><span class="postbody">No clue about this, try writing a test case that would break if something is assigned when it shouldn't be, and try copying the object in various ways.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#166956 - sajiimori - Tue Feb 24, 2009 9:07 pm</h4>
+    <div class="postbody"><span class="postbody">The Foo copy constructor will copy the Bar reference, but not the underlying Bar object.
+<br/>
+<br/>
+However, I strongly recommend against carrying references as data members.  Use pointers instead.  It's very important to be explicit about when the address and lifetime of an object is important, to highlight potential dangling pointers and spooky action at a distance.
+<br/>
+<br/>
+More generally, I recommend against "holding onto" the address of anything that was passed to you by reference.  It's deceptive from the perspective of the client code, which looks like it's passing the object by value.  The client might not be thinking about the lifetime of their object, and they may not be expecting their object to be modified.
+<br/>
+<br/>
+Use <span style="font-weight: bold">const</span> references only, and only use them as an optimization of passing by value.  That is, only use references if you <span style="font-weight: bold">could have</span> passed by value and gotten the same runtime behavior, but you didn't want to pay for the copy.
+<br/>
+<br/>
+Use pointers when lifetime and identity matter.  That is, use pointers if you intend to:
+<br/>
+<br/>
+  - hold onto the address for longer than the duration of the function
+<br/>
+  - modify the original object, not just your own copy of it
+<br/>
+  - delete the object</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#166978 - Echo49 - Wed Feb 25, 2009 7:55 am</h4>
+    <div class="postbody"><span class="postbody">Thank you for the advice. I have changed my code accordingly to avoid the use of the reference there. I discovered I only used it in one function anyway, so now that function takes the object as an extra argument using pass-by-reference instead.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#167044 - elyk1212 - Fri Feb 27, 2009 5:00 pm</h4>
+    <div class="postbody"><span class="postbody">There can be uses for using a reference as a member. For instance in a Singleton case, where this object could be shared by many others in your program, but there will be only one global instance of this object (and only one instance of any underlying reference members).  I can only think of a few special cases though, where a reference would be a *possible* design decision.
+<br/>
+<br/>
+We would use it quite a bit for Testbenches to have only one reference that was used for many classes (bus controller, memory controller [mmu], controllers for various RTL).  
+<br/>
+<br/>
+Was it the best way to go?  Maybe not, but it did avoid null pointer's from being introduced, or other such nonsense, as the classes changed.  This is likely due to having to establish the reference using an initializer list at construction, and if we did not the compiler would cough if I am not mistaken.
+<br/>
+<br/>
+Also it would not make sense to "Copy construct" or have more than one MMU  or bus controller.  This would send the simulation into chaos or something, as signals etc would have multiple connections to "real" RTL pins etc. :P</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#167052 - sajiimori - Fri Feb 27, 2009 10:44 pm</h4>
+    <div class="postbody"><span class="postbody">I don't see any special relationship between references and the Singleton pattern.  There are innumerable ways of doing Singleton without a reference in sight.
+<br/>
+<br/>
+The same goes for test benches.
+<br/>
+<br/>
+References do not prevent null pointers in any way.  Dereferencing a null pointer yields a null reference, on every compiler I've ever used.
+<br/>
+<br/>
+To guarantee that a pointer isn't null, define a NonNull class template that asserts in the constructor that its argument isn't null.  This is a stronger guarantee, it catches errors as early as possible, it reduces the quantity of hand-written asserts, and it's self-documenting.
+<br/>
+<br/>
+If you want to force member data initialization in the constructor, declare your member data as const.
+<br/>
+<br/>
+Objects are copyable by default in C++.  The traditional way to prevent copying is to explicitly declare a private copy constructor and assignment operator, but omit their definitions.  References do not aid in preventing copies.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#167057 - elyk1212 - Sat Feb 28, 2009 12:22 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+I don't see any special relationship between references and the Singleton pattern. There are innumerable ways of doing Singleton without a reference in sight. 
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Well in the easiest case, using reference in a parameter list (or constructor param list) would avoid making any copies of the said, Singleton object.  Which is one goal of the HDL simulation, avoid making 2 bus abstractions pointing to the same pins (... which would be... major ouch).  There are other ways of course.
+<br/>
+<br/>
+Anyhow, that part wasn't my design, so I can't speak to its complete intent.  But I *think* they decided to use references to hold electrical engineer's hands to avoid dereference syntax within test writing, as well as prevent passing them around and other confusion, just setting them up once in the testbench and not worrying any further.
+<br/>
+<br/>
+You'd be surprised what strange things can happen when you give people, unfamiliar with C or C++, access to REAL pointers.. Oh .. MAN...  how many times sanity tests failed due to invalid memory and run on arrays.. ehhhh. They'd probably try to do pointer arithmetic, getting clever, then dereferencing ... ack!
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+References do not prevent null pointers in any way. Dereferencing a null pointer yields a null reference, on every compiler I've ever used. 
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+They might.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+<br/>
+// OK :) &lt;3
+<br/>
+Bar b;
+<br/>
+Foo f(b);
+<br/>
+<br/>
+// Oh no! :Z   
+<br/>
+Bar* b2 = 0x0;
+<br/>
+Foo f2(*b2);     /// Dead Before ever reaching constructor 
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+  If you don't set a member variable (that happens to be a reference) equal to an ACTUAL object, at construction time (within an initialization list too, I am fairly certain),  the compiler complained in every case  (I used g++ 3.x-4.x).   
+<br/>
+<br/>
+So in this case the lack of compilation would be a vice to holding you accountable for passing an actual live object to the constructor (no NULLs to be had).   Let me know if otherwise... that would be interesting.  
+<br/>
+<br/>
+BTW: Not sure how you can have an "null reference"... and still have a running simulation... hmm.  It IS possible though... just not typical.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+T* ptr = 0x0;
+<br/>
+T&amp; ref = *T;  // BANG! Or No BANG? Address space is the question. 
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+How can you pass in a null "actual" object?  To have a NULL actual object, in the case that you're mentioning, it would imply that you had write access to address 0x0 and that the object was constructed there.   Try dereferencing Address 0x0 within any simulator, by address space convention, should not work (but again, possible).
+<br/>
+<br/>
+If 0x0 is not supposed to be writable, Would you pass in a delayed evaluation to a null dereference to get an actual null reference (but still would not have been evaluated)?  Sounds like lisp :O
+<br/>
+<br/>
+Just to check the exceedingly dynamic C++ standards with what I know....
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+Wikipedia: <a href="http://en.wikipedia.org/wiki/Reference_" target="_blank">http://en.wikipedia.org/wiki/Reference_</a>(C%2B%2B)
+<br/>
+[Note: in particular, a null reference cannot exist in a well-defined program, because the only way to create such a reference would be to bind it to the ?object? obtained by dereferencing a null pointer, which causes <span style="font-weight: bold">undefined behavior</span>. As described in 9.6, a reference cannot be bound directly to a bitfield. ]
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+... well maybe, it is Wikipedia after all :(
+<br/>
+<br/>
+Maybe I am missing something there.  Dereferencing a NULL pointer should leave you with a pretty little stack trace... Well unless your system actually uses address space 0x0 for something writable by your program... there *could* be a case, I spose.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+Objects are copyable by default in C++. The traditional way to prevent copying is to explicitly declare a private copy constructor and assignment operator, but omit their definitions. 
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Yep, I am all too familiar.  That's what *they* did, just made the copy constructors private for these Singleton instances.  But anyhow, a singleton pattern could be a case for using references if you'd like to avoid copy constructors and still want to use a dot syntax, which was the odd requirements for our library (hand holding).  
+<br/>
+<br/>
+It's a bit difficult for me to know all the reasons for the design decision, just sighting one instance used in actual production code within a company.  This is a widely used library.  Is it a good idea?  .. That is a different story.  
+<br/>
+<br/>
+But as the saying goes, one size does not fit all.  I argue there could be a reasonable case for doing member references (but probably not very many)
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+References do not aid in preventing copies.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Yeah, but in the context they were being used, they no longer <span style="font-weight: bold">wanted</span> to try to copy or do anything weird (but yeah, they were forcefully stopped by using private copy constructors).  
+<br/>
+<br/>
+With pointers someone (especially EE guys :P)  would surely try and dereference the public instance and set it equal to a local variable in their test, or do some funky address offsets on the pointer... (Just to mess with us perhaps).  Then blame the Testbench authors when there junk didn't compile or make sense.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#167062 - sajiimori - Sat Feb 28, 2009 1:49 am</h4>
+    <div class="postbody"><span class="postbody">elyk1212, it seems like your design decisions are mostly guided by the decision to have non-programmers try to use C++...?
+<br/>
+<br/>
+The discussion ends there, for me -- I think the goal itself is misguided.
+<br/>
+<br/>
+Closing comment: Your "dead before reaching constructor" example actually runs fine for me, as long as the constructor takes Bar by reference and use it, even if it's stored as a data member.  I tried it on GCC 3.4.5 and MSVC 2005, and they both silently allowed the null reference, which is exactly what I'd expect.
+<br/>
+<br/>
+(If you'd think about it a bit more, perhaps you would've expected it, too.)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#167063 - elyk1212 - Sat Feb 28, 2009 2:13 am</h4>
+    <div class="postbody"><span class="postbody">No no... NOT my design decision.... Rationalizing the design on an existing system, and just stating that there might be a case for reference members (one size doesn't fit all).  Not that it matters but, I designed other parts.  See earlier.   
+<br/>
+<br/>
+But anyhow, yes... non-programmers (in the traditional sense) need to use C++... it's called engineering ;) .
+<br/>
+<br/>
+  It is quite common in the hardware world, believe me.  Designers need to test their Hardware, and most of the time they're the best people for the job.  So a designer becomes the verification engineer temporarily.  If you've worked in this area, you can come to see that many EE guys are (obviously) absolutely brilliant, but not very schooled in high level languages (other than HDL stuff).  These requirements are (likely) dictated via the designers themselves.   You should see this stuff, even complete class definitions are abstracted away in macros sometimes. :Z.  But anyhow, it was an <span style="font-weight: bold">actual requirement</span> for us to make the library easy to use and to avoid pointer usage in public spaces, where possible (though I didn't have to deal with this much).  
+<br/>
+<br/>
+You're right.  The behavior is supposedly <span style="font-weight: bold">undefined</span> for dereferencing NULL, but I guess I was not completely familiar with how a C++ reference was implemented (under the hood).  I suppose, in many (ALL?) cases you'd only have an issue if you actually tried to use that memory.  But I had thought I had seen killed simulations when dereferencing null, but it may have only been in a non reference parameter situation.  I will have to try again.
+<br/>
+<br/>
+Edit: And in fact it looks as though dereferencing the address <span style="font-weight: bold">is</span> delayed till it is used, when using references, sort of like lisp (I guess there is no need to read anything yet, so this makes sense).</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#167075 - sgeos - Sat Feb 28, 2009 8:01 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>elyk1212 wrote:</b></span></td> </tr> <tr> <td class="quote">But anyhow, yes... non-programmers (in the traditional sense) need to use C++... it's called engineering ;) .</td> </tr></table><span class="postbody">
+<br/>
+No, no, no... this is what scripting languages are for, even when interfacing with hardware.  Tie your architecture to a scripting language (like lua) and then extend the scripting language with a domain specific API.  Not only will you not need to recomile to test new things, if your API is good enough, you can get people who barely know HTML to write useful behaviors.  A scripting sandbox also insulates your system bugs introduced by people who don't know the programming language very well.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>elyk1212 wrote:</b></span></td> </tr> <tr> <td class="quote">Rationalizing the design on an existing system,</td> </tr></table><span class="postbody">
+<br/>
+It sounds like your hands are tied to a certain extent.
+<br/>
+<br/>
+I really only skimmed this thread, but a getMySingleton() function is how I deal with singletons.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#167076 - elyk1212 - Sat Feb 28, 2009 8:25 am</h4>
+    <div class="postbody"><span class="postbody">Yeah, that's fair.  I should have said, <span style="font-style: italic">need to use high level languages</span>. In our case, they had to use C++ (SystemC) for tests... at least in the short term.
+<br/>
+<br/>
+Yeah, scripting sounds like a good idea, I just haven't noticed any simulators that support this directly (VCS, Cadence?),  I don't know much about these sims' capabilities though, but even a layer could be build between SystemC and a scripting lang (which someone was working on, but it was primitive).  To get this language support you have to pretty much tie a conduit that bridges the simulator and the language features.  But, I still think recompiling is unavoidable as both the DUT and the language are a moving target, in most design environments.  Changes in the RTL require additions to the bench, which require a change to conduit ties to pins and such.... etc. But I see what you mean, ideally... you should not need to.
+<br/>
+<br/>
+Most of the foundation for this stuff existed when I was on board (I have since left the company).  But yeah, scripting sounds interesting.  Honestly, even C++ is a strange thing for them, and scares off many a EE guy.  They did have a language that spit out XML for hardware descriptors, and that was a nice abstraction, but many times (especially at the SOC level) tweaks would need to take place in C++ tests by designers somewhere (but ideally, it *should* have been avoidable).
+<br/>
+<br/>
+They're really used to using full on Verilog or System Verilog for their testbench... the old school way, but that wasn't providing enough randomization, so a higher level of abstraction was adopted for the bench (SystemC tied to SysVerilog)
+<br/>
+<br/>
+getMySingleton()
+<br/>
+<br/>
+Yep, good deal, that's the way I'd do it too.  Have a factory method that would spit once instance and restrict further calls.  I think they had a cooked mmu.malloc that was tied to creation of singleton instance, no conventional C++ <span style="font-weight: bold">new</span>s to be had, so no issue with messing with pointers (much).  But I don't recall a real obj factory design. That would've been better.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#167087 - sgeos - Sat Feb 28, 2009 2:49 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>elyk1212 wrote:</b></span></td> </tr> <tr> <td class="quote">Yeah, scripting sounds like a good idea, I just haven't noticed any simulators that support this directly</td> </tr></table><span class="postbody">
+<br/>
+If the simulator can access the file system, I think they already do.  If you are dropping a program ROM image into the simulator, you might need to store your script as a bytecode data object and feed it into the scripting engine.  That would require a recomile (and more expertise on the part of the programmer maintaining the scripting engine), but I don't see any reason it wouldn't work.  I'm assuming SystemC can deal with vanilla C code here.  Correct me if I'm wrong.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>elyk1212 wrote:</b></span></td> </tr> <tr> <td class="quote">But, I still think recompiling is unavoidable as both the DUT and the language are a moving target, in most design environments.</td> </tr></table><span class="postbody">
+<br/>
+I made false assumptions about your problem domain.  My bad.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>elyk1212 wrote:</b></span></td> </tr> <tr> <td class="quote">Changes in the RTL require additions to the bench, which require a change to conduit ties to pins and such.... etc. But I see what you mean, ideally... you should not need to.</td> </tr></table><span class="postbody">
+<br/>
+Once your hardware is fixed, if you have access to a filesystem, all you should need to do is replace the scripts that drive the device.  (Barring API changes, etc.)
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>elyk1212 wrote:</b></span></td> </tr> <tr> <td class="quote">Honestly, even C++ is a strange thing for them, and scares off many a EE guy.</td> </tr></table><span class="postbody">
+<br/>
+And it should.  Non programmers should domain specific scripting langauges.  Even these will give many people trouble.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">getMySingleton()
+<br/>
+<br/>
+Yep, good deal, that's the way I'd do it too.  Have a factory method that would spit once instance and restrict further calls.</td> </tr></table><span class="postbody">
+<br/>
+There are a bunch of ways to get this to work.  The goal is to abstract all that behind an API call that makes getting to your singleton easy.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

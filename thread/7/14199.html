@@ -1,0 +1,268 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>bug hunting! - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>C/C++ > bug hunting!</h2>
+<div id="posts">
+<div class="post">
+    <h4>#141183 - spinal_cord - Sun Sep 23, 2007 12:46 am</h4>
+    <div class="postbody"><span class="postbody">I'm currently trying to get my stupid menu to work, but whenever I re-read a directory I get gfx problems so I assume I have a leak somewhere. Can someone tell me if there are any problems with the following code, 
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+void get_file_list(void)
+<br/>
+{
+<br/>
+// loading animation
+<br/>
+// sprite for loading animation
+<br/>
+PA_LoadSprite16cPal(1,2,(void*)loading_Pal);   // Palette name
+<br/>
+PA_CreateSprite(1, 10,(void*)loading_Sprite,OBJ_SIZE_32X32,0,2,96,120);
+<br/>
+<br/>
+int temp;
+<br/>
+<br/>
+   number_of_files=0; // so we have no files
+<br/>
+   struct stat st;
+<br/>
+   DIR_ITER* dir;
+<br/>
+   dir = diropen (folder); 
+<br/>
+   if (dir == NULL) {
+<br/>
+      // can't open
+<br/>
+   } else {
+<br/>
+      while (dirnext(dir, icon[number_of_files].filename, &amp;st) == 0) {
+<br/>
+         icon[number_of_files].is_folder = (st.st_mode &amp; S_IFDIR) ? 1 : 0;
+<br/>
+         
+<br/>
+if(st.st_mode &amp; S_IFDIR)
+<br/>
+{
+<br/>
+ // is a folder
+<br/>
+ // later load the folder icon and palette
+<br/>
+}else{   
+<br/>
+ if(isNDS(icon[number_of_files].filename))
+<br/>
+ {
+<br/>
+   if(number_of_files&lt;max_files)
+<br/>
+   {
+<br/>
+      icon[number_of_files].is_folder=0; // is not folder
+<br/>
+    readheader(icon[number_of_files].filename,number_of_files);
+<br/>
+<br/>
+<br/>
+    number_of_files++;//next line
+<br/>
+   // animate the loading anim
+<br/>
+    PA_SetSpriteAnim(1, 10, lframe);
+<br/>
+   lframe++;
+<br/>
+   PA_WaitForVBL();
+<br/>
+    if(lframe==12)lframe=0;
+<br/>
+   }   
+<br/>
+ } 
+<br/>
+<br/>
+}      
+<br/>
+}
+<br/>
+dirclose(dir);
+<br/>
+PA_WaitForVBL();
+<br/>
+}   
+<br/>
+// delete the animation
+<br/>
+PA_DeleteSprite(1,10);
+<br/>
+<br/>
+number_of_files--; // remove the last unused entry
+<br/>
+<br/>
+   for(temp=0; temp&lt;=number_of_files; temp++)
+<br/>
+   {
+<br/>
+      icon[temp].x=0;
+<br/>
+      icon[temp].y=temp*32;
+<br/>
+      icon[temp].zoom=256;
+<br/>
+      icon[temp].sprite=-1;   // Keep track of sprite used for each icon.
+<br/>
+   }
+<br/>
+   
+<br/>
+}
+<br/>
+<br/>
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I'm likely to spend forever on this, so I need all the help I can get.<br/>_________________<br/>I'm not a boring person, it's just that boring things keep happening to me.
+<br/>
+<a class="postlink" href="http://spinal.dizidesigns.co.uk/" target="_blank">Homepage</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#141394 - Miked0801 - Mon Sep 24, 2007 11:12 pm</h4>
+    <div class="postbody"><span class="postbody">Without being familiar with the API, here's my thoughts:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+     // can't open 
+<br/>
+   } else { 
+<br/>
+      while (dirnext(dir, icon[number_of_files].filename, &amp;st) == 0) { 
+<br/>
+         icon[number_of_files].is_folder = (st.st_mode &amp; S_IFDIR) ? 1 : 0</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+As there is no limit to how often this will repeat, you could be writing off the end of the icon[] array.
+<br/>
+<br/>
+Scratch that, you are never loading number_of_files with any value.  It will always be 0.  Perhaps you wanted a ++ on there?
+<br/>
+<br/>
+Oh #$%@, your silly indentation screwed me up.  Keeps reading...
+<br/>
+<br/>
+Why '--' on number of files?  Just use &lt; instead of &lt;= in the for()
+<br/>
+<br/>
+Hmm, number_of_files is global.  Any chance an interrupt is playing with it as all?
+<br/>
+<br/>
+Hmm.  Are you 100% sure you are handling your max_files condition correctly?
+<br/>
+<br/>
+Also, your SetSpriteAnim call is using magically delicious numbers.  Are you sure those number are valid?
+<br/>
+<br/>
+lframe is never set to a low value to begin and appears to be global.  If it starts above 12, it will never reset to 0.  Consider using &gt;= on your if.
+<br/>
+<br/>
+<br/>
+<br/>
+That's what I got first pass.  Others may be able to help more.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#141397 - spinal_cord - Tue Sep 25, 2007 12:37 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Why '--' on number of files? Just use &lt; instead of &lt;= in the for()</td> </tr></table><span class="postbody">
+<br/>
+I'm number_of_files++ after adding the info to the array, so the last entry is never used. THis way I dont need to remember to number_of_files-1 in the icon rendering.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Hmm, number_of_files is global. Any chance an interrupt is playing with it as all?</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+This is the only place n the entire code where number_of_files is used (I think)
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Hmm. Are you 100% sure you are handling your max_files condition correctly?</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+How do you mean? If number_of_files = max_files, then that last entry is overwritten. Might not be the best way, but it works (I think).
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Also, your SetSpriteAnim call is using magically delicious numbers. Are you sure those number are valid?
+<br/>
+<br/>
+lframe is never set to a low value to begin and appears to be global. If it starts above 12, it will never reset to 0. Consider using &gt;= on your if.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+I still have the bug when I completely remove the sprite animation. lframe is global but I can't remember why.
+<br/>
+<br/>
+At least you tried, thankyou.<br/>_________________<br/>I'm not a boring person, it's just that boring things keep happening to me.
+<br/>
+<a class="postlink" href="http://spinal.dizidesigns.co.uk/" target="_blank">Homepage</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#141406 - Miked0801 - Tue Sep 25, 2007 2:11 am</h4>
+    <div class="postbody"><span class="postbody">Perhaps your icon rendering code is getting confused when you reload its new information upon directory reload?  Another guess.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#141410 - spinal_cord - Tue Sep 25, 2007 2:24 am</h4>
+    <div class="postbody"><span class="postbody">If your using palib, I can pm you a link to the full code if you want to have a look. its bugging the hell out of me (pun intentional).<br/>_________________<br/>I'm not a boring person, it's just that boring things keep happening to me.
+<br/>
+<a class="postlink" href="http://spinal.dizidesigns.co.uk/" target="_blank">Homepage</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#141423 - Vich - Tue Sep 25, 2007 9:04 am</h4>
+    <div class="postbody"><span class="postbody">I don't know how diropen works, but maybe you do something wrong with the directory data pointers?
+<br/>
+<br/>
+You do:
+<br/>
+dir = diropen (folder); 
+<br/>
+But is "folder" a block of allocated memory and is it big enough for diropen?<br/>_________________<br/>[<a class="postlink" href="http://www.lifeisdigital.net" target="_blank">project website</a>] [<a class="postlink" href="http://www.kenvanhoeylandt.net" target="_blank">personal website</a>]</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#141456 - tepples - Tue Sep 25, 2007 8:14 pm</h4>
+    <div class="postbody"><span class="postbody">'folder' is supposed to be a C string containing the path of the folder to open. But because 'folder' is not a local variable, it has to be a variable declared directly in the module, either globally or "static". For example:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">char folder[PATH_MAX];</td> </tr></table><span class="postbody">
+<br/>
+Am I right?<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#141504 - spinal_cord - Wed Sep 26, 2007 11:00 am</h4>
+    <div class="postbody"><span class="postbody">char * folder="/";<br/>_________________<br/>I'm not a boring person, it's just that boring things keep happening to me.
+<br/>
+<a class="postlink" href="http://spinal.dizidesigns.co.uk/" target="_blank">Homepage</a></span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

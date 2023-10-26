@@ -1,0 +1,416 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Input sequences - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Beginners > Input sequences</h2>
+<div id="posts">
+<div class="post">
+    <h4>#26800 - Typhin - Sun Sep 26, 2004 8:48 am</h4>
+    <div class="postbody"><span class="postbody">Okay, I tried searching, but when I realized I was getting into threads that died about a year and a half ago, I decided I'd just go ahead and ask.
+<br/>
+<br/>
+Is there any easy way to recognize certain sequences of inputs?  For example, moves in a fighting game?  A certain margin of error is needed, not to mention the timing issues involved.  Saving the state from the previous check would mean that a move like Ryu's Hadoken would have to be executed in 1/20th of a second.
+<br/>
+<br/>
+So far, the only idea I have involves checking for the first input of a sequence (like down), allowing a certain amount of time (ten frames, maybe) to pass while waiting for the next input (like down-forward) and ruling out any move that doesn't start with those two, again letting time pass while waiting for the next input of any matching sequences, and only performing the move when one finishes.
+<br/>
+<br/>
+--Typhin, who's a little stumped by this.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#26803 - tepples - Sun Sep 26, 2004 2:32 pm</h4>
+    <div class="postbody"><span class="postbody">Read up on finite state machines. Then for each move, construct a finite state machine that will detect it.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#26807 - keldon - Sun Sep 26, 2004 3:27 pm</h4>
+    <div class="postbody"><span class="postbody">Aargh, I just looked at a search for Finite State machines .. I think a link would do him justice =D
+<br/>
+<br/>
+<a href="http://forum.gbadev.org/viewtopic.php?t=3753&amp;highlight=finite+state+machine" target="_blank">http://forum.gbadev.org/viewtopic.php?t=3753&amp;highlight=finite+state+machine</a>
+<br/>
+<br/>
+Tepples, maybe this should appear in the FAQ ( or at least a link to it ). Only problem is that unless you know what FSM's are, then you most likely don't know that it is what you wish to search for =)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#26820 - Typhin - Sun Sep 26, 2004 9:02 pm</h4>
+    <div class="postbody"><span class="postbody">I didn't find that post while searching, but it is essentially what I had described.  Except that I'm trying to figure out a good way to include a "fudge factor" into the moves so each input doesn't have to happen within the next frame.  In the example shown (unless I'm misreading it), the entire sequence would have to take place within three frames, or 1/20th of a second.  Even then, there has to be some kind of margin for error, so the only way I can think of to use the example shown is basically to include a count of how many frames the character has been in each state and cancel the move if they're doing it too slow, as well as keep tabs on multiple moves that start the same way. Perhaps the "state" would contain a series of bitflags corresponding to possible moves at that point.  At the first "down", flags for all mves starting with "down" are set, and everything else is cleared.  The next input checks against the sequences necessary for each of the remaining moves, clearing any that are wrong.  (Down/forward clears bits for moves that need down/back, for example.)  And then a move is executed only if it successfully gets to the end of a single move.
+<br/>
+<br/>
+--Typhin, who'd never heard the term "Finite State Machine" before this forum, but knew the basic concepts already.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#26822 - sajiimori - Sun Sep 26, 2004 9:57 pm</h4>
+    <div class="postbody"><span class="postbody">The key is to completely isolate each state machine, and let it work according to its own rules.  Pass the current input to each of the relevant state machines, and let them decide what to do independently.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+void update_states()
+<br/>
+{
+<br/>
+  KeyState s = get_new_key_state();
+<br/>
+  update_hadouken(s);
+<br/>
+  update_shoryuken(s);
+<br/>
+  ...
+<br/>
+  update_regular_moves(s);
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+An FSM for a particular move might resemble this pseudocode:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+// Specify how many frames can pass before entering the
+<br/>
+// next part of the sequence.
+<br/>
+#define HADOUKEN_MAX_TIMING_GAP  5
+<br/>
+<br/>
+SequenceStep hadouken_sequence[] =
+<br/>
+{
+<br/>
+  down, down_forward, forward_and_punch, end
+<br/>
+};
+<br/>
+<br/>
+struct
+<br/>
+{
+<br/>
+  int current_step;
+<br/>
+  int ticks_since_last_step;
+<br/>
+} hadouken_state;
+<br/>
+<br/>
+void update_hadouken(KeyState s)
+<br/>
+{
+<br/>
+  if(input_satisfies_current_step(s)
+<br/>
+  {
+<br/>
+    reset_ticks_since_last_step();
+<br/>
+    increment_current_step();
+<br/>
+    if(at_end_of_sequence())
+<br/>
+    {
+<br/>
+      do_hadouken_if_possible();
+<br/>
+      reset_current_step();
+<br/>
+    }
+<br/>
+  }
+<br/>
+  else
+<br/>
+  {
+<br/>
+    increment_ticks_since_last_step();
+<br/>
+    if(too_many_ticks_have_passed())
+<br/>
+      reset_current_step();
+<br/>
+  }
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Chances are your various moves will have a lot of code in common, so you could share most of it and just have the timing and sequences be different for each.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#26823 - LOst? - Sun Sep 26, 2004 10:01 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sajiimori wrote:</b></span></td> </tr> <tr> <td class="quote">The key is to completely isolate each state machine, and let it work according to its own rules.  Pass the current input to each of the relevant state machines, and let them decide what to do independently.
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+void update_states()
+<br/>
+{
+<br/>
+  KeyState s = get_new_key_state();
+<br/>
+  update_hadouken(s);
+<br/>
+  update_shoryuken(s);
+<br/>
+  ...
+<br/>
+  update_regular_moves(s);
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+An FSM for a particular move might resemble this pseudocode:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+// Specify how many frames can pass before entering the
+<br/>
+// next part of the sequence.
+<br/>
+#define HADOUKEN_MAX_TIMING_GAP  5
+<br/>
+<br/>
+SequenceStep hadouken_sequence[] =
+<br/>
+{
+<br/>
+  down, down_forward, forward_and_punch, end
+<br/>
+};
+<br/>
+<br/>
+struct
+<br/>
+{
+<br/>
+  int current_step;
+<br/>
+  int ticks_since_last_step;
+<br/>
+} hadouken_state;
+<br/>
+<br/>
+void update_hadouken(KeyState s)
+<br/>
+{
+<br/>
+  if(input_satisfies_current_step(s)
+<br/>
+  {
+<br/>
+    reset_ticks_since_last_step();
+<br/>
+    increment_current_step();
+<br/>
+    if(at_end_of_sequence())
+<br/>
+    {
+<br/>
+      do_hadouken_if_possible();
+<br/>
+      reset_current_step();
+<br/>
+    }
+<br/>
+  }
+<br/>
+  else
+<br/>
+  {
+<br/>
+    increment_ticks_since_last_step();
+<br/>
+    if(too_many_ticks_have_passed())
+<br/>
+      reset_current_step();
+<br/>
+  }
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Chances are your various moves will have a lot of code in common, so you could share most of it and just have the timing and sequences be different for each.</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+sajiimori, you are one of the best programmers I have seen.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#26827 - sajiimori - Sun Sep 26, 2004 10:30 pm</h4>
+    <div class="postbody"><span class="postbody">Wow, thank you! o_O</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#26838 - sajiimori - Mon Sep 27, 2004 7:45 am</h4>
+    <div class="postbody"><span class="postbody">Just for practice, here's a working (?) version in Lua.  This language is pretty cool for having such humble origins.  Things that are conceptually linear (like pressing down, down+forward, forward+punch) can be written in a linear fashion, rather than jumping through the usual C hoops with FSMs and all that.</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">-- 'sequence' is a list of command sets to do the move.
+<br/>
+-- 'max_gap' is the maximum number of ticks between steps.
+<br/>
+-- 'execute_move' actually does the move, if possible.
+<br/>
+-- Presumes "local by default" Lua patch.
+<br/>
+-- Caller of coroutine provides command sets
+<br/>
+-- that correspond to player input.  These commands become
+<br/>
+-- "return values" of coroutine.yield().
+<br/>
+<br/>
+function special_move_coroutine(sequence,
+<br/>
+                                max_gap, execute_move)
+<br/>
+  while true do
+<br/>
+    ticks_since_last = 0
+<br/>
+    for step in list_values(sequence) do
+<br/>
+      while ticks_since_last &lt;= max_gap do
+<br/>
+        if coroutine.yield() == step then
+<br/>
+          ticks_since_last = 0
+<br/>
+          break
+<br/>
+        end
+<br/>
+        ticks_since_last = ticks_since_last + 1
+<br/>
+      end
+<br/>
+      if ticks_since_last &gt; max_gap then break end
+<br/>
+    end
+<br/>
+    if not step then execute_move() end
+<br/>
+  end
+<br/>
+end</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#26853 - expos1994 - Mon Sep 27, 2004 2:46 pm</h4>
+    <div class="postbody"><span class="postbody">Hey,  I just thought I'd share my combo code.  
+<br/>
+I have a structure that defines button_combos.  These can be loaded on the fly from Const definitions.  Basically there's an index that increments each time a button in the combodef array is pressed.  When a timer(counter) reaches a certain value without the next button being pressed, the index resets.  If the last button in combodef gets pressed before the timer has a chance to reset, the combo is executed.
+<br/>
+<br/>
+I have tested this and it works, but I haven't used it extensively so there is probably some cleanup and functionality that could be added to it.  You will need a method of detecting button state changes that detects when a button has been pressed and unpressed (if you know what I mean).  If you want to look at my way of doing that, send me a pm and I'll send you the code.
+<br/>
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">struct COMBO 
+<br/>
+{
+<br/>
+      u16 index;
+<br/>
+      u16 combodef[6];
+<br/>
+      u16 numofbuttons;
+<br/>
+      u16 type;
+<br/>
+}combo[3];  //Three different combos.  
+<br/>
+u16 numofcombos = 1;
+<br/>
+u16 combotimer[3];</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+void check_combos()
+<br/>
+{
+<br/>
+   u16 comboloop;
+<br/>
+   u16 b_loop;  //Button_loop.  Loops through all GBA buttons
+<br/>
+   
+<br/>
+   for(comboloop = 0; comboloop &lt; 2; comboloop++) 
+<br/>
+   {
+<br/>
+      if (combotimer[comboloop] == 20)  //the amount of time to press the next button in a combo.  20 gives ~1/3sec to press a button, this could be variable.
+<br/>
+      {
+<br/>
+              combo[comboloop].index = 0;  //Reset combo. 
+<br/>
+              combotimer[comboloop] = 0;
+<br/>
+           }   
+<br/>
+      else
+<br/>
+      {
+<br/>
+               for (b_loop = 0; b_loop &lt; 9; b_loop++)
+<br/>
+                  {
+<br/>
+                     if ((changed_keys[b_loop] == PRESSED) &amp;&amp; (combo[comboloop].combodef[combo[comboloop].index] == b_loop))   //If a pressed button is the next button in a combo.
+<br/>
+                     {
+<br/>
+                           if (combo[comboloop].index + 1 == combo[comboloop].numofbuttons)
+<br/>
+                           { 
+<br/>
+                                 player.combo_executed = YES;
+<br/>
+                                 combo[comboloop].index = 0;
+<br/>
+                              }
+<br/>
+                           else
+<br/>
+                           {
+<br/>
+                                 combo[comboloop].index++;
+<br/>
+                                 combotimer[comboloop] = 0;
+<br/>
+                           }
+<br/>
+                     }
+<br/>
+                     //else
+<br/>
+                     }
+<br/>
+                }
+<br/>
+           combotimer[comboloop]++;
+<br/>
+        }
+<br/>
+<br/>
+}</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

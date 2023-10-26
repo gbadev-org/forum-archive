@@ -1,0 +1,152 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Texture corruption after glResetTextures() - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Texture corruption after glResetTextures()</h2>
+<div id="posts">
+<div class="post">
+    <h4>#167145 - Kath - Tue Mar 03, 2009 4:52 pm</h4>
+    <div class="postbody"><span class="postbody">Hi again,
+<br/>
+<br/>
+I'm having a problem with getting corrupted textures when loading them after <b style="color:#FFA34F">glResetTextures</b>() has been called. I have banks A and B assigned to textures. The first game state loads 224k of textures and this works fine. When this state ends it calls <b style="color:#FFA34F">glResetTextures</b>() and then the next state loads it's textures. However as this state starts getting close to the end of VRAM_A (128k) the first texture loaded starts getting corrupted, I can see the shape of the last texture uploaded appear on the first.
+<br/>
+<br/>
+It seems that after calling <b style="color:#FFA34F">glResetTextures</b>() only Bank A is used and as it gets filled libnds goes back to the start of it. If I set the second state to be the first it loads the same textures without a problem. I've been trying to figure this out for a few hours so here are all of the textures I load (in the order they are loaded):
+<br/>
+<br/>
+In the first game state I load:
+<br/>
+<br/>
+256x256 (256col) (64k) ~ 64k
+<br/>
+256x256 (256col) (64k) ~ 128k - VRAM_A full.
+<br/>
+256x256 (256col) (64k) ~ 192k - Starts in VRAM_B.
+<br/>
+256x256 (16col)  (32k) ~ 224k 
+<br/>
+<br/>
+In the second game state I load:
+<br/>
+<br/>
+256x256 (256col) (64k) ~ 64k
+<br/>
+256x256 (16col) (32k)  ~ 96k
+<br/>
+128x128 (16col) (8k) ~ 104k
+<br/>
+128x128 (16col) (8k) ~ 112k
+<br/>
+128x128 (16col) (8k) ~ 120k &lt;- Corruption starts here.
+<br/>
+<br/>
+I thought it might have been my texture manager but it all seems to be updating properly, the handles/addresses it gets for each state are:
+<br/>
+<br/>
+First state:
+<br/>
+- Texture name: 1
+<br/>
+- Texture name: 2
+<br/>
+- Texture name: 3
+<br/>
+- Texture name: 4
+<br/>
+- Palette address: 0
+<br/>
+- Palette address: 512
+<br/>
+- Palette address: 1024
+<br/>
+- Palette address: 1536
+<br/>
+<br/>
+Second state:
+<br/>
+- Texture name: 1
+<br/>
+- Texture name: 2
+<br/>
+- Texture name: 3
+<br/>
+- Texture name: 4
+<br/>
+- Texture name: 5
+<br/>
+- Palette address: 0
+<br/>
+- Palette address: 512
+<br/>
+- Palette address: 544
+<br/>
+- Palette address: 576
+<br/>
+- Palette address: 608
+<br/>
+<br/>
+Sorry about the long post, thought more information would be helpful. Is there anything else I should be doing other than clearing my saved names and calling <b style="color:#FFA34F">glResetTextures</b>()? Thanks for any pokes in the right direction.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#167167 - elhobbs - Wed Mar 04, 2009 2:43 pm</h4>
+    <div class="postbody"><span class="postbody">I may be wrong, but there looks like there is an issue with the <b style="color:#FFA34F">glResetTextures</b> function - should it clear out the dynamic array texturePtrs? since it is not cleared out during a reset it looks like it will reuse the texture vram from the texture at that name before the reset which could lead to the issues you are experiencing.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#167335 - Zalo - Mon Mar 09, 2009 11:22 am</h4>
+    <div class="postbody"><span class="postbody">Yes... I updated to the last version on libnds with a lot of issues and I am also having a problem with textures that I think may be related to this. Anybody fixed it?<br/>_________________<br/>-----
+<br/>
+Zalo</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#167507 - Zalo - Sun Mar 15, 2009 9:02 pm</h4>
+    <div class="postbody"><span class="postbody">you were right elhobbs
+<br/>
+<br/>
+This is how <b style="color:#FFA34F">glResetTextures</b> should look like:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">//---------------------------------------------------------------------------------
+<br/>
+void <b style="color:#FFA34F">glResetTextures</b>(void) {
+<br/>
+//---------------------------------------------------------------------------------
+<br/>
+  int i;
+<br/>
+<br/>
+   glGlob-&gt;activeTexture = 0;
+<br/>
+   glGlob-&gt;nextBlock = (uint32*)0x06800000;
+<br/>
+   glGlob-&gt;nextPBlock = 0;
+<br/>
+   glGlob-&gt;nameCount = 1;
+<br/>
+<br/>
+  for(i = 0; i &lt; glGlob-&gt;texturePtrs.cur_size; i++)
+<br/>
+      DynamicArraySet(&amp;glGlob-&gt;texturePtrs, i, (void*)0);
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+After that change everything seems to be working again :)<br/>_________________<br/>-----
+<br/>
+Zalo</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

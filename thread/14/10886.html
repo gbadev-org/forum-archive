@@ -1,0 +1,215 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>libnds SIN/COS/TAN look up tables - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Beginners > libnds SIN/COS/TAN look up tables</h2>
+<div id="posts">
+<div class="post">
+    <h4>#99381 - Goosey - Mon Aug 21, 2006 5:29 am</h4>
+    <div class="postbody"><span class="postbody">I am trying to convert Patater's 'orange ship' tutorial ( <a href="http://www.patatersoft.info/manual.html" target="_blank">http://www.patatersoft.info/manual.html</a> ) to use fixed point math as a training exercise for myself.
+<br/>
+<br/>
+I finished the conversion except for the Accelleration function which had the sin/cos math functions. Attempting to convert these to use the libnds luts has been a headache. I think I am missing something simple, but can't seem to find it.
+<br/>
+<br/>
+For reference:
+<br/>
+ - Angles are being stored as RADIANS in signed 20.12 fixed format
+<br/>
+ - AFAIK the SIN/COS luts are 4.12 fixed format and 512 degree increments
+<br/>
+<br/>
+Here is what I have tried for indexing based on the suggestions from people in #dsdev. Below the macros is the function where they are being applied. 
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#define f32slowsin( _rad )   ( floattof32(sin(f32tofloat(_rad))) )
+<br/>
+#define f32slowcos( _rad )   ( floattof32(cos(f32tofloat(_rad))) )
+<br/>
+#define f32slowtan( _rad )   ( floattof32(tan(f32tofloat(_rad))) )
+<br/>
+<br/>
+#define PI         ( 3.14159265358979323846264338327f )
+<br/>
+#define F32PI         ( floattof32(PI) )
+<br/>
+#define RadToDeg512Mul      ( divf32(inttof32(256), F32PI) )
+<br/>
+#define Deg512ToRadMul      ( divf32(F32PI, inttof32(256)) )
+<br/>
+<br/>
+#define lutIndexMul      ( divf32( inttof32(512), mulf32(inttof32(2), F32PI) ) )
+<br/>
+#define lutIndex( _rad )   ( mulf32( _rad, lutIndexMul ) )
+<br/>
+<br/>
+#define radToDeg512PROPER( _rad )   ( mulf32( _rad, RadToDeg512Mul) )
+<br/>
+#define deg512ToRadPROPER( _deg )   ( mulf32( _deg, Deg512ToRadMul) )
+<br/>
+<br/>
+#define radToDeg512( _rad )   ( f32(f32tofloat(_rad) * (256/PI)) )
+<br/>
+#define deg512ToRad( _deg )   ( f32(f32tofloat(_deg) * (PI/256)) )
+<br/>
+<br/>
+// This causes the accel to be perpendicular (looking N and accel = E, deccel = W)
+<br/>
+#define f32sin( _rad )      ( COS[radToDeg512PROPER(_rad) &amp; 0x1FF] ) 
+<br/>
+#define f32cos( _rad )      ( SIN[radToDeg512PROPER(_rad) &amp; 0x1FF] )
+<br/>
+#define f32tan( _rad )      ( TAN[radToDeg512PROPER(_rad) &amp; 0x1FF] )
+<br/>
+<br/>
+// This functions the same as above (I don't understand why, since the non-PROPER doesn't seem.. well, proper)
+<br/>
+//#define f32sin( _rad )   ( COS[radToDeg512(_rad) &amp; 0x1FF] ) 
+<br/>
+//#define f32cos( _rad )   ( SIN[radToDeg512(_rad) &amp; 0x1FF] )
+<br/>
+//#define f32tan( _rad )   ( TAN[radToDeg512(_rad) &amp; 0x1FF] )
+<br/>
+<br/>
+// This also functions the same as the above two (OK NOW I AM REALLY CONFUSED! the above at least feed 512 DEGs, this feeds RADIANS!)
+<br/>
+//#define f32sin( _rad )   ( COS[_rad &amp; 0x1FF] ) 
+<br/>
+//#define f32cos( _rad )   ( SIN[_rad &amp; 0x1FF] )
+<br/>
+//#define f32tan( _rad )   ( TAN[_rad &amp; 0x1FF] )
+<br/>
+<br/>
+// For the love of crap.. This also seems to behave the same as the 3 above. What am I missing? -_-
+<br/>
+// #define f32sin( _rad )   ( COS[lutIndex(_rad) &amp; 0x1FF] ) 
+<br/>
+// #define f32cos( _rad )   ( SIN[lutIndex(_rad) &amp; 0x1FF] )
+<br/>
+// #define f32tan( _rad )   ( TAN[lutIndex(_rad) &amp; 0x1FF] )
+<br/>
+<br/>
+// These work exactly as intended, except for them being slow of course
+<br/>
+// #define f32sin( _rad )   ( f32slowsin( _rad ) )
+<br/>
+// #define f32cos( _rad )   ( f32slowcos( _rad ) )
+<br/>
+// #define f32tan( _rad )   ( f32slowtan( _rad ) )
+<br/>
+<br/>
+void Ship::Accel(float amount)
+<br/>
+{
+<br/>
+   f32 f32Amount   = floattof32(amount);
+<br/>
+<br/>
+   f32 incX   = mulf32(f32Amount, f32sin(m_Angle));
+<br/>
+   f32 incY   = -(mulf32(f32Amount, f32cos(m_Angle)));
+<br/>
+<br/>
+   m_Velocity.x += incX;
+<br/>
+   m_Velocity.y += incY;
+<br/>
+<br/>
+   if (m_Velocity.x &gt; m_MaxSpeed) 
+<br/>
+      m_Velocity.x = m_MaxSpeed;
+<br/>
+   if (m_Velocity.x &lt; -m_MaxSpeed)
+<br/>
+      m_Velocity.x = -m_MaxSpeed;
+<br/>
+<br/>
+   if (m_Velocity.y &gt; m_MaxSpeed) 
+<br/>
+      m_Velocity.y = m_MaxSpeed;
+<br/>
+   if (m_Velocity.y &lt; -m_MaxSpeed)
+<br/>
+      m_Velocity.y = -m_MaxSpeed;
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+<br/>
+Any help would be greatly appreciated. At a frusterating point where I just simply don't understand where I am erring so I am randomly trying stuff in hope it will work. Not a fun place to be.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#99395 - Cearn - Mon Aug 21, 2006 8:55 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Goosey wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">// This causes the accel to be perpendicular (looking N and accel = E, deccel = W)
+<br/>
+#define f32sin( _rad )      ( COS[radToDeg512PROPER(_rad) &amp; 0x1FF] ) 
+<br/>
+#define f32cos( _rad )      ( SIN[radToDeg512PROPER(_rad) &amp; 0x1FF] )
+<br/>
+#define f32tan( _rad )      ( TAN[radToDeg512PROPER(_rad) &amp; 0x1FF] )
+<br/>
+<br/>
+</td> </tr></table><span class="postbody"></span></td> </tr></table><span class="postbody">
+<br/>
+You <span style="font-style: italic">did</span> notice that f32sin uses COS and f32cos uses SIN here, right? Or is this just an error in copying?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#99425 - Goosey - Mon Aug 21, 2006 3:26 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Cearn wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Goosey wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">// This causes the accel to be perpendicular (looking N and accel = E, deccel = W)
+<br/>
+#define f32sin( _rad )      ( COS[radToDeg512PROPER(_rad) &amp; 0x1FF] ) 
+<br/>
+#define f32cos( _rad )      ( SIN[radToDeg512PROPER(_rad) &amp; 0x1FF] )
+<br/>
+#define f32tan( _rad )      ( TAN[radToDeg512PROPER(_rad) &amp; 0x1FF] )
+<br/>
+<br/>
+</td> </tr></table><span class="postbody"></span></td> </tr></table><span class="postbody">
+<br/>
+You <span style="font-style: italic">did</span> notice that f32sin uses COS and f32cos uses SIN here, right? Or is this just an error in copying?</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+*smacks head really hard*
+<br/>
+<br/>
+Ok thankyou. That was the stupid error I was looking for I assume. Ill double check when I get home, but it is consistent with the results. TY! 
+<br/>
+<br/>
+/crawls away to hide in a corner
+<br/>
+<br/>
+EDIT:
+<br/>
+Ok have it working now with:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#define f32sin( _rad )      ( SIN[radToDeg512(_rad) &amp; 0x1FF] ) 
+<br/>
+#define f32cos( _rad )      ( COS[radToDeg512(_rad) &amp; 0x1FF] )
+<br/>
+#define f32tan( _rad )      ( TAN[radToDeg512(_rad) &amp; 0x1FF] )
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Still a little confused why the 'nonproper' rad-&gt;deg conversion is the one that works, but ill tackle that later. Glad to have the ship moving properly using 100% fixed woo..</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

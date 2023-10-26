@@ -1,0 +1,360 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Hblank problems - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > Hblank problems</h2>
+<div id="posts">
+<div class="post">
+    <h4>#60814 - blacksun - Tue Nov 15, 2005 2:58 am</h4>
+    <div class="postbody"><span class="postbody">Sorry if this has been posted before, but couldn't find any answers by searching.  I am attempting to use sprite multiplexing for my game.  I already have the interrupts in place and active.  And it will actually do a little of what I want.  I am probably committing a crime against nature with my code, but what I am attempting is to just draw the current sprites that are on the current VCount line.  Here is my code.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+if((REG_IF &amp; INT_HBLANK) == INT_HBLANK)
+<br/>
+      {
+<br/>
+         //Go through the number of sprites
+<br/>
+         for(int i = 0; i &lt; numOfSprites; i++)
+<br/>
+         {
+<br/>
+            //If the current VCount line is intersecting a sprite.  11 is the size of the sprite
+<br/>
+            if(REG_VCOUNT &gt;= spriteArray[i].yPos &amp;&amp; REG_VCOUNT &lt;= spriteArray[i].yPos+11)
+<br/>
+            {
+<br/>
+               //Update the OAM
+<br/>
+<br/>
+               //New Y position
+<br/>
+               sprites[index].attribute0 &amp;= 0xFF00;
+<br/>
+               sprites[index].attribute0 |= spriteArray[i].yPos;
+<br/>
+<br/>
+               //New X position
+<br/>
+               sprites[index].attribute1 &amp;= 0xFE00;
+<br/>
+               sprites[index].attribute1 |= spriteArray[i].xPos;
+<br/>
+<br/>
+               //New OAM index
+<br/>
+               sprites[index].attribute2 = spriteArray[i].spriteIndex;            
+<br/>
+<br/>
+               //increase the range of the OAM by 4.  4 is 512/128(max # of sprites)
+<br/>
+               end+= 4;
+<br/>
+            }
+<br/>
+         }
+<br/>
+            //Copy the sprites to be drawn, but only draw a section to save speed
+<br/>
+            CopyOAM(0, end);
+<br/>
+      }</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+What it is doing is drawing the first 2 rows, 14 sprites, but no more.  It also has flickering sprites on the right side of my grid from the bottom of the grid to the bottom of my last sprite.  It should be drawing 7*12 sprites.
+<br/>
+<br/>
+thanks</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#60815 - blacksun - Tue Nov 15, 2005 3:02 am</h4>
+    <div class="postbody"><span class="postbody">Ok forgot to add index++ in there, but then that just makes things worse</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#60816 - DekuTree64 - Tue Nov 15, 2005 3:48 am</h4>
+    <div class="postbody"><span class="postbody">I don't know what the exact problem is, but I can say there's no way that will run within a single HBlank with more than a few sprites.
+<br/>
+<br/>
+Instead, what you could do is set up a sort of double buffering system that copies in sprites several lines before they'll actually be displayed. Alternate between 2 blocks of OAM indices, so while one is showing, the other is being filled. 
+<br/>
+Maybe use indices 0-31 as block 0, and indices 32-63 as block 1.
+<br/>
+<br/>
+Here's an example, because it's hard to explain in words:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code"> ________
+<br/>
+|  A     |   scanline 0
+<br/>
+|B    C  |   scanline 40
+<br/>
+|  D     |   scanline 80
+<br/>
+|_E_F__G_|   scanline 120</td> </tr></table><span class="postbody">
+<br/>
+All the letters are sprites. The first thing to do is seperate them all into groups, making sure that each group can fit into one of your OAM blocks. We'll pretend only 2 actors can fit in each block.
+<br/>
+So then, we'll say sprite A and B are group 1, C and D are group 2, E and F are group 3, and G is group 4.
+<br/>
+<br/>
+Start by setting up the first 2 groups during VBlank. Group 1 goes in OAM block 0 (indices 0-1 for our example), group 2 goes in OAM block 1 (indices 2-3).
+<br/>
+<br/>
+As soon as group 1 is fully drawn (hblank at the end of line 79), overwrite block 0 with group 3. There's still a full 40 scanlines before the top of E and F, so no worries about running out of time.
+<br/>
+<br/>
+As soon as group 2 is fully drawn (hblank at the end of line 119), overwrite block 1 with group 4. Here it looks like G is on line 120 too, so we'll just have to hope for the best on getting him copied in time :)
+<br/>
+<br/>
+<br/>
+I hope that makes a bit of sense. I've wanted to do a system like that for a long time, but haven't had a reason to so far. Maybe sometime I'll do a tetris attack clone, and draw some nice 15x15 blocks so I'll have to use sprites :)<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#60823 - LOst? - Tue Nov 15, 2005 4:19 am</h4>
+    <div class="postbody"><span class="postbody">I have spent too many hours trying to make hblank work as I want. It always turned me down. When it comes to GBA programming, hblank is the pure evil devil.<br/>_________________<br/><span style="font-style: italic">Exceptions are fun</span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#60878 - blacksun - Tue Nov 15, 2005 7:52 pm</h4>
+    <div class="postbody"><span class="postbody">Wow thanks a lot.  That helps out a bunch.  And yes I agree, HBlank is the devil incarnate.  
+<br/>
+<br/>
+I am a little confused on your wording.  So if I get this straight, I first test for the VBlank interrupt and set up my first 2 sets of groups.  Then after I draw them during the VBlank I will test for the Hblanks?  And I forget, I know there is a VCount but is there also a HCount for the HBlank session?
+<br/>
+<br/>
+Thanks</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#60927 - tepples - Wed Nov 16, 2005 3:06 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>DekuTree64 wrote:</b></span></td> </tr> <tr> <td class="quote">I hope that makes a bit of sense. I've wanted to do a system like that for a long time, but haven't had a reason to so far. Maybe sometime I'll do a tetris attack clone, and draw some nice 15x15 blocks so I'll have to use sprites :)</td> </tr></table><span class="postbody">
+<br/>
+Tetris Attack for GBA was done with 13x13 pixel blocks (72 sprites), albeit with only one displayed playfield. With 12x12 pixel blocks, only one side would need to use sprites; the other side could use the 2-layer 12x12 hack used in Puyo Pop and Luminesweeper.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#60951 - DekuTree64 - Wed Nov 16, 2005 6:34 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>blacksun wrote:</b></span></td> </tr> <tr> <td class="quote">So if I get this straight, I first test for the VBlank interrupt and set up my first 2 sets of groups.  Then after I draw them during the VBlank I will test for the Hblanks?  </td> </tr></table><span class="postbody">
+<br/>
+Yeah. You'll need to find the "bottom" scanline of each group (when that group will be fully drawn, and safe to overwrite). Then in your HBlank handler you can do something like
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">if (REG_VCOUNT &gt;= lastGroupBottom)
+<br/>
+{
+<br/>
+    Copy curGroup to curBlock
+<br/>
+    lastGroupBottom = curGroupBottom
+<br/>
+    curGroup++
+<br/>
+    toggle curBlock
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">And I forget, I know there is a VCount but is there also a HCount for the HBlank session?</td> </tr></table><span class="postbody">
+<br/>
+Nope, the closest thing is bit1 of DISPSTAT to check if you're in HBlank or not. 
+<br/>
+Sometimes that can be useful though. If you really need every last cycle of HBlank (like to copy a whole 256 color palette), you can use a VCount interrupt to get into your function at the start of the line and get everything set up, then sit and wait until DISPSTAT bit1 gets set, and then start your copy or whatever immediately.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote">Tetris Attack for GBA was done with 13x13 pixel blocks (72 sprites), albeit with only one displayed playfield. With 12x12 pixel blocks, only one side would need to use sprites; the other side could use the 2-layer 12x12 hack used in Puyo Pop and Luminesweeper.</td> </tr></table><span class="postbody">
+<br/>
+Yeah, I like vs. mode a lot more than endless. Doing split sprites/BGs would be more practical, but then I'd have to think of something else to use multiplexing on :)<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#60977 - wintermute - Wed Nov 16, 2005 12:27 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>DekuTree64 wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">And I forget, I know there is a VCount but is there also a HCount for the HBlank session?</td> </tr></table><span class="postbody">
+<br/>
+Nope, the closest thing is bit1 of DISPSTAT to check if you're in HBlank or not. 
+<br/>
+Sometimes that can be useful though. If you really need every last cycle of HBlank (like to copy a whole 256 color palette), you can use a VCount interrupt to get into your function at the start of the line and get everything set up, then sit and wait until DISPSTAT bit1 gets set, and then start your copy or whatever immediately.
+<br/>
+</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+That's what Hblank DMA is for. You can use a vcount irq to get to the start of the line then just initiate a DMA transfer with hblank timing - <a href="http://nocash.emubase.de/gbatek.htm#dmatransfers" target="_blank">http://nocash.emubase.de/gbatek.htm#dmatransfers</a> . You need to set bit 5 of REG_DISPCNT for this to work with OAM too.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#61489 - Joat - Sun Nov 20, 2005 9:29 pm</h4>
+    <div class="postbody"><span class="postbody">Another word of warning for sprite multiplexing: you have to change sprites at least a scanline before they are to be rendered, i.e. your copy has to end at least a full scanline before the sprites copied over are to be displayed.<br/>_________________<br/>Joat
+<br/>
+<a href="http://www.bottledlight.com" target="_blank">http://www.bottledlight.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#67730 - blacksun - Fri Jan 20, 2006 1:32 am</h4>
+    <div class="postbody"><span class="postbody">Ok I think I am getting closer.  Now my H-Blank section looks like this.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+      if((REG_IF &amp; INT_HBLANK) == INT_HBLANK)
+<br/>
+      {
+<br/>
+<br/>
+         if(REG_VCOUNT == 26)
+<br/>
+            CopyOAM(4, 8*4);
+<br/>
+         if(REG_VCOUNT == 37)
+<br/>
+         {         
+<br/>
+            CopyOAM(32, 28+32);
+<br/>
+               for(int i = 1; i &lt; 8; i++)
+<br/>
+            {
+<br/>
+               sprites[i].attribute0 &amp;= 0xFF00;
+<br/>
+               sprites[i].attribute0 |= spriteArray[14+i].yPos;
+<br/>
+<br/>
+               sprites[i].attribute1 &amp;= 0xFE00;
+<br/>
+               sprites[i].attribute1 |= spriteArray[14+i].xPos;
+<br/>
+<br/>
+               sprites[i].attribute2 = spriteArray[14+i].spriteIndex;
+<br/>
+            }
+<br/>
+         }
+<br/>
+<br/>
+         if(REG_VCOUNT == 48)
+<br/>
+            CopyOAM(4, 8*4);
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I have it so CopyOAM transfers the sprite attributes into the OAM memory.
+<br/>
+<br/>
+What happens is it quickly shows the drawing for the first 7 blocks, then the next line, then the first line disappears and the third line is drawn.  It seems like the h-blank interrupt isn't being triggered continuously because it looks like it only performs it once.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#67770 - LOst? - Fri Jan 20, 2006 5:11 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>blacksun wrote:</b></span></td> </tr> <tr> <td class="quote">Ok I think I am getting closer.  Now my H-Blank section looks like this.
+<br/>
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+      if((REG_IF &amp; INT_HBLANK) == INT_HBLANK)
+<br/>
+      {
+<br/>
+<br/>
+         if(REG_VCOUNT == 26)
+<br/>
+            CopyOAM(4, 8*4);
+<br/>
+         if(REG_VCOUNT == 37)
+<br/>
+         {         
+<br/>
+            CopyOAM(32, 28+32);
+<br/>
+               for(int i = 1; i &lt; 8; i++)
+<br/>
+            {
+<br/>
+               sprites[i].attribute0 &amp;= 0xFF00;
+<br/>
+               sprites[i].attribute0 |= spriteArray[14+i].yPos;
+<br/>
+<br/>
+               sprites[i].attribute1 &amp;= 0xFE00;
+<br/>
+               sprites[i].attribute1 |= spriteArray[14+i].xPos;
+<br/>
+<br/>
+               sprites[i].attribute2 = spriteArray[14+i].spriteIndex;
+<br/>
+            }
+<br/>
+         }
+<br/>
+<br/>
+         if(REG_VCOUNT == 48)
+<br/>
+            CopyOAM(4, 8*4);
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I have it so CopyOAM transfers the sprite attributes into the OAM memory.
+<br/>
+<br/>
+What happens is it quickly shows the drawing for the first 7 blocks, then the next line, then the first line disappears and the third line is drawn.  It seems like the h-blank interrupt isn't being triggered continuously because it looks like it only performs it once.</span></td> </tr></table><span class="postbody">
+<br/>
+It is easy to understand why. Hblank is too short for you to copy sprites like this. It will never finish during one hblank, and it will continue during the drawing time, and possibly the next hblank too.
+<br/>
+<br/>
+Here are my advices: Cut as much code as possible in the hblank routine. Don't use that for loop! Do that stuff in vblank, and then DMA it to OAM.
+<br/>
+<br/>
+I say DMA everything during hblank that has already been set up in vblank.
+<br/>
+You hblank routine should be empty, except for some if conditions. Then you will get results.<br/>_________________<br/><span style="font-style: italic">Exceptions are fun</span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#67861 - blacksun - Fri Jan 20, 2006 11:09 pm</h4>
+    <div class="postbody"><span class="postbody">Ok, i guess I need a couple things cleared up.  I thought that V-Blank is triggered after VCount has reached 160.  Would I be able to use VCount as my scan lines then?  
+<br/>
+<br/>
+Also, is VBlank period longer or shorter than HBlank?  I thought that since HBlank is longer you can do more computations during the interrupt.  
+<br/>
+<br/>
+And finally, since VBlank preceeds an HBlank, what would you suggest to setting up 2 block in the OAM, drawing the first, drawing the second, then loading something else in the first, then drawing the first again and so on.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#67878 - keldon - Sat Jan 21, 2006 1:23 am</h4>
+    <div class="postbody"><span class="postbody">VBlank is much longer than HBlank. Check the <a class="postlink" href="http://www.work.de/nocash/gbatek.htm" target="_blank">documentation</a> for exact figures.
+<br/>
+<br/>
+VBlank is vertical blank and happens once a frame - about 60 times per second. HBlank is horizontal blank - this happens 160 times per frame.
+<br/>
+<br/>
+Yes VCount is the current scanline. But no, VBlank does not precede HBlank.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

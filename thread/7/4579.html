@@ -1,0 +1,176 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Aaargh - Memory leak? - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>C/C++ > Aaargh - Memory leak?</h2>
+<div id="posts">
+<div class="post">
+    <h4>#31178 - mr_square - Wed Dec 08, 2004 6:32 pm</h4>
+    <div class="postbody"><span class="postbody">Gah - I've just been testing my code and have discovered that it crashes (restarts the GBA) after about 2 minutes of play - testing some old builds shows that its been happening for quite a while now too.
+<br/>
+<br/>
+<br/>
+I'm using C++. Basically I have a room with multiple enemies and the player in. Without the enemies, it works fine. With even one enemy, it crashes. The more enemies, the quicker it seems to crash.
+<br/>
+<br/>
+The enemies are modelled as finite state machines, inheriting off a basic 'enemy' class. Each enemy subclass inherits an enemy pointer called 'nextState'. I call the doIt() method on each enemy, which updates it as necessary and then either initialises nextState to a new state and returns it, or else returns itself. By doing this I switch between states by just saying 
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+<br/>
+enemy* enemy1;
+<br/>
+<br/>
+.....
+<br/>
+<br/>
+while(1)
+<br/>
+{
+<br/>
+.....
+<br/>
+enemy1 = enemy1-&gt;doIt();
+<br/>
+.....
+<br/>
+}
+<br/>
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+If I just set the enemies to start in a state and remain in it by returning themselves (eg. a simple 'idle' state), its fine, but as soon as they start switching between them I get problems.
+<br/>
+<br/>
+I'm from a java background originally, so I'm lazy and used to having all my garbage collection done for me in the background - I suspect this is my problem. Each enemy state has the 'nextState' pointer already, but they create the actual next state by saying something like:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+nextState = new enemyJumpState;
+<br/>
+return nextState;
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Is this gobbling up all my memory in the background? How do I stop it?!
+<br/>
+<br/>
+Thanks :)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#31191 - sajiimori - Wed Dec 08, 2004 7:47 pm</h4>
+    <div class="postbody"><span class="postbody">C++ doesn't have automatic memory management.  You have to delete memory you allocate.  Just make sure that every "new" has a "delete" that will definitely be executed before the last pointer is lost, but not before the last pointer is accessed.
+<br/>
+<br/>
+(I make it sound so simple, but memory leaks and dangling pointers are some of the most difficult problems when using manual memory management.)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#31193 - keldon - Wed Dec 08, 2004 8:06 pm</h4>
+    <div class="postbody"><span class="postbody">When you are unsure of which pointer to memory will be freed last you can add a value to say how many pointers refer to that piece of memory. You are free to delete the memory once the value is 0.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#31218 - sajiimori - Wed Dec 08, 2004 11:21 pm</h4>
+    <div class="postbody"><span class="postbody">That scheme is called "reference counting" and it should be used with care.  If 2 objects carry references to each other, but nobody else carries a reference to either, they may never be deleted.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#31224 - mr_square - Thu Dec 09, 2004 12:47 am</h4>
+    <div class="postbody"><span class="postbody">would this:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+nextState = new enemyJumpState;
+<br/>
+delete this;
+<br/>
+return nextState; 
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+do the trick then? Is that valid? - it seems a bit odd to have something deleting itself... It doesn't throw up any errors when I try it, and the code still runs - I'll try putting it in all my states and see if it sorts it out...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#31229 - sajiimori - Thu Dec 09, 2004 1:23 am</h4>
+    <div class="postbody"><span class="postbody">Have the caller delete the old state if you want to be proper.  It's usually wrong to delete 'this' because the caller then holds a dangling pointer.
+<br/>
+<br/>
+An exception in one of my projects was a process manager and its list of processes.  The process constructor would check the new object into the list, and the destructor removed the object.  The manager would iterate over the list and update each process, and the processes could delete themselves without leaving a bad reference.
+<br/>
+<br/>
+So again, don't delete things if other people are holding references.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#31236 - keldon - Thu Dec 09, 2004 2:52 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sajiimori wrote:</b></span></td> </tr> <tr> <td class="quote">That scheme is called "reference counting" and it should be used with care.  If 2 objects carry references to each other, but nobody else carries a reference to either, they may never be deleted.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Hmm, what like if <span style="font-style: italic">main </span>created <span style="font-style: italic">a</span>, and <span style="font-style: italic">b</span>, which it created double links between. Now when main tries to erase a and b they are left floating in memory because they are held by their own links.
+<br/>
+<br/>
+A directed tree could sort this out; but it means that instead of just a number stored, each link to its holders are created. If there is no path to root memory, e.g. global data or variable then it can be deleted. I think that's how Java's memory is supposed to do it.
+<br/>
+<br/>
+With that method you know that everything in memory exists because it is somehow connected with root data. Anything that does not have a path leading to root data can be erased; along with everything that holds it, as they are not held by root data also.
+<br/>
+<br/>
+So if you are *really* lazy and enjoy java ways; then that would handle it. Just don't delete in tight loops.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#31238 - sajiimori - Thu Dec 09, 2004 3:15 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">A directed tree could sort this out; but it means that instead of just a number stored, each link to its holders are created. If there is no path to root memory, e.g. global data or variable then it can be deleted.</td> </tr></table><span class="postbody">That's very inefficient.</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">I think that's how Java's memory is supposed to do it.</td> </tr></table><span class="postbody">Java is just a language, and each implementation can use its own techniques.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#31240 - keldon - Thu Dec 09, 2004 3:43 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sajiimori wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">A directed tree could sort this out; but it means that instead of just a number stored, each link to its holders are created. If there is no path to root memory, e.g. global data or variable then it can be deleted.</td> </tr></table><span class="postbody">That's very inefficient.</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">I think that's how Java's memory is supposed to do it.</td> </tr></table><span class="postbody">Java is just a language, and each implementation can use its own techniques.</span></td> </tr></table><span class="postbody">
+<br/>
+Yes, I almost never put it up because of it's inneficiency; I've been doing java exercises for a year and look at what it's done to me :D. But it's only problem in efficiency when you have tightly coupled classes and you end up with many levels with loops and links between loops. Or basically many levels from the root.
+<br/>
+<br/>
+And yes, my bad on suggesting that's how JRE handles it.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#31243 - sajiimori - Thu Dec 09, 2004 4:03 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">But it's only problem in efficiency...</td> </tr></table><span class="postbody">The algorithm has more efficiency problems than I'd care to enumerate.  To find out about practical garbage collection techniques, try here:
+<br/>
+<br/>
+<a class="postlink" href="http://www.amazon.com/exec/obidos/tg/detail/-/0471941484" target="_blank">http://www.amazon.com/exec/obidos/tg/detail/-/0471941484</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#31244 - keldon - Thu Dec 09, 2004 4:11 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sajiimori wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">But it's only problem in efficiency...</td> </tr></table><span class="postbody">The algorithm has more efficiency problems than I'd care to enumerate.  To find out about practical garbage collection techniques, try here:
+<br/>
+<br/>
+<a class="postlink" href="http://www.amazon.com/exec/obidos/tg/detail/-/0471941484" target="_blank">http://www.amazon.com/exec/obidos/tg/detail/-/0471941484</a></span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I'll think I'll wait till ?1 = $3 before I buy those books. Then again I've had a vital course book (1/6 available) out for 10 weeks without anybody attempting to reserve it, so I think I can just keep renewing that garbage colleciton book for my next two semesters if the library has it :)
+<br/>
+<br/>
+p.s. thanks for that link</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#31248 - keldon - Thu Dec 09, 2004 4:59 am</h4>
+    <div class="postbody"><span class="postbody">This link might be more useful. I'm doing Dynamic memory management in OS at the moment, but no garbage collection related to objects is in the course. But this garbage collection of objects keeps shouting out tree traversal to me; so I'll just read on till I understand all the other methods.
+<br/>
+<a href="http://www-106.ibm.com/developerworks/java/library/j-jtp10283/" target="_blank">http://www-106.ibm.com/developerworks/java/library/j-jtp10283/</a></span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

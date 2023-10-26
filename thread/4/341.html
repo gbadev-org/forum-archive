@@ -1,0 +1,394 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Interrupts not working :( - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > Interrupts not working :(</h2>
+<div id="posts">
+<div class="post">
+    <h4>#2109 - Wanderer - Wed Jan 29, 2003 4:21 pm</h4>
+    <div class="postbody"><span class="postbody">Hi Folks,
+<br/>
+<br/>
+I'm just starting to play arround with interrupts and want to get them working from as low down and dirty as possible in C (to fully understand how they work)
+<br/>
+<br/>
+I've knocked out the following code which should display a striped background on Bkg0 and then on the first HBlank turn off the display (not the most exciting use of interrupts ever but it should show if they're working for me).
+<br/>
+<br/>
+Can someone please tell me what I'm doing wrong?
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+typedef unsigned char       u8;
+<br/>
+typedef unsigned short       u16;
+<br/>
+typedef unsigned long       u32;
+<br/>
+<br/>
+u16 offset = 1;
+<br/>
+<br/>
+void interruptCode() {
+<br/>
+   offset = 0;
+<br/>
+}
+<br/>
+<br/>
+<br/>
+int main() {
+<br/>
+   u16 pal, x, y;
+<br/>
+<br/>
+   // Blank the screen while we set it up.
+<br/>
+   *(u16*)0x04000000 = 0x0080;
+<br/>
+<br/>
+   // Fill in the first 8 entries in the palette   
+<br/>
+   for(pal=0; pal&lt;8; pal++) {
+<br/>
+      *(u16*)(0x05000000 + 2*pal) = pal * 0x0842;
+<br/>
+   }
+<br/>
+<br/>
+   // Create a single tile.
+<br/>
+   for(y=0; y&lt;8; y++) {
+<br/>
+      for(x=0; x&lt;4; x++) {
+<br/>
+         *(u16*)(0x06000000 + x*2 + y*8) = (x*2) + (((x*2)+1)&lt;&lt;8);
+<br/>
+      }
+<br/>
+   }
+<br/>
+<br/>
+   // Clear the tile map to all 0s
+<br/>
+   for(y=0; y&lt;32; y++) {
+<br/>
+      for(x=0; x&lt;32; x++) {
+<br/>
+         *(u16*)(0x06000800 + x + y*32) = 0;
+<br/>
+      }
+<br/>
+   }
+<br/>
+<br/>
+   // Set up Bkg 0 with a 256 colour palette, and the correct tile map offset.
+<br/>
+   *(u16*)0x04000008 = 0x0180;  
+<br/>
+<br/>
+   // Enable Bkg 0.
+<br/>
+   *(u16*)0x04000000 = 0x0100;
+<br/>
+<br/>
+<br/>
+<br/>
+   // Set the code to be run on an interrupt.
+<br/>
+   *(u32*)0x03007FFC = (u32) &amp;interruptCode;
+<br/>
+<br/>
+   // Set interrupts for HBlank in DISPSTAT.
+<br/>
+   *(u16*)0x04000004 = 0x0010;
+<br/>
+<br/>
+   // Set the HBlank interrupt to be enabled in REG_IE.
+<br/>
+   *(u16*)0x04000200 = 0x0010;
+<br/>
+<br/>
+   // Enable Interrupts in REG_IME.
+<br/>
+   *(u8*)0x4000208 = (u8) 1;
+<br/>
+<br/>
+   while(offset);
+<br/>
+<br/>
+   // Blank the screen once the interrupt has been hit.
+<br/>
+   *(u16*)0x04000000 = 0x0080;   
+<br/>
+<br/>
+   while(1);
+<br/>
+<br/>
+   return 0;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+cheers,
+<br/>
+<br/>
+<br/>
+Wanderer.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#2110 - AnthC - Wed Jan 29, 2003 4:39 pm</h4>
+    <div class="postbody"><span class="postbody">Things you have to realise about interrupts
+<br/>
+(1) The handler should be in ARM - not thumb.
+<br/>
+(2) You have to acknowledge the interrupt when its triggered.
+<br/>
+(3) If you have interworking enabled, you can call thumb functions also.
+<br/>
+<br/>
+Here's a sample asm  stub which calls c code :-
+<br/>
+<br/>
+IRQVec is written to the interrupt address (like you do in your code)
+<br/>
+HandleVBLIRQ is a c function, called by the interrupt -
+<br/>
+void HandleVBLIRQ(void)
+<br/>
+There's easier ways todo this if you have the right crt0.s, but I didn't do it that way. (If you are looking for a quick solution then the c table version is a better way to go imo)
+<br/>
+<br/>
+<br/>
+	.GLOBAL IRQVec
+<br/>
+IRQVec:
+<br/>
+	ldr		r0,=R_IME
+<br/>
+	ldr		r1,=0
+<br/>
+	strh	r1,[r0]	/* disable interupts */
+<br/>
+<br/>
+	ldr		r0,=R_IF
+<br/>
+	ldrh	r1,[r0]
+<br/>
+<br/>
+	ands	r2,r1,#1	/* vbl irq ? */
+<br/>
+	bne		IRQVBL
+<br/>
+<br/>
+	/* fixme : handle others here */
+<br/>
+<br/>
+int_ret:
+<br/>
+	ldr		r0,=R_IME
+<br/>
+	ldr		r1,=1
+<br/>
+	strh	r1,[r0]       /* enable interupts */
+<br/>
+	bx		lr /* return to monitor */
+<br/>
+<br/>
+IRQVBL:
+<br/>
+	strh	r2,[r0]      /* interrupt serviced */
+<br/>
+	stmfd sp!,{r4-r12,lr}  /* preserve registers */
+<br/>
+	.extern HandleVBLIRQ
+<br/>
+	bl  HandleVBLIRQ      /* call the c interrupt function */
+<br/>
+	ldmfd sp!,{r4-r12,lr}  /* restore registers */
+<br/>
+	b		int_ret
+<br/>
+<br/>
+<br/>
+Have fun
+<br/>
+Anth</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#2120 - headspin - Wed Jan 29, 2003 9:15 pm</h4>
+    <div class="postbody"><span class="postbody">Well obviously asm isn't going to help a C coder much.. here is something basic that may help... it sets up an interrupt for trapping VBlank and HBlank.  Cowbite Virtual Hardware Specs are really handy for this sort of stuff... <a class="postlink" href="http://www.cs.rit.edu/~tjh8300/CowBite/CowBiteSpec.htm" target="_blank">http://www.cs.rit.edu/~tjh8300/CowBite/CowBiteSpec.htm</a>
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#define REG_INTERUPT   *(u32*)0x3007FFC
+<br/>
+<br/>
+#define REG_DISPSTAT   *(u16*)0x4000004
+<br/>
+#define REG_IE         *(u16*)0x4000200
+<br/>
+#define REG_IF         *(u16*)0x4000202
+<br/>
+#define REG_IME        *(u16*)0x4000208
+<br/>
+<br/>
+#define INT_VBLANK 0x0001
+<br/>
+#define INT_HBLANK 0x0002
+<br/>
+<br/>
+void hblank_vblank()
+<br/>
+{
+<br/>
+   REG_IME=0;
+<br/>
+   REG_IE|=INT_HBLANK|INT_VBLANK;
+<br/>
+   REG_DISPSTAT|=(1&lt;&lt;4) | (1&lt;&lt;3);
+<br/>
+   REG_IME=1; //enable interrupt
+<br/>
+}
+<br/>
+<br/>
+void InterruptHandler(void)
+<br/>
+{
+<br/>
+   u16 temp_reg_if=REG_IF;
+<br/>
+  
+<br/>
+   REG_IME=0;
+<br/>
+<br/>
+   *((u16*)0x03007ff8) = REG_IF;
+<br/>
+  
+<br/>
+   if(temp_reg_if &amp; INT_HBLANK) { }
+<br/>
+<br/>
+   if(temp_reg_if &amp; INT_VBLANK) { }
+<br/>
+<br/>
+   REG_IME=1;
+<br/>
+}
+<br/>
+<br/>
+int main(void)
+<br/>
+{
+<br/>
+   REG_INTERUPT=(u32)&amp;InterruptHandler;
+<br/>
+<br/>
+   hblank_vblank();
+<br/>
+}</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#2181 - Wanderer - Thu Jan 30, 2003 4:36 pm</h4>
+    <div class="postbody"><span class="postbody">Hi again,
+<br/>
+<br/>
+thanks for the offerings, I managed to work out why things weren't working.. I was setting REG_IE incorrectly, so no interrupts were being fully enabled.
+<br/>
+<br/>
+I do have a couple of quesions still though:
+<br/>
+<br/>
+In the Cowbite Spec it suggests writting 1 into the relevant bit of REG_IF to show that the interrupt has been processed.  However when an interrupt hasn't been processed yet it's flag seems to be at 1 already, so writting a 1 into it won't change it.  Is this an error in the Spec or am I getting muddled up somewhere???
+<br/>
+<br/>
+<span style="text-decoration: underline">AnthC:</span>
+<br/>
+Are you sure it has to be ARM code?.. I managed to get it working ok in pure C which I believe is all Thumb code.
+<br/>
+<br/>
+<span style="text-decoration: underline">Headspin:</span>
+<br/>
+Thanks for the C, could you explain why you write REG_IF to the address 0x03007FF8? - I can't find any mention of this address in the Cowbite Specs?
+<br/>
+<br/>
+thanks,
+<br/>
+<br/>
+<br/>
+Wanderer.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#2356 - headspin - Sun Feb 02, 2003 11:58 am</h4>
+    <div class="postbody"><span class="postbody">Yes, that is strange that Cowbite don't mention that address. Well as far as I know 0x3007FF8 is usually defined as REG_IFCHECKBUFF which suggests it's a buffer used when checking REG_IF. I'm not sure if this step is entirely necessary since Cowbite say the basic model for setting up an interrupt is:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+1. Place the address for your interrupt code at 0x03007FFC. 
+<br/>
+<br/>
+2. Turn on the interrupts you wish to use:
+<br/>
+- REG_DISPSTAT, REG_TMXCNT, REG_KEYCNT, or REG_DMAXCNT tell the hardware which interrupts to send
+<br/>
+- 0x04000200 (REG_IE) masks which interrupts will actually be serviced (?) 
+<br/>
+- 0x04000208 (REG_IME) Turns all interrupts on or off. 
+<br/>
+<br/>
+3. When the interrupt is reached, the code at the address at 0x3007FFC gets loaded into the CPU. To prevent unwanted errors/behavior, the first thing this code should do is disable interrupts.
+<br/>
+<br/>
+4. To determine what interrupt this is, check the flags in 0x04000202 (REG_IF). Unset the flag by writing a 1 to that bit.
+<br/>
+<br/>
+5. Once finished with the service routine, reenable interrupts and execute a BX LR (*Not* a SUBS PC, LR #4, which is what the BIOS does). The BIOS will then take over and return your program to where execution left off. 
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+They don't mention REG_IFCHECKBUFF at all, so it beats me the reason for it's use. Maybe someone can shed some light on the subject?
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">In the Cowbite Spec it suggests writting 1 into the relevant bit of REG_IF to show that the interrupt has been processed. However when an interrupt hasn't been processed yet it's flag seems to be at 1 already, so writting a 1 into it won't change it. Is this an error in the Spec or am I getting muddled up somewhere???</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I don't think writing a 1 to the interrupt's bit into REG_IF is necessary. I mean, you check that bit to see if the interrupt has occured in the first place, why would setting it again make any difference? I'm not sure what they mean by this at all. Perhaps setting REG_IME to turn off all interrupts means this step is not nessesary?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#2367 - tepples - Sun Feb 02, 2003 3:52 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>headspin wrote:</b></span></td> </tr> <tr> <td class="quote">Yes, that is strange that Cowbite don't mention that address.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">They don't mention REG_IFCHECKBUFF at all, so it beats me the reason for it's use. Maybe someone can shed some light on the subject?</td> </tr></table><span class="postbody">
+<br/>
+As I see it, register 0x03007ff8 (called BIOS_INTACK in my header file) is used to tell IntrWait() and VblankIntrWait() which interrupts your handler acknowledged.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

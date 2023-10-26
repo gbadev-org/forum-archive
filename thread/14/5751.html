@@ -1,0 +1,445 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>text background layout (or something) - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Beginners > text background layout (or something)</h2>
+<div id="posts">
+<div class="post">
+    <h4>#43003 - ghost Leinad - Wed May 18, 2005 1:01 am</h4>
+    <div class="postbody"><span class="postbody">hi, again.
+<br/>
+this time i have a big doubt about drawing the textbackgrounds...anyone has a function to do this, i already do a function using loops and seems to work fine but i think this could be very slow
+<br/>
+<br/>
+here's mi function
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+<br/>
+u16* vramMap0 = (u16*)ScreenBaseBlock(31);
+<br/>
+u8 i,x;
+<br/>
+u16 a=0;
+<br/>
+<br/>
+for (i=0;i&lt;16;i++)
+<br/>
+{
+<br/>
+   for(x=0;x&lt;32;x++)
+<br/>
+   {
+<br/>
+      vramMap0[x+(i*64)]=background0[x+(i*64)+a];
+<br/>
+   }
+<br/>
+   a+=32;
+<br/>
+   for(x=32;x&lt;64;x++)
+<br/>
+   {
+<br/>
+      vramMap0[x+(i*64)]=background0[x+(i*64)+a];   
+<br/>
+   }
+<br/>
+   a+=32;
+<br/>
+}
+<br/>
+a=32;
+<br/>
+for (i=16;i&lt;32;i++)
+<br/>
+{
+<br/>
+   for(x=0;x&lt;32;x++)
+<br/>
+   {
+<br/>
+      vramMap0[x+(i*64)]=background0[x+(i*64)-(1024-a)];
+<br/>
+   }
+<br/>
+   a+=32;
+<br/>
+   for(x=32;x&lt;64;x++)
+<br/>
+   {
+<br/>
+      vramMap0[x+(i*64)]=background0[x+(i*64)-(1024-a)];   
+<br/>
+   }
+<br/>
+   a+=32;
+<br/>
+}
+<br/>
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+this work for a textbg of 512*256 i dont try it in bigger maps...
+<br/>
+<br/>
+if you have a better function please post it...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#43004 - strager - Wed May 18, 2005 1:19 am</h4>
+    <div class="postbody"><span class="postbody">Lemme give it a whirl...
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+/* Only works properly when maps is 1 (256x256) or 4 (512x512) */
+<br/>
+<br/>
+/* Returns the number of tiles written */
+<br/>
+u16 renderTXT(u16 *tilemap, u16 *sbb, u8 maps)
+<br/>
+{
+<br/>
+    register u16 tile;
+<br/>
+    register u8 x, y, map;
+<br/>
+    u8 mapx, mapy;
+<br/>
+<br/>
+    for(map = 0; map &lt; maps; map++)
+<br/>
+    {
+<br/>
+        if(map &amp; 1)
+<br/>
+            mapx = 32;
+<br/>
+        else
+<br/>
+            mapx = 0;
+<br/>
+<br/>
+        if(map &amp; 2)
+<br/>
+            mapy = 32;
+<br/>
+        else
+<br/>
+            mapy = 0;
+<br/>
+<br/>
+        for(y = 0; y &lt; 32; y++)
+<br/>
+        {
+<br/>
+            for(x = 0; x &lt; 32; x++)
+<br/>
+            {
+<br/>
+                sbb[(map * 32 * 32) + (y * 32) + x] = tilemap[(x + mapx) + ((y + mapy) * 32)];
+<br/>
+                tile++;
+<br/>
+            };
+<br/>
+        };
+<br/>
+    };
+<br/>
+<br/>
+    return(tile)
+<br/>
+};
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Sorry, I'm always too lazy to test my work.. :-|
+<br/>
+So, I'm crossing my fingers on this one!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#43025 - Cearn - Wed May 18, 2005 10:27 am</h4>
+    <div class="postbody"><span class="postbody">@ghost Leinad: Using no$gba (and compiling with -O2), your function uses 158 cycles. Using ints for variables i, a and x makes it go down to 74.5k. <span style="font-weight: bold">FER GAWD'S SAKE, DON'T USE CHARS OR SHORTS FOR LOCAL VARIABLES!!!</span> Sorry, just wanted to make that clear.
+<br/>
+<br/>
+If background0 is nicely word-aligned and the source maps are 64x32 tiles in size with in a simple matrix format, you can get to 34k cycles by using this:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+int iy, ix;   
+<br/>
+u32 *src= (u32*)background0;
+<br/>
+u32 *dst0= (u32*)ScreenBaseBlock[30];
+<br/>
+u32 *dst1= (u32*)ScreenBaseBlock[31]; 
+<br/>
+<br/>
+for(iy=0; iy&lt;32; iy++) // all rows
+<br/>
+{
+<br/>
+   for(ix=0; ix&lt;16; ix++) // left side of 512x256 map
+<br/>
+      *dst0++= *src++;
+<br/>
+   for(ix=0; ix&lt;16; ix++) // right side of map
+<br/>
+      *dst1++= *src++;
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+You do know that when you start your 2 screenblock map at the last screen block (31), things can go bad, right? 
+<br/>
+A second boost to 15k cycles is possible by using struct-copies, though the function takes up more instructions than the u32 function (but still less than the original):
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+<br/>
+typedef struct { u32 data[8]; } BLOCK;
+<br/>
+<br/>
+int iy;
+<br/>
+BLOCK *src= (BLOCK*)background0;
+<br/>
+BLOCK *dst0= (BLOCK*)ScreenBaseBlock(30);
+<br/>
+BLOCK *dst1= (BLOCK*)ScreenBaseBlock(31); 
+<br/>
+<br/>
+for(iy=0; iy&lt;32; iy++)
+<br/>
+{
+<br/>
+   *dst0++= *src++;
+<br/>
+   *dst0++= *src++;
+<br/>
+<br/>
+   *dst1++= *src++;
+<br/>
+   *dst1++= *src++;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+I'm fairly certain you can get a little more from using assembly and iwram, but even if the source map were already in screen block layout and using DMA, the limit would be around 8k cycles, so going from 158k to 15k is good enough, no?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#43059 - Miked0801 - Wed May 18, 2005 7:28 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+<span style="font-weight: bold">FER GAWD'S SAKE, DON'T USE CHARS OR SHORTS FOR LOCAL VARIABLES!!!</span>
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Everyone, please take careful note of this statement and its ramifications.
+<br/>
+<br/>
+<br/>
+Also, great job optimizing.  Assembly won't really speed that up noticably once you use struct copies.  Compiling as ARM and moving to IWRAM would probably speed it up another 24.99% or so due to it being able to struct copying 32 bytes at a time instead of 12 bytes with Thumb and 0.01% for reading the code quicker.[/b]</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#43071 - yaustar - Wed May 18, 2005 9:00 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Cearn wrote:</b></span></td> </tr> <tr> <td class="quote"><span style="font-weight: bold">FER GAWD'S SAKE, DON'T USE CHARS OR SHORTS FOR LOCAL VARIABLES!!!</span> Sorry, just wanted to make that clear.
+<br/>
+ enough, no?</td> </tr></table><span class="postbody">
+<br/>
+Can I ask for a reason why?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#43075 - tepples - Wed May 18, 2005 9:21 pm</h4>
+    <div class="postbody"><span class="postbody">Apparently, if you use a char or a short in a local variable that's kept in a register, it has to sign-extend or zero-extend the value every time you assign to the variable. For local variables that you know are going to be placed on the stack (use the <span style="font-weight: bold">auto</span> keyword to ensure this), this shouldn't be as much of a problem.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#43085 - SevenString - Wed May 18, 2005 10:27 pm</h4>
+    <div class="postbody"><span class="postbody">Note Cearn's optimizing technique: if you're looping through an array, you pretty much ALWAYS want to alias a simple pointer to your array, then increment that pointer.
+<br/>
+<br/>
+Sort of a standard for game dev work.<br/>_________________<br/><span style="font-style: italic">"Artificial Intelligence is no match for natural stupidity."</span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#43125 - Cearn - Thu May 19, 2005 10:21 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Miked0801 wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+<span style="font-weight: bold">FER GAWD'S SAKE, DON'T USE CHARS OR SHORTS FOR LOCAL VARIABLES!!!</span>
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Everyone, please take careful note of this statement and its ramifications.
+<br/>
+</span></td> </tr></table><span class="postbody">
+<br/>
+Sorry for sounding a little angry, but this crops up <a class="postlink" href="http://forum.gbadev.org/viewtopic.php?t=5733" target="_blank">again</a> and <a class="postlink" href="http://forum.gbadev.org/viewtopic.php?t=4394" target="_blank">again</a> so it needed to be said. Premature optimisation may be the root of all evil, but IMHO this actually qualifies as pessimisation.
+<br/>
+<br/>
+The only reason I can think of this being used is because people think it saves space. It doesn't. GCC puts just about all variables directly into CPU registers; apart from when optimisation is disabled, I don't think I've ever seen it use the stack for temporary space here. Space isn't used, so there's nothing to be saved.
+<br/>
+Also, the registers are 32bit (int sized), using bytes or halfwords have to be sign-extended like tepples says. This means two extra instructions whenever you do arithmetic on the variables, so you actually <span style="font-style: italic">waste</span> space, and time. It's even a little worse when you use chars or shorts for loop-indices because of the way arithmetic operations can work as a comparison as well, but the extra extending instructions wipe their results clean again and then an extra cmp is required too. So instead of one instruction, you'll have four. Inner loops can double in size because of this.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+@ By using chars for loop variables, you'l get this:
+<br/>
+... loop code
+<br/>
+add   r3, r1, #1   @ increment
+<br/>
+lsl   r3, r3, #24  @ - sign extend
+<br/>
+lsr   r1, r3, #24  @ /
+<br/>
+cmp   r1, #63      @ extra comparison
+<br/>
+bls   .L15         @ jump to beginning of loop
+<br/>
+<br/>
+@ where you might have had this:
+<br/>
+... loop code
+<br/>
+sub   r1, r1, #1   @ decrement (GCC can convert to )
+<br/>
+bpl   .L15         @ jump      (count-downs if possible/desirable)
+<br/>
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+So all in all, by trying to save 2 or 3 bytes, you're actually wasting multiples of 4 or more, as well as possibly halving the speed of your routines. So please, stick to ints or u32 unless you really, really have to.
+<br/>
+<br/>
+Btw, the auto keyword does not put them on the stack, I just checked. Even if it did it wouldn't matter: the stack entries are 32bit anyway so there's no benefit, all arithmetic is done in registers which will have their signs extended, and you'd have to load/store the variables from/to the stack as well.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>SevenString wrote:</b></span></td> </tr> <tr> <td class="quote">Note Cearn's optimizing technique: if you're looping through an array, you pretty much ALWAYS want to alias a simple pointer to your array, then increment that pointer. </td> </tr></table><span class="postbody">
+<br/>
+The funny thing is that GCC often does this for you, even when using a for loop with indexed arrays. Not always though. Specifically, if the expressions are complex enough or if the array's address is a nice round number (say 0x06000000), GCC will usually put in extra code. Even without pointer-incrementing, the aliasing thing can be helpful since it standardizes code, making it more readable and maintainable.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#43143 - tepples - Thu May 19, 2005 2:31 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Cearn wrote:</b></span></td> </tr> <tr> <td class="quote">The only reason I can think of this being used is because people think it saves space. It doesn't. GCC puts just about all variables directly into CPU registers; apart from when optimisation is disabled, I don't think I've ever seen it use the stack for temporary space here. Space isn't used, so there's nothing to be saved.</td> </tr></table><span class="postbody">
+<br/>
+When disassembling (gcc -S -O3) complicated game loops and even a C audio mixer that I've written, I've seen infrequently used registers (such as loop counters or state flags) get put on the stack.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Btw, the auto keyword does not put them on the stack, I just checked.</td> </tr></table><span class="postbody">
+<br/>
+Another way to force a variable onto the stack is to take the address of a variable (&amp;foo) and use it somehow.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Even if it did it wouldn't matter: the stack entries are 32bit anyway</td> </tr></table><span class="postbody">
+<br/>
+What makes you think this? If GCC's stack frame space allocator is not efficient, that is a bug.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#43150 - Cearn - Thu May 19, 2005 3:00 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Cearn wrote:</b></span></td> </tr> <tr> <td class="quote">The only reason I can think of this being used is because people think it saves space. It doesn't. GCC puts just about all variables directly into CPU registers; apart from when optimisation is disabled, I don't think I've ever seen it use the stack for temporary space here. Space isn't used, so there's nothing to be saved.</td> </tr></table><span class="postbody">
+<br/>
+When disassembling (gcc -S -O3) complicated game loops and even a C audio mixer that I've written, I've seen infrequently used registers (such as loop counters or state flags) get put on the stack.
+<br/>
+</span></td> </tr></table><span class="postbody">
+<br/>
+Point taken. If things get complicated enough, things will (have to be) put on the stack.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Even if it did it wouldn't matter: the stack entries are 32bit anyway</td> </tr></table><span class="postbody">
+<br/>
+What makes you think this? If GCC's stack frame space allocator is not efficient, that is a bug.</span></td> </tr></table><span class="postbody">
+<br/>
+Compiling the original code with -O0 uses the stack for the counters, and the stack will be offset in 4 byte increments. In other cases where the stack is used (like &amp;foo) it was also word sized. Granted, my observational experience here has been limited.
+<br/>
+<br/>
+However, think of the comsequences of having a non-word aligned stack pointer. The GBA does not load from memory the same way a PC does. On a PC if you load a u32 from address it will use the 4 bytes starting at that address even if it is unaligned. The GBA (and every ARM chip? EDIT: yes, <a class="postlink" href="http://www.arm.com/support/faqdev/1469.html" target="_blank">http://www.arm.com/support/faqdev/1469.html</a>) doesn't see it that way, it will always load from the last word-aligned address. Loading a word from, say, 0x03000001 will use the bytes [0x03000000, 0x03000003], and rotate the constituent bytes (I've seen this happen, though I think I may have left the file at home). The same would happen with the stack if any value for SP were allowed. And since a program can never know beforehand where the stack pointer is, it'd be impossible to guard against it, so using a word-aligned stack isn't such a bad idea.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#43155 - tepples - Thu May 19, 2005 3:59 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Cearn wrote:</b></span></td> </tr> <tr> <td class="quote">However, think of the comsequences of having a non-word aligned stack pointer.</td> </tr></table><span class="postbody">
+<br/>
+True, but why can't it pack, say, two char variables and one short variable into one 32-bit entry? Is there anything inherent in the ARM architecture preventing generated code from storing a char at 0x03004638, a char at 0x03004639, and an unsigned short at 0x0300463A?<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#43159 - Cearn - Thu May 19, 2005 4:19 pm</h4>
+    <div class="postbody"><span class="postbody">Probably not. But someone (compiler builders presumably) would have to check that when the stack is finally used, the things that need to be put there can be packed into words. And do the actual packing. Not sure if this is high on their list of priorities. Structs are probably put on the stack in words regardless of their member types, but they are contingent in memory anyway so I'm not sure if that counts.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#43190 - ghost Leinad - Fri May 20, 2005 2:23 am</h4>
+    <div class="postbody"><span class="postbody">ok, then after three hours trying to understand what are you talking about, i finally made a conclussion.
+<br/>
+<br/>
+there's no point in trying to save space with u8 or u16 for loops and its better to declare as int's. 
+<br/>
+<br/>
+im going to try the two codes today. but let me tell you something, im very pleased with my code because i spent two hours trying to solve how to draw the map. (even is slow)
+<br/>
+<br/>
+im just startting and i think im doing just good...
+<br/>
+BTW i already send my tamagotchi but i don't see it anywhere...i have another question but is better to create a new subject
+<br/>
+thanks everybody</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#43230 - Miked0801 - Fri May 20, 2005 6:42 pm</h4>
+    <div class="postbody"><span class="postbody">Well done then.  This particular topic is something we've seen quite a bit which explains some of the vehemence of the replies.  No personal attacks against you or your code, just some things we've seen that we know will improve game performance.  Good luck on your next venture!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#43289 - poslundc - Sat May 21, 2005 4:52 pm</h4>
+    <div class="postbody"><span class="postbody">Just thought I'd throw in my two cents...
+<br/>
+<br/>
+IMO the best reason to use "int" is because it is, in C, the general efficient "number" data type. When you use int, it's clear to people reading your code that precision and range are not the primary concerns of your code.
+<br/>
+<br/>
+On the other hand, using data types that specify signage and precision indicate that these are of primary relevance. So use them when that's the case - mostly when dealing with formatted data or IO registers.
+<br/>
+<br/>
+I would also never pass in anything other than an "int" as a numeric parameter to a function. Use ASSERTs to do bounds-checking from within your function, but trying to enforce bounds restrictions by using a fixed-width data type usually leads to much uglier and less maintainable code down the line, plus the wasted sign-extensions.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

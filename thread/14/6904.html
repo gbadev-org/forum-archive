@@ -1,0 +1,204 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>My brain's been driven into the ground. (and stamped on) - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Beginners > My brain's been driven into the ground. (and stamped on)</h2>
+<div id="posts">
+<div class="post">
+    <h4>#54487 - Ultima2876 - Mon Sep 19, 2005 10:56 pm</h4>
+    <div class="postbody"><span class="postbody">Diagonal Scrolling - while loading tiles at the edges. Argh.
+<br/>
+<br/>
+I think many of us have been there, and there's even an ancient topic about it.
+<br/>
+<br/>
+I've been fiddling with this for a few days now, and can't get it right. Down and left/right scrolling works absolutely fine, but I'm having a strange problem with the diagonal aspect of the scrolling - it updates most of the VRAM map fine, except for a triangular section... and it only does this with maps of a different width to 32 tiles (although that's probably because I'm using a 256x256 VRAM map - which means it has the correct tiles there anyway). So, I have a 128x32 tile map, being read into my 32x32 VRAM map.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">hofs_prev = *hoffset &gt;&gt; 3;
+<br/>
+      vofs_prev = *voffset &gt;&gt; 3;
+<br/>
+      scroll_speedpart += speed &amp; 0xFF;      //deal with the fixed-point speed, and update the speed part (increment speed for the frame if the speed part overflows)
+<br/>
+      speed = speed &gt;&gt; 8;
+<br/>
+      speed += scroll_speedpart &gt;&gt; 8;
+<br/>
+      scroll_speedpart = scroll_speedpart &amp; 0xFF;
+<br/>
+      if(speed &gt; 8)
+<br/>
+         {
+<br/>
+            speed = 8;
+<br/>
+         }
+<br/>
+      if(direction == 0 || direction == 2 || direction == 4)   //(right scrolling)
+<br/>
+         {
+<br/>
+            *hoffset += speed;            //increase the offset by the speed
+<br/>
+            if(hofs_prev != *hoffset &gt;&gt; 3)   //if the last frame's tile-hoffset was different, you need to update the tiles
+<br/>
+               {
+<br/>
+                  for(loop = 0; loop &lt; 21; loop++)   //update the tiles at the edge of the screen
+<br/>
+                     {
+<br/>
+                        temp_vofs = bios_mod(((loop + (*voffset &gt;&gt; 3))), map_height);
+<br/>
+                        ((u16*)map_vram)[(((loop + (*voffset &gt;&gt; 3)) &amp; 0x1F) &lt;&lt; 5) + *map_write_x] = ((u16*)map)[(map_width * temp_vofs) + *map_position_x];
+<br/>
+                     }
+<br/>
+                  *map_position_x += 1;
+<br/>
+                  *map_write_x += 1;
+<br/>
+                  *map_write_x = *map_write_x &amp; 0x1F;
+<br/>
+                  if (*map_position_x == map_width) { *map_position_x = 0; }
+<br/>
+               }
+<br/>
+            *BG_HOFS = *hoffset;         //update the H scroll register
+<br/>
+         }
+<br/>
+      else if(direction == 1 || direction == 3 || direction == 5)      //(left scrolling)
+<br/>
+         {
+<br/>
+            *hoffset -= speed;            //decrease the offset by the speed
+<br/>
+            if(hofs_prev != *hoffset &gt;&gt; 3)   //if the last frame's tile-hoffset was different, you need to update the tiles
+<br/>
+               {
+<br/>
+                  if (*map_position_x &lt; -1) { *map_position_x = map_width - 1; }
+<br/>
+                  for(loop = 0; loop &lt; 21; loop++)   //update the tiles at the edge of the screen
+<br/>
+                     {
+<br/>
+                        temp_vofs = bios_mod(((loop + (*voffset &gt;&gt; 3))), map_height);
+<br/>
+                        ((u16*)map_vram)[(((loop + (*voffset &gt;&gt; 3)) &amp; 0x1F) &lt;&lt; 5) + *map_write_x] = ((u16*)map)[(map_width * temp_vofs) + *map_position_x];
+<br/>
+                     }
+<br/>
+                  *map_position_x -= 1;
+<br/>
+                  *map_write_x -= 1;
+<br/>
+                  *map_write_x = *map_write_x &amp; 0x1F;
+<br/>
+                  if (*map_position_x == -1) { *map_position_x = map_width - 1; }
+<br/>
+               }
+<br/>
+            *BG_HOFS = *hoffset;         //update the H scroll register
+<br/>
+         }
+<br/>
+      if(direction == 4 || direction == 5 || direction == 7)   //(down scrolling)
+<br/>
+         {
+<br/>
+            *voffset += speed;            //increase the offset by the speed
+<br/>
+            if(vofs_prev != *voffset &gt;&gt; 3)   //if the last frame's tile-hoffset was different, you need to update the tiles
+<br/>
+               {
+<br/>
+                  for(loop = 0; loop &lt; 32; loop++)   //update the tiles at the edge of the screen
+<br/>
+                     {
+<br/>
+                        temp_hofs = bios_mod(loop + hofs_prev, map_width);
+<br/>
+                        ((u16*)map_vram)[(*map_write_y &lt;&lt; 5) + ((loop + hofs_prev) &amp; 0x1F)] = ((u16*)map)[(map_width * *map_position_y) + temp_hofs];
+<br/>
+                     }
+<br/>
+                  *map_position_y += 1;
+<br/>
+                  *map_write_y += 1;
+<br/>
+                  *map_write_y = *map_write_y &amp; 0x1F;
+<br/>
+                  if (*map_position_y == map_height) { *map_position_y = 0; }
+<br/>
+               }
+<br/>
+            *BG_VOFS = *voffset + bgv;
+<br/>
+         }</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+There's my code. The bios mods are for making the maps wrap around the map_height and map_width - which can be of any size.
+<br/>
+<br/>
+At first I suspected the problem was to do with incorrect implementation of the X offsetting in this line:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">((u16*)map_vram)[(*map_write_y &lt;&lt; 5) + ((loop + hofs_prev) &amp; 0x1F)] = ((u16*)map)[(map_width * *map_position_y) + temp_hofs];</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+And to be honest I still do. However, my brain is hurting quite a lot and i can't figure it out. 
+<br/>
+<br/>
+Next up, screenshots.
+<br/>
+<br/>
+<a class="postlink" href="http://img155.imageshack.us/img155/5968/terrag4je.png" target="_blank">http://img155.imageshack.us/img155/5968/terrag4je.png</a>
+<br/>
+<br/>
+That's what it kind of should look like (a mock up, really).
+<br/>
+<br/>
+<a class="postlink" href="http://img155.imageshack.us/img155/6033/terrag20jw.png" target="_blank">http://img155.imageshack.us/img155/6033/terrag20jw.png</a>
+<br/>
+<br/>
+Any help would be very much appreciated.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#54602 - Miked0801 - Tue Sep 20, 2005 7:13 pm</h4>
+    <div class="postbody"><span class="postbody">Welcome to edge scrolling hell.  When you figure this out, you will join an elite group of programmers who have solved that nasty problem.
+<br/>
+<br/>
+In general, I've found that the when the overlap square is not handled correctly, it's because you aren't completely calculation 1 direction before starting on another direction.  Good luck!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#54614 - tepples - Tue Sep 20, 2005 9:42 pm</h4>
+    <div class="postbody"><span class="postbody">To handle a diagonal scroll properly, update the vertical edge only on those frames when you aren't updating the horizontal edge.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#54660 - gauauu - Wed Sep 21, 2005 11:07 am</h4>
+    <div class="postbody"><span class="postbody">Wow..that's a good idea.  sounds easier than what I did...(although I can't remember how I finally solved the problem, to be honest)</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

@@ -1,0 +1,813 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>interrupt based serial communication (GBA) - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > interrupt based serial communication (GBA)</h2>
+<div id="posts">
+<div class="post">
+    <h4>#133250 - cuse - Wed Jul 04, 2007 6:10 pm</h4>
+    <div class="postbody"><span class="postbody">Hi!
+<br/>
+<br/>
+Has anybody managed to get an interrupt based serial communication working with the GameBoy Advance? If so, do you have some demo code?
+<br/>
+<br/>
+So far only polling based serial communication is working for me. I tried to extend my code for interrupt based communication by adjusting the initialization block like this:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+...
+<br/>
+REG_SIOCNT = VAL_SIO_BAUD_115200 | FLG_SIO_LENGTH_8 | FLG_SIO_RECV_ENABLE | FLG_SIO_SEND_ENABLE | VAL_SIO_USE_UART;
+<br/>
+REG_SIOCNT |= FLG_SIO_FIFO;
+<br/>
+REG_SIOCNT |= FLG_SIO_IRQ; // enable UART interrupt (???)
+<br/>
+<br/>
+// interrupt_service_routine() is the function where I handle
+<br/>
+// all interrupts
+<br/>
+REG_INTERUPT = (u32)interrupt_service_routine;
+<br/>
+REG_IE |= INT_COMUNICATION; // enable UART interrupt (???)
+<br/>
+...
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+But when I send something to the GBA via serial communication, interrupt_service_routine() is never called. What am I doing wrong?
+<br/>
+<br/>
+All hints or demo code very much appreciated!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#133342 - cuse - Thu Jul 05, 2007 2:27 pm</h4>
+    <div class="postbody"><span class="postbody">Never mind, I found the solution. I just forgot to globally enable interrupts, that is ...
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">REG_IME = 1;</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+did the trick.
+<br/>
+<br/>
+Thanks for .... uhm ... something.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#133370 - Miked0801 - Thu Jul 05, 2007 8:37 pm</h4>
+    <div class="postbody"><span class="postbody">Good luck.  Getting serial comms to work reliably on GBA is a HARD thing to do.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#133372 - cuse - Thu Jul 05, 2007 8:53 pm</h4>
+    <div class="postbody"><span class="postbody">Really? Then I was lucky! :)
+<br/>
+<br/>
+Beside my mistake mentioned above, I found another one: don't set the FIFO flag (at least not on interrupt based communication), that is don't do this:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">REG_SIOCNT |= FLG_SIO_FIFO;</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Now serial communication with 115kbaud works like a charm, very reliable and stable!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#133530 - Miked0801 - Fri Jul 06, 2007 9:55 pm</h4>
+    <div class="postbody"><span class="postbody">100%?  AS in leave it on all night while sending data back and forth and no packet data loss/corruption reliable?  If so, good for you.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#133597 - cuse - Sat Jul 07, 2007 11:15 am</h4>
+    <div class="postbody"><span class="postbody">I only tested it for couple hours, but during that time it, there was no data loss or something. But actually I used a GBA SP in case that matters.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#133930 - cuse - Mon Jul 09, 2007 9:29 pm</h4>
+    <div class="postbody"><span class="postbody">Now guess what ... 
+<br/>
+<br/>
+... don't praise the day before the evening. Now I just added a bit more application logic and boom - packet loss.
+<br/>
+<br/>
+I *guess* the packets get lost while global interrupt is disabled, i.e. when actually handling interrupts. Because the only thing I've added was a vblank interrupt routine.
+<br/>
+<br/>
+I wonder if switching to FIFO UART mode would help. But I don't know yet how the FIFO mode exactly works.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#134950 - Miked0801 - Wed Jul 18, 2007 9:19 pm</h4>
+    <div class="postbody"><span class="postbody">And that's the problem with Serial.  A whole lot of guessing and groping in the dark.  I wish I had a better answer for you than keep guessing, but I don't :)
+<br/>
+<br/>
+Just keep in mind the following:
+<br/>
+1. If your serial routine gets too big and you try to xfer too fast, you will miss interrupts and cause havok.
+<br/>
+<br/>
+2. If you need VBlank or HBlank interrupts to work with serial interrupt code, you need a CRT.s that supports nested interrupts.  If your video routines will cause glitching if they run late, then your serial code must be designed to tolerate being interrupted while other things run.  This makes things real complex.
+<br/>
+<br/>
+3. No xfer on the GBA is guarenteed ever.  You pretty much have to send the same info over and over quite often to get the message across to all conected GBAs.  As such, Serial code will really slow down your game.
+<br/>
+<br/>
+4. Your code should be able to handle plugging the cable in and pulling it back out a few times.  With good error handling, this can be done and makes for a good way to test bad data sends and/or serial cable interference.
+<br/>
+<br/>
+5. Serial code is hard :)  I worked on ours (professional game company) for months before I got in most of the way right - and then got to debug it occasionally for the following year as little things popped up.
+<br/>
+<br/>
+6. The whole game you are working on MUST be aware of the serial engine.  The GBA doesn't have the throughput to realistically send entire game states every tic.  We just sent key presses and the initial random seed then let run the engines lock-step to keep the game going at a decent pace.  As such, any non-deterministic function had to be specially handled.  Random numbers must use a common seed and be called the same number of times on each system.  Array overrun reads on any kind will cause out of sync.  Game code relying on local timers (vblank or whatever) will cause out of sync.  Any hardware related calls for game state stuff will cause out of syncs.  Sneezing on the keyboard will cause out of syncs, etc.
+<br/>
+<br/>
+Again, I say good luck to you.  You've embarked on a very difficult task.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#134954 - tepples - Wed Jul 18, 2007 9:35 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Miked0801 wrote:</b></span></td> </tr> <tr> <td class="quote">3. No xfer on the GBA is guarenteed ever.  You pretty much have to send the same info over and over quite often to get the message across to all conected GBAs.  As such, Serial code will really slow down your game.</td> </tr></table><span class="postbody">
+<br/>
+Can you give a ballpark estimate for typical bit error rates, or is that a trade secret?<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#134956 - Miked0801 - Wed Jul 18, 2007 9:51 pm</h4>
+    <div class="postbody"><span class="postbody">The famous 'it depends' answer.  The faster you try to go and the bigger your interrupt code and the bigger your crt0, the more bad timed interrupt / timeouts on interrupt read code you get.  I've found we got almost 0 bad read errors from the cable itself.  Hell, I passed a high power magnet over the serial cable while testing our stuff to try any induce errors and got nothing.
+<br/>
+<br/>
+Errors directly attributed to the serial cable itself, maybe 1 xfer every 10 hours or so.  Very low. 
+<br/>
+<br/>
+Errors from interrupts interrupting themselves at 'bad' times, depends on the xfer (and therefore the serial interrupt) rate as well as other offending (DMA/interrupt) code.  In Digimon Racing where we had Mode7 BGs (read big DMAs and HBlanks that could not be interrupted as well as VBlanks that were sacred) we would get lost packets about 1 every 3 seconds or so.  Without perfect recovery code, our games would go out of sync in 1 - 5 seconds.
+<br/>
+<br/>
+If you were to not need other interrupts, I'd guess you'd get a timing based serial failure about 1 every 30 minutes or so - perhaps even less often.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#135036 - cuse - Thu Jul 19, 2007 5:04 pm</h4>
+    <div class="postbody"><span class="postbody">I ended up reducing interrupt handler code to an absolute minimum, that is by moving most of the actual interrupt handlers to the application's main loop, to reduce packet loss. Analogue I reduced the usage of REG_IME  (which I did to avoid concurrency issues). Currently I have a packet loss rate of about 1%.
+<br/>
+<br/>
+Has anybody tried the FIFO mode yet? That claims to buffer 4 bytes on hardware side.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#135059 - ScottLininger - Thu Jul 19, 2007 8:33 pm</h4>
+    <div class="postbody"><span class="postbody">I don't know if it's helpful to you at all, but I got a pretty stable link-cable  codebase working a while back. It relies on polling on each of the GBs instead of interrupts. So it eats up a lot of processor time just waiting for the data to be sent and confirmed. Maybe you'll find something useful in there? Hard to say without knowing more about your project.
+<br/>
+<br/>
+<a href="http://www.scottlininger.com/gba" target="_blank">http://www.scottlininger.com/gba</a>
+<br/>
+<br/>
+It's at the bottom of the page there.
+<br/>
+<br/>
+-Scott</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#137060 - elyk1212 - Tue Aug 07, 2007 6:28 pm</h4>
+    <div class="postbody"><span class="postbody">Hey, cool Scott.  I was looking for something like this. THANKS!
+<br/>
+<br/>
+I hear so many issues/confusion with serial on GBA, it is great to have as many examples as possible.
+<br/>
+<br/>
+So I assume you do not use VBlank or HBlank interrupts also, is that right?  Or do you just use a lot of error correction code.  I will review the code base shortly.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#137078 - ScottLininger - Tue Aug 07, 2007 8:28 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>elyk1212 wrote:</b></span></td> </tr> <tr> <td class="quote">So I assume you do not use VBlank or HBlank interrupts also, is that right?  Or do you just use a lot of error correction code.  I will review the code base shortly.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Uh, not that I remember. It's been a couple of years. As I recall, I just have a function that sits in a loop on the master GBA and pushes a bit of data out to the slaves until they echo back the same piece of data, confirming that it got there uncorrupted, and a similar function on the slave side that sends back data until they're asked for the next bit.
+<br/>
+<br/>
+It's not very fast or elegant, but I've built a couple of working games with it.
+<br/>
+<br/>
+-Scott<br/>_________________<br/>Some of my <a class="postlink" href="http://www.scottlininger.com/" target="_blank">GBA projects</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#137094 - elyk1212 - Tue Aug 07, 2007 9:28 pm</h4>
+    <div class="postbody"><span class="postbody">So I would guess that means that you push OAM data just in a set part of your main game loop instead of during interrupt? (for your working games that is)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#137096 - ScottLininger - Tue Aug 07, 2007 10:14 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>elyk1212 wrote:</b></span></td> </tr> <tr> <td class="quote">So I would guess that means that you push OAM data just in a set part of your main game loop instead of during interrupt? (for your working games that is)</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Yeah, that's exactly right. Basically, you define a STRUCT that each gameboy has "control" over, then each gameboy calls a function called ExchangeStructs() inside the main game loop. Here's some pseudocode for a pong game:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">while  (gameIsFinished != TRUE) {
+<br/>
+<br/>
+    // check for keypresses and move your sprite
+<br/>
+    MoveMyPaddle();  
+<br/>
+<br/>
+    // this is what does all the work... it sends data to the
+<br/>
+    // other GBAs and gets some data back from them
+<br/>
+    ExchangeStructs(); 
+<br/>
+<br/>
+    // Draw the enemy paddle position + ball position based on
+<br/>
+    // the data I just got back
+<br/>
+    UpdateScreen();
+<br/>
+<br/>
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody"><br/>_________________<br/>Some of my <a class="postlink" href="http://www.scottlininger.com/" target="_blank">GBA projects</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#137596 - elyk1212 - Mon Aug 13, 2007 9:11 pm</h4>
+    <div class="postbody"><span class="postbody">Hey, I like the pong game.  One thing however,  did you do anything funky when compiling this project?  You have a batch file to compile, and I am trying to port it to devkitARM (Linux!) with make  and I got this: That is after switching all your includes from gfx\blah to gfx/blah, standard URIs, and putting sources in appropriate folders marked by my Makefile template.  It looks like a problem with jump addresses in the ASM produced.  Should I enable long calls or something? (-mlong-calls).  Thanks in advance, your code will really help my project.  
+<br/>
+<br/>
+Worst case, if you can call it that: If I can't compile your stuff, I can at least use the concept.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+main.c
+<br/>
+arm-eabi-gcc -MMD -MP -MF /home/my_login/Desktop/thingpongsource.zip_unzip/build/main.d -g -Wall -O3 -mcpu=arm7tdmi -mtune=arm7tdmi -fomit-frame-pointer -ffast-math -mthumb -mthumb-interwork -I/home/my_login/Desktop/thingpongsource.zip_unzip/./ -I/home/my_login/Desktop/thingpongsource.zip_unzip/include -I/home/my_login/Development/Games/Multi_System_Compilers/DevikitPro/libgba/include -I/home/my_login/Desktop/thingpongsource.zip_unzip/build -c /home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c -o main.o
+<br/>
+In file included from /home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:59:
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/./gba.h:308:1: warning: "REG_TM0D" redefined
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/./gba.h:192:1: warning: this is the location of the previous definition
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/./gba.h:309:1: warning: "REG_TM0CNT" redefined
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/./gba.h:193:1: warning: this is the location of the previous definition
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/./gba.h:310:1: warning: "REG_TM1D" redefined
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/./gba.h:194:1: warning: this is the location of the previous definition
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/./gba.h:312:1: warning: "REG_TM2D" redefined
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/./gba.h:195:1: warning: this is the location of the previous definition
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/./gba.h:313:1: warning: "REG_TM2CNT" redefined
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/./gba.h:196:1: warning: this is the location of the previous definition
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/./gba.h:314:1: warning: "REG_TM3D" redefined
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/./gba.h:197:1: warning: this is the location of the previous definition
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/./gba.h:315:1: warning: "REG_TM3CNT" redefined
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/./gba.h:198:1: warning: this is the location of the previous definition
+<br/>
+In file included from /home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:60:
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/./sprite.h:65: warning: dereferencing type-punned pointer will break strict-aliasing rules
+<br/>
+In file included from /home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:60:
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/./sprite.h:88:7: warning: no newline at end of file
+<br/>
+In file included from /home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:62:
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/./gfx/_pongbg.h:4:1: warning: "/*" within comment
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/./gfx/_pongbg.h:1957:70: warning: no newline at end of file
+<br/>
+In file included from /home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:63:
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/./gfx/_startscreen.h:4:1: warning: "/*" within comment
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/./gfx/_startscreen.h:1957:70: warning: no newline at end of file
+<br/>
+In file included from /home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:64:
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/./gfx/_pressstart.h:4:1: warning: "/*" within comment
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/./gfx/_pressstart.h:159:70: warning: no newline at end of file
+<br/>
+In file included from /home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:65:
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/./gfx/_paddle.h:4:1: warning: "/*" within comment
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/./gfx/_paddle.h:89:70: warning: no newline at end of file
+<br/>
+In file included from /home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:66:
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/./gfx/_paddleshadow.h:4:1: warning: "/*" within comment
+<br/>
+In file included from /home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:67:
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/./gfx/_ballshadow.h:4:1: warning: "/*" within comment
+<br/>
+In file included from /home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:68:
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/./gfx/_objball.h:4:1: warning: "/*" within comment
+<br/>
+In file included from /home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:69:
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/./gfx/_objapple.h:4:1: warning: "/*" within comment
+<br/>
+In file included from /home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:70:
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/./gfx/_objkoosh.h:4:1: warning: "/*" within comment
+<br/>
+In file included from /home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:71:
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/./gfx/_objduck.h:4:1: warning: "/*" within comment
+<br/>
+In file included from /home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:72:
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/./gfx/_objeye.h:4:1: warning: "/*" within comment
+<br/>
+In file included from /home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:73:
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/./gfx/_objflower.h:4:1: warning: "/*" within comment
+<br/>
+In file included from /home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:74:
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/./gfx/_scoremask.h:4:1: warning: "/*" within comment
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/./gfx/_scoremask.h:67:70: warning: no newline at end of file
+<br/>
+In file included from /home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:75:
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/./gfx/_choose.h:4:1: warning: "/*" within comment
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/./gfx/_choose.h:303:70: warning: no newline at end of file
+<br/>
+In file included from /home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:76:
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/./gfx/_paddleright.h:4:1: warning: "/*" within comment
+<br/>
+In file included from /home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:78:
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/./gfx/_load.h:4:1: warning: "/*" within comment
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/./gfx/_load.h:374:70: warning: no newline at end of file
+<br/>
+In file included from /home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:79:
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/./gfx/_wait.h:4:1: warning: "/*" within comment
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/./gfx/_wait.h:374:70: warning: no newline at end of file
+<br/>
+In file included from /home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:80:
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/./gfx/_winwhite.h:4:1: warning: "/*" within comment
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/./gfx/_winwhite.h:552:70: warning: no newline at end of file
+<br/>
+In file included from /home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:81:
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/./gfx/_winyellow.h:4:1: warning: "/*" within comment
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/./gfx/_winyellow.h:552:70: warning: no newline at end of file
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c: In function 'halfword':
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:252: warning: unused variable 'digits'
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c: In function 'mb_find_gba':
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:292: warning: implicit declaration of function 'WaitForVblank'
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c: In function 'mb_send_rom':
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:304: warning: unused variable 'debug'
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:347: warning: no return statement in function returning non-void
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c: In function 'FadePaletteByPercent':
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:461: warning: unused variable 'step'
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c: In function 'DrawBitmap':
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:514: warning: implicit declaration of function 'Flip'
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c: In function 'DrawTransparentBitmap':
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:523: warning: unused variable 'screenBuffer'
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c: At top level:
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:541: warning: conflicting types for 'Flip'
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:514: warning: previous implicit declaration of 'Flip' was here
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:556: warning: conflicting types for 'WaitForVblank'
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:292: warning: previous implicit declaration of 'WaitForVblank' was here
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c: In function 'InitializeSprites':
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:673: warning: passing argument 1 of 'LoadSpritePalette' discards qualifiers from pointer target type
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:676: warning: assignment discards qualifiers from pointer target type
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:683: warning: assignment discards qualifiers from pointer target type
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:690: warning: assignment discards qualifiers from pointer target type
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:699: warning: assignment discards qualifiers from pointer target type
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:706: warning: assignment discards qualifiers from pointer target type
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:713: warning: assignment discards qualifiers from pointer target type
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:740: warning: implicit declaration of function 'LoadTileData'
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:741: warning: implicit declaration of function 'AlignSprite'
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c: At top level:
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:753: warning: conflicting types for 'LoadTileData'
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:740: warning: previous implicit declaration of 'LoadTileData' was here
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:765: warning: conflicting types for 'AlignSprite'
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:741: warning: previous implicit declaration of 'AlignSprite' was here
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c: In function 'ScorePoint':
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:1019: warning: passing argument 1 of 'DrawBitmap' discards qualifiers from pointer target type
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:1040: warning: passing argument 1 of 'DrawBitmap' discards qualifiers from pointer target type
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:1041: warning: passing argument 2 of 'FadeFromColor' discards qualifiers from pointer target type
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:1045: warning: passing argument 1 of 'DrawBitmap' discards qualifiers from pointer target type
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:1046: warning: passing argument 2 of 'FadeFromColor' discards qualifiers from pointer target type
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:1051: warning: implicit declaration of function 'ResetScore'
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:1053: warning: passing argument 1 of 'DrawBitmap' discards qualifiers from pointer target type
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:1054: warning: passing argument 2 of 'FadeFromColor' discards qualifiers from pointer target type
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c: At top level:
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:1095: warning: conflicting types for 'ResetScore'
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:1051: warning: previous implicit declaration of 'ResetScore' was here
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c: In function 'main':
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:1133: warning: assignment discards qualifiers from pointer target type
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:1134: warning: assignment discards qualifiers from pointer target type
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:1135: warning: assignment discards qualifiers from pointer target type
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:1136: warning: assignment discards qualifiers from pointer target type
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:1137: warning: assignment discards qualifiers from pointer target type
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:1138: warning: assignment discards qualifiers from pointer target type
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:1154: warning: passing argument 1 of 'DrawBitmap' discards qualifiers from pointer target type
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:1155: warning: passing argument 1 of 'BlitBitmap' discards qualifiers from pointer target type
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:1156: warning: passing argument 1 of 'BlitBitmap' discards qualifiers from pointer target type
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:1157: warning: passing argument 2 of 'FadeFromColor' discards qualifiers from pointer target type
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:1212: warning: passing argument 1 of 'BlitBitmap' discards qualifiers from pointer target type
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:1280: warning: passing argument 1 of 'BlitBitmap' discards qualifiers from pointer target type
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:1285: warning: passing argument 1 of 'BlitBitmap' discards qualifiers from pointer target type
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:1306: warning: passing argument 1 of 'DrawBitmap' discards qualifiers from pointer target type
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:1307: warning: passing argument 2 of 'FadeFromColor' discards qualifiers from pointer target type
+<br/>
+/home/my_login/Desktop/thingpongsource.zip_unzip/source/main.c:1147: warning: 'nextServeDirection' may be used uninitialized in this function
+<br/>
+/home/my_login/tmp/cc5C5cUh.s: Assembler messages:
+<br/>
+/home/my_login/tmp/cc5C5cUh.s:2573: Error: invalid offset, value too big (0x00001F70)
+<br/>
+make[1]: *** [main.o] Error 1
+<br/>
+make: *** [build] Error 2
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+My Make file (pretty much standard from devkitARM template, only a few paths changed)
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+# Clear the implicit built in rules
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+.SUFFIXES:
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+ifeq ($(strip $(DEVKITARM)),)
+<br/>
+$(error "Please set DEVKITARM in your environment. export DEVKITARM=&lt;path to&gt;devkitARM)
+<br/>
+endif
+<br/>
+<br/>
+include $(DEVKITARM)/gba_rules
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+# TARGET is the name of the output, if this ends with _mb a multiboot image is generated
+<br/>
+# BUILD is the directory where object files &amp; intermediate files will be placed
+<br/>
+# SOURCES is a list of directories containing source code
+<br/>
+# DATA is a list of directories containing data files
+<br/>
+# INCLUDES is a list of directories containing header files
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+TARGET      :=   $(shell basename $(CURDIR))_mb
+<br/>
+BUILD      :=   build
+<br/>
+SOURCES      :=   source
+<br/>
+DATA      :=
+<br/>
+INCLUDES   := ./ include
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+# options for code generation
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+ARCH   :=   -mthumb -mthumb-interwork
+<br/>
+<br/>
+CFLAGS   :=   -g -Wall -O3\
+<br/>
+      -mcpu=arm7tdmi -mtune=arm7tdmi\
+<br/>
+       -fomit-frame-pointer\
+<br/>
+      -ffast-math \
+<br/>
+      $(ARCH)
+<br/>
+<br/>
+CFLAGS   +=   $(INCLUDE)
+<br/>
+<br/>
+CXXFLAGS   :=   $(CFLAGS) -fno-rtti -fno-exceptions
+<br/>
+<br/>
+ASFLAGS   :=   $(ARCH)
+<br/>
+LDFLAGS   =   -g $(ARCH) -Wl,-Map,$(notdir $@).map
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+# path to tools - this can be deleted if you set the path to the toolchain in windows
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+export PATH   :=   $(DEVKITARM)/bin:$(PATH)
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+# any extra libraries we wish to link with the project
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+LIBS   :=   -lgba
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+# list of directories containing libraries, this must be the top level containing
+<br/>
+# include and lib
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+LIBDIRS   :=   $(LIBGBA)
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+# no real need to edit anything past this point unless you need to add additional
+<br/>
+# rules for different file extensions
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+ifneq ($(BUILD),$(notdir $(CURDIR)))
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+<br/>
+export OUTPUT   :=   $(CURDIR)/$(TARGET)
+<br/>
+export VPATH   :=   $(foreach dir,$(SOURCES),$(CURDIR)/$(dir)) \
+<br/>
+         $(foreach dir,$(DATA),$(CURDIR)/$(dir))
+<br/>
+<br/>
+export DEPSDIR   :=   $(CURDIR)/$(BUILD)
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+# automatically build a list of object files for our project
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+CFILES      :=   $(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.c)))
+<br/>
+CPPFILES   :=   $(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.cpp)))
+<br/>
+SFILES      :=   $(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.s)))
+<br/>
+BINFILES   :=   $(foreach dir,$(DATA),$(notdir $(wildcard $(dir)/*.*)))
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+# use CXX for linking C++ projects, CC for standard C
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+ifeq ($(strip $(CPPFILES)),)
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+   export LD   :=   $(CC)
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+else
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+   export LD   :=   $(CXX)
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+endif
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+<br/>
+export OFILES   := $(addsuffix .o,$(BINFILES)) $(CPPFILES:.cpp=.o) $(CFILES:.c=.o) $(SFILES:.s=.o)
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+# build a list of include paths
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+export INCLUDE   :=   $(foreach dir,$(INCLUDES),-I$(CURDIR)/$(dir)) \
+<br/>
+         $(foreach dir,$(LIBDIRS),-I$(dir)/include) \
+<br/>
+         -I$(CURDIR)/$(BUILD)
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+# build a list of library paths
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+export LIBPATHS   :=   $(foreach dir,$(LIBDIRS),-L$(dir)/lib)
+<br/>
+<br/>
+.PHONY: $(BUILD) clean
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+$(BUILD):
+<br/>
+   @[ -d $@ ] || mkdir -p $@
+<br/>
+   @make --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile
+<br/>
+<br/>
+all   : $(BUILD)
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+clean:
+<br/>
+   @echo clean ...
+<br/>
+   @rm -fr $(BUILD) $(TARGET).elf $(TARGET).gba
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+else
+<br/>
+<br/>
+DEPENDS   :=   $(OFILES:.o=.d)
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+# main targets
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+$(OUTPUT).gba   :   $(OUTPUT).elf
+<br/>
+<br/>
+$(OUTPUT).elf   :   $(OFILES)
+<br/>
+<br/>
+-include $(DEPENDS)
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+endif
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#137612 - ScottLininger - Tue Aug 14, 2007 12:31 am</h4>
+    <div class="postbody"><span class="postbody">Sorry, I'm a make file retard. It worked for me under DevkitAdv. Wish I could give you a silver bullet.
+<br/>
+<br/>
+-Scott<br/>_________________<br/>Some of my <a class="postlink" href="http://www.scottlininger.com/" target="_blank">GBA projects</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#137616 - elyk1212 - Tue Aug 14, 2007 1:03 am</h4>
+    <div class="postbody"><span class="postbody">No worries.  I can still use the concepts.  
+<br/>
+<br/>
+I think there has been something else on this form about that "invalid offset" error when switching to devkitARM (from ADVANCE).  But their solution was the reverse of what I expected.  They abolished use of long_calls. BTW, I get the same error when using a modified version of your build script, so it is likely due to the difference between the two build environments.  Oh well....
+<br/>
+<br/>
+Thanks again!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#137628 - elyk1212 - Tue Aug 14, 2007 4:35 am</h4>
+    <div class="postbody"><span class="postbody"><span style="font-weight: bold">cuse</span>, if you are still following this thread....,
+<br/>
+<br/>
+Is there any chance you could post some of your serial handling code?  Just curious since you said you had 1% packet loss.  I was thinking of using some verification schemes acknowledgments, packet numbering.... maybe even checksums or huffman, but that is probably overkill, right?
+<br/>
+<br/>
+Most of my experience with SPI and UART stuff I have done for work/school there is no need for checks and such since I send to reliable devices (FTDI USB bit blitting controllers... even embedded system test boards, which surprisingly their several interrupts do not affect the UART communication).  I implemented the communication code base myself, and it was easy/code-it-once stuff.  Too bad not the same on GBA.  But fun anyhow.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#137779 - Miked0801 - Wed Aug 15, 2007 6:18 pm</h4>
+    <div class="postbody"><span class="postbody">We used both packet numbering and checksums.  The numbering may have been overkill though.  We also through some key game data into the checksum value as well - things like hero position, random number seeed, etc.  Stuff that we'd want to know immediately if things went out of sync.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

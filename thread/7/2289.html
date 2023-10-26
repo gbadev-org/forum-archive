@@ -1,0 +1,105 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Screen Effects - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>C/C++ > Screen Effects</h2>
+<div id="posts">
+<div class="post">
+    <h4>#12137 - Wildginger - Fri Oct 31, 2003 3:51 pm</h4>
+    <div class="postbody"><span class="postbody">Hi all,
+<br/>
+<br/>
+Does anyone have any screen effect functions that they would like to share?
+<br/>
+<br/>
+I have the fade in and fade out functions that have been posted before, but was just wondering if there was any code floating about that made the background appear and disappear in any other way, such as Apex designs logo reducing to a dot in the middle of the screen etc, or fading out different pixels at a time to get a "speckled" effect.
+<br/>
+<br/>
+Any help/code appreciated, just fancy applying some different effects apart from the normal fading.
+<br/>
+<br/>
+Cheers,
+<br/>
+<br/>
+Wildginger</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12144 - tepples - Fri Oct 31, 2003 8:43 pm</h4>
+    <div class="postbody"><span class="postbody">Reducing to the middle involves playing with the affine registers and is available in all modes but 0.
+<br/>
+<br/>
+"Speckled" fading involves pseudorandom writes to the VRAM.
+<br/>
+<br/>
+You can get a lot of effects through HDMA to the scroll registers (or affine registers for bitmaps or rot/scale BGs).<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12146 - RaBBi - Fri Oct 31, 2003 8:46 pm</h4>
+    <div class="postbody"><span class="postbody">what are exactly "affine" registers ?<br/>_________________<br/>Sorry for my poor english, but it would be worst for you to understand me if I speak in my native language, French ^^</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12148 - tepples - Fri Oct 31, 2003 8:53 pm</h4>
+    <div class="postbody"><span class="postbody">The "affine registers", as many GBA programmers call them, are the registers in the GBA's video chip that specify the affine map that is applied to screen pixels to get texel coordinates. Such an affine map can include translation, rotation, scaling, and shearing operations.
+<br/>
+<br/>
+<a class="postlink" href="http://www.work.de/nocash/gbatek.htm#lcdiobgrotationscaling" target="_blank">GBATEK description of GBA affine registers</a>
+<br/>
+<a class="postlink" href="http://www.cs.rit.edu/~tjh8300/CowBite/CowBiteSpec.htm#Background%20Rotation/Scaling%20Regi" target="_blank">CowBite Spec description of GBA affine registers</a>
+<br/>
+<br/>
+A DMA transfer triggered by horizontal blank (often called HDMA, especially by those with Super NES programming experience) can change the affine registers after every scanline to make all sorts of effects.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12150 - DekuTree64 - Fri Oct 31, 2003 9:25 pm</h4>
+    <div class="postbody"><span class="postbody">The affine regs are BG2X, BG2Y, BG2PA, BG2PB BG2PC and BG2PD, and the same things except for BG3. They let you rotate/scale/skew the background layers for some very nice effects, such as the 3D looking ground in Mario Kart and F-Zero.
+<br/>
+PA is the X scale, PB is X skew (it shifts the background horizontally as it goes down the screen, you can also simluate this for text BGs by changing the X scroll on HBlank), PC is the Y skew (shifts vertically each pixel along the screen, which can't be done any other way), and PD is the Y scale (which can be simulated by scrolling a text BG up/down each scanline). The GBA doesn't actually know how to rotate things itself, you just tell it to skew the BG both directions and scale it back to the right size and it appears to be rotated. You can calculate the skew/scale values easily with the equations in the PERN tutorials.
+<br/>
+Then the X and Y regs are basically the same as the regular text BGHOFS and BGVOFS, but more accurate. They are 32 bits, with the lower 8 bits being the fractional portion of the scrolling distance, so if you set BG2X to 128, it will scroll 1/2 a pixel to the right. Of course you can only see whole pixels so it wouldn't look any different than 0, but when you rotate/scale it you can see the difference. 
+<br/>
+X and Y tell the coordinates in the map that will appear in the top left corner of the screen, then all the other pixels in the screen are calculated relative to that depending on PA, PB, PC and PD. So if you set X to 20 &lt;&lt; 8, and Y to 30 &lt;&lt; 8 (remember, lower 8 bits are fractional), then pixel 20, 30 of the map will be in the top left corner. Then if you set PB (horizontal skew) to 5 &lt;&lt; 8 (PA/PB/PC/PD are 8 bit fractional too), it will scroll one more pixel to the right each line down the screen, pixel 0, 1 on the screen will show pixel 25, 31 of the map (because we went down one line, and then skewed 5 pixels over). 
+<br/>
+Then the scale regs tell how many pixels to move over each pixel across/down the screen, so they're normally set to 1 &lt;&lt; 8, so each screen pixel to the right, you move one map pixel to the right, and each screen down, you move one map down, and therefore it looks perfectly normal. If you set PA (X scale) to 2 &lt;&lt; 8, then each pixel across the screen, you move over 2 map pixels, so you're only drawing every other pixel of the map, so it looks zoomed out.
+<br/>
+PC and PD (Y skew/scale) are the same, just going the other direction, so that's about it.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12151 - crossraleigh - Fri Oct 31, 2003 9:45 pm</h4>
+    <div class="postbody"><span class="postbody">darkcloud has some windowing and moasic demos on his site: <a class="postlink" href="http://sinewave3.tripod.com/ScreenTutorial/screentutpg1.html" target="_blank">http://sinewave3.tripod.com/ScreenTutorial/screentutpg1.html</a>. The AAS logo probably uses windowing.
+<br/>
+<br/>
+There is the <span style="font-style: italic">Swirl Effect</span> demo by Thomas Carton: <a class="postlink" href="http://www.gbadev.org/download.php?section=demos&amp;filename=swirl.zip" target="_blank">http://www.gbadev.org/download.php?section=demos&amp;filename=swirl.zip</a>.  I think his "swirl" and your "speckled" work pretty much the same way.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

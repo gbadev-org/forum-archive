@@ -1,0 +1,566 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>MidiKey2Freq and devkitpro - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>C/C++ > MidiKey2Freq and devkitpro</h2>
+<div id="posts">
+<div class="post">
+    <h4>#118459 - nuvalo - Tue Feb 13, 2007 5:03 pm</h4>
+    <div class="postbody"><span class="postbody">Hello, i?m still new programming and using devkitpro for gba programs. I was interested in using the libfat, and i found a piece of code that uses the libfat and dumps the gba Bios to a file. 
+<br/>
+<br/>
+ The matter is that it uses a function named "MidiKey2Freq", but it doesn?t know how to link with it. It says : undefined reference to `MidiKey2Freq'
+<br/>
+<br/>
+This is the code that i?m using:
+<br/>
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+/*---------------------------------------------------------------------------------
+<br/>
+<br/>
+Some emulators need the bios from your gba in order to use SWI calls
+<br/>
+<br/>
+This little piece of code will read the bios and save it to your
+<br/>
+SD/CF card device using the magic of libfat.
+<br/>
+<br/>
+Some cards are supported be default, the binary will need patched with
+<br/>
+the appropriate DLDI file for newer cards.
+<br/>
+<br/>
+---------------------------------------------------------------------------------*/
+<br/>
+<br/>
+<br/>
+#include &lt;gba.h&gt;
+<br/>
+#include &lt;fat.h&gt;
+<br/>
+#include &lt;stdio.h&gt;
+<br/>
+#include &lt;stdlib.h&gt;
+<br/>
+#include &lt;stdio.h&gt;
+<br/>
+#include &lt;math.h&gt;
+<br/>
+#include &lt;gba_sound.h&gt;
+<br/>
+<br/>
+//---------------------------------------------------------------------------------
+<br/>
+void waitForever() {
+<br/>
+//---------------------------------------------------------------------------------
+<br/>
+while (1)
+<br/>
+VBlankIntrWait();
+<br/>
+}
+<br/>
+<br/>
+//---------------------------------------------------------------------------------
+<br/>
+// Program entry point
+<br/>
+//---------------------------------------------------------------------------------
+<br/>
+int main(void) {
+<br/>
+//---------------------------------------------------------------------------------
+<br/>
+<br/>
+<br/>
+// the vblank interrupt must be enabled for VBlankIntrWait() to work
+<br/>
+// since the default dispatcher handles the bios flags no vblank handler
+<br/>
+// is required
+<br/>
+irqInit();
+<br/>
+irqEnable(IRQ_VBLANK);
+<br/>
+<br/>
+// initialise the console
+<br/>
+// setting NULL &amp; 0 for the font address &amp; size uses the default font
+<br/>
+// The font should be a complete 1bit 8x8 ASCII font
+<br/>
+consoleInit( 0, // charbase
+<br/>
+4, // mapbase
+<br/>
+0, // background number
+<br/>
+NULL, // font
+<br/>
+0, // font size
+<br/>
+15 // 16 color palette
+<br/>
+);
+<br/>
+<br/>
+// RGB8 generates a 16 bit palette entry from 3 8bit components
+<br/>
+BG_COLORS[0]=RGB8(58,110,165);
+<br/>
+<br/>
+// RGB5 generates a 16 bit palette entry from 3 5bit components
+<br/>
+BG_COLORS[241]=RGB5(31,31,31);
+<br/>
+<br/>
+SetMode(MODE_0 | BG0_ON);
+<br/>
+<br/>
+iprintf("GBA Bios Dumper\n\n");
+<br/>
+<br/>
+if (fatInitDefault()) {
+<br/>
+iprintf("FAT system initialised\n");
+<br/>
+} else {
+<br/>
+iprintf("FAT system failed!\n");
+<br/>
+waitForever();
+<br/>
+}
+<br/>
+<br/>
+u32 *bios = (u32 *)malloc(0x4000);
+<br/>
+<br/>
+if ( bios ) {
+<br/>
+iprintf("Memory allocated\n");
+<br/>
+} else {
+<br/>
+iprintf("Memory allocation failure!\n");
+<br/>
+waitForever();
+<br/>
+}
+<br/>
+<br/>
+int i;
+<br/>
+<br/>
+iprintf("dumping ");
+<br/>
+<br/>
+for (i=0; i&lt;0x4000; i+=4)
+<br/>
+{
+<br/>
+// The MidiKey2Freq bios call allows us to read from bios
+<br/>
+// the lower bits are inaccurate, so just get it four times :)
+<br/>
+u32 a = MidiKey2Freq((WaveData *)(i-4), 180-12, 0) * 2;
+<br/>
+u32 b = MidiKey2Freq((WaveData *)(i-3), 180-12, 0) * 2;
+<br/>
+u32 c = MidiKey2Freq((WaveData *)(i-2), 180-12, 0) * 2;
+<br/>
+u32 d = MidiKey2Freq((WaveData *)(i-1), 180-12, 0) * 2;
+<br/>
+<br/>
+// rebuild a 32bit word from the 4 words we read
+<br/>
+u32 abcd = ( a &amp; 0xff000000 ) |
+<br/>
+( d &amp; 0xff000000 ) &gt;&gt; 8 |
+<br/>
+( c &amp; 0xff000000 ) &gt;&gt; 16 |
+<br/>
+( b &amp; 0xff000000 ) &gt;&gt; 24;
+<br/>
+bios[i/4] = abcd;
+<br/>
+<br/>
+//print a dot every 256 bytes
+<br/>
+if ( (i &amp; 0xff) == 0 ) iprintf(".");
+<br/>
+<br/>
+}
+<br/>
+<br/>
+iprintf("\nBios dumped, saving file\n");
+<br/>
+<br/>
+FILE *biosFile = fopen("biosgba.rom","wb");
+<br/>
+if (biosFile ) {
+<br/>
+fwrite(bios,16384,1,biosFile);
+<br/>
+fclose(biosFile);
+<br/>
+iprintf("bios saved!");
+<br/>
+} else {
+<br/>
+iprintf("file creation failed!");
+<br/>
+}
+<br/>
+<br/>
+waitForever();
+<br/>
+<br/>
+return 0;
+<br/>
+}
+<br/>
+<br/>
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+and this is the makefile:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#---------------------------------------------------------------------------------
+<br/>
+# Clear the implicit built in rules
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+.SUFFIXES:
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+ifeq ($(strip $(DEVKITARM)),)
+<br/>
+$(error "Please set DEVKITARM in your environment. export DEVKITARM=&lt;path to&gt;devkitARM)
+<br/>
+endif
+<br/>
+include $(DEVKITARM)/gba_rules
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+# TARGET is the name of the output, if this ends with _mb generates a multiboot image
+<br/>
+# BUILD is the directory where object files &amp; intermediate files will be placed
+<br/>
+# SOURCES is a list of directories containing source code
+<br/>
+# INCLUDES is a list of directories containing extra header files
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+TARGET      :=   biosDumper
+<br/>
+BUILD      :=   build
+<br/>
+SOURCES      :=   source font
+<br/>
+INCLUDES   :=
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+# options for code generation
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+ARCH   :=   -mthumb -mthumb-interwork
+<br/>
+<br/>
+CFLAGS   :=   -g -Wall -O3\
+<br/>
+         -mcpu=arm7tdmi -mtune=arm7tdmi\
+<br/>
+          -fomit-frame-pointer\
+<br/>
+         -ffast-math \
+<br/>
+         $(ARCH)
+<br/>
+<br/>
+CFLAGS   +=   $(INCLUDE)
+<br/>
+<br/>
+ASFLAGS   :=   $(ARCH)
+<br/>
+LDFLAGS   =   -g $(ARCH) -Wl,-Map,$(notdir $@).map -L/c/devkitPro/libgba/lib 
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+# path to tools - this can be deleted if you set the path in windows
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+export PATH      :=   $(DEVKITARM)/bin:$(PATH)
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+# any extra libraries we wish to link with the project
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+LIBS   :=   -lgba -lfat
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+# list of directories containing libraries, this must be the top level containing
+<br/>
+# include and lib
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+LIBDIRS   :=   $(LIBGBA)
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+# no real need to edit anything past this point unless you need to add additional
+<br/>
+# rules for different file extensions
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+ifneq ($(BUILD),$(notdir $(CURDIR)))
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+<br/>
+export OUTPUT   :=   $(CURDIR)/$(TARGET)
+<br/>
+<br/>
+export VPATH   :=   $(foreach dir,$(SOURCES),$(CURDIR)/$(dir))
+<br/>
+export PATH   :=   $(DEVKITARM)/bin:$(PATH)
+<br/>
+export DEPSDIR   :=   $(CURDIR)/$(BUILD)
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+# automatically build a list of object files for our project
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+CFILES      :=   $(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.c)))
+<br/>
+CPPFILES   :=   $(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.cpp)))
+<br/>
+SFILES      :=   $(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.s)))
+<br/>
+BINFILES   :=   $(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.bin)))
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+# use CXX for linking C++ projects, CC for standard C
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+ifeq ($(strip $(CPPFILES)),)
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+   export LD   :=   $(CC)
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+else
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+   export LD   :=   $(CXX)
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+endif
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+<br/>
+export OFILES   := $(BINFILES:.bin=.o) $(CPPFILES:.cpp=.o) $(CFILES:.c=.o) $(SFILES:.s=.o)
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+# build a list of include paths
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+export INCLUDE   :=   $(foreach dir,$(INCLUDES),-I$(CURDIR)/$(dir)) \
+<br/>
+               $(foreach dir,$(LIBDIRS),-I$(dir)/include) \
+<br/>
+               -I$(CURDIR)/$(BUILD)
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+# build a list of library paths
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+export LIBPATHS   :=   $(foreach dir,$(LIBDIRS),-L$(dir)/lib)
+<br/>
+<br/>
+.PHONY: $(BUILD) clean
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+$(BUILD):
+<br/>
+   @[ -d $@ ] || mkdir -p $@
+<br/>
+   @make --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+clean:
+<br/>
+   @echo clean ...
+<br/>
+   @rm -fr $(BUILD) $(TARGET).elf $(TARGET).gba
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+else
+<br/>
+<br/>
+DEPENDS   :=   $(OFILES:.o=.d)
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+# main targets
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+$(OUTPUT).gba   :   $(OUTPUT).elf
+<br/>
+<br/>
+$(OUTPUT).elf   :   $(OFILES) $(LIBGBA)/lib/libgba.a
+<br/>
+<br/>
+%.o   :   %.bin
+<br/>
+   @echo   $(notdir $&lt;)
+<br/>
+   @$(bin2o)
+<br/>
+<br/>
+-include $(DEPENDS)
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+endif
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+If someone can help me would be good.
+<br/>
+<br/>
+Thanks</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#118460 - kusma - Tue Feb 13, 2007 5:13 pm</h4>
+    <div class="postbody"><span class="postbody">you define $(LIBS) as "-lgba -lfat", but I cant see any usage of that variable.
+<br/>
+<br/>
+edit: to be a bit clearer:
+<br/>
+try adding:
+<br/>
+<br/>
+LDFLAGS += $(LIBS)
+<br/>
+<br/>
+at some point before your .elf-rule</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#118603 - nuvalo - Wed Feb 14, 2007 3:22 pm</h4>
+    <div class="postbody"><span class="postbody">It is used here
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">include $(DEVKITARM)/gba_rules</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+it uses the arm-eabi-gcc to link and create the ".elf" file. I tried with "arm-eabi-ld" to link, but it says that it cant create a thumb. This is the compilation result:
+<br/>
+<br/>
+arm-eabi-gcc -MMD -MP -MF  /c/devkitPro/examples/gba/libfat/build/biosDumper.d -g -Wall -O3 -mcpu=arm7tdmi -mtune=arm7tdmi -fomit-frame-pointer -ffast-math -mthumb -mthumb-interwork -I/c/devkitPro/libgba/include -I/c/devkitPro/examples/gba/libfat/build -c /c/devkitPro/examples/gba/libfat/source/biosDumper.c -o biosDumper.o
+<br/>
+<br/>
+<br/>
+arm-eabi-gcc  -g -mthumb -mthumb-interwork  -Wl,-Map,biosDumper.elf.map -L/c/devkitPro/libgba/lib  -specs=gba.specs     biosDumper.o    -L/c/devkitPro/libgba/lib -lgba -lfat -o /c/devkitPro/examples/gba/libfat/biosDumper.elf
+<br/>
+<br/>
+c:/devkitPro/examples/gba/libfat/source/biosDumper.c:87: undefined reference to `MidiKey2Freq'
+<br/>
+c:/devkitPro/examples/gba/libfat/source/biosDumper.c:88: undefined reference to `MidiKey2Freq'
+<br/>
+c:/devkitPro/examples/gba/libfat/source/biosDumper.c:89: undefined reference to `MidiKey2Freq'
+<br/>
+c:/devkitPro/examples/gba/libfat/source/biosDumper.c:90: undefined reference to `MidiKey2Freq'
+<br/>
+collect2: ld returned 1 exit status
+<br/>
+make[1]: *** [/c/devkitPro/examples/gba/libfat/biosDumper.elf] Error 1
+<br/>
+"make": *** [build] Error 2
+<br/>
+<br/>
+&gt; Process Exit Code: 2
+<br/>
+&gt; Time Taken: 00:01
+<br/>
+<br/>
+<br/>
+Anyone knows why this dont works? Other question, works libfat on the Visual boy advance emulator?
+<br/>
+<br/>
+thanks
+<br/>
+<br/>
+<br/>
+[/code]</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

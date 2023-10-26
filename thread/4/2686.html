@@ -1,0 +1,199 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Double Buffering - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > Double Buffering</h2>
+<div id="posts">
+<div class="post">
+    <h4>#15109 - Krakken - Sat Jan 17, 2004 10:01 am</h4>
+    <div class="postbody"><span class="postbody">Hi,
+<br/>
+<br/>
+I need to know an efficient way to implement double buffering for my MOD player. I have come up with a few ways but either - i'm skeptical that it will work or it produces "clicks" between each section being played.
+<br/>
+<br/>
+I could probably find a nice way but after a lot of frustration. If anyone could help me so that I can save a lot of time testing things over and over that would be great.
+<br/>
+<br/>
+Thanks.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#15122 - tepples - Sat Jan 17, 2004 4:56 pm</h4>
+    <div class="postbody"><span class="postbody">If you're getting clicks:
+<br/>
+<br/>
+For one thing, the buffer size needs to be a multiple of 4 and aligned to a 4-byte boundary. It also needs to be a factor of the number of cycles between switches. If you're switching on vblank, the buffer size needs to be a factor of 280896.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#15127 - poslundc - Sat Jan 17, 2004 5:34 pm</h4>
+    <div class="postbody"><span class="postbody">Make sure the very first thing you do when the buffer is emptied is restart the DMA on the new buffer.
+<br/>
+<br/>
+So if you're synching to VBlank, that should be what you do when VBlank arrives before anything else.
+<br/>
+<br/>
+If (like me) you're running on a timer, it's pretty easy. You just set a second timer to increment on overload of the FIFO's clock and set that one to overload on the size of your buffer (you might have to divide by four for the length of the FIFO; I don't remember). Then make sure the first thing your interrupt does is reset the DMA.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#15663 - animension - Tue Jan 27, 2004 10:53 am</h4>
+    <div class="postbody"><span class="postbody">Replying to an older post since I'm getting the same problem , and I didin't want to clutter the forum with another thread. I'm getting nasty clicks in audio buffer playback. Here's the layout of the buffer:
+<br/>
+<br/>
+size: 2x2048 bytes (4096 bytes -- multiple of 4)
+<br/>
+addr: 0x03001C58 (aligned on 4 byte bound)
+<br/>
+mixing freq: 16384 Hz
+<br/>
+method: DMA1 transfer
+<br/>
+Timer0: count set to (0xFFFF - 1024) to yield 1024 ticks per FIFO sample (16384Hz)
+<br/>
+Timer1: increment on overflow of timer0, count set to (0xFFFF-2048), IRQ ON
+<br/>
+<br/>
+Every VBL, the mixer checks to see if it needs to mix in the inactive buffer, and if so, mix in a chunk of audio. If the buffer is full, return immediately. 
+<br/>
+<br/>
+Timer 1 is set to overflow when 2048 samples have been played, which is the size of a half of the buffer, and sends out an IRQ. The handler for timer1 blocks any other IRQ to prevent itself from being interrupted. The handler does the following in just under 40 cycles:
+<br/>
+1) disables DMA1, checks to see if the mixer is done mixing (it always is -- but will wait till next time if it isn't causing a pause in audio playback) 
+<br/>
+2) set the SRC address of DMA1 to the part of the buffer that was just filled by the mixer
+<br/>
+3) reenables DMA1
+<br/>
+4) resets FIFO
+<br/>
+<br/>
+I ran the code through gdb all evening long, and the mixer is not too slow -- in fact there are always several VBL IRQs where it returns immediately because it's already done mixing. It's also mixing to the correct location in memory, verified by memory dump. The timers are firing correctly as well. 
+<br/>
+<br/>
+I've pulled my hair out all evening long, and after staring at the debugger and stepping through the code, everything looks like it's working the way it's supposed to.
+<br/>
+<br/>
+So, am I missing something so completely stupid here that it's right in front of my nose and I still can't see it?<br/>_________________<br/>"Beer is proof that God loves us and wants us to be happy."
+<br/>
+-- Benjamin Franklin</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#15670 - poslundc - Tue Jan 27, 2004 3:29 pm</h4>
+    <div class="postbody"><span class="postbody">Well, one thing that jumps out to me is that you shouldn't be resetting the FIFO, just the DMA. In fact, resetting the FIFO is very likely to cause an audible click if it's been playing continuous sound.
+<br/>
+<br/>
+But I also have to question why you are mixing on VBlank. The logistics are much more complicated for the system you have set up, and needlessly so. You already have a timer IRQ that gets called when one of the buffers is emptied. Why not have it just fill the other buffer after it swaps the DMA?
+<br/>
+<br/>
+I also think your buffer is quite large, which means a greater latency before sound gets played/stopped and more time your mixer has to steal away per cycle it gets called in order to keep it full. My mixer only uses 256 bytes (double-buffered and stereo for a total of 1024 bytes) and while it's a bit smaller than average it's really all you need: just enough to do some optimization and to keep the music playing if there's a delay or things get out of sync.
+<br/>
+<br/>
+Good luck,
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#15675 - animension - Tue Jan 27, 2004 7:30 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+Well, one thing that jumps out to me is that you shouldn't be resetting the FIFO, just the DMA. In fact, resetting the FIFO is very likely to cause an audible click if it's been playing continuous sound. 
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Hmm, I'll give that a try when I get home.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+But I also have to question why you are mixing on VBlank. The logistics are much more complicated for the system you have set up, and needlessly so. You already have a timer IRQ that gets called when one of the buffers is emptied. Why not have it just fill the other buffer after it swaps the DMA? </td> </tr></table><span class="postbody">
+<br/>
+Since the timer1 IRQ must be called to change out the DMA src address at the right time, and I want to allow multiple interrupts, I needed to alter the timer1 IRQ handler to never allow timer1 itself to get interrupted. This makes sure that the DMA SRC address will get swapped without delay. However, this poses a different problem -- no other IRQ will be honoured while the timer1 IRQ is being processed. By necessity I need to make timer1's IRQ as short as can possibly be -- the handler is coded in ARM ASM in IWRAM and takes under 40 cycles to process. As I intend to eventually be able to mix in 16 channels, this is why I can't also mix during timer1 IRQ.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+I also think your buffer is quite large, which means a greater latency before sound gets played/stopped and more time your mixer has to steal away per cycle it gets called in order to keep it full. My mixer only uses 256 bytes (double-buffered and stereo for a total of 1024 bytes) and while it's a bit smaller than average it's really all you need: just enough to do some optimization and to keep the music playing if there's a delay or things get out of sync. 
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+I need a larger buffer mainly due to the same reason as above. If I'll be mixing during VBL, approx 274 samples will have played to the FIFO since the last mixing pass, so I need a buffer at least that size. Granted 2048 per half is overkill, but I wanted a larger buffer to fill during testing so I could observe timer1 count and mixing times during multuple passes to check on the efficiency of my code. I will probably drop the size to 512x2 stereo for a total of 2048, but I first want to get rid of the awful clicking.<br/>_________________<br/>"Beer is proof that God loves us and wants us to be happy."
+<br/>
+-- Benjamin Franklin</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#15677 - poslundc - Tue Jan 27, 2004 8:06 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>animension wrote:</b></span></td> </tr> <tr> <td class="quote">Since the timer1 IRQ must be called to change out the DMA src address at the right time, and I want to allow multiple interrupts, I needed to alter the timer1 IRQ handler to never allow timer1 itself to get interrupted. This makes sure that the DMA SRC address will get swapped without delay. However, this poses a different problem -- no other IRQ will be honoured while the timer1 IRQ is being processed. By necessity I need to make timer1's IRQ as short as can possibly be -- the handler is coded in ARM ASM in IWRAM and takes under 40 cycles to process. As I intend to eventually be able to mix in 16 channels, this is why I can't also mix during timer1 IRQ.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Just re-enable interrupts once you're done switching DMAs. The length of the ISR shouldn't cause a problem, although if you use a smaller buffer it'll run even smoother.
+<br/>
+<br/>
+Besides, I generally prioritize HBlank interrupts (if you're using them) over my mixer anyway. If you're mixing at 16,384 Hz it means you've got a full 1024 cycles to switch the DMA before the next signal needs to be fed to the FIFO. HBlank lasts only 228 cycles.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#15678 - animension - Tue Jan 27, 2004 8:24 pm</h4>
+    <div class="postbody"><span class="postbody">But what about a situation like this:
+<br/>
+<br/>
+1). Timer1 IRQ handler called.
+<br/>
+2). handler disables IME
+<br/>
+3). handler switches DMA src address to new address
+<br/>
+4). handler re-enables IME
+<br/>
+5). handler starts mixing small amount of audio
+<br/>
+6). before handler is finished mixing, VBLANK IRQ occurs, handler called
+<br/>
+7). VBL handler takes it's merry time doing something CPU intesive and returns
+<br/>
+9). mixer still mixing from last time, when timer1 overflows and fires IRQ
+<br/>
+<br/>
+You can see the trouble with this scenario.<br/>_________________<br/>"Beer is proof that God loves us and wants us to be happy."
+<br/>
+-- Benjamin Franklin</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#15691 - poslundc - Wed Jan 28, 2004 12:43 am</h4>
+    <div class="postbody"><span class="postbody">You can disable the VBlank interrupt while leaving the master interrupt register on by toggling the VBlank interrupt mask bit in REG_IE. An interrupt will still be generated when VBlank hits (assuming you've got it turned on in REG_DISPCNT), but it won't be <span style="font-style: italic">activated</span> until you turn it back on in REG_IE (presumably at the end of your timer's IRQ).
+<br/>
+<br/>
+(I don't use IRQs for VBlank, though, so it isn't a problem for me.)
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#15694 - animension - Wed Jan 28, 2004 1:53 am</h4>
+    <div class="postbody"><span class="postbody">Aha! I didn't know that IRQ's can be "queued" like that! This makes it much much much easier to work with timing for the mixer. Thanks for that very helpful tidbit!<br/>_________________<br/>"Beer is proof that God loves us and wants us to be happy."
+<br/>
+-- Benjamin Franklin</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

@@ -1,0 +1,153 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>stencil buffer question - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > stencil buffer question</h2>
+<div id="posts">
+<div class="post">
+    <h4>#149054 - zeGouky - Mon Jan 14, 2008 8:35 am</h4>
+    <div class="postbody"><span class="postbody">Hi people,
+<br/>
+<br/>
+i'm trying to cut a simple rendered quad by an another rendered only in the stencil buffer.
+<br/>
+<br/>
+Here's what im doing :
+<br/>
+<br/>
+1/ render a first quad using a poly shadow and poly ID at 0 (alpha =1 )
+<br/>
+2/ render a quad just behind the 1st one
+<br/>
+<br/>
+I wanted to have the #2 polygon cutted by the #1 (of course the #1 is not visible)
+<br/>
+<br/>
+Anyone can help on this issue ?
+<br/>
+<br/>
+Thanks.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#149075 - Cydrak - Mon Jan 14, 2008 8:10 pm</h4>
+    <div class="postbody"><span class="postbody">First off, if you only need rectangle clipping (aka scissoring), glViewport() works per-poly. You'll have to adjust the projection, but it could be faster/easier. In that case, search the forums on "scissor".
+<br/>
+<br/>
+For stencils, try this:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#define POLY_DEPTH_TEST_LESS   (0&lt;&lt;14)
+<br/>
+#define POLY_DEPTH_TEST_EQUAL  (1&lt;&lt;14)
+<br/>
+<br/>
+glPolyFmt(POLY_SHADOW | POLY_ALPHA(1) | POLY_DEPTH_TEST_EQUAL);
+<br/>
+&lt;draw stencil&gt;
+<br/>
+<br/>
+glPolyFmt(POLY_SHADOW | POLY_ALPHA(30) | POLY_ID(&lt;nonzero&gt;));
+<br/>
+&lt;draw quad&gt;
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Please note, the NDS is kinda grumpy about stencilling, unless you're doing shadows. So be prepared to fiddle around. I don't understand it too well, but I'll try to summarise what I saw:
+<br/>
+<br/>
+- glFlush() needs GL_TRANS_MANUALSORT (for reliable draw order).
+<br/>
+- Both stencil and quad need POLY_ALPHA &lt; 31 (or they will be sorted anyway).
+<br/>
+- Your quad is drawn where the stencil's depth test <span style="font-style: italic">failed</span>.
+<br/>
+- Usually, GL_DEPTH_EQUAL will make it fail. If not, give Z a nudge.
+<br/>
+- The first poly of each stencil, clears the stencil buffer beforehand.
+<br/>
+- I haven't seen anything else clear it, not even vblank.
+<br/>
+<br/>
+Finally, the most confusing part:
+<br/>
+<br/>
+For reliable clears (and happy stencilling), <span style="font-style: italic">each</span> stencil must cover <span style="font-style: italic">all</span> scanlines of any "shadow" polys that it might affect. A single pixel line, per stencil, at edge of screen, should be enough. Sometimes a line of shadow is required too. (This is speculation--but mayhap because the clear won't happen if no polys exist to switch the mode on the same line?)
+<br/>
+<br/>
+Failure to placate the renderer, on this last point, will give you "stencil barf." Have fun. :-)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#149117 - silent_code - Tue Jan 15, 2008 4:34 pm</h4>
+    <div class="postbody"><span class="postbody">as far as i know the "stencil buffer" can only be used for shadow polygons (as shadows or "fog cutout volumes" or even sort of "light volumes" when using propper colors for the volume, although it's not really a nice effect).
+<br/>
+<br/>
+what restricts it's usability is the lack of stencil operation functions that affect the setting of stencil values. that's why we can only have z-pass shadow volumes (as of now).
+<br/>
+<br/>
+so, i'm afraid you can't use it for csg style "clipping" or slicing. :^C</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#149119 - Noda - Tue Jan 15, 2008 5:05 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>silent_code wrote:</b></span></td> </tr> <tr> <td class="quote">as far as i know the "stencil buffer" can only be used for shadow polygons (as shadows or "fog cutout volumes" or even sort of "light volumes" when using propper colors for the volume, although it's not really a nice effect).
+<br/>
+<br/>
+what restricts it's usability is the lack of stencil operation functions that affect the setting of stencil values. that's why we can only have z-pass shadow volumes (as of now).
+<br/>
+<br/>
+so, i'm afraid you can't use it for csg style "clipping" or slicing. :^C</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I actually use it for slicing my projected shadows, it needs some trick but it's feasable ;)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#149315 - zeGouky - Fri Jan 18, 2008 8:23 am</h4>
+    <div class="postbody"><span class="postbody">Hi,
+<br/>
+<br/>
+sorry was on vacation :-)
+<br/>
+<br/>
+Thanks for the answers, Noda can you explain a bit on how you do that ?
+<br/>
+<br/>
+Thanks !</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#149339 - Noda - Fri Jan 18, 2008 6:08 pm</h4>
+    <div class="postbody"><span class="postbody">Check this other thread, it has already been discussed: <a href="http://forum.gbadev.org/viewtopic.php?t=14640" target="_blank">http://forum.gbadev.org/viewtopic.php?t=14640</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#149669 - silent_code - Wed Jan 23, 2008 5:56 pm</h4>
+    <div class="postbody"><span class="postbody">but you still use a "flat" shadow "volume" (or polygon/mesh), don't you? ;^P
+<br/>
+greetings! :^D</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#149676 - Noda - Wed Jan 23, 2008 7:21 pm</h4>
+    <div class="postbody"><span class="postbody">Nope, as I only draw the floor in the stencil once!
+<br/>
+<br/>
+When using this little trick (the vertical line), you can use it like any 1 bit stencil buffer from what I tested.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#149927 - silent_code - Sun Jan 27, 2008 2:41 pm</h4>
+    <div class="postbody"><span class="postbody">very interesting!
+<br/>
+so, would it be possible to implement z-fail shadow volumes then? (i guess no, because of the 1bit thing.)</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

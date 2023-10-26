@@ -1,0 +1,151 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Wierd float problem - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Wierd float problem</h2>
+<div id="posts">
+<div class="post">
+    <h4>#109292 - Dan Forever - Thu Nov 16, 2006 11:40 pm</h4>
+    <div class="postbody"><span class="postbody">I'm having a problem when it comes to drawing a quad on an orthogonal view.
+<br/>
+<br/>
+With a width and height of upto 7, the quad draws correctly. If I have a size on either axes of 8 or larger, it inverts on those axes.
+<br/>
+<br/>
+so a quad at x 10.0 with a width of 5 will correctly have it's left at 10 and right at 15, but a width of 8 will have the left at 2 and right at 10.
+<br/>
+<br/>
+Are floats one byte fixed point real numbers, or is there something inherently wrong with my drawing code?
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void RenderManager::Draw(Renderable&amp; quad)
+<br/>
+{
+<br/>
+   if(quad.texID == NO_TEXTURE &amp;&amp; quad.texID &lt; NUM_TEXTURES)
+<br/>
+      glBindTexture(GL_TEXTURE_2D, 0);                  // No Texture
+<br/>
+   else
+<br/>
+      glBindTexture(GL_TEXTURE_2D, m_texture[quad.texID]);   // Texture
+<br/>
+<br/>
+   glColor3b(quad.red, quad.green, quad.blue);
+<br/>
+   glTranslatef(quad.x, quad.y, 0.0f);
+<br/>
+   glBegin(GL_QUADS);                                 // Draw A Quad
+<br/>
+<br/>
+      glTexCoord2f(quad.uv[0][0], quad.uv[0][1]);            // Top Left
+<br/>
+      glVertex3f(quad.width, 0.0f, 0.0f);                  // Top Right
+<br/>
+<br/>
+      glTexCoord2f(quad.uv[1][0], quad.uv[0][1]);            // Top Right
+<br/>
+      glVertex3f(quad.width, quad.height, 0.0f);            // Bottom Right
+<br/>
+<br/>
+      glTexCoord2f(quad.uv[1][0], quad.uv[1][1]);            // Bottom Right
+<br/>
+      glVertex3f(0.0f, quad.height, 0.0f);               // Bottom Left
+<br/>
+<br/>
+      glTexCoord2f(quad.uv[0][0], quad.uv[1][1]);            // Bottom Left
+<br/>
+      glVertex3f(0.0f, 0.0f, 0.0f);                     // Top Left
+<br/>
+<br/>
+   glEnd();                                       // Done Drawing The Quad
+<br/>
+}</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#109293 - Mighty Max - Thu Nov 16, 2006 11:44 pm</h4>
+    <div class="postbody"><span class="postbody">The hardware registers use a fixed point format(4.12) that does not allow values smaller then -8 and equal or higher then +8.<br/>_________________<br/><a class="postlink" href="http://mightymax.org/gbamp_multiboot.html" target="_blank">GBAMP Multiboot</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#109295 - Dan Forever - Thu Nov 16, 2006 11:56 pm</h4>
+    <div class="postbody"><span class="postbody">hmm, thanks for the quick response. Whats the best method for converting a real to a fixed point number stored in a 32 bit int?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#109296 - Mighty Max - Fri Nov 17, 2006 12:02 am</h4>
+    <div class="postbody"><span class="postbody">Not using floating point at all :p (the arm has no native support for it, it does floating point math by software)
+<br/>
+<br/>
+there should be some defines in ndslib that does this conversation for you. See the nds/arm9/videoGL.h:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">typedef short int v16;       // vertex 4.12 fixed format
+<br/>
+#define inttov16(n)          ((n) &lt;&lt; 12)
+<br/>
+#define f32tov16(n)          (n)
+<br/>
+#define v16toint(n)          ((n) &gt;&gt; 12)
+<br/>
+#define floattov16(n)         ((v16)((n) * (1 &lt;&lt; 12)))
+<br/>
+#define VERTEX_PACK(x,y)       (((y) &lt;&lt; 16) | ((x) &amp; 0xFFFF))</td> </tr></table><span class="postbody"><br/>_________________<br/><a class="postlink" href="http://mightymax.org/gbamp_multiboot.html" target="_blank">GBAMP Multiboot</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#109396 - Dan Forever - Sat Nov 18, 2006 12:09 am</h4>
+    <div class="postbody"><span class="postbody">I'm having problems with the fixed point maths.
+<br/>
+Presumably adding or subtracting two f32s is still by using the + and - binary operators. Multiplication and division is via the handy functions provided in math.h (in the ndslib include dir) and converting between formats required by the "opengl" stuff is provided in videogl.h as pointed out above.
+<br/>
+<br/>
+Switching over to fixed point has caused my quads to be "stuck" in the top left corner and render as completely black (as opposed to textured).
+<br/>
+<br/>
+I start with literal floats that I convert to f32 using the floattof32() macro.
+<br/>
+I then convert them using f32tov16() or f32tot16() when the values are passed into glVertex3v16() or glTexCoord2t16() respectively.
+<br/>
+<br/>
+I can move the quad, but when it moves into the screen an amount greater than it's width or height it dissappears.
+<br/>
+<br/>
+Textures render correctly when I switch the tex-coord function back to glTexCoord2f() and converting back to float with f32tofloat(). But positioning is still screwed.
+<br/>
+<br/>
+Unfortunately I'm left without the ability to debug at all, so I'm left with educated guesses and blind luck :( (and turning to you guys for help :D)
+<br/>
+<br/>
+Am I using these functions correctly or have I misunderstood something?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#109636 - Rajveer - Sun Nov 19, 2006 11:21 pm</h4>
+    <div class="postbody"><span class="postbody">1) Some code would be nice to see how you're using the fixed-point math, especially for the quad/its textures :)
+<br/>
+<br/>
+2) Adding/Subtracting is still done with + and -, and mult/div is with the functions you specified. If, for f32's, you remember 1 is 4096, therefore 2 is 8192 e.t.c. you won't even need the macros ;)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#109991 - Payk - Fri Nov 24, 2006 1:18 am</h4>
+    <div class="postbody"><span class="postbody">First: How do you move that mesh? with translate there shouldnt be any problem at all. If its still not good enough try to use that values better.
+<br/>
+For example when loading a model, i divide each vertex by 128 so that i use that value range better. When rendering i scale it up again. That often helps much. (when working with fixed points)
+<br/>
+<br/>
+Second: Which fixed point do u use for texturecoords? T16 is made for that. So convert an UV from an int to it should be fine inttot16(64); u can store preconverted t16 and f32 for texture and mesh. its best for models.
+<br/>
+And fastest way of course.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

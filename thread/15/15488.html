@@ -1,0 +1,247 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Special Effects Scripting Language - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Game Design > Special Effects Scripting Language</h2>
+<div id="posts">
+<div class="post">
+    <h4>#155887 - sgeos - Mon May 05, 2008 7:40 am</h4>
+    <div class="postbody"><span class="postbody">I was speaking with a friend about scripting, and the topic of a "special effects scripting language" came up.  I've implemented something like this before using time based transitions that modify a host object.  That is actually how the movement in <a class="postlink" href="http://www.fukoku-life.co.jp/clubfine/game/breakdown/index.html" target="_blank">this game</a> was done.  (Card flips, dealing cards, help window, win/lose messages... everything.)
+<br/>
+<br/>
+The goal this time is to come up with a general purpose special effects language.  A stack based approach follows.  Each controller has an update stack and a general stack.  The the general stack runs until it is out of tasks.  The update stack loops until the general stack has finished doing its job.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code"># comment
+<br/>
+<br/>
+# function definition
+<br/>
+funtionName(pParamA, pParamB, pParamC)
+<br/>
+{
+<br/>
+}
+<br/>
+<br/>
+# global constants
+<br/>
+CONSTANT
+<br/>
+<br/>
+# set the object to modify
+<br/>
+controller.host = object
+<br/>
+controller.host = Object.new(params)
+<br/>
+<br/>
+# set effect using initial and final states
+<br/>
+controller.transition_type(frames=1).parameterA(initial_state, final_state).parameterB(initial_state, final_state)
+<br/>
+<br/>
+# set effect using final states (transition from current value to final value)
+<br/>
+controller.transition_type(frames=1).parameterC(final_state).parameterD(final_state)
+<br/>
+<br/>
+# mix the above just for kicks
+<br/>
+controller.transition_type(frames=1).parameterE(initial_state, final_state).parameterF(final_state)
+<br/>
+<br/>
+# transition types
+<br/>
+controller.linear(frames=1) # current_frame / max_frame
+<br/>
+controller.cos(frames=1)    # 1 - cos( PI * current_frame / max_frame ); radians; reluctant
+<br/>
+controller.sin(frames=1)    # sin( PI * current_frame / max_frame ); radians; eager
+<br/>
+controller.s(frames=1)      # cos to midpoint, sin from midpoint; slow, fast, slow
+<br/>
+controller.z(frames=1)      # sin to midpoint, cos from midpoint; fast, slow, fast
+<br/>
+<br/>
+# push effect list onto stack (controller stops when it reaches the end of the stack)
+<br/>
+controller.push(repeat=1)
+<br/>
+<br/>
+# push effects list onto update stack (controller repeats update stack from the start when it reaches the end)
+<br/>
+controller.update(repeat=1)
+<br/>
+<br/>
+# clear stack in question
+<br/>
+controller.clear.push
+<br/>
+controller.clear.update
+<br/>
+<br/>
+# do nothing for a number of frames
+<br/>
+controller.wait(frames)
+<br/>
+<br/>
+# repeat entire stack in question a number of times
+<br/>
+controller.repeat(times=1).push
+<br/>
+controller.repeat(times=1).update
+<br/>
+<br/>
+# special output
+<br/>
+# flashing, shaking and tinting the background also belong here
+<br/>
+controller.sfx(sound_effect_id)       # NULL clears currently playing effect
+<br/>
+controller.bgm(background_music_id)   # NULL restores previous BGM
+<br/>
+controller.value(value)               # show a value at the host's location
+<br/>
+controller.text(text)                 # show text at the host's location
+<br/>
+controller.message(message, *params)  # print to the message window
+<br/>
+<br/>
+# example animation
+<br/>
+# animation time ... 210 frames
+<br/>
+# source throws a blade at target, blade spins on target and
+<br/>
+# returns a little short of source, but source moves in to compensate
+<br/>
+flyingBlade(pSource, pTarget, pDamage)
+<br/>
+{
+<br/>
+  # initialize effect stacks
+<br/>
+  blade.host   = Image.new(GFX_BLADE_SMALL)
+<br/>
+  sourceX.host = pSource  # doing something fancy, so two stacks are needed
+<br/>
+  sourceY.host = pSource  # see above
+<br/>
+  target.host  = pTarget
+<br/>
+  
+<br/>
+  # blade spin - rotate 360 degrees every 30 frames for the entire effect
+<br/>
+  # slowest point is 270 degrees (facing left); spin counter clockwise
+<br/>
+  blade.s(30).angle(270,-90).update
+<br/>
+  
+<br/>
+  # source and target wait
+<br/>
+  sourceX.wait(150).push
+<br/>
+  sourceY.wait(180).push
+<br/>
+  target.wait(90).push
+<br/>
+<br/>
+  # blade flies at target; makes swish sound
+<br/>
+  blade.sfx(SFX_SWISH)
+<br/>
+  blade.linear(90).scale(0,100).alpha(0,100)
+<br/>
+  blade.cos(90).x(pSource.x, pTarget.x)
+<br/>
+  blade.sin(90).y(pSource.y, pTarget.y)
+<br/>
+  blade.push
+<br/>
+<br/>
+  # blade hits target; makes grinding noise
+<br/>
+  blade.sfx(SFX_GRIND).value(pDamage).wait(30).push  # spinning is automatic
+<br/>
+<br/>
+  # target shakes
+<br/>
+  pTarget.clear.push
+<br/>
+  pTarget.linear.x( 2).push
+<br/>
+  pTarget.linear.x(-2).push
+<br/>
+  pTarget.repeat(15)
+<br/>
+<br/>
+  # blade returns to source; makes zing sound
+<br/>
+  gfxA.sfx(SFX_ZING)
+<br/>
+  gfxA.linear(60).scale(100,0).alpha(100,0)
+<br/>
+  gfxA.cos(60).x(pTarget.x, pSource.x - 30)
+<br/>
+  gfxA.sin(60).y(pTarget.y, pSource.y)
+<br/>
+  gfxA.push
+<br/>
+<br/>
+  # source moves to catch blade
+<br/>
+  pSourceX.s(30).x(-30).push
+<br/>
+<br/>
+  # blade makes a click sound when caught
+<br/>
+  gfxA.sfx(SFX_CLICK).push
+<br/>
+<br/>
+  # source returns to position
+<br/>
+  pSourceX.z(30).x(30).push
+<br/>
+  pSourceY.sin(15).y( 15).push  # U-shape down
+<br/>
+  pSourceY.cos(15).y(-15).push  # U-shape up
+<br/>
+<br/>
+  # cleanup
+<br/>
+  blade.host.delete
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+Like any good scripting language, the goal is to have something that is easy for the scripter to use.  There are two end goals for such a scripting language- A) replace the special effects programmer with special effects scripters, B) make the life easier for the special effects programmer if it is decided that scripters are unnecessary afterall.  I'm looking for comments and constructive criticism.
+<br/>
+<br/>
+-Brendan
+<br/>
+<br/>
+<span style="font-weight: bold">EDIT / NOTES TO SELF:</span>
+<br/>
+A) Need a way to dynamically staple one object to another VS just reading the value one time.  Having an orb circle a critter as the critter moves is Good Stuff.  Need to be able to both in any case.  Afterall, sometimes you want to throw an object at a critter and then move the critter out of the way.
+<br/>
+B) I didn't like how the shake was done when I was writing it, but that somehow seems correct.
+<br/>
+C) On the return, X uses non-linear timing, and Y does two transitions in the time X does one.  I don't see how to make this work without more than one controller for the same object.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

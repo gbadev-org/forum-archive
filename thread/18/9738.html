@@ -1,0 +1,144 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>undefined reference to _kill:problem with devkitarm - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > undefined reference to _kill:problem with devkitarm</h2>
+<div id="posts">
+<div class="post">
+    <h4>#85392 - xyierz - Mon May 29, 2006 8:32 pm</h4>
+    <div class="postbody"><span class="postbody">Last night I was struggling with a linker error while trying to compile a library for the DS:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+/usr/local/devkitpro/devkitARM/bin/../lib/gcc/arm-elf/4.1.0/../../../../arm-elf/lib/interwork/libc.a(signalr.o): In function `_kill_r':
+<br/>
+: undefined reference to `_kill'
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+I found the cause of the error this morning.  When I was asking about it in IRC, I was told that someone had posted here asking about this error, but I haven't been able to find the post.
+<br/>
+<br/>
+Anyway, the problem is that for some reason the linker is trying to link signalr.o which does indeed contain an undefined reference to _kill. If you take a look at the symbols exported by signalr.o:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+$ arm-elf-objdump -t libc.a
+<br/>
+<br/>
+signalr.o:     file format elf32-littlearm
+<br/>
+<br/>
+SYMBOL TABLE:
+<br/>
+00000000 l    d  .text  00000000 .text
+<br/>
+00000000 l    d  .data  00000000 .data
+<br/>
+00000000 l    d  .bss   00000000 .bss
+<br/>
+00000000 l    d  .comment       00000000 .comment
+<br/>
+00000000 g     F .text  00000004 _getpid_r
+<br/>
+00000000         *UND*  00000000 _getpid
+<br/>
+00000004 g     F .text  0000003c _kill_r
+<br/>
+00000000         *UND*  00000000 _kill
+<br/>
+00000000         *UND*  00000000 errno
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+You'll notice that signalr.o exports the functions _getpid_r and _kill_r. Taking a look at which libc functions refer to these symbols:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+$ find . -name '*.a' | xargs arm-elf-nm -u -A | grep _getpid_r
+<br/>
+./libc.a:mktemp.o:         U _getpid_r
+<br/>
+./libc.a:signal.o:         U _getpid_r
+<br/>
+./libc.a:tmpnam.o:         U _getpid_r
+<br/>
+<br/>
+$ find . -name '*.a' | xargs arm-elf-nm -u -A | grep _kill_r
+<br/>
+./libc.a:signal.o:         U _kill_r
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Since mktemp.o, signal.o, and tmpnam.o all reference symbols defined in signalr.o, using any functions that they define will link in signalr.o and trigger the linker error. Using another objdump, I determined that the functions that these object files export are
+<br/>
+<br/>
+mktemp.o: mktemp(), mkstemp()
+<br/>
+signal.o: raise(), signal()
+<br/>
+tmpnam.o: tempnam(), tmpnam()
+<br/>
+<br/>
+For a proof of concept, I wrote a simple program with examples of all the function calls that trigger this error:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#include &lt;stdio.h&gt;
+<br/>
+#include &lt;stdlib.h&gt;
+<br/>
+<br/>
+int main() {
+<br/>
+  // the following libc function calls trigger the linker error
+<br/>
+  signal(0, NULL);
+<br/>
+  tmpnam(NULL);
+<br/>
+  tempnam(NULL, NULL);
+<br/>
+  mktemp(NULL);
+<br/>
+  mkstemp(NULL);
+<br/>
+<br/>
+  return 0;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Since none of these functions are really very useful on the DS, probably the best fix is to simply avoid using them.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#85412 - tepples - Tue May 30, 2006 1:06 am</h4>
+    <div class="postbody"><span class="postbody">Wouldn't mktemp() and friends be useful with Chishm's FAT library?<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

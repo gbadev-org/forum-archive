@@ -1,0 +1,249 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Stupid question - Vram banks?!? - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Stupid question - Vram banks?!?</h2>
+<div id="posts">
+<div class="post">
+    <h4>#37856 - Wriggler - Thu Mar 17, 2005 11:18 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">VRAM_A_CR = VRAM_ENABLE | VRAM_ARM9 | VRAM_CORE_A;
+<br/>
+VRAM_B_CR = VRAM_ENABLE | VRAM_ARM9 | VRAM_CORE_A;
+<br/>
+VRAM_C_CR = VRAM_ENABLE | VRAM_ARM9 | VRAM_CORE_B;
+<br/>
+VRAM_D_CR = VRAM_ENABLE | VRAM_ARM9 | VRAM_CORE_B;
+<br/>
+   vramSetMainBanks(VRAM_A_MAIN_BG,VRAM_B_MAIN_SPRITE,VRAM_C_SUB_BG,VRAM_D_SUB_SPRITE);</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+So, ermm... what does this actually do? This is new to me, and anything that isn't immediately familiar scares the hell out of me... ;-)
+<br/>
+<br/>
+Ben</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#37872 - josath - Fri Mar 18, 2005 2:49 am</h4>
+    <div class="postbody"><span class="postbody">it enables the first 4 vram banks, assigns the first two to core_a (the main screen), and the next two to core_b (the sub screen), as well as marking them as used by the ARM9 processor (the main one most code is written for right now)
+<br/>
+<br/>
+then it sets bank A as BG data for main screen, bank B as sprite data for main screen, bank C as BG data for sub screen, and bank D as sprite data for sub screen.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#37886 - Wriggler - Fri Mar 18, 2005 8:59 am</h4>
+    <div class="postbody"><span class="postbody">Oh I see, so then you can write to VRAM_A (or whichever), as if it were a great big bitmap? Do you need to use this in a specific graphics mode? I assume so, as I wasn't having any joy in MODE_0_2D...
+<br/>
+<br/>
+Ben</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#37913 - josath - Fri Mar 18, 2005 5:31 pm</h4>
+    <div class="postbody"><span class="postbody">here's a snippet of code from my mines game which use bg0, with some comments:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+    // Set main display to mode 0
+<br/>
+    // Enable BG0
+<br/>
+    DISPLAY_CR = MODE_0_2D | DISPLAY_BG0_ACTIVE;
+<br/>
+<br/>
+    // Set BG0 to 256 color mode
+<br/>
+    // Set it to screen block 0 (for map data)
+<br/>
+    // Set it to char block 1 (for tile gfx data)
+<br/>
+    BG0_CR = BG_COLOR_256| (0 &lt;&lt; SCREEN_SHIFT) | (1 &lt;&lt; CHAR_SHIFT);
+<br/>
+<br/>
+    // copy our palette to the main bg palette
+<br/>
+    COPY16((uint16*)title_pal, (uint16 *)BG_PALETTE, 256);
+<br/>
+<br/>
+    // copy our tile map the screen block 0
+<br/>
+    uint16 *map = (uint16*)SCREEN_BASE_BLOCK(0);
+<br/>
+    COPY16((uint16*)title_map, map0, 32*24/2);
+<br/>
+    // you may not have a pre-built tile map, in which case you would
+<br/>
+    // not use the above copy line, and place tiles by hand using the formula:
+<br/>
+    // map[y*32 + x] = N; // where N is the tile number. Tiles are 8x8
+<br/>
+<br/>
+    // decompress our tile data to char block 1
+<br/>
+    // (you would just use same copy function if your data is not compressed)
+<br/>
+    aP_depack((void *)title_raw, (void *)CHAR_BASE_BLOCK(1));
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+to get the graphics in the correct format, i use a tool called 'gfx2gba', and the command line options are:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">./gfx2gba -t8 -zt -ap tiles.pcx</td> </tr></table><span class="postbody">
+<br/>
+the -t8 tells it to split it into 8x8 tiles, -zt tells it to compress the tile data, -ap tells it to use aPLib to compress it. (leave out the '-zt -ap' if you don't want to bother with compressing)
+<br/>
+If you want it to generate a tile map for you (like for a static image or something), add '-m' before tiles.pcx. Make sure the width of your image is 256 pixels, otherwise  you will have to fool around with it to line up correctly.
+<br/>
+You will end up with a tiles.raw and a master.pal, rename master.pal to tiles.pal, and move the two files to the arm9/resources/ directory. in your cpp file, write:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#include "tiles_raw.h"
+<br/>
+#include "tiles_pal.h"
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+and the template handles the compilation of the resources for you.
+<br/>
+<br/>
+hope this helps</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#37915 - Wriggler - Fri Mar 18, 2005 5:42 pm</h4>
+    <div class="postbody"><span class="postbody">Hey josath, thanks for the code. That's just the same as tile modes on the GBA though isn't it? It's virtually how I'm running my demos on the DS at the moment... if you comment out all the vram bank code it doesn't make any difference. For example...
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+void initBg(void)
+<br/>
+{
+<br/>
+   u16 i;
+<br/>
+<br/>
+   //Setup background layers
+<br/>
+   u16* CharBB = (u16*)CHAR_BASE_BLOCK(0);
+<br/>
+   u16* ScreenBB0 = (u16*)SCREEN_BASE_BLOCK(31);
+<br/>
+<br/>
+   u16* CharBBSub = (u16*)CHAR_BASE_BLOCK_SUB(2);
+<br/>
+   u16* ScreenBB0Sub = (u16*)SCREEN_BASE_BLOCK_SUB(29);
+<br/>
+<br/>
+   BG0_CR = TEXTBG_SIZE_256x256 | BG_COLOR_256 | (31 &lt;&lt; SCREEN_SHIFT) | (0 &lt;&lt; CHAR_SHIFT);
+<br/>
+   SUB_BG0_CR = TEXTBG_SIZE_256x256 | BG_COLOR_256 | (29 &lt;&lt; SCREEN_SHIFT) | (2 &lt;&lt; CHAR_SHIFT);
+<br/>
+<br/>
+   //Setup background (sub screen)
+<br/>
+   for (i=0; i&lt;=255; i++) { BG_PALETTE_SUB[i] = bg0_cmap[i]; }      //Palette
+<br/>
+   
+<br/>
+   //DMA Copy for character tiles (ouch!)
+<br/>
+   *(vu32*)0x40000D4 = (u32)bg0_blockgfx;
+<br/>
+   *(vu32*)0x40000D8 = (u32)CharBBSub;
+<br/>
+   *(vu32*)0x40000DC = (u32)714*32 | 0x80000000;
+<br/>
+<br/>
+   for (i=0; i&lt;(32*32); i++) { ScreenBB0Sub[i] = bg0_map0[i];   }
+<br/>
+<br/>
+   //Setup background (main screen)
+<br/>
+   for (i=0; i&lt;=255; i++) { BG_PALETTE[i] = bg1_cmap[i]; }      //Palette
+<br/>
+   
+<br/>
+   //DMA Copy for character tiles (ouch!)
+<br/>
+   *(vu32*)0x40000D4 = (u32)bg1_blockgfx;
+<br/>
+   *(vu32*)0x40000D8 = (u32)CharBB;
+<br/>
+   *(vu32*)0x40000DC = (u32)607*32 | 0x80000000;
+<br/>
+<br/>
+   for (i=0; i&lt;(32*32); i++) { ScreenBB0[i] = bg1_map0[i];   }
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+...all of that works as you'd expect, without enabling Vram banks. So what exactly does that original bit of code do?
+<br/>
+<br/>
+Ben</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#37916 - josath - Fri Mar 18, 2005 6:20 pm</h4>
+    <div class="postbody"><span class="postbody">maybe those vram settings are the default settings, so if you don't set them, it still works?
+<br/>
+<br/>
+or if you are running on an emulator, maybe the emulator doesn't emulate those settings?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#37917 - Wriggler - Fri Mar 18, 2005 6:28 pm</h4>
+    <div class="postbody"><span class="postbody">Yeah maybe... I can't be arsed to go find the hardware specs at the moment, but didn't Nintendo add a whole bunch of new vram to the DS over the GBA? Perhaps they just did a crap job of implementing it, allowing you to "allocate" the extra vram memory as you please?
+<br/>
+<br/>
+We really need someone who knows what they're talking about in this thread, hehe :)
+<br/>
+<br/>
+Ben</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#37955 - dovoto - Sat Mar 19, 2005 3:03 am</h4>
+    <div class="postbody"><span class="postbody">The call to vramSetBanks is all that is required. ndslib is currently written with little direct register access required, mainly to make the source code easier to read.
+<br/>
+ My first tutorial will be almost entirely on vram mapping (that is the biggest difference between GBA and DS 2D cores) but i have a lot of testing to do this weekend before I start.  There are 9 banks that can each be used a little differently and most can be mapped to more than one area of low vram for the 2D cores to utilize.<br/>_________________<br/><a href="http://www.drunkencoders.com" target="_blank">www.drunkencoders.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#38293 - Wriggler - Fri Mar 25, 2005 2:20 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>dovoto wrote:</b></span></td> </tr> <tr> <td class="quote">The call to vramSetBanks is all that is required. ndslib is currently written with little direct register access required, mainly to make the source code easier to read.
+<br/>
+ My first tutorial will be almost entirely on vram mapping (that is the biggest difference between GBA and DS 2D cores) but i have a lot of testing to do this weekend before I start.  There are 9 banks that can each be used a little differently and most can be mapped to more than one area of low vram for the 2D cores to utilize.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Excellent, cheers dovoto. Will wait for the tutorial with interest...
+<br/>
+<br/>
+Ben</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#38367 - Sausage Boy - Sat Mar 26, 2005 7:05 pm</h4>
+    <div class="postbody"><span class="postbody">Sorry for bothering you with a silly question, but I can't make it work.
+<br/>
+It compiles fine, but instead of my awesome title screen it prints this:
+<br/>
+<br/>
+<a href="http://img45.exs.cx/img45/6839/doesntwork6qs.png">[Images not permitted - Click here to view it]</a>
+<br/>
+<br/>
+<br/>
+Is there any common newbie mistake I'm making?<br/>_________________<br/>"no offense, but this is the gayest game ever"</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

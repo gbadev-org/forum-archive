@@ -1,0 +1,451 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>lambda optimizing.... - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > lambda optimizing....</h2>
+<div id="posts">
+<div class="post">
+    <h4>#84537 - DiscoStew - Tue May 23, 2006 5:25 am</h4>
+    <div class="postbody"><span class="postbody">This is something I've put off for a while now. As of right now, I've got the MODE 7 perspective working for my demo, but a lot of processing time is spent on the "lambda" being calculated for each scanline (not during each scanline), more specifically, the divide being used for it. Now, from the line of code I have from my demo....
+<br/>
+<br/>
+lam = Asm_Divide(Cam_Pos.y &lt;&lt; 12, BG_Cam_Incs.y);
+<br/>
+<br/>
+...Where "Cam_Pos.y" is the height position of the camera, and "BG_Cam_Inc.y" is an incrementation of an initial value incremented/decremented with "BG_Cam_YAxis.y", which is affected by the cosine of theta. The bit-wise shift in it is merely for more precision. The only optimization I've done with it thus far is an added check if theta of the camera is 128. or, looking straight down, which in this case, would make the layer look as if MODE 7 wasn't being used at all, because at theta = 128, "BG_Cam_Incs.y" does not increment/decrement...
+<br/>
+<br/>
+lam = Cam_Pos.y &gt;&gt; 3;
+<br/>
+<br/>
+So far, I've tried other possible methods of optimization, like linker settings, putting the full code of the needed calculations into IWRAM, etc. The only other idea I've come up with for optimizing (though not implemented yet) is if "Cam_Pos.y" and theta do not change, a LUT can be processed in one frame, and then reused for following frames, but if either of these variables change, the LUT would have to be filled in again.
+<br/>
+<br/>
+What I'm looking for is one single thing. To get rid of that divide per scanline. It isn't so bad if it is used a couple of times, but when used at max 160 times, it really limits anything else I can do, and even with the LUT idea, if any change is made to the camera's height or the camera's theta, the new lambda values would have to be calculated, and it could show among other things being processed.
+<br/>
+The only other thing I can see is taking a different approach to calculating lambda using the same values being put into it. However, I have no idea where to begin, which is why I'm here to ask you all about it. The info I can give is that throughout the lambda calculation, the camera's height is constant, and "BG_Cam_Incs.y" starts off at a calculated value, of which then per scanline, it is incrementing/decrementing at a constant rate.
+<br/>
+<br/>
+If you have any thoughts, or even a formula for a faster lambda calculation with minimum error, please fell free to post.<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#84540 - poslundc - Tue May 23, 2006 5:51 am</h4>
+    <div class="postbody"><span class="postbody">For Mode 7, you should only have to divide once per frame, by your zoom value.
+<br/>
+<br/>
+Calculate (1 / z) before looping over your scanlines, then multiply by that value for every scanline.
+<br/>
+<br/>
+There are a number of optimizations you can do on your division, but ultimately one division per frame shouldn't have a noticeable impact.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#84550 - DiscoStew - Tue May 23, 2006 8:34 am</h4>
+    <div class="postbody"><span class="postbody">Thanks for your suggestion poslundc, but I don't see where I can implement that though. My brain is pretty fried atm for just working on this.
+<br/>
+<br/>
+To give a very close example of what I'm working with, my code is based off Cearn's Mode 7 example (not the one showing type A,B,C), of which he has lambda being calculated every scanline. Of course I've worked through a few optimizations, but the concept of how it works is still the same...
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">// calculates bg affine pameters for the next frame
+<br/>
+// pa= lam*cos(phi) pc= lam*sin(phi)
+<br/>
+//
+<br/>
+// dx' = cam_pos + lam*C*b, where
+<br/>
+//  b = (L, T-ys, -D)
+<br/>
+// dx'= (DX, 0, DY)
+<br/>
+// get lambda from dx'.y, then DX=dx.x, DY= dx.z
+<br/>
+//
+<br/>
+// NOTE: heavy optimisations possible!
+<br/>
+// Like compiling in ARM and putting it in IWRAM
+<br/>
+void m7_aff_calc()
+<br/>
+{
+<br/>
+   if(_m7_horizon &gt;= VID_HEIGHT)   // no visible floor, so wots the point?
+<br/>
+      return;
+<br/>
+<br/>
+   int ii, ii0= _m7_horizon&gt;=0 ? _m7_horizon : 0;
+<br/>
+<br/>
+   // lam*C*xp = r
+<br/>
+   // C*Xp: C= [cam.u cam.v cam.w]
+<br/>
+   // Xp = (xp, scanline (==ii), D)
+<br/>
+   // The multiplication can be done nicely with 
+<br/>
+   // incremental offsets
+<br/>
+   FIXED dcx= _m7_cam.v.x, dcy= _m7_cam.v.y, dcz= _m7_cam.v.z;
+<br/>
+   FIXED lam= INT_MAX, cx, cy, cz;
+<br/>
+   cx= (_m7_cam.w.x&lt;&lt;M7_D_SH) + (ii0 - M7_TOP)*dcx;
+<br/>
+   cy= (_m7_cam.w.y&lt;&lt;M7_D_SH) + (ii0 - M7_TOP)*dcy;
+<br/>
+   cz= (_m7_cam.w.z&lt;&lt;M7_D_SH) + (ii0 - M7_TOP)*dcz;
+<br/>
+<br/>
+   BGAFF_EX *bga= &amp;_m7_bgaff_ex[ii0];
+<br/>
+   FIXED pa, pc;
+<br/>
+<br/>
+   for(ii= ii0; ii&lt;VID_HEIGHT; ii++)
+<br/>
+   {
+<br/>
+      // I'm sure there's a faster way of getting lam 
+<br/>
+      // via trigonometry, but I'll have to check whether 
+<br/>
+      // it's as accurate.
+<br/>
+      lam= DivSafe(_m7_cam.pos.y&lt;&lt;12, cy);// .12
+<br/>
+<br/>
+      // having the scale might be useful later, 
+<br/>
+      // so store it somewhere for later retrieval.
+<br/>
+      // pb will do, since it's unused anyway
+<br/>
+      bga-&gt;pb= lam&gt;&gt;4;      // .8
+<br/>
+      
+<br/>
+      pa= (lam*_m7_cam.u.x)&gt;&gt;12;
+<br/>
+      bga-&gt;pa= pa;
+<br/>
+      bga-&gt;dx= _m7_cam.pos.x + M7_LEFT*pa - (lam*cx&gt;&gt;12);
+<br/>
+<br/>
+      pc= (lam*_m7_cam.u.z)&gt;&gt;12;
+<br/>
+      bga-&gt;pc= pc;
+<br/>
+      bga-&gt;dy= _m7_cam.pos.z + M7_LEFT*pc - (lam*cz&gt;&gt;12);
+<br/>
+<br/>
+      cx += dcx;      cy += dcy;      cz += dcz;
+<br/>
+      bga++;
+<br/>
+   }
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Heh, even he says in here about lam possibly being calculate by trig, but right now, I'm not even sure where to begin.<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#84567 - Cearn - Tue May 23, 2006 12:49 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>poslundc wrote:</b></span></td> </tr> <tr> <td class="quote">For Mode 7, you should only have to divide once per frame, by your zoom value.
+<br/>
+<br/>
+Calculate (1 / z) before looping over your scanlines, then multiply by that value for every scanline.
+<br/>
+</td> </tr></table><span class="postbody">But unless you're looking straight down, the zoom changes non-linearly for every scanline.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>DiscoStew wrote:</b></span></td> </tr> <tr> <td class="quote">Heh, even he says in here about lam possibly being calculate by trig, but right now, I'm not even sure where to begin.</td> </tr></table><span class="postbody">That would be <a class="postlink" href="http://user.chem.tue.nl/jakvijn/tonc/mode7ex.htm#eq-lambda-alt" target="_blank">eq 16</a> right below the code :P. You'd need a small arctan lut for the angles of each scanline and a high-resolution 1/sin(x) lut to make it work accurately. That way you'd to get rid off all divisions, save the one for focus length <span style="font-style: italic">D</span>. 
+<br/>
+Another thing that would cut down on the code is to fill in all the sines and cosines for the matrix elements, or use better division code, stuff like that.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#84600 - poslundc - Tue May 23, 2006 4:50 pm</h4>
+    <div class="postbody"><span class="postbody">Shoot, you guys are right; it's been too long since I've done Mode 7. I was thinking about sprite-placement, where you only need to calculate the reciprocal once for both rotational components. 
+<br/>
+<br/>
+I've looked at my old Mode 7 code, and what I did was create a secant lookup table, which gave me the reciprocal of the cosine of the angle I was viewing at, essentially handling two of the operations I needed to perform with a single LUT, and since the secant function is periodic I could easily decide the precision of the domain it needed to operate on. This may work for you as well.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#84880 - DiscoStew - Thu May 25, 2006 8:17 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Cearn wrote:</b></span></td> </tr> <tr> <td class="quote">That would be <a class="postlink" href="http://user.chem.tue.nl/jakvijn/tonc/mode7ex.htm#eq-lambda-alt" target="_blank">eq 16</a> right below the code :P. You'd need a small arctan lut for the angles of each scanline and a high-resolution 1/sin(x) lut to make it work accurately. That way you'd to get rid off all divisions, save the one for focus length <span style="font-style: italic">D</span>. 
+<br/>
+Another thing that would cut down on the code is to fill in all the sines and cosines for the matrix elements, or use better division code, stuff like that.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Ok, I'm beginning to work on this using your method and such (sorry, but a lot of it took me a while to take into concept. I'm good at math, but lousy at interpreting these advanced calculations). About the small arctan lut, I'm still a little unsure about how i goes. As you said here...
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">If β is the angle between (0, yp, -D) and (0, 0, -D), then tan β = yp/D.</td> </tr></table><span class="postbody">
+<br/>
+...I am to make an LUT of 160 entries for the scanlines. Looking at it, if theta = 0 (of which I'm assuming where this default expression is concerned), and that the camera is looking at scanline 80, the top 80 entries would assume their β &lt; 0, and the bottom 79 entires would assume their β &gt; 0. If that is so, would the first 80 entries be just a mirror of the next 80 entries, but negative? I'm just trying to understand where you are coming from on this. What I figure, using your Excellut, is this formula (my <span style="font-style: italic">D</span> is 128, and x is 0 to 159 for scanlines)...
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">ATAN((x - 80) / 128) * (256 / pi)</td> </tr></table><span class="postbody">
+<br/>
+Would that be correct?
+<br/>
+<br/>
+With that, I'd have my β for each scanline, but what about using them for the COS() and 1/SIN() parts? My current COS() LUT is the same one made by your Excellut (interpreted using the SIN() LUT) that is 512/circle, but would I need to make a new one for just this, or can I keep it? As for the 1/SIN(), you propose that using 1024/circle is best, so a new LUT would need to be made, but with using β made for 512/circle, I can just do a (&lt;&lt; 1) to the final angle to use with that LUT, or would other adjustments need to be made?
+<br/>
+<br/>
+Having 160 divides for MODE 7 is not something I want, even if the Asm divide I'm using is fast, and I want to make sure I'm going through this process of alterations carefully and correctly. Once I get this general method down, I can make some extra tuning whereever needed.
+<br/>
+<br/>
+EDIT:
+<br/>
+Eww, another problem. Got this formula for 1/SIN() for Excellut...
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">=1 / SIN(x * pi / 512)</td> </tr></table><span class="postbody">
+<br/>
+...but the x=0 is not pretty. (1 / 0)
+<br/>
+Can't divide by 0, and can't export the LUT with that problem for some reason.<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#84923 - Cearn - Thu May 25, 2006 7:56 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>DiscoStew wrote:</b></span></td> </tr> <tr> <td class="quote">...I am to make an LUT of 160 entries for the scanlines. Looking at it, if theta = 0 (of which I'm assuming where this default expression is concerned), and that the camera is looking at scanline 80, the top 80 entries would assume their β &lt; 0, and the bottom 79 entires would assume their β &gt; 0. If that is so, would the first 80 entries be just a mirror of the next 80 entries, but negative? I'm just trying to understand where you are coming from on this. What I figure, using your Excellut, is this formula (my <span style="font-style: italic">D</span> is 128, and x is 0 to 159 for scanlines)...
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">ATAN((x - 80) / 128) * (256 / pi)</td> </tr></table><span class="postbody">
+<br/>
+Would that be correct?
+<br/>
+</span></td> </tr></table><span class="postbody">
+<br/>
+Pretty much. At least under the current conditions. The key point here is that you need looking angles for each scanline, which means arctan. The fact that they are antisymmetrical around line 80 is just a side effect of the configuration. Unless you intend to get these angles dynamically, it's really not important.
+<br/>
+By the way, the symmetry is centered around <span style="font-style: italic">line</span> 80, not around the center of the screen (the border between lines 79 and 80) This is one of those round-off errors you can find in discretisation (which also occurs for <a class="postlink" href="http://user.chem.tue.nl/jakvijn/tonc/affobj.htm#sec-artifact" target="_blank">affine objects</a>). If you want to be completely correct, you should use 79.5, but I don't think anyone would really notice.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>DiscoStew wrote:</b></span></td> </tr> <tr> <td class="quote">With that, I'd have my β for each scanline, but what about using them for the COS() and 1/SIN() parts? My current COS() LUT is the same one made by your Excellut (interpreted using the SIN() LUT) that is 512/circle, but would I need to make a new one for just this, or can I keep it? As for the 1/SIN(), you propose that using 1024/circle is best, so a new LUT would need to be made, but with using β made for 512/circle, I can just do a (&lt;&lt; 1) to the final angle to use with that LUT, or would other adjustments need to be made?</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+You'll see that the β-lut will almost be linear with a slope of about 0.6. The fractional part is the problem, as you can't really use it as lut indices: you'd get a lot of aliased values that way. That was why I suggested a bigger lut: the higher resolution would correct for the truncation. However, now I'm thinking that you could also do linear interpolations between lut entries, using β and θ-&amp;946; as fixed-point indices.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+// General lerp for point xm between xa and xb
+<br/>
+// ya= f(xa) ; yb= f(xb)
+<br/>
+// w= (xm-xa)/(xb-xa)
+<br/>
+// -&gt; ym = ya + (yb-ya)*w
+<br/>
+<br/>
+//! Example of LUT linear interpolation, with fixed point lut-indices (untested)
+<br/>
+//! \param lut The look-up table
+<br/>
+//! \param xm Fixed point indec
+<br/>
+//! \param fshift Fixed-point shift
+<br/>
+static inline int lut_lerp(const int lut[], u32 xm, int fshift)
+<br/>
+{
+<br/>
+    int xa= xm&gt;&gt;fshift;
+<br/>
+    int ya= lut[xa], yb= lut[xa+1];
+<br/>
+    return ya + (yb-ya)*(xm-(xa&lt;&lt;fshift))&gt;&gt;fshift;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Something like that. You could use this for both the cos(β) and 1/sin(φ-β) lookups, as that's where the fractional nature of β is used. This does go at the expense of a few cycles, but inlining and modifying it for a specific purpose should still be a lot faster than all the divisions.
+<br/>
+<br/>
+I suppose with this,the 512/circle might still be accurate enough and you wouldn't need a completely new cosine lut. You do need to be careful where you wrap around though: lerping between entries 511 and 512 would be bad. Or, as β is always constant for each scanline, you could create a 160 cos(β) lut and be done with the whole thing.
+<br/>
+<br/>
+You still need a 1/sine lut, because that's how you get rid of the divisions.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>DiscoStew wrote:</b></span></td> </tr> <tr> <td class="quote">Having 160 divides for MODE 7 is not something I want, even if the Asm divide I'm using is fast, and I want to make sure I'm going through this process of alterations carefully and correctly. Once I get this general method down, I can make some extra tuning whereever needed.
+<br/>
+<br/>
+EDIT:
+<br/>
+Eww, another problem. Got this formula for 1/SIN() for Excellut...
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">=1 / SIN(x * pi / 512)</td> </tr></table><span class="postbody">
+<br/>
+...but the x=0 is not pretty. (1 / 0)
+<br/>
+Can't divide by 0, and can't export the LUT with that problem for some reason.</span></td> </tr></table><span class="postbody">
+<br/>
+Heh, oops. VB isn't so forgiving when it comes to 1/0 as C, that's where this is coming from. Or with overflow problems btw, as I found out a little while ago. You could try inputting a bogus value for it and disabling 'calc @ export' so it doesn't refill all the cells, but I'll see what I can do about it.
+<br/>
+<br/>
+<br/>
+Oh, and as a general note: <span style="font-style: italic">never</span> blindly use someone else's trig equations. With slightly different definitions for the angles (in both direction and origin) sines turn into cosines and pluses into minuses and the whole thing goes pearshaped. They are an accident waiting to happen. I don't care if you got them from people who can pull Nobel Prize winning theories out of their ass on cue, always check in a comfortable environment before actual use. This is why the page was done with matrices, where you don't have this problem as much.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#85239 - DiscoStew - Sun May 28, 2006 3:58 am</h4>
+    <div class="postbody"><span class="postbody">I will admit, when directed to your example of figuring out lambda without a divide per scanline, I dove right into it, hoping (yes, hoping) that when I took the equations and functions and placed them into my library, I'd get results close to what you described. How sad that wasn't true. My entire Mode 7 went from looking very nice to trying to figure out what the heck was on the screen. I then began looking through the code, hoping to find something, but couldn't. I even went and within the program itself, wrote the correct lambda from the divide and the odd lambda from the trig functions into an unused space in the GBA memory. I saw the comparision of the values, and they were not pretty. So not pretty as to see that when the direction of one set of lambda values went one way, the trig lambda went in all directions.
+<br/>
+So, I took your advice and took both, and began experimenting under Excel (also used Excellut for more than just making LUTs). When comparing the figures you displayed with code I had, it hit me. The code I displayed for figuring out the Arctan for each scanline was wrong, as I was thinking incorrectly as to the direction of an incrementing angle would be. I was thinking of going from looking at the horizon to looking straight at the graphics plane as incrementing, but your example of figuring out β had it incrementing the other direction. So I changed the equation to make the Arctan LUT from...
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">ATAN((x - 80) / 128) * (256 / pi)</td> </tr></table><span class="postbody">
+<br/>
+...to...
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">ATAN((80 - x) / 128) * (256 / pi)</td> </tr></table><span class="postbody">
+<br/>
+...and now, I began to actually see the Mode 7 effect to a degree. I was still using 512/circle for both figuring out Arctan and 1/Sin because I wasn't focusing on accuracy for that time, but I increased them to 1024/circle, and made correct adjustments to working with .8 and .16 Fixed numbers to reduce the error and accuracy of rounding off, and now it really looks great. Of course there are the side effects to working it (liek having the camera really close to the perspective plane but looking off to the horizon, it shears really bad), but I'm not too worried because the range of which I'm using this Mode 7 effect won't go close to these extreme ranges. I have yet to try lerp'ing, or even making a scanline COS LUT (which I should since it would be very easy to implement), but if needs be, they will be done.
+<br/>
+<br/>
+Thanks again for your help.<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#85249 - tepples - Sun May 28, 2006 5:12 am</h4>
+    <div class="postbody"><span class="postbody">For most common uses of rotation backgrounds on the GBA and DS, you don't need to mess with trig per scanline. Just use similar triangles (one division per scanline) to determine the distance from the camera to the center of each scanline, and then determine the texels per pixel and scanline texel origin from that.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#85813 - Cearn - Fri Jun 02, 2006 1:19 pm</h4>
+    <div class="postbody"><span class="postbody">Hmm, somehow I missed this reply. Think it might have saved me a bit of trouble if I hadn't.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>DiscoStew wrote:</b></span></td> </tr> <tr> <td class="quote">The code I displayed for figuring out the Arctan for each scanline was wrong, as I was thinking incorrectly as to the direction of an incrementing angle would be. I was thinking of going from looking at the horizon to looking straight at the graphics plane as incrementing, but your example of figuring out β had it incrementing the other direction. ...</td> </tr></table><span class="postbody">I noticed this too. The problem is that under my definition of β, it should have the same sign as θ in the cosecant (=1/sin) lookup. I messed up there, sorry about that. Well, I did warn you not to blindly trust untested equations :P Your solution of changing the definition of β works too, of course.
+<br/>
+<br/>
+I've also ran some additional tests. I now have a 0.16fixed beta_lut[160] and a 20.12fixed csc_lut[513], which works very well once you apply the lerp to the cosecant lookup. It's not even necessary for the cos(β). Anyway, I went from an original 20k-56k cycles (depending on angle and altitude) to 9k-19k (depending on angle, independent of altitude). 
+<br/>
+Current code looks something like the snippet below. It uses lerps for both cos and csc, but these can be modified easily, and also filling in the camera matrix vectors, which allows for a few simplifications as well.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">inline CODE_IN_IWRAM int trig_lam(u16 beta, u16 theta)
+<br/>
+{
+<br/>
+    FIXED cosb, csc, ya, yb, dx;
+<br/>
+    u32 xa;
+<br/>
+<br/>
+    // get cos(beta) (no need for lerp here actually)
+<br/>
+    xa= beta&gt;&gt;7;
+<br/>
+    ya= lut_cos(xa);    yb= lut_cos(xa+1);
+<br/>
+    dx= beta-(xa&lt;&lt;7);
+<br/>
+    cosb= ya + ((yb-ya)*dx&gt;&gt;7);
+<br/>
+<br/>
+    // get cosecant (remove lerp here and get crap (if you only have a small lut))
+<br/>
+    theta += beta;
+<br/>
+    xa= theta&gt;&gt;7;
+<br/>
+    ya= csc_lut[xa];    yb= csc_lut[xa+1];
+<br/>
+    dx= theta-(xa&lt;&lt;7);
+<br/>
+    csc= ya + ((yb-ya)*dx&gt;&gt;7);
+<br/>
+<br/>
+    return cosb*csc&gt;&gt;8;
+<br/>
+}
+<br/>
+<br/>
+// Lambda via trigonometry.
+<br/>
+CODE_IN_IWRAM void m7_aff_calc_trig()
+<br/>
+{
+<br/>
+    if(_m7_horizon &gt;= VID_HEIGHT)   // no visible floor, so wots the point?
+<br/>
+        return;
+<br/>
+<br/>
+    int ii, ii0= _m7_horizon&gt;=0 ? _m7_horizon : 0;
+<br/>
+<br/>
+    FIXED xc= _m7_cam.pos.x, yc= _m7_cam.pos.y, zc=_m7_cam.pos.z;
+<br/>
+    FIXED ys0, lam;
+<br/>
+<br/>
+    BGAFF_EX *bga= &amp;_m7_bgaff_ex[ii0];
+<br/>
+<br/>
+    FIXED cf, sf, ct, st, lcf, lsf;
+<br/>
+    // cos/sin of phi (f) and theta (t)
+<br/>
+    cf= _m7_cam.u.x;      sf= _m7_cam.u.z;
+<br/>
+    ct= _m7_cam.v.y;      st= _m7_cam.w.y;
+<br/>
+    for(ii= ii0; ii&lt;VID_HEIGHT; ii++)
+<br/>
+    {
+<br/>
+        lam= yc*trig_lam(beta_lut[ii], _m7_cam.theta&lt;&lt;7)&gt;&gt;15;
+<br/>
+        lcf= lam*cf&gt;&gt;12;    lsf= lam*sf&gt;&gt;12;
+<br/>
+        bga-&gt;pa= lcf;       bga-&gt;pc= lsf;
+<br/>
+<br/>
+        ys0= (ii-M7_TOP)*st - M7_D*ct;      // lambda?Rx?b
+<br/>
+        bga-&gt;dx= xc + lcf*M7_LEFT - (lsf*ys0&gt;&gt;8);
+<br/>
+        bga-&gt;dy= zc + lsf*M7_LEFT + (lcf*ys0&gt;&gt;8);
+<br/>
+<br/>
+        // hack that I need for fog. pb and pd are unused anyway
+<br/>
+        bga-&gt;pb= lam&gt;&gt;4;
+<br/>
+        bga++;
+<br/>
+    }
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">I'm sure you can get a few extra things from manual asm, but don't think it'll be that much.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

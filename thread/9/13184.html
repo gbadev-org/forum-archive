@@ -1,0 +1,142 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Bloom effect in a 16 colors palette in realtime - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Graphics > Bloom effect in a 16 colors palette in realtime</h2>
+<div id="posts">
+<div class="post">
+    <h4>#128529 - Chano Marrano - Sat May 12, 2007 12:15 pm</h4>
+    <div class="postbody"><span class="postbody">I wonder which is the algorithm to implement a bloom effect in a 16 colors palette:
+<br/>
+<br/>
+<a href="http://www.profoundeffects.com/products/camerapov/gallery/Bloom.jpg">[Images not permitted - Click here to view it]</a>
+<br/>
+<br/>
+I don't look for the overexposure of the image, only to change the colors of the palette.
+<br/>
+<br/>
+Thanks.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#128533 - kusma - Sat May 12, 2007 1:23 pm</h4>
+    <div class="postbody"><span class="postbody">If you're only going to change the palette, then you're not doing a bloom-effect. Is it the result on the right you want from a picture like the one on the left?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#128534 - keldon - Sat May 12, 2007 1:49 pm</h4>
+    <div class="postbody"><span class="postbody"><a href="http://en.wikipedia.org/wiki/Bloom_" target="_blank">http://en.wikipedia.org/wiki/Bloom_</a>(shader_effect)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#128535 - Chano Marrano - Sat May 12, 2007 1:57 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Is it the result on the right you want from a picture like the one on the left?</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Yes, but I only want to increment the brightness of the colors of the palette like in real bloom. I do not want to change the image that uses the palette. The pseudocode would be like this:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">for(i=1; i&lt;16; i++)
+<br/>
+    palette[paletteNum][i] = fakeBloom(
+<br/>
+        redComp(palette[paletteNum][i]), 
+<br/>
+        greenComp(palette[paletteNum][i]), 
+<br/>
+        blueComp(palette[paletteNum][i])
+<br/>
+    );
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I would like to know how to implement the fakeBloom function.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#128536 - keldon - Sat May 12, 2007 2:34 pm</h4>
+    <div class="postbody"><span class="postbody">The 'fake bloom' that you talk of sounds more like <a class="postlink" href="http://en.wikipedia.org/wiki/Gamma_correction" target="_blank">gamma correction</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#128540 - Chano Marrano - Sat May 12, 2007 3:27 pm</h4>
+    <div class="postbody"><span class="postbody">Thanks! I was looking for that!
+<br/>
+<br/>
+Sooo...
+<br/>
+<br/>
+Any ideas of how to implement gamma correction in a 16 colors palette in realtime?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#128553 - keldon - Sat May 12, 2007 5:45 pm</h4>
+    <div class="postbody"><span class="postbody">Just do it to the palette itself; you don't need to care about what the colours related to, but bear in mind that continuous calculations on those colours will result in some dodgy colours.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#128565 - Chano Marrano - Sat May 12, 2007 7:42 pm</h4>
+    <div class="postbody"><span class="postbody">Okay, there is an implementation of dynamic gamma correction for the GBA:
+<br/>
+<br/>
+The gamma correction for each color component would be like this:
+<br/>
+gammaCorrectedComponent = originalComponent ^ correctionFactor.
+<br/>
+<br/>
+Supposing that the color components are expressed in a range of 0 to 1:
+<br/>
+- If the correctionFactor is lower than 1, the color is clarified.
+<br/>
+- If the correctionFactor is greater than 1, the color is darkened.
+<br/>
+I only want to clarify the colors, so the correctionFactor is going to be lower than 1.
+<br/>
+<br/>
+The color components in GBA are expressed in a range of 0 to 31 (5 bits), so we should compress the range (divide by 31), correct the gamma and decompress the range (multiply by 31).
+<br/>
+<br/>
+The better way to do this is to create a lookup table of 32 colums and 32 rows:
+<br/>
+- Each column refers to the possible values that takes each color component (0..31).
+<br/>
+- Each row refers to the correctionFactor values allowed: 1/1, 1/1.1, 1/1.2, ... , 1/4.1.
+<br/>
+<br/>
+So the gamma correction algorithm would be something like this:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+for(i=1; i&lt;16; i++)
+<br/>
+{
+<br/>
+    color = sourcePalette[paletteNum][i];
+<br/>
+<br/>
+    gammaRed = gammaTable[redComp(color)] [gammaFactor] ;
+<br/>
+    gammaGreen = gammaTable[greenComp(color)] [gammaFactor] ;
+<br/>
+    gammaBlue = gammaTable[blueComp(color)] [gammaFactor] ;
+<br/>
+<br/>
+    palette[paletteNum] [i] = setRGB(gammaRed, gammaGreen, gammaBlue);
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+So what do you think?</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

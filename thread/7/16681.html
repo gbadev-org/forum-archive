@@ -1,0 +1,482 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Best practice for Macros? - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>C/C++ > Best practice for Macros?</h2>
+<div id="posts">
+<div class="post">
+    <h4>#168820 - Drovor - Wed May 27, 2009 9:40 pm</h4>
+    <div class="postbody"><span class="postbody">I am working on a simulation project on the DS and essentially have a 2D array of tiles, each tile is a struct of values.  The generic tile has a TYPE field and can be various TYPEs (like barrier, empty, food, egg, ... all of which are declared in an enum).  Actions can be performed on the struct which modify its properties, like if the TYPE == food, the food can be picked up and the TYPE is changed to empty. (This design may be questionable, but it is working for me surprisingly well and the question is about use of macro's not design!)
+<br/>
+<br/>
+These are the relevant values of my tile:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">struct Tile
+<br/>
+{
+<br/>
+  short TYPE;
+<br/>
+  Creature* occupant_one;
+<br/>
+  Creature* occupant_two;
+<br/>
+};</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+At first I was using simple comparison macro's to test the TYPEs:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#define FOOD(X) FOODi(X-&gt;TYPE) // Tile* X
+<br/>
+#define FOODi(X) ((X == FOOD))</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+This was very convenient because I was able to expand it without touching any other part of the program when I wanted to make more types of food:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#define FOOD(X) FOODi(X-&gt;TYPE)
+<br/>
+#define FOODi(X) ((X == FOOD) || (X == FOOD2))</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Well this practice seems to be a slippery slope, because I'm adding more and more of these.  All are simply manipulating the struct, but they are getting more complicated than simple comparisons.
+<br/>
+<br/>
+For example, I needed a reference to who is standing on the tile in the tile (there are thousands of characters, so a lookup from my list of characters isn't feasable if I need to know something like who is standing next to someone else).  Because of that I needed to keep the struct updated when a character moves from one tile to the next and I get something like this:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#define AVAILABLE_SPOT(X) ((X-&gt;occupant_one == '\0') || (X-&gt;occupant_two == '\0'))
+<br/>
+#define SET_SPOT(X, Y) {if(AVAILABLE_SPOT_ONE(X)) SET_SPOT_ONE(X, Y); else if (AVAILABLE_SPOT_TWO(X)) SET_SPOT_TWO(X, Y);}
+<br/>
+<br/>
+#define REMOVE_SPOT(X, Y) {if(SPOT_ONE_IS(X, Y)) SET_SPOT_ONE(X, '\0'); else if (SPOT_TWO_IS(X, Y)) SET_SPOT_TWO(X, '\0');}
+<br/>
+<br/>
+#define AVAILABLE_SPOT_ONE(X) (X-&gt;occupant_one == '\0')
+<br/>
+#define AVAILABLE_SPOT_TWO(X) (X-&gt;occupant_two == '\0')
+<br/>
+<br/>
+#define SET_SPOT_ONE(X, Y) (X-&gt;occupant_one = Y)
+<br/>
+#define SET_SPOT_TWO(X, Y) (X-&gt;occupant_two = Y)
+<br/>
+<br/>
+#define SPOT_ONE_IS(X, Y) (X-&gt;occupant_one == Y)
+<br/>
+#define SPOT_TWO_IS(X, Y) (X-&gt;occupant_two == Y)</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Again I can easily update the macro if I wanted to make it so 3 characters can occupy one tile, but then it gets even bigger.
+<br/>
+<br/>
+<span style="font-weight: bold">Finally the question:</span>
+<br/>
+For those of you who may be more familiar with with using macros, I am wondering what your opinions on them are?  I suppose at some point you should just make functions to do this sort of manipulation and I probably crossed that line long ago, where do you consider that line?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#168821 - Dwedit - Wed May 27, 2009 9:48 pm</h4>
+    <div class="postbody"><span class="postbody">Functions like this might be a better idea than macros:
+<br/>
+<br/>
+static __inline bool isFood(int X)
+<br/>
+{
+<br/>
+  return X == FOOD;
+<br/>
+}
+<br/>
+<br/>
+Because if you end up going to a List of possible things to match, you can use more code without the restrictions of a macro.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#168823 - kusma - Wed May 27, 2009 10:03 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Drovor wrote:</b></span></td> </tr> <tr> <td class="quote">For those of you who may be more familiar with with using macros, I am wondering what your opinions on them are?  I suppose at some point you should just make functions to do this sort of manipulation and I probably crossed that line long ago, where do you consider that line?</td> </tr></table><span class="postbody">
+<br/>
+I draw the line at "Do I absolutely HAVE TO use macros to get this to work?". Macros icky to debug, and provide no type-safety.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#168827 - Pete_Lockwood - Thu May 28, 2009 1:10 am</h4>
+    <div class="postbody"><span class="postbody">As much as you're saying the question is about macros, I'd suggest that a more complete answer would necessarily address the data structures you're using.
+<br/>
+<br/>
+For example for your requirement to know which characters are located on a given tile, you're using two different variables - occupant_one and occupant_two.  If you had an array of Creature* in your Tile and a count of used Creature* locations, you'd be able to write cleaner code like this:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#define MAX_CREATURES 2
+<br/>
+#define AVAILABLE_SPOT(X) (X-&gt;used_locations &lt; MAX_CREATURES)
+<br/>
+#define SET_SPOT(X, Y)    (if(X-&gt;used_locations &lt; MAX_CREATURES) X-&gt;creature[x-&gt;used_locations++] = Y)
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+The REMOVE_SPOT would be a little longer - you'd trot along the array looking for Y, remove it, trot along the rest of the array moving each character down one, and finally decrement used_locations - but this approach could expand to having 50 creatures in the same spot without any change to the code.
+<br/>
+<br/>
+Similarly the question of 'food'.  Will your program really have so much data that it's necessary to compress all the data into one variable at the cost of complicating the code?  If you have several types of food you could use a boolean in the struct that is only set for 'food' tiles.  Then have another variable in the struct which holds an index to the specific 'flavor' of food.  That index could also be used indicate the type of terrain for a non-food tile, although I'd guess that perhaps you want your tile to assume a type of terrain after the food has been collected?  If that was the case, why not just add another variable to the struct and keep the idea of 'food' separate from terrain?
+<br/>
+<br/>
+There are a hundred ways to skin a rabbit and these aren't necessarily the best, the idea is more to get you to consider that your problem might not be whether to write macros but whether it's worth thinking the data structures through more - sooner rather than later.
+<br/>
+<br/>
+Personally, if a macro does much more than a little bit manipulation I'd just write an inline function.  I'm not sure I can think of any really good reasons to use macros - there are several gotchas you have to avoid when using macros: the lack of type safety, argument re-evaluation, and lack of debugging being the obvious ones - so why bother?<br/>_________________<br/>It's not an illusion, it just looks like one.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#168831 - elwing - Thu May 28, 2009 9:00 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Pete_Lockwood wrote:</b></span></td> </tr> <tr> <td class="quote">Personally, if a macro does much more than a little bit manipulation I'd just write an inline function.  I'm not sure I can think of any really good reasons to use macros - there are several gotchas you have to avoid when using macros: the lack of type safety, argument re-evaluation, and lack of debugging being the obvious ones - so why bother?</td> </tr></table><span class="postbody">
+<br/>
+you are generally right, trough macro can be used to add readability to the code at the expense of code clarity... and in some place you can not just use inline function (think protothread and such awfull things...). here is an example i've personnally seen (but feel free to check protothread, it's not that different...)
+<br/>
+<br/>
+I had to write an almost sequential state machine that was manageing a remote device configuration. I had a sequential list of things to perform (eg. read x, write y...) and each transaction needed to use a substate machine. the main state machine was written as a method containing a big switch case with every case being a state and all of its state looked the same... call the substate machine, depending on the return either switch to the next state (the transaction was ended) or the transaction is pending, return and continue from the same state...
+<br/>
+so basically each "state" was looking like:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+      switch(state){
+<br/>
+      case STATE_A:
+<br/>
+         switch(lFSM(WRITE,&amp;data)){
+<br/>
+         case PENDING:
+<br/>
+            break;
+<br/>
+         case RESULT_OK:      
+<br/>
+            state = STATE_B;
+<br/>
+            break;
+<br/>
+         case ERROR:
+<br/>
+            ...
+<br/>
+         default:
+<br/>
+            ...
+<br/>
+         }
+<br/>
+      case STATE_B:
+<br/>
+         switch(lFSM(WRITE,&amp;data)){
+<br/>
+         case PENDING:
+<br/>
+            break;
+<br/>
+         case RESULT_OK:      
+<br/>
+            state = STATE_C;
+<br/>
+            break;
+<br/>
+         case ERROR:
+<br/>
+            ...
+<br/>
+         default:
+<br/>
+            ...
+<br/>
+         }
+<br/>
+      ...
+<br/>
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+if the transmition FSM return that the transmission is pending we get out and it will be called once more using re-entrency (the main FSM is evaluated periodically...)
+<br/>
+now, using macro you can tradeoff all theses lines with something clearer to the reader (but much harder to debug... that's a tradeoff...) using macro like:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#define WRITEFSM(data,nextstate)                  \
+<br/>
+      witch(ltrsmFSM(WRITE,&amp;data)){               \
+<br/>
+   case PENDING:                           \
+<br/>
+      break;                           \
+<br/>
+   case RESULT_OK:                        \
+<br/>
+      state = nextstate;                     \
+<br/>
+      break;                           \
+<br/>
+   case ERROR:                           \
+<br/>
+      ...                              \
+<br/>
+   default:                              \
+<br/>
+      ...                              \
+<br/>
+   }
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+that can reduce your FSM code to something like:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+      switch(state){
+<br/>
+      case STATE_A:
+<br/>
+         WRITEFSM(data,STATE_B);
+<br/>
+      case STATE_B:
+<br/>
+         WRITEFSM(data,STATE_C);
+<br/>
+      ...
+<br/>
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+it's obviously harder to debug, but for a reader point of view, there's no comparision i think...
+<br/>
+<br/>
+now in my opinion, if you except theses special cases, you should only use macro for simple bitwise operation and inline method for all other repetitive threatment, but, in any cases, please avoid using a macro to access a member, in my opinion basket-&gt;fruit is much better than FRUIT_IN(basket)...
+<br/>
+<br/>
+<br/>
+edit: protothread link <a class="postlink" href="http://www.sics.se/~adam/pt/" target="_blank">http://www.sics.se/~adam/pt/</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#168832 - gauauu - Thu May 28, 2009 2:49 pm</h4>
+    <div class="postbody"><span class="postbody">For the most part, I think elwing is on a good track.  I had similar issues where there were repeating chunks of stuff (especially in some data definitions) that couldn't reasonably be broken into functions, where macros made it a lot more semantic for the human writer/reader of the code.
+<br/>
+<br/>
+Another place I ended up using macros was to give more semantic meaning to reusable variables -- I had a system for enemies (using C, not C++) where there was an enemy struct.  Something like (albeit rather simplified):
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+struct Enemy{
+<br/>
+   Character * characterInfo;
+<br/>
+   int stat1;
+<br/>
+   int stat2;
+<br/>
+   int stat3;
+<br/>
+   int stat4;
+<br/>
+<br/>
+   int (*enemyTypeScript)(int param, Enemy * enemy);
+<br/>
+<br/>
+} ;
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+In this case, all enemies used the same struct, and particular enemy scripting/AI was handled in the enemyTypeScript, with a different function for each enemy type.  The stat variables were generic variables that could be used differently for different enemy types.  (For some enemies, stat1 was a delay timer, for others, it was a counter for how many bullets they shot).  In this case, in the enemyTypeScripts, I used a macro to make it easier to refer to stat1 by "DELAYTIMER", so it would be clearer.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+you should only use macro for simple bitwise operation and inline method for all other repetitive threatment</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Although I do it this way also, what makes bitwise operations special that you don't use inline functions for them?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#168834 - elwing - Thu May 28, 2009 3:14 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>gauauu wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+you should only use macro for simple bitwise operation and inline method for all other repetitive threatment</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Although I do it this way also, what makes bitwise operations special that you don't use inline functions for them?</span></td> </tr></table><span class="postbody">
+<br/>
+not sure, that's actually a good question... it's maybe because you can use the same macro for any integer type...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#168836 - Pete_Lockwood - Thu May 28, 2009 3:57 pm</h4>
+    <div class="postbody"><span class="postbody">@Elwing: I'm not following why you'd elect to move the FSM subcode into Macros instead of functions.  Doesn't moving it into functions produce the same result?  The main FSM code would be highly readable but you wouldn't lose type safety, debuggability(TM) etc.
+<br/>
+<br/>
+@gauauu: Without seeing more of the code to know why you didn't, an outside observer might suggest that you could achieve the readability by simply using unions of structs.
+<br/>
+<br/>
+<br/>
+The reason I don't mind putting bit operations into a macro is that I'm effectively stating that my macro is probably doing something a little cunning that isn't going to be obvious if it's expanded in code anyway - but I never want the compiler to override my decision and not inline the code.<br/>_________________<br/>It's not an illusion, it just looks like one.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#168838 - Miked0801 - Thu May 28, 2009 6:10 pm</h4>
+    <div class="postbody"><span class="postbody">There are ways to make sure that code always inlines.  Tha said, if you are being so cunning, one hopes you don't fool yourself later on when debugging or extending your code :)
+<br/>
+<br/>
+Seriously, the only time I use macros anymore are for their identifier stitching stuff when build tables:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#define MODEL_INFO(model) \
+<br/>
+   (ModelInfo){ FooCast(model##_foo1), FooCast(model##_foo2), FooCast(model##_foo3) }
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Then I just need to have MODEL_INFO(bleh) in a table instead of all the sub components.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#168845 - elwing - Fri May 29, 2009 7:42 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Pete_Lockwood wrote:</b></span></td> </tr> <tr> <td class="quote">@Elwing: I'm not following why you'd elect to move the FSM subcode into Macros instead of functions.  Doesn't moving it into functions produce the same result?  The main FSM code would be highly readable but you wouldn't lose type safety, debuggability(TM) etc.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+guess I wasn't clear enough, the FSM is in a function and the substate machine is also in a function, but depending on the return I need either to change the main FSM state (no change when pending, move to a certain state in case of error and move to a last state if the transmission is ended) and exit the main FSM. now I could change the main FSM state in the sub FSM function and return in anycase, but changing the main FSM state outside of the FSM code itself seems quite wrong to me... (and not easier to debug).
+<br/>
+<br/>
+now if i missed an interesting alternative it would be great if you could point it.
+<br/>
+Using macro is not right or wrong, it all depend of what are the gain (readability) and what are the loss (debugability(c) :))</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#168846 - sgeos - Fri May 29, 2009 8:43 am</h4>
+    <div class="postbody"><span class="postbody">Use macros instead of magic numbers.  =)
+<br/>
+Macros are also good for stringization and tokenization.
+<br/>
+I also use macros when I need to do something many times and I can not reasonablely break the code off into a subroutine due to scope issues.
+<br/>
+<br/>
+This is probably not the best example, but here is an example:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#include &lt;stdio.h&gt;
+<br/>
+<br/>
+#define COUNT_ROTTING(a) ((a) &lt; 0 ? -(a) : 0)
+<br/>
+#define COUNT_FRESH(a)   (0 &lt; (a) ?  (a) : 0)
+<br/>
+#define NAME_ROTTING    "rotting"
+<br/>
+#define NAME_FRESH      "fresh"
+<br/>
+#define PRINT_FRUIT_NONE(basket,fruit) \
+<br/>
+        if (0 == basket-&gt;fruit) \
+<br/>
+                printf("%d x %s\n", 0, #fruit)
+<br/>
+#define PRINT_FRUIT_OF_TYPE(basket,fruit,status) \
+<br/>
+        if (0 &lt; COUNT_##status(basket-&gt;fruit)) \
+<br/>
+                printf("%d x %s %s\n", COUNT_##status(basket-&gt;fruit), \
+<br/>
+                NAME_##status, #fruit)
+<br/>
+#define PRINT_FRUIT(basket,fruit) \
+<br/>
+        PRINT_FRUIT_NONE(basket,fruit); \
+<br/>
+        PRINT_FRUIT_OF_TYPE(basket,fruit,FRESH); \
+<br/>
+        PRINT_FRUIT_OF_TYPE(basket,fruit,ROTTING)
+<br/>
+<br/>
+struct fruitBasket
+<br/>
+{
+<br/>
+        int apple;
+<br/>
+        int banana;
+<br/>
+        int peach;
+<br/>
+        int orange;
+<br/>
+        // a bunch of other fruits
+<br/>
+};
+<br/>
+<br/>
+void printFruitBasket(struct fruitBasket *pBasket)
+<br/>
+{
+<br/>
+        PRINT_FRUIT(pBasket, apple);
+<br/>
+        PRINT_FRUIT(pBasket, banana);
+<br/>
+        PRINT_FRUIT(pBasket, peach);
+<br/>
+        PRINT_FRUIT(pBasket, orange);
+<br/>
+}
+<br/>
+<br/>
+int main(void)
+<br/>
+{
+<br/>
+        struct fruitBasket myFruitBasket = {-1, 0, 1, 2};
+<br/>
+        printFruitBasket(&amp;myFruitBasket);
+<br/>
+        return 0;
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+Any time you start naming variables with numbers in them (flag1, flag2, actor_one, actor_two), it is a good sign you should probably be using an array.
+<br/>
+<br/>
+Also, the macro VS subroutine argument strikes me as moot for the most part.  It seems like your macros should really be methods.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">if (myTile.contains(FOOD))
+<br/>
+  // pick up food</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#168851 - gauauu - Fri May 29, 2009 6:35 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Pete_Lockwood wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+@gauauu: Without seeing more of the code to know why you didn't, an outside observer might suggest that you could achieve the readability by simply using unions of structs.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Yeah, that would also work.  I found my approach to be easier for me to read when I considered both options (partially due to the fact that at the declaration of "enemy" I don't know how many different kinds of specific enemies there will be), but it would definitely be a reasonable choice.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sgeos wrote:</b></span></td> </tr> <tr> <td class="quote">Any time you start naming variables with numbers in them (flag1, flag2, actor_one, actor_two), it is a good sign you should probably be using an array.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+True. Really, in my case, it should have been an array of u32's, to be divided up in any way the specific enemy type requires.  Practically, in this limited case, it didn't make much difference.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

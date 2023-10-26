@@ -1,0 +1,846 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Skinning with Matrix_Load4x4 - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Skinning with Matrix_Load4x4</h2>
+<div id="posts">
+<div class="post">
+    <h4>#141489 - nce - Wed Sep 26, 2007 6:09 am</h4>
+    <div class="postbody"><span class="postbody">Hi Everyone,
+<br/>
+<br/>
+I'm currently playing a little with the matrices on the DS...
+<br/>
+I wanted to set 2 characters from 500 to 800 triangles on screen.  Because of this polycount, it looks quite hard to keep their animations as vertex blend because I will be out of memory too fast... ( yes I want to put lot of animations on them )
+<br/>
+<br/>
+So I started to skin the characters... ( I first did the skin in software to have softskin ( more than 1 bones influences ) but well I killed the ds with a single 500 tri mesh ... )
+<br/>
+<br/>
+I'm now using a single rigid skin ( 1 bone only ) and using the hardware matrices to do the skin...
+<br/>
+<br/>
+The main problem I have here is that I can render only around 600 tri on screen before missing a frame...  It looks like loading a matrix is quite expensive too
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">//start the strip
+<br/>
+   glBegin ( GL_TRIANGLE_STRIP );
+<br/>
+   //render all tri of that strip
+<br/>
+   for ( i = 0 ; i &lt; character-&gt;nbrvertex ; i++ )
+<br/>
+   {
+<br/>
+      glPushMatrix();
+<br/>
+<br/>
+         //loading the matrix link to this vertex
+<br/>
+         matrix = &amp;character-&gt;anims-&gt;matrix[ ( vertex-&gt;boneid * character-&gt;anims-&gt;nbrframes ) + ( frame ) ];
+<br/>
+<br/>
+         MATRIX_LOAD4x4 = *matrix++ ;
+<br/>
+         MATRIX_LOAD4x4 = *matrix++ ;
+<br/>
+         MATRIX_LOAD4x4 = *matrix++ ;
+<br/>
+         MATRIX_LOAD4x4 = 0;
+<br/>
+<br/>
+         MATRIX_LOAD4x4 = *matrix++ ;
+<br/>
+         MATRIX_LOAD4x4 = *matrix++ ;
+<br/>
+         MATRIX_LOAD4x4 = *matrix++ ;
+<br/>
+         MATRIX_LOAD4x4 = 0;
+<br/>
+<br/>
+         MATRIX_LOAD4x4 = *matrix++ ;
+<br/>
+         MATRIX_LOAD4x4 = *matrix++ ;
+<br/>
+         MATRIX_LOAD4x4 = *matrix++ ;
+<br/>
+         MATRIX_LOAD4x4 = 0;
+<br/>
+<br/>
+         MATRIX_LOAD4x4 = *matrix++ ;
+<br/>
+         MATRIX_LOAD4x4 = *matrix++ ;
+<br/>
+         MATRIX_LOAD4x4 = *matrix++ ;
+<br/>
+         MATRIX_LOAD4x4 = 1&lt;&lt;12;
+<br/>
+<br/>
+         //render vertex
+<br/>
+<br/>
+            GFX_NORMAL   = vertex-&gt;normal;
+<br/>
+            GFX_TEX_COORD   = vertex-&gt;uv;
+<br/>
+<br/>
+            GFX_VERTEX16   = vertex-&gt;yx ;
+<br/>
+            GFX_VERTEX16   = vertex-&gt;z ;
+<br/>
+<br/>
+      glPopMatrix(1);
+<br/>
+<br/>
+      //next
+<br/>
+      vertex++ ;
+<br/>
+   }
+<br/>
+   //ending strip
+<br/>
+   glEnd();</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I've also done some test to see if it's slower to change the matrix inside the glbegin glend couple or if it's better to each time do a new couple for each matrix.... It looks there is no differences....
+<br/>
+<br/>
+Anyone has already had this kind of problem ? Or anyone has an idea to speed this up ?
+<br/>
+<br/>
+<br/>
+Thanks.<br/>_________________<br/>-jerome-</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#141491 - DekuTree64 - Wed Sep 26, 2007 6:59 am</h4>
+    <div class="postbody"><span class="postbody">Yeah, loading a matrix for every vertex is going to be pretty darn slow. 
+<br/>
+<br/>
+First of all, get rid of that push/pop in the loop. If you really need to preserve the original matrix, then push/pop outside the loop.
+<br/>
+<br/>
+Then one thing you can do to make it a little faster is shove all the matrices onto the matrix stack with glStoreMatrix, and then load whichever one you need with glRestoreMatrix.
+<br/>
+<br/>
+Once that's all done, the main place to save time will be minimizing the number of times you have to change matrix. Could get tricky, but for starters, maybe just separate the polygons into 2 groups. The first group being polygons that each belong entirely to one bone, and the second group being polygons that are influenced by multiple bones. From there, it should be pretty easy to optimize group 1. Group 2 is not going to get incredibly much faster anyway, so you might as well just leave it alone.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#141492 - nce - Wed Sep 26, 2007 7:01 am</h4>
+    <div class="postbody"><span class="postbody">EDIT : thanks DekuTree64 you answerd while I was writting this
+<br/>
+<br/>
+<br/>
+First optimisation was to remove the push and pop from inside the loop ( while I'm doing only load matrix I don't need them there )
+<br/>
+<br/>
+It's little better but not soo impressive :(
+<br/>
+<br/>
+I found looking around the glRestoreMatrix... Do you think that it will be faster to push all my matrix before drawing and to call a restore during rendering...
+<br/>
+<br/>
+I've seach on internet to find the exact size of the stack, to know how many matrix I can push but I always find answer like 16 or 32 ... but nobody looks sure about what it is exactly...<br/>_________________<br/>-jerome-</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#141493 - nce - Wed Sep 26, 2007 7:13 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>DekuTree64 wrote:</b></span></td> </tr> <tr> <td class="quote">Once that's all done, the main place to save time will be minimizing the number of times you have to change matrix. Could get tricky, but for starters, maybe just separate the polygons into 2 groups. The first group being polygons that each belong entirely to one bone, and the second group being polygons that are influenced by multiple bones.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Yes It's not shown in this code, but I'm doing my strip by hand ( for the character I discovert that I'm far better to do a strip than my stripper :) )
+<br/>
+So while doint the strip I'm trying to stay in the same bone influence and the code does the load matrix only when you change from one matrix to another...
+<br/>
+( But right now I'm testing on a character of 200 triangles so all poly are in the second group )<br/>_________________<br/>-jerome-</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#141742 - M3d10n - Sat Sep 29, 2007 1:53 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>DekuTree64 wrote:</b></span></td> </tr> <tr> <td class="quote">Then one thing you can do to make it a little faster is shove all the matrices onto the matrix stack with glStoreMatrix, and then load whichever one you need with glRestoreMatrix.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I just used that scheme on my skinning code and I must thank you for the tip, because it rocks. I'm using skinned display lists, and it was just a matter of adding MATRIX_RESTORE commands to the display list to save the skinnig info (I was planning to use matrix load calls and insert them into the DL originally, and it would require me to modify the DLs every time before rendering). 
+<br/>
+<br/>
+To update the skin before rendering, all I need is to get each bone to compute its  global matrix, then multiply it and the inverse of the skin-pose global matrix (pre-calculated during load time) onto the current modelview and store the result directly into the stack position for each bone. 
+<br/>
+<br/>
+I still need to profile it (how do I do that on the DS?), but I'm still getting 60fps with a 550 triangles + 18 bones model plus a 3K triangle scene (top-view-ish camera, of course, its never showing the whole scene at once). Bone animations are done using linear-interpolated quaternions (only rotations are animated).</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#141795 - nce - Sun Sep 30, 2007 2:32 am</h4>
+    <div class="postbody"><span class="postbody">I'm doing the same kind of stuff ( except I haven't move everything to display list yet. first I'm trying to have everything working before that step )
+<br/>
+<br/>
+My question is, how do you succeeded to put 18 bones on the stack ?  While I tried more than 16 bones, nothing was shown... I then cut my model to have less that 16 bones on each part ( now I'm using piece of 12 bones each )
+<br/>
+<br/>
+Did I made a mistake while I tried ? I'll redo a model with more that 16 bones just to be sure ....<br/>_________________<br/>-jerome-</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#141798 - DiscoStew - Sun Sep 30, 2007 5:00 am</h4>
+    <div class="postbody"><span class="postbody">The matrix stack in modelview mode can handle up to 32 different matrices, so you could easily put 18 bone matrices onto it, as long as you've got the room.
+<br/>
+<br/>
+Are you doing any matrix pushes prior to loading the model's bones matrices without popping them? Not saying "all" of them should be popped, but if you've got 16 pushes (that aren't popped) before loading the model's bones, you'll only have 16 slots to use.
+<br/>
+<br/>
+<br/>
+Heh, I never even thought about skinned display lists. Always thought about a static display list. That's something I should add to my own code. Pretty much everything that is linked to a single bone is put into a list with in-list commands to load the different bones, but for everything else, won't those need to be calculated manually? And what about the normals for those?<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#141831 - M3d10n - Sun Sep 30, 2007 5:43 pm</h4>
+    <div class="postbody"><span class="postbody">nce:
+<br/>
+<br/>
+Each bone copies its matrices into position (30-boneIndex) in the stack, to avoid them getting over my own push()/pop() operations. I don't do any more than 4 matrix pushes on the modelview before drawing characters, so I'm safe up to 24-ish bones.
+<br/>
+<br/>
+Now there's a catch when using the stack directly : a matrix_restore is only a faster equivalent of a matrix_load, so you must take care when using it and make sure all your matrices are properly multiplied before storing. 
+<br/>
+This is the method I call on my skeleton class before drawing the display list (I think I can show this much):
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+void Skeleton::copyToMatrixStack()
+<br/>
+{
+<br/>
+   for (int i=0; i&lt;mBoneCount; i++)
+<br/>
+   {
+<br/>
+      Bone &amp;bone = mBoneList[i];
+<br/>
+<br/>
+      glPushMatrix();
+<br/>
+                  
+<br/>
+      //Transform by the bone global matrix
+<br/>
+      glMultMatrix4x4(&amp;bone.globalMatrix);
+<br/>
+      
+<br/>
+      //Transform by the bone's inverse bind-pose matrix
+<br/>
+      glMultMatrix4x4(&amp;bone.invBindMatrix);
+<br/>
+<br/>
+      //Apply default translation and offset 
+<br/>
+      glTranslatev(&amp;mDefaultOffset);
+<br/>
+      glScalev(&amp;mDefaultScale);
+<br/>
+      
+<br/>
+      //Store in the stack
+<br/>
+      glStoreMatrix(bone.matrixStackIndex);
+<br/>
+<br/>
+      glPopMatrix(1);
+<br/>
+   }   
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+The order of these matrix operations is crucial for things to work properly. The bone invBindMatrix is calculated at load time, by calculating the global matrices using the default skeleton pose and inverting them.
+<br/>
+(Those translate and scale commands are there because the vertices on the display list are pre-scaled to use all of the DS vertex precision.)
+<br/>
+<br/>
+DiscoStew:
+<br/>
+<br/>
+I'm using 1 bone per vertex only, the code has no weighted skinning support. 
+<br/>
+<br/>
+About the normals. On the current setup they would be simply automatically rotated alongside their vertices. Not correct, although I assume it wouldn't look that bad, but I'm not using lighting on my characters so I haven't tested it yet (they have pre-calculated per-vertex colors.)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#141838 - DiscoStew - Sun Sep 30, 2007 6:55 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>M3d10n wrote:</b></span></td> </tr> <tr> <td class="quote">DiscoStew:
+<br/>
+<br/>
+I'm using 1 bone per vertex only, the code has no weighted skinning support. 
+<br/>
+<br/>
+About the normals. On the current setup they would be simply automatically rotated alongside their vertices. Not correct, although I assume it wouldn't look that bad, but I'm not using lighting on my characters so I haven't tested it yet (they have pre-calculated per-vertex colors.)</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I guess it was just the way I was thinking. When I think of skinning, I think of one complete mesh, rather than multiple meshes put together, like building blocks for a model. For the latter, there should be no problems with the normals as far as I can see, as they do move along with the matrix, as the vertices do. The former, in my mind, would require splitting up the polygons as DekuTree64 suggests, as even if every vertex only has one bone associated with them, a group of vertices to make a polygon may not have the same bone.<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#141870 - M3d10n - Mon Oct 01, 2007 12:05 am</h4>
+    <div class="postbody"><span class="postbody">I'll make some test models to check how normals look with the current skinning code. Can't post screens of the characters themselves.
+<br/>
+<br/>
+--EDIT--
+<br/>
+<br/>
+Eww, its worse than I expected. The normals look totally messed up for some reason. They look fine when I export the model without skinning, so its definitely caused by my skinning code, but I can't think up of a reason right now (I know they wouldn't be correct, but this is pushing it).</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#141894 - silent_code - Mon Oct 01, 2007 10:45 am</h4>
+    <div class="postbody"><span class="postbody">are all normals weird or is it just the joint poly (polygons with vertices that belong to different bones - normally found in joint regions) normals? i guess a way (maybe not the best) would be to rotate those normals with the current absolute matrix. check it out.
+<br/>
+<br/>
+happy coding!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#141934 - M3d10n - Mon Oct 01, 2007 9:23 pm</h4>
+    <div class="postbody"><span class="postbody">See yourself:
+<br/>
+<a href="http://i24.tinypic.com/331ozth.jpg">[Images not permitted - Click here to view it]</a>
+<br/>
+<br/>
+Doesn't make any sense, apparently. I think something else is wrong, but I can't check it until tomorrow.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#141972 - silent_code - Tue Oct 02, 2007 6:00 pm</h4>
+    <div class="postbody"><span class="postbody">it is, indeed.
+<br/>
+i expect your light setup works with "normal" (static) geometry. if this is the bind pose and your normals are calculated in "global" modelspace (i lack a better description for that - "local" would then be on a per influence basis) it should display just fine. there's something transforming these normals and producing garbage.
+<br/>
+i bet there's a bug in the normal calculation algorithm (either in the data structures - on an abstract level -  or the calculation itself). do you import them or do you calculate them on load time (not a good idea, imo)? how do you handle normals, anyway?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#142008 - M3d10n - Wed Oct 03, 2007 1:01 am</h4>
+    <div class="postbody"><span class="postbody">I'm importing the normals (using FBX files). The vertex positions and normals are read from their original bind pose.
+<br/>
+<br/>
+Lighting looks fine if I simply remove the mesh skinning and re-export. Unskinned triangles are placed at the start of the display list, and are rendered exactly as they did before I added skinning support and the matrix_restore command is not written before such vertices.
+<br/>
+<br/>
+I did a quick test using matrix_restore to position the vertices of a single gouraud-shaded triangle, and they rotate the normal properly. It really seems to be something specific to my own code, probably on the FBX-&gt;DS conversion.
+<br/>
+<br/>
+--EDIT--
+<br/>
+Found the culprit! It was the Goddamn FBX SDK! A quick debugging on my converter and it turned out the method I was using for retrieving normals returns (0,0,0) normals for skinned meshes (this explains why most of the model looks flat).
+<br/>
+<br/>
+I just need to find out how to read the normals from the skinned mesh bind pose to fix it. FBX files are very practical to use but the SDK is a royal pain to use (the data is stored in structures which are as far away from the ones used for gaming as possible).</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#142009 - M3d10n - Wed Oct 03, 2007 2:00 am</h4>
+    <div class="postbody"><span class="postbody">Ok, I've got it working now. I really had to use a different method for retrieving the normals (the easy one won't work for skinned models). 
+<br/>
+<br/>
+Looks far better than I expected, and at first glance it looks almost as good as dynamically recalculated normals.
+<br/>
+<br/>
+Download here:
+<br/>
+<a class="postlink" href="http://www.mediafire.com/?5thzghscygj" target="_blank">http://www.mediafire.com/?5thzghscygj</a>
+<br/>
+<br/>
+Needs DLDI patching, and you must put the skinned_dl folder at your card's root. The "skinned_dl_fcsr.nds" file is usable on No$GBA or old flash carts (if you rename to .ds.gba).
+<br/>
+<br/>
+<a href="http://i21.tinypic.com/2hncihh.jpg">[Images not permitted - Click here to view it]</a>
+<br/>
+<br/>
+What's a good way to profile how much CPU or frame time this whole thing is using? How to you measure time on the DS?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#142020 - DiscoStew - Wed Oct 03, 2007 6:11 am</h4>
+    <div class="postbody"><span class="postbody">Pretty good there.
+<br/>
+<br/>
+When I looked around for a profiler, I found Lazy's timer that when set up, returned time based on milliseconds. Probably adjustable to finer values as it uses 2 of the hardware's timers, but I didn't want to mess with it.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#include &lt;nds.h&gt;
+<br/>
+<br/>
+/* Lazy:
+<br/>
+ * Since TIMER1_DATA will overflow in 65536 milliseconds, it is necessary
+<br/>
+ * to add 65536 to this variable every time TIMER1_DATA overflows.
+<br/>
+ * So, the total time elapsed since Timer_Init in milliseconds is g_timerBaseMS + TIMER1_DATA.
+<br/>
+ */
+<br/>
+u32 g_timerBaseMS = 0;
+<br/>
+<br/>
+/* nds_timer1_overflow:
+<br/>
+ * Adds 65536 to the base millisecond counter so we
+<br/>
+ * don't lose any time when TIMER1_DATA rolls over.
+<br/>
+ */
+<br/>
+static void nds_timer1_overflow( void ) {
+<br/>
+   g_timerBaseMS+= 65536;
+<br/>
+}
+<br/>
+<br/>
+/* Timer_GetMS:
+<br/>
+ * Returns: The time in milliseconds since Timer_Init was called.
+<br/>
+ */
+<br/>
+int Timer_GetMS( void ) {
+<br/>
+   return g_timerBaseMS + TIMER1_DATA;
+<br/>
+}
+<br/>
+<br/>
+/* Timer_Sleep:
+<br/>
+ * Waits until ( usec ) microseconds have passed.
+<br/>
+ */
+<br/>
+void Timer_Sleep( int usec ) {
+<br/>
+   swiDelay( usec );
+<br/>
+}
+<br/>
+<br/>
+/* Timer_Init:
+<br/>
+ * Initialize NDS hardware timers.
+<br/>
+ */
+<br/>
+void Timer_Init( void ) {
+<br/>
+   /* Timer0 will overflow roughly every 0.98 milliseconds */
+<br/>
+   TIMER0_CR = TIMER_ENABLE | TIMER_DIV_1;
+<br/>
+   TIMER0_DATA = 32768;
+<br/>
+<br/>
+   /* When timer0 overflows, TIMER1_DATA will be incremented by 1.
+<br/>
+    * When timer1 overflows 65536 is added to g_timerBaseMS so we don't lose
+<br/>
+    * any time.
+<br/>
+    */
+<br/>
+   TIMER1_CR = TIMER_ENABLE | TIMER_CASCADE | TIMER_IRQ_REQ;
+<br/>
+   TIMER1_DATA = 0;
+<br/>
+<br/>
+   /* Set and enable the interrupts for timer 1 */
+<br/>
+   irqSet( IRQ_TIMER1, nds_timer1_overflow );
+<br/>
+   irqEnable( IRQ_TIMER1 );
+<br/>
+} </td> </tr></table><span class="postbody">
+<br/>
+<br/>
+It is slightly altered from when I first got it, because for some reason I was getting 0 the entire time before making the change to TIMER1_CR, which didn't have TIMER_ENABLE on it. To profile, retrieve the time before you process your model, and subtract the current time with the one you saved before.
+<br/>
+<br/>
+Note though that you'll most likely get different times when trying on hardware vs No$GBA, as in No$GBA, not only is stuff done slower, but ITCM is not up to what speed it should be.
+<br/>
+<br/>
+[shameless plug]
+<br/>
+For my own stuff, I'd get 12-13 milliseconds on hardware vs 36-37 milliseconds on No$GBA, processing 6 rigid-skinned models with normals calculated in real-time, with each model consisting of 300 triangles and 21 bones, non-textured. About 15-16/41-42 milliseconds when using the same setup but models are smooth-skinned with up to 3 maximum influences. They're set up for altering the bones for animation, but I'm not at that point yet.
+<br/>
+[/shameless plug]<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#142029 - M3d10n - Wed Oct 03, 2007 12:46 pm</h4>
+    <div class="postbody"><span class="postbody">I'm getting 19-20 on HW and 26-27 on No$GBA, 6 models with 530 triangles, 18 bones. That's the whole of updating animation+skinning. 
+<br/>
+<br/>
+Gotta find out which parts of the animation and skinning code are eating more time, but milliseconds aren't granulated enough. I found that I can get a much better resolution using the VCOUNT register (when not missing vblanks). The render for a single character takes 50-51 lines (3.17 milliseconds, which matches the ms profiling). I'll break it up to find out where all that time is being used, because that's 19% of my frame time.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#142030 - M3d10n - Wed Oct 03, 2007 2:54 pm</h4>
+    <div class="postbody"><span class="postbody">Ok, got some results. For a single 550 polys, 18 bones character, my code takes 15 vcounts (0.95 ms) to update the animation and the bones matrices, but the glCallList is taking 35 vcounts (2.2 ms) to actually render the character. 
+<br/>
+<br/>
+I removed the skinning and re-exported the model, and the glCallList time went down to 10 vcounts. Those matrix_restores in there surely aren't free, and its obvious that the performance depends a lot on how often they are called to draw a mesh. The dream of 8 250 poly characters at 60fps seems a bit distant now...
+<br/>
+<br/>
+Well, that's yet another reason for me to get off my lazy arse and make my converter use triangle strips and quads (right now I'm using GL_TRIANGLES, ugh), that'd bring the vertex count down. 
+<br/>
+<br/>
+I should also try optimizing the animation code, maybe moving some functions to ITCM (like the quaternion-&gt;matrix code and the quaternion interpolation stuff).</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#142045 - silent_code - Wed Oct 03, 2007 7:41 pm</h4>
+    <div class="postbody"><span class="postbody">very nice work (all of it)!
+<br/>
+i'll look (later) if i can run your demo with my neo max cart (slot 2, of course!). :^)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#142960 - silent_code - Mon Oct 15, 2007 4:09 pm</h4>
+    <div class="postbody"><span class="postbody">very impressive to see it running on hw! the model is sort of an unfortunate filler (there are vertex gabs between limbs and body), but the animation is sooo fluid! definitely some nice work!
+<br/>
+<br/>
+how big (in words) is your joint structure? i'm trying to get away with just a vector, a quaternion and one (maybe two) matrices (3x3 or 3x4) plus hierarchy information (about two words), all packed into a tright array and of course propperly aligned. ;^D
+<br/>
+<br/>
+btw: no results, yet! i'm still working on the corresponding tool. ;^p</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#143076 - M3d10n - Tue Oct 16, 2007 4:00 pm</h4>
+    <div class="postbody"><span class="postbody">I'm working with ~20 joints.
+<br/>
+<br/>
+Here's the current bone struct:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+typedef struct {
+<br/>
+      char name[16];
+<br/>
+      s32  nameHash;
+<br/>
+      s8 child[MAX_BONE_CHILDREN];
+<br/>
+      s8 parent;
+<br/>
+<br/>
+      //Changes before render
+<br/>
+      dsQuatf32 rotation;
+<br/>
+      m4x4 localMatrix;
+<br/>
+      m4x4 globalMatrix;                     
+<br/>
+      
+<br/>
+      //Calculated once, never changes
+<br/>
+      GLvector offset;
+<br/>
+      m4x4 bindMatrix;
+<br/>
+      m4x4 invBindMatrix;
+<br/>
+      int matrixStackIndex;
+<br/>
+} Bone;
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Quite big, and probably horribly aligned, but it's made in a way that I can re-use the same skeleton data for multiple meshes.
+<br/>
+There are a few of changes I have to to do. I can get rid of bindMatrix, because only the invBindMatrix needs to be stored. I can also get rid of storing the actual bone name string and the hash number by implementing a string table and only storing the string index.
+<br/>
+<br/>
+dsQuatf32 is my beloved fixed point quaternion class. Took a few days to get it working right.
+<br/>
+<br/>
+I spent a lot of time making sure the actual animation data was as lightweight as possible. Each keyframe contains a compressed quaternion (8-bit per component, packed into a 32-bit unsigned int) and a time value (unsigned 0.32 format). 
+<br/>
+<br/>
+The 8-bit quaternions worked better than I expected. I feared the animation keyframes would look off, but it looks exactly as it does in Maya.
+<br/>
+<br/>
+The animation process I'm using works like this: a SkinMeshInstance can load a mesh, a skeleton and a number of animations. When told to render itself, it calls advanceTime() on the currently playing animation and then calls updateSkeleton() on it, passing a pointer to its own skeleton. The animation will calculate the interpolated rotation for its nodes (each node contains animation keyframes for a bone on the skeleton), convert the quaternions to matrices and store them on the corresponding skeleton's bones' localMatrix. Then the SkinMeshInstance will call updateGlobalMatrices() and copyMatricesToStack() on the skeleton. Then it's just glCallList() to get the skinned mesh on screen.
+<br/>
+<br/>
+The quaternions are interpolated in a very crude way: I "uncompress" the previous and next keyframes' 8-bit quaterions into 32-bit ones and simply do linear interpolation on each component. I later figured out that I don't even need to normalize the result: it just looks the same somehow.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#143077 - silent_code - Tue Oct 16, 2007 5:30 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>M3d10n wrote:</b></span></td> </tr> <tr> <td class="quote">The quaternions are interpolated in a very crude way: I "uncompress" the previous and next keyframes' 8-bit quaterions into 32-bit ones and simply do linear interpolation on each component. I later figured out that I don't even need to normalize the result: it just looks the same somehow.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+you get one hell of a WOW! for that! i wouldn't expect it to be *that* good on screen! even when zooming in real close it still looks pretty convincing and stable. i was about to ask what interpolation method you use, but know i'm just stunned... is it asm or c/c++?
+<br/>
+<br/>
+what about multiple meshes? how much can you cram into memory (after all the other stuff) and what's you experience (if any) with, say, 4 or 6 on-screen characters?
+<br/>
+<br/>
+as you already know yourself, your structure need some work - i know, that's just early work. i can see some good memory win after optimizing this stuff. this is why i'm writing custom tools to handle that stuff in a more general manner and then export data into very tight and (hopefully enough) optimized structures.
+<br/>
+<br/>
+speaking of which: i finally found the bug in my character tool that attached child bones to the root, if there was a child already. so damn embarassing. the whole skelleton was mangled (most time it looked like a "women's toy", with "jewels" and all - no, seriously!). i hope i can fix that tonight and move on with the nds-side implementation very soon...
+<br/>
+<br/>
+alignment shouldn't be a problem if you don't use the pack attribute and if you use sizeof(). the compiler should align your structs in a way that is close to the optimum. might bloat your structure, though, so think of interleaving it with other data, if necessary.
+<br/>
+<br/>
+about storing names... the hash idea is quite good. you won't even have to use any complicated hash functions with that little entries. :^D well, if "joint capturing" by name is a feature you must have. ;^D
+<br/>
+<br/>
+i think you could also throw the relative matrix out, because you only need it if your joint moves, what it does by setting the quaternion, which is then converted to the relative matrix, which in turn could thereby be reused for the whole skeleton inside the function which recalculates the joints absolute matrix with the relative matrix, as a function scope variable... even a static one, if that's any good.
+<br/>
+... i hope you get it.
+<br/>
+<br/>
+keep posting any new results! :^D
+<br/>
+<br/>
+ps: sorry for the constant editing! it's the "editing flood", really!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#143249 - M3d10n - Thu Oct 18, 2007 6:26 pm</h4>
+    <div class="postbody"><span class="postbody">The quaternion interpolation trick I got from here:
+<br/>
+<a class="postlink" href="http://number-none.com/product/Hacking%20Quaternions/index.html" target="_blank">http://number-none.com/product/Hacking%20Quaternions/index.html</a>
+<br/>
+<br/>
+I even went as far as implementing that fast square root approximation too for normalizing the quaternions, but then I noticed that nothing changed visually if I didn't normalize.
+<br/>
+<br/>
+Since keyframes are strictly linearly interpolated (no fancy curves), complex movements need more intermediate keyframes. Right now my converter simply generates keyframes at a regular framerate specified as a parameter. That sample use 15 keyframes per second. There is a crude redundant keyframe removal algorithm, but it only removes identical keyframes and can be improved.
+<br/>
+<br/>
+The interpolation code, converting quaternions to local matrices, calculating global matrices from local ones... it's all C++. Completely animating and updating a 18-joints skeleton takes a little less than 1 millisecond with the current code. I hope to optimize it enough so I can put 8 characters on screen at 60fps (with simplier skeletons and less polygons), but probably there'll be very little frame time left for complex game logic.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">speaking of which: i finally found the bug in my character tool that attached child bones to the root, if there was a child already. so damn embarassing. the whole skelleton was mangled (most time it looked like a "women's toy", with "jewels" and all - no, seriously!). i hope i can fix that tonight and move on with the nds-side implementation very soon... </td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I know how that is. My test skeleton was rendered in all kinds of weird messed up positions for ages until I got all the matrix stuff working properly. Then it was the skinned mesh's turn to be drawn in totally mangled ways until I managed to get it following the bones correctly.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">i think you could also throw the relative matrix out, because you only need it if your joint moves, what it does by setting the quaternion, which is then converted to the relative matrix, which in turn could thereby be reused for the whole skeleton inside the function which recalculates the joints absolute matrix with the relative matrix, as a function scope variable... even a static one, if that's any good.
+<br/>
+... i hope you get it. </td> </tr></table><span class="postbody">
+<br/>
+<br/>
+You mean, I convert the quaternion to a local matrix for each joint during the absolute matrix calculation? Sounds like it could work, since that is the only time they are needed. I would need to take care with stack usage since the function is recursive, though (but these skeletons shouldn't get too deep anyway).</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#143443 - silent_code - Sun Oct 21, 2007 6:59 pm</h4>
+    <div class="postbody"><span class="postbody">PLEASE, DON'T GET ME WRONG, I'M POSSIBLY JUST USING AN UNCOMMON APROACH TO SKINNING. i know what a "relative" matrix is good for (rendering "relative" to the parent etc.)! :^)
+<br/>
+<br/>
+well, i'm using just one matrix per joint and everything's working fine. when a quaternion is updated, i simply convert it into a relative matrix, which is a static joint class member (thus shared by all joints), then multiply that with the parent's (absolute) matrix and store that as the current joint's (absolute) matrix. push that on the stack and fire up your rendering.
+<br/>
+<br/>
+i can't think of any case i'd really *have* to store the relative matrix. rag doll, maybe? i don't know, probably not.
+<br/>
+<br/>
+most implementations i saw used up to mindbolowing four matrices! that's crazy! with my setup i can store around three times as much joints and i believe that computation time isn't even worse that with all those matrices available for "instant" access.
+<br/>
+<br/>
+so, all in all, i can only encourage you to try some alternatives. :^D
+<br/>
+<br/>
+good luck and happy coding.
+<br/>
+<br/>
+ps: any arguments for storing a relative matrix (or any other), anyone?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#143465 - M3d10n - Mon Oct 22, 2007 12:21 am</h4>
+    <div class="postbody"><span class="postbody">I understand you 100% =)
+<br/>
+<br/>
+I realize fully now I have no need at all to store the local matrices, since their only function is to calculate the global ones. I'm surely not gonna use ragdolls on a DS game, and I plan to implement stuff like head turning using additive animations.
+<br/>
+<br/>
+I didn't optimize my bone structure too much before because my animation system is designed so only a single skeleton instance can be shared among several skinMeshInstances. The animations are shared as well. Each skinMeshInstance stores the current time for its current animation. The render sequence for each mesh is like this:
+<br/>
+<br/>
+- Increment the animation position and update the current animation object instance with it
+<br/>
+- Call updateSkeleton() on the Animation object, passing the skinMeshInstance skeleton pointer
+<br/>
+- UpdateSkeleton() will calculate and copy the interpolated quaternions into the passed skeleton
+<br/>
+- UpdateGlobalMatrices() and copyMatricesToStack() are called on the skeleton instance
+<br/>
+- Draw the skinned display list
+<br/>
+<br/>
+That way different characters can share a single skeleton and the same animations, so memory isn't too much of an issue.
+<br/>
+<br/>
+BTW, I managed to implement triangle strips into my converter, using Brad Grantham's very nice library: <a class="postlink" href="http://plunk.org/~grantham/public/actc/" target="_blank">http://plunk.org/~grantham/public/actc/</a>
+<br/>
+<br/>
+It cut down the number of vertices from 1590 to 810 and the time needed to render the skinned mesh dropped by 37% (from 2.3ms to 1.5ms). The whole animation thing takes almost 1ms, but I need to beef up my profiler code to properly detect how much time each call is taking.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#143476 - DiscoStew - Mon Oct 22, 2007 5:37 am</h4>
+    <div class="postbody"><span class="postbody">This is just a question I've had on my mind, but with the display list and calls to restore matrices on the stack for animation, are you having to restore each matrix multiple times throughout the display list when dealing with multiple polygons whose vertices are affected by more than one bone? I just can't seem to grasp that each matrix can be called only once throughout the display list without having done prior manipulation to certain vertices as a bone is calculated, and then plugging in those results into the display list itself.<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#143493 - tepples - Mon Oct 22, 2007 11:55 am</h4>
+    <div class="postbody"><span class="postbody">If each bone is a separate self-contained mesh with a cap, and the joints are drawn as simple overlaps, leaving the Z-buffer to sort out the differences, then yes, you can probably draw each bone as a separate part of a display list.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#143495 - M3d10n - Mon Oct 22, 2007 1:09 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>DiscoStew wrote:</b></span></td> </tr> <tr> <td class="quote">This is just a question I've had on my mind, but with the display list and calls to restore matrices on the stack for animation, are you having to restore each matrix multiple times throughout the display list when dealing with multiple polygons whose vertices are affected by more than one bone? I just can't seem to grasp that each matrix can be called only once throughout the display list without having done prior manipulation to certain vertices as a bone is calculated, and then plugging in those results into the display list itself.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Yep, that's exactly what happens. In the worst case scenario, there'll be a matrix restore call for every vertex. When I was using triangle lists, I sorted the triangles based on their vertices bone IDs to try to increase matrix_restore batching. 
+<br/>
+<br/>
+The triangle stripper I'm using knows nothing about bone ids, that's why the glCallList time didn't go down as much as the number of vertices (I think). I'm gonna try modifying the stripper code so it takes bone IDs in consideration, giving priority to vertices which use the same bone when creating strips.
+<br/>
+<br/>
+Anyway, I'm quite satisfied with the results. The character I'm using is quite detailed for a DS game (530 triangles, 18 bones). I would probably hit the polygon limit before missing a frame due to many characters on screen. I'll try creating a test character with ~300 triangles and 12 bones later to see how it performs.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#143874 - DiscoStew - Sat Oct 27, 2007 12:38 am</h4>
+    <div class="postbody"><span class="postbody">Gave some thought on the subject, and I dunno how practical this example may be, but what about plugging in calculated values into the display list to remove numerous calls to restoring matrices? What I mean is that with extra data pertaining to each bone, you'd have a list of certain vertices at the Bind-on-Pose distance from the bone's joint, and before calculating the bone's matrix, build a separate matrix that is derived from the opposite local orientation that the bone will be oriented, calculate the new vertex translation from it, and plug those values into designated spots on the display list.
+<br/>
+<br/>
+Like I said, I don't know if this would be a practical method, as it not only could be slower, but also because of possible problems along the edges of adjacent polygons if the calculated vertices are slightly off from where they would be with the restore matrix method.
+<br/>
+<br/>
+EDIT:
+<br/>
+Even if this method is good, you'd also have to deal with normals, and I hadn't thought that hard, though it could be really simple. Also, even if you are using a display list as a "master copy" that all iterations work off of, each iteration would have to plug in calculated vertices in the same exact spots anyways, so it probably wouldn't create a problem.<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#143888 - M3d10n - Sat Oct 27, 2007 2:52 am</h4>
+    <div class="postbody"><span class="postbody">DiscoStew, if I'm understanding you correctly, that was my original idea (and the OP's too). I was planning to calculate the global matrix for each bone and copying the values into matrix_load calls directly in the display lists.
+<br/>
+<br/>
+I didn't implement it (I went straight with the matrix_restore idea), but it's quite obvious which the drawbacks are. It's impossible to put group all vertices which are affected by the same bone on the display list sequentially, unless whole triangles are affected by single joints. This means there would be multiple copies of the matrix data for the same bone on the list, and that brings 3 problems:
+<br/>
+<br/>
+1) Storing 4x4, or even 3x4 matrices on the lists would inflate them pretty quickly, due to the multiple copies.
+<br/>
+<br/>
+2) Each bone would need to store a list of the indices on the display list where the matrix data goes. This makes it impossible to share the same bone structure among different meshes.
+<br/>
+<br/>
+3) Updating a bone matrix on a display list would require multiple (maybe several) copy operations.
+<br/>
+<br/>
+The matrix_restore reduces the amount of data on the display list, since the matrices are all pre-loaded into the stack.
+<br/>
+<br/>
+-- EDIT--
+<br/>
+Reading again, I think you meant transforming the vertices by software and copying their positions to the right spots in the display list, right? It could be faster, at the cost of extra memory (you need the bind position, bind normal and display list index for each vertex and need a skeleton structure for each unique mesh.)
+<br/>
+<br/>
+It would be hard to modify my code to test such approach. Maybe it would be easier to try moving a software-skinning codebase from immediate mode to display lists?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#143900 - DekuTree64 - Sat Oct 27, 2007 6:09 am</h4>
+    <div class="postbody"><span class="postbody">Yeah, the matrix restore method will definitely be faster than writing each vertex. But for soft skinning, it's hard to say wether immediate mode or display list modification would be faster.
+<br/>
+<br/>
+DiscoStew, did you ever make any more progress on your soft skinning? Real life things have finally settled down a bit for me, so I'd be happy to help out with it.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#143912 - DiscoStew - Sat Oct 27, 2007 9:26 am</h4>
+    <div class="postbody"><span class="postbody">Was just an idea, but then again, I was thinking of simple models rather than more complex models at the time.
+<br/>
+<br/>
+As for my own smooth-skinning code, not much optimization has been done, or could be done. Switched over to counting by the VCount instead of the timer's milliseconds to better see how much time it takes to run the code. Got a few vcount less from simply removing constant indexing that a pointer can do. Other than that, I'm basically at a dead end as far as what I could do better for it. Probably even at the point where I'd get more speed from it if I convert the entire function to assembly. Not something I'm looking forward to, since I'm rusty at it.
+<br/>
+<br/>
+Actually, I could probably do something about the bone processing code. It is using basic matrices, with having to load up a bone's current matrix (or Identity matrix if it is the root bone), then multiply the bone's Bind on Pose matrix, then multiply the bone's changes for the frame. After that is all done, the resulting matrix for the bone is dumped out into memory, in case future effects require it, like an example of a sword in a character's hand. Simple linking of the sword to the character's hand by retrieving that matrix that was saved. All matrix multiplies done in hardware, of course, and (in theory) there is no limit to the number of joints that a model can have.
+<br/>
+<br/>
+With all the talk of quaternions in the thread, I've begun looking up some articles, including those found here, to see what I can do with them. Still reading and trying to understand how they work.<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#143920 - NeX - Sat Oct 27, 2007 12:22 pm</h4>
+    <div class="postbody"><span class="postbody">Would it not be easier, faster and more suitable for the DS (what with that low-res screen and low-accuracy renderer) to simply model each limb, place and rotate?  I mean without any vertex blending.  It looks Ok with med-poly models.<br/>_________________<br/><a class="postlink" href="http://www.mediafire.com/?cuyb10fzdz2" target="_blank">Strummer</a> or <a class="postlink" href="http://www.mediafire.com/?71zxcztscix" target="_blank">Drummer?</a>.  
+<br/>
+Or maybe you would rather play with sand? <a class="postlink" href="http://www.mediafire.com/?a05z5wmdvxm" target="_blank">Sandscape is for you in that case.</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#143946 - M3d10n - Sat Oct 27, 2007 5:57 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>NeX wrote:</b></span></td> </tr> <tr> <td class="quote">Would it not be easier, faster and more suitable for the DS (what with that low-res screen and low-accuracy renderer) to simply model each limb, place and rotate?  I mean without any vertex blending.  It looks Ok with med-poly models.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+It would be faster, since that's not even skinning: it's called hierarchical animation, where you have parent-child relationships on whole meshes (limbs). It has some drawbacks: models looks like robots since all limbs are completely detached from each other (it looks particularly bad at the torso and pelvis) and you need extra polygons at the limbs' endings.
+<br/>
+<br/>
+Most PSOne and N64 games from 1998/1999 and onwards moved from hierarchical-based to vertex-based animation (either vertex-blending or bone-based skinning), since it allows for much more organic-looking characters and seamless UV texturing. Check the differences between Tekken 2 (hierarchical) and Tekken 3 (uses vertex blending for most limbs).</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#144060 - memoni - Sun Oct 28, 2007 9:48 pm</h4>
+    <div class="postbody"><span class="postbody">Just a random thought... has anyone tried to use the bones to "bake" the meshes at keyframes and then just interpolate the vertices for the inbetweens? I guess usually the reasoning to use the bones is that the keyframes for vertex tweening takes too much memory (well... the bones stuff maps better to any modern animation pipeline too :)).
+<br/>
+<br/>
+Additionally the next pose calculation could be interleaved. If you have a key frame every 4 frames, then you would have 4 frames to update the upcoming frame.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#144091 - DiscoStew - Mon Oct 29, 2007 12:44 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>memoni wrote:</b></span></td> </tr> <tr> <td class="quote">Just a random thought... has anyone tried to use the bones to "bake" the meshes at keyframes and then just interpolate the vertices for the inbetweens? I guess usually the reasoning to use the bones is that the keyframes for vertex tweening takes too much memory (well... the bones stuff maps better to any modern animation pipeline too :)).
+<br/>
+<br/>
+Additionally the next pose calculation could be interleaved. If you have a key frame every 4 frames, then you would have 4 frames to update the upcoming frame.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+You suggesting that each key frame "morph" into the next key frame? I would say that unless your animation doesn't change much from key frame to key frame, it might be something, but you'll have restricted yourself too much with it, as well as bloating the amount of memory you'd use.
+<br/>
+<br/>
+But, morphing does have it's uses. For my own stuff, I plan to use simple morphs for such cases like facial animation.<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#144100 - M3d10n - Mon Oct 29, 2007 3:32 am</h4>
+    <div class="postbody"><span class="postbody">Didn't Quake use per-vertex animations (without interpolation)? I think that technique was used before skeletal animation when CPUs weren't powerful enough to update skinned meshes. 
+<br/>
+<br/>
+It's also very likely a good amount of PSOne games used that technique: usually characters were very low-poly and most games were CPU-bound. Would also explain why many games had horrible polygon shaking on characters (probably vertices using very low-precision animation data).</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#144127 - silent_code - Mon Oct 29, 2007 12:44 pm</h4>
+    <div class="postbody"><span class="postbody">they used structures like s8 or 2*u8 (this was considered "high" precision) for vertex components back in those days.
+<br/>
+<br/>
+yes, q1 didn't interpolate, that's why it looked likes stop motion animation all the time. q2 did better, although it had a lot of "vertex swimming" (due to the fact, that it still interpolated coarsley quantized vertex positions). even q3 had point level animation (vertex morphing) with the addition of joint tags to stick meshes together. still, that was very crude. look at good old hl - it was one of the first games i knew to have skeletal animation, although it was still pretty static (no ragdoll etc.), except for head movement (characters looking at you).
+<br/>
+<br/>
+well, you can "compine" hierarchical animation and skinning: simply have just one joint weight for each vertex, make joint influence groups and then animate them hierarchically (instead of closed meshes). just make sure you don't break the mesh in joint regions.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

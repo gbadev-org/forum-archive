@@ -1,0 +1,356 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Manual sorting of polygons in 3d - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Manual sorting of polygons in 3d</h2>
+<div id="posts">
+<div class="post">
+    <h4>#140083 - Jesse - Thu Sep 13, 2007 1:03 pm</h4>
+    <div class="postbody"><span class="postbody">I've been trying to use the 3d-hardware to replace my sprites, since I want access to the nice alpha-formats. The problem is that I can't seem to control in what order my polygons are rendered in. I've been trying to find topics about this and found some that discuss turning off the automatic y-sorting, but it doesn't seem to make a difference for me.
+<br/>
+<br/>
+The code below is a good example where the order that the two polygons is rendered on the screen only depends on the y-position, even though I use GL_TRANS_MANUALSORT. On a side-note, it's the other way around when running in DeSmuME where it always render in the call-order.
+<br/>
+<br/>
+Does anyone have any idea of how to solve this?
+<br/>
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#include &lt;nds.h&gt;
+<br/>
+#include &lt;stdlib.h&gt;
+<br/>
+<br/>
+void DrawQuad(int _PosX, int _PosY, int _Color, int _TextureID)
+<br/>
+{
+<br/>
+   int Size = 64;
+<br/>
+   int x0 = (1 &lt;&lt; 11) / 256 + (_PosX - 128) * (1 &lt;&lt; 12) / 128;
+<br/>
+   int x1 = (1 &lt;&lt; 11) / 256 + (_PosX + Size - 128) * (1 &lt;&lt; 12) / 128;
+<br/>
+   int y0 = (1 &lt;&lt; 11) / 192 + (96 - _PosY) * (1 &lt;&lt; 12) / 96;
+<br/>
+   int y1 = (1 &lt;&lt; 11) / 192 + (96 - _PosY - Size) * (1 &lt;&lt; 12) / 96;
+<br/>
+<br/>
+   glBindTexture(0, _TextureID);
+<br/>
+   glBegin(GL_QUAD);
+<br/>
+   glNormal(NORMAL_PACK(0,inttov10(-1),0));
+<br/>
+   glColor3b(_Color &gt;&gt; 16, _Color &gt;&gt; 8, _Color);
+<br/>
+<br/>
+   glTexCoord2t16(inttot16(64), 0);
+<br/>
+   glVertex3v16(x1, y0, 0);
+<br/>
+   glTexCoord2t16(0, 0);
+<br/>
+   glVertex3v16(x0, y0, 0);
+<br/>
+   glTexCoord2t16(0, inttot16(64));
+<br/>
+   glVertex3v16(x0, y1, 0);
+<br/>
+   glTexCoord2t16(inttot16(64), inttot16(64));
+<br/>
+   glVertex3v16(x1, y1, 0);
+<br/>
+<br/>
+   glEnd();
+<br/>
+}
+<br/>
+<br/>
+int main()
+<br/>
+{
+<br/>
+   powerON(POWER_ALL);
+<br/>
+   irqInit();
+<br/>
+   irqEnable(IRQ_VBLANK);
+<br/>
+   lcdMainOnBottom();
+<br/>
+   videoSetMode(MODE_0_3D);
+<br/>
+   vramSetMainBanks(VRAM_A_TEXTURE_SLOT0, VRAM_B_LCD, VRAM_C_LCD, VRAM_D_LCD);
+<br/>
+<br/>
+   glInit();
+<br/>
+   glEnable(GL_TEXTURE_2D);
+<br/>
+   glViewPort(0,0,255,191);
+<br/>
+<br/>
+   short *pBuf = new short[64 * 64];
+<br/>
+   for(int i = 0; i &lt; 64 * 64; i++)
+<br/>
+   {
+<br/>
+      int x = (i &amp; 63);
+<br/>
+      int y = (i &gt;&gt; 6);
+<br/>
+      if(x == 0 || x == 63 || y == 0 || y == 63)
+<br/>
+         pBuf[i] = 0x801f;
+<br/>
+      else if((x &amp; 1) || (y &amp; 1))
+<br/>
+         pBuf[i] = 0xffff;
+<br/>
+      else
+<br/>
+         pBuf[i] = 0x8000;
+<br/>
+   }
+<br/>
+<br/>
+   int textureID;
+<br/>
+   glGenTextures(1, &amp;textureID);
+<br/>
+   glBindTexture(0, textureID);
+<br/>
+   glTexImage2D(0, 0, GL_RGBA, TEXTURE_SIZE_64, TEXTURE_SIZE_64, 0, TEXGEN_TEXCOORD, (u8*)pBuf);
+<br/>
+<br/>
+   glMatrixMode(GL_PROJECTION);
+<br/>
+   glLoadIdentity();
+<br/>
+   
+<br/>
+   glMaterialf(GL_AMBIENT, RGB15(16,16,16));
+<br/>
+   glMaterialf(GL_DIFFUSE, RGB15(16,16,16));
+<br/>
+   glMaterialf(GL_SPECULAR, BIT(15) | RGB15(8,8,8));
+<br/>
+   glMaterialf(GL_EMISSION, RGB15(16,16,16));
+<br/>
+   glMaterialShinyness();
+<br/>
+<br/>
+   glPolyFmt(POLY_ALPHA(31) | POLY_CULL_BACK);
+<br/>
+<br/>
+   int nFrame = 0;
+<br/>
+   while(1)
+<br/>
+   {
+<br/>
+      nFrame = (nFrame + 1) &amp; 127;
+<br/>
+      DrawQuad(nFrame, nFrame, 0xffffffff, textureID);
+<br/>
+      DrawQuad(128 - nFrame, 128 - nFrame, 0xffff00ff, textureID);
+<br/>
+<br/>
+      glFlush(GL_TRANS_MANUALSORT);
+<br/>
+<br/>
+      swiWaitForVBlank();
+<br/>
+   }
+<br/>
+<br/>
+   return 0;
+<br/>
+}</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#140084 - Jesse - Thu Sep 13, 2007 1:09 pm</h4>
+    <div class="postbody"><span class="postbody">By the way, this may be a good example of how to render textured quads pixel-perfect with the 3d-hardware. It took me far too much time to get everything right. :)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#140088 - a128 - Thu Sep 13, 2007 1:56 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Jesse wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+<br/>
+      glFlush(GL_TRANS_MANUALSORT);
+<br/>
+<br/>
+      swiWaitForVBlank();
+<br/>
+   }
+<br/>
+<br/>
+}</td> </tr></table><span class="postbody"></span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+swiWaitForVBlank(); is not need after glFlush()</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#140091 - kusma - Thu Sep 13, 2007 2:10 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>a128 wrote:</b></span></td> </tr> <tr> <td class="quote">swiWaitForVBlank(); is not need after glFlush()</td> </tr></table><span class="postbody">
+<br/>
+In normal OpenGL glFlush() is just supposed to guarantee that rendering will finish within finite time, not to do any updates or change any state. Conceptually, it shouldn't wait for the next vblank or swap any buffers. After browsing the source code for videoGL, it seems that the glFlush() implementation is somewhat confused with the windowing-systems buffer swapping routines. I'd personally much more prefer calling it something else than glFlush() since that easily leads to confusions for those of us who are pretty much fluent at OpenGL.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#140093 - Jesse - Thu Sep 13, 2007 2:27 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>kusma wrote:</b></span></td> </tr> <tr> <td class="quote">After browsing the source code for videoGL, it seems that the glFlush() implementation is somewhat confused with the windowing-systems buffer swapping routines.</td> </tr></table><span class="postbody">
+<br/>
+Hmm. What do you mean? The only implementation of glFlush I can find is:</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">GL_STATIC_INL void glFlush(uint32 mode) { GFX_FLUSH = mode; }</td> </tr></table><span class="postbody">
+<br/>
+So this code waits for VBlank? Strange... (but of course has nothing to do with my problem. :)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#140094 - M3d10n - Thu Sep 13, 2007 2:28 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>a128 wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Jesse wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+<br/>
+      glFlush(GL_TRANS_MANUALSORT);
+<br/>
+<br/>
+      swiWaitForVBlank();
+<br/>
+   }
+<br/>
+<br/>
+}</td> </tr></table><span class="postbody"></span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+swiWaitForVBlank(); is not need after glFlush()</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+For rendering, no it isn't (the screen will religiously update at 60fps). But for keeping the game logic running at constant speed, yes it is required.
+<br/>
+<br/>
+Back on topic: Jesse, did you try assigning a different poly ID for each quad? I think alpha-blended polygons with the same ID can't blend against each other, but I'm not sure.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#140096 - kusma - Thu Sep 13, 2007 2:57 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Jesse wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+Hmm. What do you mean? The only implementation of glFlush I can find is:<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">GL_STATIC_INL void glFlush(uint32 mode) { GFX_FLUSH = mode; }</td> </tr></table><span class="postbody">
+<br/>
+</span></td> </tr></table><span class="postbody">
+<br/>
+Yeah, and GFX_FLUSH is what is documented in gbatek as 
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">4000540h - Cmd 50h - SWAP_BUFFERS - Swap Rendering Engine Buffer (W)
+<br/>
+SwapBuffers exchanges the two sets of Polygon/Vertex RAM buffers, that is, the newly defined polygons/vertices are passed to the rendering engine (and will be displayed in following frame(s)). The other buffer is emptied, and passed to the Geometry Engine (to be filled with new polygons/vertices by Geometry Commands).
+<br/>
+<br/>
+  0     Translucent polygon Y-sorting (0=Auto-sort, 1=Manual-sort)
+<br/>
+  1     Depth Buffering  (0=With Z-value, 1=With W-value)
+<br/>
+        (mode 1 does not function properly with orthogonal projections)
+<br/>
+  2-31  Not used
+<br/>
+<br/>
+SwapBuffers isn't executed until next VBlank (Scanline 192) (the Geometry Engine is halted for that duration). SwapBuffers should not be issued within Begin/End.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+This differs quite a lot from the operation of glFlush().
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+So this code waits for VBlank? Strange... (but of course has nothing to do with my problem. :)</td> </tr></table><span class="postbody">
+<br/>
+No, it does not. But it doesn't reach the rendering engine until the next vblank.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#140102 - Jesse - Thu Sep 13, 2007 4:21 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>M3d10n wrote:</b></span></td> </tr> <tr> <td class="quote">Back on topic: Jesse, did you try assigning a different poly ID for each quad? I think alpha-blended polygons with the same ID can't blend against each other, but I'm not sure.</td> </tr></table><span class="postbody">
+<br/>
+I tried this now:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">glPolyFmt(POLY_ALPHA(31) | POLY_CULL_BACK | POLY_ID(0));
+<br/>
+DrawQuad(nFrame, nFrame, 0xffffffff, textureID);
+<br/>
+glPolyFmt(POLY_ALPHA(31) | POLY_CULL_BACK | POLY_ID(1));
+<br/>
+DrawQuad(128 - nFrame, 128 - nFrame, 0xffff00ff, textureID);</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+With no change. The polygons are still switching order depending on y-position.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#140106 - Peter - Thu Sep 13, 2007 5:25 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Jesse wrote:</b></span></td> </tr> <tr> <td class="quote">On a side-note, it's the other way around when running in DeSmuME where it always render in the call-order.</td> </tr></table><span class="postbody">
+<br/>
+So far DeSmuME (v1.0.18a) wasn't able to emulate any of my 3D programs correctly. I have much better results with <a class="postlink" href="http://nocash.emubase.de/gba.htm" target="_blank">no$gba</a>, though it lacks of some 3D features but it's much closer to what the hardware displays. My little experience with NDS 3D programming is to only trust the real hardware though!<br/>_________________<br/>Kind Regards,
+<br/>
+Peter</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#140111 - Sunray - Thu Sep 13, 2007 5:51 pm</h4>
+    <div class="postbody"><span class="postbody">Edit: Forget what I said. I misread.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#153999 - SiW - Wed Apr 09, 2008 4:41 am</h4>
+    <div class="postbody"><span class="postbody">Did you ever solve this, Jesse?  Because I'm having exactly the same issue.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#154003 - a128 - Wed Apr 09, 2008 8:53 am</h4>
+    <div class="postbody"><span class="postbody">The "Y-Problem" is one of those unsolved!!!? problems.
+<br/>
+<br/>
+I hope there is a solution...or somethink like "No it can't be solved"</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#154007 - Sunray - Wed Apr 09, 2008 9:57 am</h4>
+    <div class="postbody"><span class="postbody">I don't know. I've never had any problems with this myself. :O
+<br/>
+<br/>
+What's important is that you specify a z value for each layer of sprites and not 0 for every vertex.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#154021 - SiW - Wed Apr 09, 2008 3:31 pm</h4>
+    <div class="postbody"><span class="postbody">Yeah, my workaround is to auto-increment the z value every time I draw a quad (resetting it each frame, of course).  Which, now that I think about, is the same method I use in PSPGL game of mine to ensure reliable sort order, heh.
+<br/>
+<br/>
+Although I still had trouble on the DS, so I looked around at other 2D-as-3D implementations and changed my glOrtho setup to match uLib's glOrthof32(0, 256, 192, 0, -2045, 1).  This isn't exactly intuitive, but it does work.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#154023 - M3d10n - Wed Apr 09, 2008 5:08 pm</h4>
+    <div class="postbody"><span class="postbody">It makes sense because you cannot turn off depth-testing on the DS, so even if you draw sprite A first and sprite B later, the one with the smaller Z will be on front. But this is a good thing, since this mean you can sort the sprites by assigned sorted Z values, instead of having to sort them in a list.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#154024 - Noda - Wed Apr 09, 2008 5:26 pm</h4>
+    <div class="postbody"><span class="postbody">Take a look at the PAlib or uLibrary sources, they're doing exactly what you want perfectly ;)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#154026 - SiW - Wed Apr 09, 2008 5:46 pm</h4>
+    <div class="postbody"><span class="postbody">Well I did just say I looked at uLib ;)</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

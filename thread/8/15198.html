@@ -1,0 +1,1493 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Complete newbie question... - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>ASM > Complete newbie question...</h2>
+<div id="posts">
+<div class="post">
+    <h4>#152534 - Ruben - Mon Mar 17, 2008 11:30 am</h4>
+    <div class="postbody"><span class="postbody">Hi everyone. I was reading up on Deku's sound mixing thingy, optimized it, blah blah blah... but then I though, "I think I should do it in assembler." I came up with this code but I know for a FACT that there's something wrong in it... I just don't know WHAT LMAO!
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">.section .iwram, "ax", %progbits
+<br/>
+.align 4
+<br/>
+.arm
+<br/>
+.global   SndMix, tmpBuffer
+<br/>
+.extern sndVars, sngVars, sndChannels
+<br/>
+<br/>
+@ r0: samples to mix
+<br/>
+SndMix:
+<br/>
+ stmfd    sp!, {r1-r12}                @ push {r1-r12}
+<br/>
+<br/>
+@ Clear the temp buffer
+<br/>
+ add      r0, r0, #0x01                @ r0   += 0x01 (to avoid LSR'ing 1)
+<br/>
+ mov      r1, #0x04000000              @ r1    = 0x04000000 (REG_BASE)
+<br/>
+ add      r1, r1, #0xD4                @ r1   += 0xD4 (DMA3SAD)
+<br/>
+ mov      r2, #0x00000000              @ r2    = 0x00000000 (NULL)
+<br/>
+ str      r2, [r1, #0x08]              @ *(r1 + 0x08) = r2 (DMACNT)
+<br/>
+ ldr      r2, =ClrVal                  @ r2    = &amp;ClrVal
+<br/>
+ ldr      r3, =tmpBuffer               @ r3    = &amp;sndTmpBuffer
+<br/>
+ mov      r4, #0x85000000              @ r4    = 0x85000000 (MEMSET32)
+<br/>
+ add      r4, r4, r0, lsr #0x01        @ r4   += r0 &gt;&gt; 1
+<br/>
+ stmia    r1!, {r2-r4}                 @ *r4++ = r1, *r4++ = r2, *r4++ = r3
+<br/>
+ 
+<br/>
+@ Get the global volume
+<br/>
+ ldr      r1, =sngVars                 @ r1    = &amp;sngVars
+<br/>
+ ldr      r1, [r1]                     @ r1    = *((int*)r1) (gVol)
+<br/>
+<br/>
+@ Loop through the channels and mix data
+<br/>
+ mov      r2, #0x09                    @ r2    = 0x09
+<br/>
+ ldr      r3, =sndChannels+0xE0        @ r3    = &amp;(*sndChannels[8])
+<br/>
+<br/>
+.LChnLoop:
+<br/>
+ ldr      r4, [r3]                     @ r4  = *((int*)r3)      (CHN_CNT)
+<br/>
+ ands     r5, r4, #0x01                @ \
+<br/>
+ beq      .LChnNA                      @  if(!(r4 &amp; 0x01)) goto .LChnLoopEnd
+<br/>
+<br/>
+.LChnActive:
+<br/>
+ ldr      r5, =tmpBuffer               @ r5  = &amp;tmpBuffer
+<br/>
+ mov      r6, r4, lsr #0x03            @ r6  = r4 &gt;&gt; 2          (CHN_VOL)
+<br/>
+ muls     r7, r6, r1                   @ r7  = r6 * r1              |
+<br/>
+ mov      r6, r7, lsr #0x06            @ r6  = r7 &gt;&gt; 6          (CHN_VOL)
+<br/>
+ ldr      r7, [r3, #0x04]!             @ r7  = *(int*)(r3 += 4) (CHN_POS)
+<br/>
+ ldr      r8, [r3, #0x04]!             @ r8  = *(int*)(r3 += 4) (CHN_INC)
+<br/>
+ ldr      r9, [r3, #0x04]!             @ r9  = *(int*)(r3 += 4) (CHN_LEN)
+<br/>
+ ldr      r10, [r3, #0x08]!            @ r10 = *(int*)(r3 += 8) (CHN_SRC)
+<br/>
+ add      r3, r3, #0x04                @ r3 += 0x04             (CHN_FRQ) (end)
+<br/>
+ sub      r3, r3, #0x1C
+<br/>
+ stmfd    sp!, {r0}
+<br/>
+<br/>
+@ Mix down
+<br/>
+.LChnActMix:
+<br/>
+ ldrb    r11, [r10, r7, lsr #0x0C]    @ r12 = *(char*)(r10+r11)
+<br/>
+ mul      r11, r12, r6                 @ r11 = r12 * r6 (CHN_VOL)
+<br/>
+ ldrsh    r12, [r5]
+<br/>
+ add      r11, r11, r12
+<br/>
+ strh     r11, [r5]
+<br/>
+ add      r5, r5, #0x02
+<br/>
+ add      r7, r7, r8
+<br/>
+ cmp      r7, r9
+<br/>
+ bge      .LChnEnd
+<br/>
+<br/>
+.LChnLink:
+<br/>
+ subs     r0, r0, #0x01
+<br/>
+ bne      .LChnActMix
+<br/>
+<br/>
+.LChnLinkEnd:
+<br/>
+ ldmfd    sp!, {r0}
+<br/>
+ str      r7, [r3, #0x04]
+<br/>
+ b        .LChnLoopEnd                 @ goto .LChnLoopEnd
+<br/>
+<br/>
+.LChnEnd:
+<br/>
+ ands     r11, r4, #0x02
+<br/>
+ beq      .LChnSmpEnd
+<br/>
+<br/>
+.LChnSmpEndLoop:
+<br/>
+ ldr      r11, [r3, #0x14]
+<br/>
+ mov      r7, r11
+<br/>
+ b        .LChnLink
+<br/>
+<br/>
+.LChnSmpEnd:
+<br/>
+ mov      r7, #0x00
+<br/>
+ sub      r11, r4, #0x02
+<br/>
+ str      r11, [r3]
+<br/>
+ b        .LChnLinkEnd
+<br/>
+<br/>
+.LChnNA:
+<br/>
+.LChnLoopEnd:
+<br/>
+ sub      r3, r3, #0x1C
+<br/>
+ subs     r2, r2, #0x01                @ \
+<br/>
+ bne      .LChnLoop                    @  if(r2-- != 0) goto .LChnLoop
+<br/>
+<br/>
+.LDownsample:
+<br/>
+ ldr      r1, =tmpBuffer-2
+<br/>
+ ldr      r2, =sndVars
+<br/>
+ ldr      r2, [r2]                     @ curmixbuffer
+<br/>
+ sub      r2, r2, #0x01
+<br/>
+<br/>
+.LDownsampleLoop:
+<br/>
+ ldrh     r3, [r1, #0x02]!
+<br/>
+ mov      r4, r3, lsr #0x08
+<br/>
+ strb     r4, [r2, #0x01]!
+<br/>
+ subs     r0, r0, #0x01
+<br/>
+ bne      .LDownsampleLoop
+<br/>
+<br/>
+.LEnd:
+<br/>
+ ldmfd    sp!, {r1-r12}                @ pop {r1-r12}
+<br/>
+ bx       lr                           @ bx to lr
+<br/>
+<br/>
+.align 4
+<br/>
+<br/>
+ClrVal:
+<br/>
+ .word 0x00000000
+<br/>
+<br/>
+tmpBuffer:
+<br/>
+ .space 736*2
+<br/>
+<br/>
+.end</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+The externs sndVars, sngVars and sndChannels are as follow:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+typedef struct __attribute__ ((aligned(4))) {
+<br/>
+ s8  *mixBufferBase;
+<br/>
+ s8  *curMixBuffer;
+<br/>
+ u8  activeBuffer;
+<br/>
+ u32 smpsTilTick;
+<br/>
+ u32 smpsPerTick;
+<br/>
+ u32 mixFreq;
+<br/>
+ u32 rcpMixFreq;
+<br/>
+ u32 mixBufferSize;
+<br/>
+} SND_VARS;
+<br/>
+<br/>
+typedef struct __attribute__ ((aligned(4))) {
+<br/>
+ u32        gVol;
+<br/>
+ u32        mode;
+<br/>
+ u32        state;
+<br/>
+ u8         tickA;
+<br/>
+ u8         tickB;
+<br/>
+ u8         row;
+<br/>
+ ... ... ...
+<br/>
+} MOD_VARS;
+<br/>
+<br/>
+typedef struct __attribute__ ((aligned(4))) {
+<br/>
+ u32  cnt;
+<br/>
+ u32 pos;
+<br/>
+ u32 inc;
+<br/>
+ u32 len;
+<br/>
+ u32 loopStart;
+<br/>
+ s8  *dat;
+<br/>
+ u32 freq;
+<br/>
+} SND_CHANNEL;
+<br/>
+<br/>
+...
+<br/>
+<br/>
+SND_VARS sndVars;
+<br/>
+MOD_VARS sngVars;
+<br/>
+SND_CHANNEL sndChannels[9];</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I know, I know... lots of room for optimization but I just wanna get this working first. Thanks a lot guys.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#152535 - Ruben - Mon Mar 17, 2008 11:33 am</h4>
+    <div class="postbody"><span class="postbody">Oh, and BTW: I know... lots of old comments and typos lol...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#152547 - Cearn - Mon Mar 17, 2008 4:41 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Ruben wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">@ Mix down
+<br/>
+.LChnActMix:
+<br/>
+ ldrb    r11, [r10, r7, lsr #0x0C]    @ r12 = *(char*)(r10+r11)
+<br/>
+ mul     r11, r12, r6                 @ r11 = r12 * r6 (CHN_VOL)</td> </tr></table><span class="postbody"></span></td> </tr></table><span class="postbody">
+<br/>
+The comments do not match the code ... did you mean "ldrb r12, ..." ?
+<br/>
+<br/>
+Some other points (for when it's actually working):
+<br/>
+<ul><li>You don't need to save r0-r3 and r12 on the stack; the caller expects these to be clobbered.
+<br/>
+</li><li>IIRC, CpuFastSet (swi 0xC0000) is actually about 10% faster than DMA for filling large amounts of data (provided it's a multiple of 32 bytes long). if the situation allows for it, try using that some time as well. The swi's do have a substantial overhead though.
+<br/>
+</li><li>In .LChnActive, you're using stuff like "ldr      r7, [r3, #0x04]!". You don't have to use write-back all the time. It's probably more readable if you didn't. Example:
+<br/>
+</li></ul></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">   ldr      r7, [r3, #0x04]             @ chn-&gt;pos
+<br/>
+   ldr      r8, [r3, #0x08]             @ chn-&gt;inc
+<br/>
+   ldr      r9, [r3, #0x0C]             @ chn-&gt;len
+<br/>
+   ldr      r10, [r3, #0x14]            @ chn-&gt;dat
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+This would also mean that the addition and subtraction you have now aren't necessary. Of course, if you want to be 1337 (and fast), you could use something like "ldmib r3, {r7-r9}", but you'd have to be careful where your pointer ends up. (Note: untested, but I think it should work.)
+<br/>
+<li>On
+<br/>
+</li></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">.LChnEnd:
+<br/>
+    ands     r11, r4, #0x02
+<br/>
+    beq      .LChnSmpEnd
+<br/>
+<br/>
+.LChnSmpEndLoop:
+<br/>
+    ldr      r11, [r3, #0x14]
+<br/>
+    mov      r7, r11
+<br/>
+    b        .LChnLink 
+<br/>
+.LChnSmpEnd:</td> </tr></table><span class="postbody">Conditional opcodes are teh awesome:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">.LChnEnd:
+<br/>
+    tst      r4, #0x02         @ like ands, but sans extra register
+<br/>
+    ldrne    r7, [r3, #0x14]   @ .LChnSmpEndLoop:
+<br/>
+    bne     .LChnLink
+<br/>
+.LChnSmpEnd:
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<li>In
+<br/>
+</li></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code"> ldrsh    r12, [r5]
+<br/>
+ add      r11, r11, r12
+<br/>
+ strh     r11, [r5]
+<br/>
+ add      r5, r5, #0x02 </td> </tr></table><span class="postbody"> The store and addition can be combined. "strh r11, [r5], #2" would increment r5 by 2 after the store. Something similar is also useful in the down-sample part, which, if I read it correctly, currently decrements the pointers before the loop so that the "Rd, [Rn, Op2]!" parts work properly inside it.
+<br/>
+Have you checked what the compiler makes of it, by the way? The code doesn't seems too complicated, and I'm not sure the compiler would come up with something that much slower. That said, it's still a nice exercise :)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#152585 - Ruben - Mon Mar 17, 2008 11:56 pm</h4>
+    <div class="postbody"><span class="postbody">Hehehe... yeah, I did mean r12. Like I said: those were older comments. But I got it sorted now, it works fine (though it has a weird click...). So now I'm gonna try your suggestions. Thanks a lot!
+<br/>
+<br/>
+BTW: Yeah, I did check the code the compiler came up with. About 2-3 scanlines slower, which in a lot of channels adds up.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#152586 - Miked0801 - Mon Mar 17, 2008 11:58 pm</h4>
+    <div class="postbody"><span class="postbody">Always use ldm/stm ops when possible.  They will save you 1-2 cycles per register used.
+<br/>
+<br/>
+On the Swi calls - pretty much don't do them unless you are copying huge amounts of info.  There is somewhere in the neighborhood on 80 cycles of overhead getting in and out of the system crap.  Pretty much, you are better off writing your own fast copy in IWRAM and calling that.
+<br/>
+<br/>
+In general when optimizing ARM code, if you see alot of mov and cmp/tst type instructions, there are ways to speed things up.
+<br/>
+<br/>
+The stack is your enemy.  Don't use the stack if you can at all help it.
+<br/>
+<br/>
+Now to the code itself:
+<br/>
+In LChnLoop:
+<br/>
+instead of anding, you can use tst and preserve r5.
+<br/>
+<br/>
+In Active:
+<br/>
+Your comment says &gt;&gt; 2 but the code is lsr 3.
+<br/>
+You may be able to drop the first mov instuction by shifting 9 on the 2nd mov - overflow permitting.
+<br/>
+The 4 ldr instuctions feel like they could easily become an ldm instruction of some sort.
+<br/>
+Your last 2 instructions cancel each other.  Add 4 then subtract 28 (0x1c) from the same register is the same as subtract 24 (0x18)
+<br/>
+Are you sure you have to push/pop r0?  That's wasteful
+<br/>
+at  LChnEnd: Your ands could be replace with tst to save a register.
+<br/>
+The 3 instructions after your and at LChnEnd should probably be conditionally executed
+<br/>
+Is writeback mode even allowed when accessing halfwords?  I didn't think so, but if it compiles, fine.
+<br/>
+In your downsample loop, if the data is aligned properly, you can use 4 byte reads and 2 byte writes to get a nice speed up.  You may also be able to unroll that loop a bit - data dependent.
+<br/>
+Don't save r1,r2,r3 or r12.  Do use lr (r14) if you need an extra temp register.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#152588 - Ruben - Tue Mar 18, 2008 12:34 am</h4>
+    <div class="postbody"><span class="postbody">"Your comment says &gt;&gt; 2 but the code is lsr 3."
+<br/>
+<br/>
+Like I said, older comments :)
+<br/>
+<br/>
+"You may be able to drop the first mov instuction by shifting 9 on the 2nd mov - overflow permitting."
+<br/>
+<br/>
+What exactly do you mean? That kinda confused me.
+<br/>
+<br/>
+"The 4 ldr instuctions feel like they could easily become an ldm instruction of some sort."
+<br/>
+<br/>
+Done! :)
+<br/>
+<br/>
+"Your last 2 instructions cancel each other. Add 4 then subtract 28 (0x1c) from the same register is the same as subtract 24 (0x18)"
+<br/>
+<br/>
+Like I said, I wanted to get this working before optimizing :)
+<br/>
+<br/>
+"Are you sure you have to push/pop r0? That's wasteful"
+<br/>
+<br/>
+Unless there's some other way to save r0 somewhere else...
+<br/>
+<br/>
+"at LChnEnd: Your ands could be replace with tst to save a register."
+<br/>
+"The 3 instructions after your and at LChnEnd should probably be conditionally executed"
+<br/>
+<br/>
+Done. :)
+<br/>
+<br/>
+"In your downsample loop, if the data is aligned properly, you can use 4 byte reads and 2 byte writes to get a nice speed up. You may also be able to unroll that loop a bit - data dependent."
+<br/>
+<br/>
+Explain! It's confusing me LOL!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#152603 - Cearn - Tue Mar 18, 2008 2:58 am</h4>
+    <div class="postbody"><span class="postbody">As far as I can tell, this is the routine in C:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void SndMix(u32 nSamples)
+<br/>
+{
+<br/>
+   // Clear tmp buffer
+<br/>
+   volatile u32 fill= 0;
+<br/>
+   REG_DMA3CNT= 0;
+<br/>
+   REG_DMA3SRC= &amp;fill;
+<br/>
+   REG_DMA3DST= &amp;tmpBuffer;
+<br/>
+   REG_DMA3CNT= DMA_ENABLE | DNA_32 | DMA_SRC_FIXED;
+<br/>
+<br/>
+   // Main variables
+<br/>
+   u32 mainVol= sngVars.gVolume;
+<br/>
+   SND_CHANNEL *chn= &amp;sndChannels[8];
+<br/>
+   u16 *buffy;
+<br/>
+<br/>
+   // Channel loop
+<br/>
+   for(ii=0; ii&lt;9; ii++)
+<br/>
+   {
+<br/>
+      // (.LChnLoop)
+<br/>
+      u32 cnt= chn-&gt;cnt;
+<br/>
+      if(cnt&amp;1)      // Only use active channels
+<br/>
+      {
+<br/>
+         // .LChnActive
+<br/>
+         buffy= tmpBuffer;
+<br/>
+         u32 vol= mainVol*(cnt&gt;&gt;3)&gt;&gt;6;   // p0 ?!? volume, orly ?
+<br/>
+         u32 pos= chn-&gt;pos;            // Q12 number
+<br/>
+         u32 inc= chn-&gt;inc;
+<br/>
+         u32 len= chn-&gt;len;
+<br/>
+         u8 *src= chn-&gt;dat;
+<br/>
+         
+<br/>
+         // Sample loop (.LChnActMix)
+<br/>
+         for(jj=0; jj&lt;nSamples; jj++)
+<br/>
+         {
+<br/>
+            buffy[jj] += src[pos&gt;&gt;12] * vol;
+<br/>
+<br/>
+            pos += inc;
+<br/>
+            if(pos &gt; len)      // (.LChnEnd)
+<br/>
+            {
+<br/>
+               // Check for looping sound
+<br/>
+               if(cnt &amp; 2)      // (.LChnSmpEndLoop)
+<br/>
+               {
+<br/>
+                  pos= chn-&gt;dat;       // p1 ?!?
+<br/>
+               }
+<br/>
+               else
+<br/>
+               {
+<br/>
+                  chn-&gt;cnt -= 2;      // p2 ?!?
+<br/>
+                  pos= 0;
+<br/>
+                  break;
+<br/>
+               }
+<br/>
+            }
+<br/>
+         }
+<br/>
+         chn-&gt;pos= pos;
+<br/>
+      }
+<br/>
+      chn--;
+<br/>
+   }
+<br/>
+<br/>
+   // Down-sample
+<br/>
+   buffy= tmpBuffer;
+<br/>
+   u8 *dst= sndVars.mixBufferBase;
+<br/>
+   for(jj=0; jj&lt;nSamples; jj++)
+<br/>
+      *dst++ = *buffy++;
+<br/>
+}</td> </tr></table><span class="postbody">If so, I have 5 questions:
+<br/>
+<br/>
+What is the usual size of nSamples ? Order of magnitude figure will do.
+<br/>
+<br/>
+What happens if the sum of the channels exceeds 16 bits?
+<br/>
+<br/>
+(p0) :  How exactly is the channel volume hidden inside chn-&gt;cnt ? Is it really bits 3 to 31 ?
+<br/>
+<br/>
+(p1) : for looping channels, the asm sets the position to chn-&gt;dat. Shouldn't this be chn-&gt;loopStart ?
+<br/>
+<br/>
+(p2) : why subtract the control by 2. Isn't the 'on' bit in the first bit, not the second?
+<br/>
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Miked0801 wrote:</b></span></td> </tr> <tr> <td class="quote">Is writeback mode even allowed when accessing halfwords? I didn't think so, but if it compiles, fine. </td> </tr></table><span class="postbody">
+<br/>
+You're probably thinking about a shifted <span style="font-style: italic">Op2</span>. Those don't work for halfwords, but writeback is fine.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Ruben wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Miked0801 wrote:</b></span></td> </tr> <tr> <td class="quote">You may be able to drop the first mov instuction by shifting 9 on the 2nd mov - overflow permitting.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+What exactly do you mean? That kinda confused me. </span></td> </tr></table><span class="postbody">
+<br/>
+"a * (b&gt;&gt;3) &gt;&gt; 6" should be pretty close to "(a*b)&gt;&gt;3&gt;&gt;6 = (a*b)&gt;&gt;9". The difference is a*(b%8)&gt;&gt;6. If a*7 is smaller than 64 (and if a*b fits into 32 bits), you can use the &gt;&gt;9 form without any consequence. If a*7 &gt; 64, there would be a very small but possibly inaudible difference.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Ruben wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Miked0801 wrote:</b></span></td> </tr> <tr> <td class="quote">Are you sure you have to push/pop r0? That's wasteful</td> </tr></table><span class="postbody">
+<br/>
+Unless there's some other way to save r0 somewhere else... </span></td> </tr></table><span class="postbody">
+<br/>
+You still have the link register (lr / r14) left over that you can use don't forget to stack it, of course. I think it's possible to reduce the register usages by one or two by the way.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Ruben wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Miked0801 wrote:</b></span></td> </tr> <tr> <td class="quote">In your down-sample loop, if the data is aligned properly, you can use 4 byte reads and 2 byte writes to get a nice speed up. You may also be able to unroll that loop a bit - data dependent.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Explain! It's confusing me LOL!</span></td> </tr></table><span class="postbody">
+<br/>
+Right now you're converting one halfword into one byte per loop. If the source pointer is 32-bit aligned (which it is) and the sndVars buffer is halfword aligned, you can cover two samples in one loop like this:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">   @ Assuming : 
+<br/>
+   @ r0 : u16 *dst= tmpBuffer;
+<br/>
+   @ r1 : u32 *src= sdnVars.mixBufferBase;
+<br/>
+   @ r2 : nSamples
+<br/>
+   @ r3 : data
+<br/>
+   @ r4 : mask (0x00FF00FF)
+<br/>
+   
+<br/>
+   mov      r4, 0xFF
+<br/>
+   mov      r4, r4, lsl #16
+<br/>
+.LDownSampleLoop:
+<br/>
+   ldr      r3, [r1], #4         @ p = 0xDDccBBaa
+<br/>
+   and      r3, r4, r3, lsr #8      @ p = m &amp; p&gt;&gt;8 = 0x00DD00BB
+<br/>
+   orr      r3, r3, r3, lsr #8      @ p = p | p&gt;&gt;8 = 0x00DDDDBB
+<br/>
+   strh   r3, [r0], #2         @ store 0xDDBB
+<br/>
+   subs   r2, r2, #2
+<br/>
+   bne      .LDownSampleLoop
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+This can also be extended to a 4 halfword -&gt; 4 byte loop with ease. And then unrolled to get rid of some loop overhead.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#152606 - Ruben - Tue Mar 18, 2008 3:15 am</h4>
+    <div class="postbody"><span class="postbody">(p0) : How exactly is the channel volume hidden inside chn-&gt;cnt ? Is it really bits 3 to 31 ? 
+<br/>
+<br/>
+Yeahuh. I don't really like using halfwords for stuff (in case you didn't already notice lol).
+<br/>
+<br/>
+(p1) : for looping channels, the asm sets the position to chn-&gt;dat. Shouldn't this be chn-&gt;loopStart ? 
+<br/>
+<br/>
+... ... ... it does? *double checks and fixes it up*
+<br/>
+<br/>
+(p2) : why subtract the control by 2. Isn't the 'on' bit in the first bit, not the second?
+<br/>
+<br/>
+Hehe. Yeah, it's fixed up in my new code
+<br/>
+<br/>
+"(a*b)&gt;&gt;3&gt;&gt;6 = (a*b)&gt;&gt;9"
+<br/>
+<br/>
+Is that basically (assuming r4 is the destination, r5: a, r6: b)
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">mul r7, r5, r6
+<br/>
+mov r4, r7, lsr #0x09</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+"You still have the link register (lr / r14) left over"
+<br/>
+<br/>
+Wouldn't that mean I still have to do some stacking?
+<br/>
+<br/>
+"If the source pointer is 32-bit aligned (which it is) and the sndVars buffer is halfword aligned, you can cover two samples in one loop"
+<br/>
+<br/>
+Since I'm not really sure what you mean, I'm assuming you mean something like align 4... IDK... lol...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#152608 - Ruben - Tue Mar 18, 2008 4:23 am</h4>
+    <div class="postbody"><span class="postbody">Oh, and in regards to that code:
+<br/>
+1) Why is the tmpBuffer the destination?
+<br/>
+2) Why is the 'source' 'mixBufferBase' and not 'curMixBuffer'? IDK if those weren't typos but when I tried that code, NO$GBA just crashed...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#152610 - Ruben - Tue Mar 18, 2008 5:06 am</h4>
+    <div class="postbody"><span class="postbody">OK. After trying out that code (and changing it around to make it work! lol), I figured it didn't really speed up much so I'm just gonna leave it. This is my newest code. Haven't double checked the comments so ignore them... Any room for optimization?
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">SndMix:
+<br/>
+ stmfd    sp!, {r4-r11,lr}             @ push {r4-r11,lr}
+<br/>
+ add      r5, r0, #0x01                @ r5    = r0 + 0x01
+<br/>
+ ldr      r1, =0x040000D4              @ r1    = 0x040000D4 (DMA3SAD)
+<br/>
+ mov      r2, #0x00000000              @ r2    = 0x00000000 (NULL)
+<br/>
+ str      r2, [r1, #0x08]              @ *(r1 + 0x08) = r2  (DMACNT)
+<br/>
+ ldr      r2, =ClrVal                  @ r2    = &amp;ClrVal
+<br/>
+ ldr      r3, =tmpBuffer               @ r3    = &amp;sndTmpBuffer
+<br/>
+ mov      r4, #0x85000000              @ r4    = 0x85000000 (MEMSET32)
+<br/>
+ add      r4, r4, r5, lsr #0x01        @ r4   += r5 &gt;&gt; 0x01
+<br/>
+ stmia    r1, {r2-r4}                  @ SAD = r2, DAD = r3, CNT = r4
+<br/>
+ ldr      r1, =sngVars                 @ r1    = &amp;sngVars
+<br/>
+ ldr      r1, [r1]                     @ r1    = sngVars.gVol
+<br/>
+ mov      r2, #0x09                    @ r2    = 0x09
+<br/>
+ ldr      r3, =sndChannels+0xE0        @ r3    = &amp;sndChannels[8]
+<br/>
+<br/>
+.LChnLoop:
+<br/>
+ ldr      r4, [r3]                     @ r4  = chn-&gt;cnt
+<br/>
+ tst      r4, #0x01                    @ \
+<br/>
+ beq      .LChnNA                      @  if(!(r4 &amp; 0x01)) goto .LChnLoopEnd
+<br/>
+<br/>
+.LChnActive:
+<br/>
+ ldr      r5, =tmpBuffer               @ r5  = &amp;tmpBuffer
+<br/>
+ mul      r7, r4, r1                   @ r7  = cnt * gVol
+<br/>
+ mov      r6, r7, lsr #0x09            @ r6  = r7 &gt;&gt; 9 (VOLUME)
+<br/>
+ ldmib    r3, {r7-r10}                 @ r7 = chn-&gt;pos, r8 = chn-&gt;inc,
+<br/>
+                                       @ r9 = chn-&gt;len, r10 = chn-&gt;data
+<br/>
+ mov      lr, r0                       @ lr = samplesToMix
+<br/>
+<br/>
+.LChnActMix:
+<br/>
+ mov      r11, r7, lsr #0x0C           @ r11  = r7 &gt;&gt; 0x0C
+<br/>
+ ldrsb    r12, [r10, r11]              @ r12  = *(char*)(r10+r11)
+<br/>
+ mul      r11, r12, r6                 @ r11  = r12 * r6 (VOLUME)
+<br/>
+ ldrsh    r12, [r5]                    @ r12  = *(short*)(r5)
+<br/>
+ add      r11, r11, r12                @ r11 += r12
+<br/>
+ strh     r11, [r5], #0x02             @ r11  = r5; r5 += 2
+<br/>
+ add      r7, r7, r8                   @ r7  += r8 (chn-&gt;inc)
+<br/>
+ cmp      r7, r9                       @ \
+<br/>
+ bge      .LChnEnd                     @  if(chn-&gt;pos &gt;= chn-&gt;len) goto .LChnEnd
+<br/>
+<br/>
+.LChnLink:
+<br/>
+ subs     lr, lr, #0x01                @ \
+<br/>
+ bne      .LChnActMix                  @  if(--r0) goto .LChnActMix
+<br/>
+<br/>
+.LChnLinkEnd:
+<br/>
+ str      r7, [r3, #0x04]              @ (r3 + 0x04) = r7 (chn-&gt;pos)
+<br/>
+ b        .LChnLoopEnd                 @ goto .LChnLoopEnd
+<br/>
+<br/>
+.LChnEnd:
+<br/>
+ tst      r4, #0x02                    @\
+<br/>
+ ldrne    r7, [r3, #0x14]              @ if(chn-&gt;cnt &amp; LOOP)
+<br/>
+ bne      .LChnLink                    @  r7 = loopStart; goto .LChnLink
+<br/>
+<br/>
+.LChnSmpEnd:
+<br/>
+ mov      r7, #0x00                    @ r7  = 0x00 (chn-&gt;pos)
+<br/>
+ sub      r11, r4, #0x01               @ r4  = r11 - 0x01 (CHN_ACT)
+<br/>
+ str      r11, [r3]                    @ r3  = r11
+<br/>
+ b        .LChnLinkEnd                 @ goto .ChnLinkEnd
+<br/>
+<br/>
+.LChnNA:
+<br/>
+.LChnLoopEnd:
+<br/>
+ sub      r3, r3, #0x1C                @ r3 -= sizeof(channel)
+<br/>
+ subs     r2, r2, #0x01                @ \
+<br/>
+ bne      .LChnLoop                    @  if(--r2) goto .LChnLoop
+<br/>
+<br/>
+.LDownsample:
+<br/>
+ ldr      r1, =sndVars                 @ r1     = &amp;sndVars
+<br/>
+ ldr      r2, [r1, #0x04]              @ r2     = sndVars-&gt;curMixBuffer
+<br/>
+ ldr      r3, =tmpBuffer               @ r3     = &amp;tmpBuffer
+<br/>
+ mov      r4, r2                       @ r4     = sndVars-&gt;curMixBuffer
+<br/>
+ add      r4, r4, r0                   @ r4    += samplesToMix
+<br/>
+ str      r4, [r1, #0x04]              @ curMixBuffer = r4
+<br/>
+<br/>
+.LDownsampleLoop:
+<br/>
+ ldrh     r4, [r3], #0x02              @ r4 = *(short*)(r3); r3 += 0x02
+<br/>
+ mov      r4, r4, lsr #0x08            @ r4 &gt;&gt;= 0x08
+<br/>
+ strb     r4, [r2], #0x01              @ r2 = r4; r2++
+<br/>
+ subs     r0, r0, #0x01                @ \
+<br/>
+ bne      .LDownsampleLoop             @  if(--r0) .LDownsampleLoop
+<br/>
+<br/>
+.LEnd:
+<br/>
+ ldmfd    sp!, {r4-r11,lr}             @ pop {r4-r11,lr}
+<br/>
+ bx       lr                           @ bx to lr
+<br/>
+<br/>
+.align 4
+<br/>
+<br/>
+ClrVal:
+<br/>
+ .word 0x00000000
+<br/>
+<br/>
+tmpBuffer:
+<br/>
+ .space 736*2</td> </tr></table><span class="postbody">
+<br/>
+And I also changed this around:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">typedef struct __attribute__ ((aligned(4))) {
+<br/>
+ u32  cnt;
+<br/>
+ 
+<br/>
+ //bit 1 = on, bit 2 = looped, bit 3-32 = vol
+<br/>
+ 
+<br/>
+ u32 pos;
+<br/>
+ u32 inc;
+<br/>
+ u32 len;
+<br/>
+ s8  *dat;
+<br/>
+ u32 loopStart;
+<br/>
+ u32 freq;
+<br/>
+} SND_CHANNEL;</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#152614 - Cearn - Tue Mar 18, 2008 5:52 am</h4>
+    <div class="postbody"><span class="postbody">This is what I came up with ...
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">SndMix:
+<br/>
+    stmfd   sp!, {r4-r11, r14}
+<br/>
+<br/>
+    @ Clear buffer
+<br/>
+    mov     r2, #0x04000000
+<br/>
+    add     r1, r2, #0xD4
+<br/>
+    str     r2, [r1, #8]            @ Clear REG_DMA3CNT
+<br/>
+    ldr     r2,=ClrVal
+<br/>
+    ldr     r3,=tmpBuffer
+<br/>
+    add     r4, r0, #1
+<br/>
+    add     r4, r4, r4, lsr #1
+<br/>
+    add     r4, r4, 0x85000000
+<br/>
+    stmfd   r1!, {r2-r4}
+<br/>
+    
+<br/>
+    @ Set-up main loop:
+<br/>
+    ldr     r1,=sngVars
+<br/>
+    ldr     r1, [r1]                @ master volume
+<br/>
+    ldr     r6,=sndChannels         @ chn
+<br/>
+    mov     r2, #9                  @ ii
+<br/>
+<br/>
+    @ Register list:
+<br/>
+    @ r0 :  nSamples
+<br/>
+    @ r1 :  mainVol
+<br/>
+    @ r2 :  ii
+<br/>
+    @ r3 :  tmpBuffer
+<br/>
+    @ r4 :  dst
+<br/>
+    @ r5 :  vol
+<br/>
+    @ r6 :  chn
+<br/>
+    @ r7 :  cnt
+<br/>
+    @ r8 :  pos
+<br/>
+    @ r9 :  inc / mix-data
+<br/>
+    @ r10:  len
+<br/>
+    @ r11:  (start) / data
+<br/>
+    @ r12:  src
+<br/>
+    @ r14:  jj
+<br/>
+<br/>
+.LChnLoop:
+<br/>
+        ldr     r7, [r6]            @ cnt
+<br/>
+        tst     r7, #1
+<br/>
+        beq     .LChnLoopInc
+<br/>
+<br/>
+        ldmib   r6, {r8-r12}        @ r8:pos, r9:inc, r10:len, r12:src
+<br/>
+        mul     r5, r1, r7          @ vol
+<br/>
+        mov     r5, r5, lsr #9
+<br/>
+        mov     r14, r0             @ jj
+<br/>
+        mov     r4, r3              @ buffer
+<br/>
+.LMixLoop:
+<br/>
+            ldrb    r11, [r12, r8, lsr #12]
+<br/>
+            add     r8, r8, r9          @ pos += inc. Frees r9 for mix
+<br/>
+            ldrh    r9, [r4]
+<br/>
+            mla     r9, r5, r11, r9     @ mix += sample*vol
+<br/>
+            strh    r9, [r4], #2
+<br/>
+<br/>
+            @ Test for end-of-data
+<br/>
+            cmp     r8, r10
+<br/>
+            bge     .LEndOfData
+<br/>
+.LMixLoopInc:
+<br/>
+            subs    r14, r14, #1
+<br/>
+            bne     .LMixLoop
+<br/>
+.LPostMixLoop:
+<br/>
+        str     r8, [r6, #4]
+<br/>
+.LChnLoopInc:
+<br/>
+        add     r6, r6, 0x1C
+<br/>
+        subs    r2, r2, #1
+<br/>
+        bne     .LChnLoop
+<br/>
+    b       .LPostChnLoop
+<br/>
+<br/>
+            @ Out of data: special cases
+<br/>
+.LEndOfData:
+<br/>
+            tst     r7, #2      @ Check for looping channel
+<br/>
+<br/>
+            @ if(loop) then start over
+<br/>
+            ldreq   r8, [r6, #0x14]
+<br/>
+            beq     .LMixLoopInc
+<br/>
+<br/>
+            @ else  reset pos, disable channel and bug out
+<br/>
+            mov     r8, #0
+<br/>
+            bic     r7, r7, #1
+<br/>
+            str     r7, [r3]
+<br/>
+            b       .LPostMixLoop
+<br/>
+<br/>
+    @ Channel and mix loops done. Yay. Prep for down-sample.
+<br/>
+.LPostChnLoop:
+<br/>
+    
+<br/>
+    @ Down sample:
+<br/>
+    @ r0: nSamples
+<br/>
+    @ r1: data
+<br/>
+    @ r2: curMixBuffer
+<br/>
+    @ r3: tmpBuffer
+<br/>
+<br/>
+    ldr     r2,=sndVars
+<br/>
+    ldr     r2, [r2, #4]    @ sndVars.curMixBuffer ?!?
+<br/>
+    add     r2, r2, #1      @ Yes, I'm moving one up
+<br/>
+.LDownSampleLoop:
+<br/>
+        ldrb    r1, [r3], #2    @ get top-byte only
+<br/>
+        strb    r1, [r2], #1
+<br/>
+        subs    r0, r0, #1
+<br/>
+        bne     .LDownSampleLoop
+<br/>
+<br/>
+    ldmfd   sp!, {r4-r11, r14}
+<br/>
+    bx      lr
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+It's almost the same as what you have now. I should probably point out that it's *cough* nearly 6am here, so the code above may not be accurate. 
+<br/>
+<br/>
+The main differences are that I'm not reloading tmpBuffer anywhere and that you're now using signed data instead of unsigned (which should it be, signed or unsigned?). You're also updating the mix-buffer now, something that wasn't there before.
+<br/>
+<br/>
+About the number of samples: is this guaranteed to be even ? If it's odd, the rounding you apply for the tmpBuffer will adds an extra sample that isn't actually there.
+<br/>
+<br/>
+There's also an interesting little tidbit about the mul instruction that you might want to know. The cycle-time for it is 1S + mI, with m being the number of significant bytes in the <span style="font-style: italic">second</span> operand. If you order the operands so that the second one is smaller, you may gain up to 3 cycles (the equivalent of 3 instructions).
+<br/>
+<br/>
+<span style="font-size: 9px; line-height: normal">EDIT : loop indentation</span></span><span class="gensmall"><br/><br/>Last edited by Cearn on Tue Mar 18, 2008 7:54 pm; edited 1 time in total</span></div>    
+</div>
+<div class="post">
+    <h4>#152635 - Miked0801 - Tue Mar 18, 2008 7:09 pm</h4>
+    <div class="postbody"><span class="postbody">Nice looking code Cearn.  Well formated and commented.  It's hard enough to read assembler without comments :)  The way you downsample is also very well done.  
+<br/>
+<br/>
+The code looks pretty tight.  The only thing I am wondering at this point is about the architecture/algorithms used.  The inner loops are a mess.  They're interleaved and the system is forced to jump back and forth.  It also required both an end of buffer check and a decrement check.  It seems to me that either one or the other should be sufficient with just a little care on the data creation side.  Also, depending on where in RAM this is being stored, buffering the output to words may make sense.
+<br/>
+<br/>
+Also,there is the possibly of using 4 byte reads and possibly buffering the output the 4-byte writes in the down sampler - but I have no idea if that is even needed because without data, I can't tell how much time is spent in any of the loops.
+<br/>
+<br/>
+Finally, as this uses DMA, be very careful not to mix this code with other DMA code across interrupts.  That causes very hard to track bugs.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#152644 - Cearn - Tue Mar 18, 2008 8:34 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Miked0801 wrote:</b></span></td> </tr> <tr> <td class="quote">Nice looking code Cearn.  Well formated and commented.  It's hard enough to read assembler without comments :)  The way you downsample is also very well done.  
+<br/>
+<br/>
+The code looks pretty tight.  The only thing I am wondering at this point is about the architecture/algorithms used.  The inner loops are a mess.  They're interleaved and the system is forced to jump back and forth.</td> </tr></table><span class="postbody">
+<br/>
+Actually, they aren't really interleaved, but since I messed up with my indentation I can see how it may have appeared that way. There are two loops, ChnLoop and MixLoop. They run like this:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">.LChnLoop:
+<br/>
+    init for mixer
+<br/>
+    
+<br/>
+.LMixLoop:
+<br/>
+        mix samples
+<br/>
+<br/>
+        (end-of-data check)
+<br/>
+<br/>
+        subs    r14, r14, #1
+<br/>
+        bne     .LMixloop
+<br/>
+<br/>
+.LPostMixLoop:
+<br/>
+    update chn-&gt;pos
+<br/>
+<br/>
+    subs    r2, r2, #1
+<br/>
+    bne     .LChnLoop
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+The mix loop runs from .LMixLoop to .LPostMixLoop, and is completely contained witin the channel loop. But what about .LEndOfData ?  .LEndOfData is separate from both loops. It essentially functions as a sub-routine. Now, it <span style="font-style: italic">does</span> 'return' to two different places: one still inside the mix loop, and one after it. The reason for the different exits is that the latter return would result in a 'break' statement (see the C version) inside the look, and you can avoid that by simply skipping past the loop parts from the sub-routine.
+<br/>
+<br/>
+The alternative is to put the end-of-data handler inside the mix loop and skip over it if pos is not out of bounds. Since branches are evil and pos will usually be smaller than len (ok, so that's an assumption, but it makes sense), it's better to have two infrequent branches than one frequent one. GCC actually does the same ... although it wastes quite a bit of energy with the stack and member loading.
+<br/>
+<br/>
+You could also place the whole .LEndOfData part after the bx so that the "b  .LPostChnLoop" can be removed.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Miked0801 wrote:</b></span></td> </tr> <tr> <td class="quote">It also required both an end of buffer check and a decrement check.  It seems to me that either one or the other should be sufficient with just a little care on the data creation side. </td> </tr></table><span class="postbody">
+<br/>
+Yeah, it there maybe ways around it, but you still need to have separate checks for  the number of samples and the end of the channel data in some form. If pos were decreasing, you could use subs/bmi instead of add/cmp/bge. 
+<br/>
+<br/>
+You can also fiddle with the chn updating in the channel loop and remove one or two instructions there, but I'm not sure that's really worth it; the loop only being executed 9 times and all.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#152667 - Ruben - Wed Mar 19, 2008 3:38 am</h4>
+    <div class="postbody"><span class="postbody">Question:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">.LEndOfData: 
+<br/>
+            tst     r7, #2      @ Check for looping channel 
+<br/>
+<br/>
+            @ if(loop) then start over 
+<br/>
+            ldreq   r8, [r6, #0x14] 
+<br/>
+            beq     .LMixLoopInc</td> </tr></table><span class="postbody">
+<br/>
+Did you mean 'ldrne' and 'bne'?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#152680 - Cearn - Wed Mar 19, 2008 12:06 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Ruben wrote:</b></span></td> </tr> <tr> <td class="quote">Question:
+<br/>
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">.LEndOfData: 
+<br/>
+            tst     r7, #2      @ Check for looping channel 
+<br/>
+<br/>
+            @ if(loop) then start over 
+<br/>
+            ldreq   r8, [r6, #0x14] 
+<br/>
+            beq     .LMixLoopInc</td> </tr></table><span class="postbody">
+<br/>
+Did you mean 'ldrne' and 'bne'?</span></td> </tr></table><span class="postbody">
+<br/>
+Uhm, yeah. If a set bit 1 means looping sound, then it should be -ne.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#152694 - tepples - Wed Mar 19, 2008 7:59 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Cearn wrote:</b></span></td> </tr> <tr> <td class="quote"><span style="font-size: 9px; line-height: normal">EDIT : loop indentation</span></td> </tr></table><span class="postbody">
+<br/>
+Interesting. Is there any sort of commonly accepted style for indentation of assembly language?<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#152710 - Dwedit - Wed Mar 19, 2008 11:02 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Cearn wrote:</b></span></td> </tr> <tr> <td class="quote"><span style="font-size: 9px; line-height: normal">EDIT : loop indentation</span></td> </tr></table><span class="postbody">
+<br/>
+Interesting. Is there any sort of commonly accepted style for indentation of assembly language?</span></td> </tr></table><span class="postbody">
+<br/>
+Whatever doesn't cause syntax errors.  Some assemblers require labels to be aligned to the left column.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#152905 - Cearn - Sat Mar 22, 2008 12:59 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Cearn wrote:</b></span></td> </tr> <tr> <td class="quote"><span style="font-size: 9px; line-height: normal">EDIT : loop indentation</span></td> </tr></table><span class="postbody">
+<br/>
+Interesting. Is there any sort of commonly accepted style for indentation of assembly language?</span></td> </tr></table><span class="postbody">Not that I know of, no. But using indentation makes loops stand out and hence improve readability. 
+<br/>
+<br/>
+Loops generally follow this pattern:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">   pre-loop code
+<br/>
+.LLoop:
+<br/>
+   loop code
+<br/>
+   ...
+<br/>
+   test for exit
+<br/>
+   bne .LLoop
+<br/>
+   post-loop code
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+I find it easier to see where the loop ends if I use
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">   pre-loop code
+<br/>
+.LLoop:
+<br/>
+      loop code
+<br/>
+      ...
+<br/>
+      test for exit
+<br/>
+      bne .LLoop
+<br/>
+   post-loop code
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#152908 - eKid - Sat Mar 22, 2008 2:09 pm</h4>
+    <div class="postbody"><span class="postbody">I prefer the format
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+label:
+<br/>
+        instr   reg, reg
+<br/>
+        instr   reg, xxx
+<br/>
+        blah    blah
+<br/>
+label2:
+<br/>
+        etc     reg, #???
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+i.e with labels left aligned, the instructions on the second tab, and parameters on the third tab (tabsize 8). *Personally*, I think indentation throws around the parameters, and makes it harder to read.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#155115 - Ruben - Fri Apr 25, 2008 3:44 am</h4>
+    <div class="postbody"><span class="postbody">OK, so I've moved on to a higher quality mixing routine and decided to use Cearn's 4byte -&gt; 2byte idea. But when I tried it, it gave strange clicks and, according to No$GBA, it contains bugs. This is my loop ATM:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">@ r0: samples to mix
+<br/>
+@ r1: address of pS3MVars, which contains the current location of the mix buffer, etc
+<br/>
+@ r2: current address of mix buffer
+<br/>
+@ r3: address of tmpBuffer
+<br/>
+@ pS3MVars + 0x18 = current mix buffer address
+<br/>
+.LPreMixdownLoop:
+<br/>
+ ldr        r1, =pS3MVars
+<br/>
+ ldr        r2, [r1, #0x18]
+<br/>
+ ldr        r3, =tmpBuffer
+<br/>
+ 
+<br/>
+ add        r4, r2, r0               @ update the location of the mix buffer
+<br/>
+ str        r4, [r1, #0x18]
+<br/>
+<br/>
+ mov        r4, #0xFF
+<br/>
+ orr        r4, r4, r4, lsl #0x10    @ m = 0x00FF00FF
+<br/>
+<br/>
+.LMixdownLoop:
+<br/>
+ ldr        r5, [r3], #0x04          @ d =              0xAAbbCCdd
+<br/>
+ and        r5, r4, r5, lsr #0x08    @ d = d &amp; m &gt;&gt; 8 = 0x00AA00CC
+<br/>
+ orr        r5, r5, r5, lsr #0x08    @ d = d | d &gt;&gt; 8 = 0x00aaAACC
+<br/>
+ strh       r5, [r2], #0x02
+<br/>
+ ldr        r5, [r3], #0x04          @ d =              0xAAbbCCdd
+<br/>
+ and        r5, r4, r5, lsr #0x08    @ d = d &amp; m &gt;&gt; 8 = 0x00AA00CC
+<br/>
+ orr        r5, r5, r5, lsr #0x08    @ d = d | d &gt;&gt; 8 = 0x00aaAACC
+<br/>
+ strh       r5, [r2], #0x02
+<br/>
+ 
+<br/>
+ subs       r0, r0, #0x04
+<br/>
+ bpl        .LMixdownLoop</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#155116 - Ruben - Fri Apr 25, 2008 3:51 am</h4>
+    <div class="postbody"><span class="postbody">Oh, yeah. Cearn, you asked how many samples it mixes at a time right? Well, I'm not exactly sure of the figure but this is the code which calls the function:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">//in sound.h...
+<br/>
+#define S3M_TICKFPA 8
+<br/>
+#define S3M_BUFSIZE 528
+<br/>
+<br/>
+//in sound.c...
+<br/>
+int pS3MSetTempo(int tempo) {
+<br/>
+ pS3MVars.sTT -= pS3MVars.sPT;
+<br/>
+ pS3MVars.sPT  = pS3MDivide(pS3MVars.mFr*5&lt;&lt;S3M_TICKFPA, tempo*2); //smps p/tick = (mix freq * 5 &lt;&lt; S3M_TICKFPA) / (tempo * 2)
+<br/>
+ pS3MVars.sTT += pS3MVars.sPT;
+<br/>
+ 
+<br/>
+ return 0;
+<br/>
+}
+<br/>
+<br/>
+int gS3MUpdate() {
+<br/>
+ int sL = S3M_BUFSIZE, sTT;
+<br/>
+ int (*mix)();
+<br/>
+ 
+<br/>
+ if(pS3MModVars.sigMode == 1) mix = pS3MMixdownS;
+<br/>
+ else mix = pS3MMixdown;
+<br/>
+ 
+<br/>
+ while(sL) {
+<br/>
+  if(pS3MVars.sTT &lt; (1 &lt;&lt; S3M_TICKFPA)) {
+<br/>
+   pS3MVars.sTT += pS3MVars.sPT; //samples til tick += smps p/tick
+<br/>
+   pS3MUpdateMod(); //process the row
+<br/>
+  }
+<br/>
+  
+<br/>
+  sTT = pS3MVars.sTT &gt;&gt; S3M_TICKFPA;
+<br/>
+  if(sTT &lt; sL) {
+<br/>
+   mix(sTT);
+<br/>
+   sL -= sTT;
+<br/>
+   pS3MVars.sTT -= (sTT &lt;&lt; S3M_TICKFPA);
+<br/>
+  } else {
+<br/>
+   sTT = sL;
+<br/>
+   
+<br/>
+   mix(sTT);
+<br/>
+   pS3MVars.sTT -= (sL  &lt;&lt; S3M_TICKFPA);
+<br/>
+   return -1;
+<br/>
+  }
+<br/>
+ }
+<br/>
+ 
+<br/>
+ return 0;
+<br/>
+}</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

@@ -1,0 +1,549 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>NDS Cache - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > NDS Cache</h2>
+<div id="posts">
+<div class="post">
+    <h4>#153481 - zoranc - Mon Mar 31, 2008 6:19 pm</h4>
+    <div class="postbody"><span class="postbody">I'd like to have some detailed info on cache used in NDS. Also which libNDS function to use when. Sample code of cache improper rewrite when operated from both arm7 and arm9 would be nice to see...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#153482 - Dwedit - Mon Mar 31, 2008 6:35 pm</h4>
+    <div class="postbody"><span class="postbody">The only time I ran ito difficulties with the cache is before using HDMA to write new values to the LCD registers during hblank.  I added the cache flush code to the end of my vblank handler to fix it.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#153490 - simonjhall - Mon Mar 31, 2008 9:54 pm</h4>
+    <div class="postbody"><span class="postbody">The ARM9 has 4k of data cache, and 8k of instruction cache. It's four-way set associative. You've also got 16k of tightly coupled memory for use with data (by default this is where your stack lives) and 32k of TCM for code. Each cache line is 32 bytes in size.
+<br/>
+The ARM7 has no caching at all.
+<br/>
+<br/>
+Have a look in libnds/include/nds/arm9/cache.h for the stuff to use. The most obviously useful functions are DC_FlushAll and IC_InvalidateAll.
+<br/>
+Also, if you bitwise OR any main memory address with 0x400000 you'll get the uncached mirror of the original address, bypassing the data cache altogether (even if there is newer data waiting to be written back).
+<br/>
+<br/>
+EDIT: I forgot, the DMA engine cannot access either TCM nor is it cache coherent.<br/>_________________<br/><span style="font-weight: bold"><a class="postlink" href="https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&amp;business=simonjhall%40gmail%2ecom&amp;no_shipping=2&amp;no_note=1&amp;tax=0&amp;currency_code=GBP&amp;lc=GB&amp;bn=PP%2dDonationsBF&amp;charset=UTF%2d8" target="_blank">Big thanks to everyone who donated for Quake2</a></span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#153492 - zoranc - Mon Mar 31, 2008 10:21 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>simonjhall wrote:</b></span></td> </tr> <tr> <td class="quote">The ARM9 has 4k of data cache, and 8k of instruction cache. It's four-way set associative. You've also got 16k of tightly coupled memory for use with data (by default this is where your stack lives) and 32k of TCM for code. Each cache line is 32 bytes in size.
+<br/>
+The ARM7 has no caching at all.
+<br/>
+<br/>
+Have a look in libnds/include/nds/arm9/cache.h for the stuff to use. The most obviously useful functions are DC_FlushAll and IC_InvalidateAll.
+<br/>
+Also, if you bitwise OR any main memory address with 0x400000 you'll get the uncached mirror of the original address, bypassing the data cache altogether (even if there is newer data waiting to be written back).
+<br/>
+<br/>
+EDIT: I forgot, the DMA engine cannot access either TCM nor is it cache coherent.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Thanks a lot for the explanation. I was looking into those functions but was not sure which one is proper to call. And what is going to flush/invalidate. 
+<br/>
+<br/>
+Or more simply my question is: if I write something with ARM9 (that I expect ARM7 or DMA to read), should I flush or invalidate? Also what to do when I approach to read with the ARM9, memory that is probably updated by ARM7 and not in sync with the cache.
+<br/>
+<br/>
+And 2. question if I make all my data reside in range with 0x400000 does that turn the cache off?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#153497 - simonjhall - Mon Mar 31, 2008 10:59 pm</h4>
+    <div class="postbody"><span class="postbody">Have a look at the comments in cache.h - they should be pretty explanatory! I normally would roll with DC_FlushAll when I want to flush something, as I seem to remember that there was some performance beef with the implentation of FlushRange (at least in r20). Can't really remember though.
+<br/>
+<br/>
+If you're going to do something with a piece of hardware that's not cache coherent (eg the graphics hardware, DMA or the second processor) I'd recommend *flushing* the relavent parts or all of the cache before doing a read or write with that piece of hardware.
+<br/>
+So say you want something accessed from the ARM7 - do your normal processing/storing of data on the ARM9 then flush the cache, then do the read on the ARM7.
+<br/>
+If you're going to use DMA to copy something, do a data cache flush first on the source and destination (or the entire cache) then do the DMA.
+<br/>
+<br/>
+Avoid invalidation unless you're sure you know what you're doing, and don't forget that the line size is 32b and lines are 32b aligned. For instance, on Q2 I would get weird errors with invalidation as I was invalidating a piece of memory that wasn't 32b aligned, and this meant that the data that was in the gap between the aligned address and my actual data (that I wanted to invalidate) wasn't getting written back. Took some time to track down!
+<br/>
+<br/>
+Finally, the 0x400000 thing just bypasses the cache for reads and writes so even if there is more recent data in the cache if you do a read from that address (but ORed) you'll get the data that's actually in memory, not in the cache. Same if you do a store to an address that's ORed like this - you'll do a store directly to that location, bypassing the cache. If there is more recent data in the cache for that location, when it gets written back (assuming you didn't invalidate the cache) you'll overwrite the data you wrote via the uncached address. WAW, baby.
+<br/>
+There is another advantage to the uncached access to main memory - the latency is lower for a read/write than it is for a cache miss. So if you're using memory in a really random way (and your data is smaller than the line size) if may be faster to use the uncached address.
+<br/>
+<br/>
+Any more questions?<br/>_________________<br/><span style="font-weight: bold"><a class="postlink" href="https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&amp;business=simonjhall%40gmail%2ecom&amp;no_shipping=2&amp;no_note=1&amp;tax=0&amp;currency_code=GBP&amp;lc=GB&amp;bn=PP%2dDonationsBF&amp;charset=UTF%2d8" target="_blank">Big thanks to everyone who donated for Quake2</a></span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#153503 - tepples - Tue Apr 01, 2008 12:56 am</h4>
+    <div class="postbody"><span class="postbody">As I understand it, "flush" means <a class="postlink" href="http://en.wikipedia.org/wiki/Commit_%28data_management%29" target="_blank">commit</a> and "invalidate" means <a class="postlink" href="http://en.wikipedia.org/wiki/Rollback_%28data_management%29" target="_blank">rollback</a>, but (obviously) without any hope of atomicity. Is this correct?
+<br/>
+<br/>
+Can you think of pros and cons of flushing a range versus flushing the whole thing? Specifically, if I were going to fill some HDMA buffers, would it be faster/cleaner/more correct to <ol type="a"><li>flush the buffer as a range after filling them, </li><li>flush the entire data cache after filling them, or </li><li>just write them to the uncached mirror? </li></ol><br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#153504 - silent_code - Tue Apr 01, 2008 1:00 am</h4>
+    <div class="postbody"><span class="postbody">well, as you're already at it, maybe you could write down some general cache tips for the relatively new coders. like "how can i make use of / optimze for the cache" (data structures etc) and the like. maybe around five tips to demystify the cache or five common mistakes. there are some papers on the net, sure, but many of them are either too long or too technical to start with.
+<br/>
+<br/>
+i, myself, found it hard to get the idea for the cache and how to use it. even today, most of the time i don't even think about it. :^) for me it boils down to: "alignment, structure size, alignment" and "not so random" random access ;^D
+<br/>
+<br/>
+ps: &lt;jokingly/&gt; ... and we don't want to waste any energy by asking google. ;^p</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#153511 - M3d10n - Tue Apr 01, 2008 4:08 am</h4>
+    <div class="postbody"><span class="postbody">I too don't think as much about the cache as I think I should, and I keep hearing how crucial it's for getting the code optimized (at least for time-critical code, like animation and collision detection).</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#153514 - sajiimori - Tue Apr 01, 2008 7:20 am</h4>
+    <div class="postbody"><span class="postbody">Ok, 5 things about optimizing cache behavior:
+<br/>
+<br/>
+1.  Minimize the number of times you visit a game object per frame.  Try to do everything you need to do with the object before moving on, so you won't have to reload it again.
+<br/>
+<br/>
+2.  Try to do the same task a lot of times in a row, rather than rapidly switching between a lot of different tasks.  This minimizes the number of times that a particular piece of code has to be loaded per frame.
+<br/>
+<br/>
+3.  Group data together by task.  If you have 100 actors that each have 5 subsystems that need to be updated every frame, try having 5 separate lists (one per subsystem) with 100 objects each, and iterate over the lists separately.  The actor can be glue for these subsystems -- maybe you can get away with not even visiting the actor itself!
+<br/>
+<br/>
+4.  If you have an actor list with a lot of different types, try sorting the list by type so you'll see more of the same kind in a row, meaning the tasks will be more repetitive.
+<br/>
+<br/>
+5.  Rather than setting "skip me" flags on an object, remove it from the list of things to visit.
+<br/>
+<br/>
+And here's an unsolicited one:
+<br/>
+<br/>
+6.  These things probably don't matter for your game.  Code for simplicity and use decent algorithms.  When you have a nice engine, and your last game maxed out the CPU without any obvious bottlenecks, and you'd like to push your next game further, redesign your engine with the cache in mind and you'll squeeze another 25% out of it.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#153517 - simonjhall - Tue Apr 01, 2008 9:36 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sajiimori wrote:</b></span></td> </tr> <tr> <td class="quote">stuff</td> </tr></table><span class="postbody">What he said, esp the first three!
+<br/>
+<br/>
+I also found that you've really got to try lots of different ways of storing your data and the various caching options and then properly timing what the results are. For instance, I found that with some pieces of code (eg BSP tree traversal in Q2) I got better results when not using the cache. However this also had a good side effect - since the data cache is so small, other code got slightly faster too since there was less competition for the cache.
+<br/>
+I guess the main advantage/point to the cache is that it's fast. Using synthetic tests I found that the data cache has roughly ten times more bandwidth than main memory, and given how slow that is it can be a real saviour!
+<br/>
+<br/>
+In fact I've got a big fat table somewhere of how fast the various pieces of memory are...<br/>_________________<br/><span style="font-weight: bold"><a class="postlink" href="https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&amp;business=simonjhall%40gmail%2ecom&amp;no_shipping=2&amp;no_note=1&amp;tax=0&amp;currency_code=GBP&amp;lc=GB&amp;bn=PP%2dDonationsBF&amp;charset=UTF%2d8" target="_blank">Big thanks to everyone who donated for Quake2</a></span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#153524 - masscat - Tue Apr 01, 2008 10:56 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>ARM946E-S Tech Ref Manual wrote:</b></span></td> </tr> <tr> <td class="quote">Data cache clean and flush
+<br/>
+The data cache has flexible cleaning and flushing utilities that enable the following operations:
+<br/>
+<ul><li>You can invalidate the whole data cache (flush data cache) in one operation without writing back dirty data.
+<br/>
+</li><li>You can invalidate individual lines without writing back any dirty data (flush data cache single entry).
+<br/>
+</li><li>You can perform cleaning on a line-by-line basis. The data is only written back through the write buffer when a dirty line is encountered, and the cleaned line remains in the cache (clean data cache single entry). You can clean cache lines using either their index within the data cache, or their address within memory.
+<br/>
+</li><li>You can clean and flush individual lines in one operation, using either their index within the data cache, or their address within memory.</li></ul></td> </tr></table><span class="postbody">
+<br/>
+<span style="font-weight: bold">Note:</span> the use of <span style="font-style: italic">flush</span> is different in the quote from the use in the libnds functions. The ARM tech ref uses flush to mean remove the entry from the cache and clean to write back dirty data (changed in cache but not committed to memory) to memory. Therefore the meaning of the libnds functions in the ARM tech ref parlance are as follows:
+<br/>
+<br/>
+DC_FlushRange - performs a flush and clean on the cache lines (data may be written to memory).
+<br/>
+DC_InvalidateRange - performs a flush on the cache lines (no data is written to memory).
+<br/>
+<br/>
+Also note that it is not possible to clean and flush the entire data cache in a single operation. DC_FlushAll function actually does a loop cleaning and flushing each line of the data cache in turn.
+<br/>
+Cleaning and flushing the entire cache when you really only want a section of memory cleaned and flushed may cause unnecessary writes to memory (and the overhead associated with them). 
+<br/>
+<br/>
+<br/>
+For using DMA and similar on the ARM9 you will be wanting to perform a DC_FlushRange on the area of memory that you are going to be DMAing. This ensures that the actual memory is the same as the ARM9's view of it (through its cache).
+<br/>
+<br/>
+You would use DC_InvalidateRange when an area of main memory (or other cachable region of memory) is changed behind the ARM9's back.
+<br/>
+<br/>
+As an example, you have a situation where you are passing control of shared buffers in main memory backwards and forwards between the ARM9 and the ARM7. A buffer written by the ARM7 will change main memory without the ARM9's knowledge. When control of this buffer is passed to the ARM9 it is necessary that the ARM9 DC_InvalidateRange the memory the buffer covers thereby removing any corresponding data cache lines, otherwise the ARM9 will see its cached view of the memory rather the true memory contents. Similarly when a buffer is going to be passed from the ARM9 to the ARM7 it would be necessary to call DC_FlushRange for the buffer so that any cached data is written back.
+<br/>
+<br/>
+In the buffering scheme described it is vital that the buffers are aligned to cache line boundaries (32 bytes). Otherwise you get into situations where the end/start of one buffer is accidentally cleaned/flushed at the same time as its neighbour (leading to data corruption).</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#153527 - zoranc - Tue Apr 01, 2008 12:29 pm</h4>
+    <div class="postbody"><span class="postbody">Wow, masscat you really addressed all my question, concernes very-very precise.  
+<br/>
+1. Discrepancy of the terminology between Tech Ref MAnual and the lib.
+<br/>
+2. Performance issues with full and the range flush.
+<br/>
+3. Exact implementation for my use case - ARM9 and ARM7 buffer communication.
+<br/>
+<br/>
+Thanks a lot!!!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#153535 - masscat - Tue Apr 01, 2008 2:17 pm</h4>
+    <div class="postbody"><span class="postbody">There is an operation on the data cache to which the libnds functions do not provide access. The following is a table of the cache operations:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>ARM946E-S Tech Ref Manual wrote:</b></span></td> </tr> <tr> <td class="quote">MCR p15, 0, Rd, c7, c5, 0  -  Flush instruction cache  -   SBZa
+<br/>
+MCR p15, 0, Rd, c7, c5, 1  -  Flush instruction cache single entry  -  Address
+<br/>
+MCR p15, 0, Rd, c7, c13, 1  -  Prefetch instruction cache line   -   Address
+<br/>
+MCR p15, 0, Rd, c7, c6, 0  -  Flush data cache  -   SBZa
+<br/>
+MCR p15, 0, Rd, c7, c6, 1  -  Flush data cache single entry  -  Address
+<br/>
+MCR p15, 0, Rd, c7, c10, 1  -  Clean data cache entry  -  Address
+<br/>
+MCR p15, 0, Rd, c7, c14, 1  -  Clean and flush data cache entry  -  Address
+<br/>
+MCR p15, 0, Rd, c7, c10, 2  -  Clean data cache entry  -  Index and segment
+<br/>
+MCR p15, 0, Rd, c7, c14, 2  -  Clean and flush data cache entry  -  Index and segment</td> </tr></table><span class="postbody">
+<br/>
+The missing functionality is <span style="font-style: italic">Clean data cache entry</span>, DC_FlushRange uses <span style="font-style: italic">Clean and flush data cache entry</span>. This does mean that the use of the data cache may be less efficient than needs be under some circumstances.
+<br/>
+<br/>
+For example, the ARM9 sets up some image data for display and then calls DC_FlushRange before using DMA to copy the image data into the VRAM at VBlank. For the next frame, the ARM9 updates the image data and repeats the clean and flush and DMA.
+<br/>
+The less than efficient behaviour is that the flush is not needed and including the flush may mean that a data cache line that was flushed is reloaded the next frame (including the overhead of the memory read) when it could have happily remained in the cache.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#153537 - M3d10n - Tue Apr 01, 2008 2:51 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sajiimori wrote:</b></span></td> </tr> <tr> <td class="quote">wise words</td> </tr></table><span class="postbody">
+<br/>
+Wow, nice tips. I'll re-check my engine against those... I already know a thing or two that could be changed. I got a question:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sajiimori wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+3.  Group data together by task.  If you have 100 actors that each have 5 subsystems that need to be updated every frame, try having 5 separate lists (one per subsystem) with 100 objects each, and iterate over the lists separately.  The actor can be glue for these subsystems -- maybe you can get away with not even visiting the actor itself!
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+When you say a "list", you mean strictly an actual array of sequential objects? Would or an array of pointers (like a linked list) work?
+<br/>
+<br/>
+Also, should I split my game objects into smaller components (render, simulation, collision, etc) and have those, not the game objects themselves, on specialized lists to be processed by specialized functions?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#153539 - zoranc - Tue Apr 01, 2008 3:19 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>M3d10n wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sajiimori wrote:</b></span></td> </tr> <tr> <td class="quote">wise words</td> </tr></table><span class="postbody">
+<br/>
+Wow, nice tips. I'll re-check my engine against those... I already know a thing or two that could be changed. I got a question:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sajiimori wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+3.  Group data together by task.  If you have 100 actors that each have 5 subsystems that need to be updated every frame, try having 5 separate lists (one per subsystem) with 100 objects each, and iterate over the lists separately.  The actor can be glue for these subsystems -- maybe you can get away with not even visiting the actor itself!
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+When you say a "list", you mean strictly an actual array of sequential objects? Would or an array of pointers (like a linked list) work?
+<br/>
+<br/>
+Also, should I split my game objects into smaller components (render, simulation, collision, etc) and have those, not the game objects themselves, on specialized lists to be processed by specialized functions?</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I think his tip is to have more access to the same objects in order to minimize cache misses, so data structure is irrelevant, the idea is to visit less objects within the loop.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#153543 - masscat - Tue Apr 01, 2008 5:22 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>masscat wrote:</b></span></td> </tr> <tr> <td class="quote">As an example, you have a situation where you are passing control of shared buffers in main memory backwards and forwards between the ARM9 and the ARM7. A buffer written by the ARM7 will change main memory without the ARM9's knowledge. When control of this buffer is passed to the ARM9 it is necessary that the ARM9 DC_InvalidateRange the memory the buffer covers thereby removing any corresponding data cache lines, otherwise the ARM9 will see its cached view of the memory rather the true memory contents. Similarly when a buffer is going to be passed from the ARM9 to the ARM7 it would be necessary to call DC_FlushRange for the buffer so that any cached data is written back.</td> </tr></table><span class="postbody">
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>zoranc wrote:</b></span></td> </tr> <tr> <td class="quote">3. Exact implementation for my use case - ARM9 and ARM7 buffer communication.</td> </tr></table><span class="postbody">
+<br/>
+You could actually miss out the DC_InvalidateRange call for buffers coming in the ARM7 to ARM9 direction.
+<br/>
+When the ARM9 passes a buffer down to the ARM7 it does a DC_FlushRange call. Since this does a clean and flush and the ARM9 will not be accessing the buffer until the ARM7 passes it back, the buffer's memory region will not be loaded back into the cache until needed.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#153545 - sajiimori - Tue Apr 01, 2008 6:03 pm</h4>
+    <div class="postbody"><span class="postbody">M3d10n,
+<br/>
+<br/>
+The data structure can be important.  When it fits your needs, you can't beat a simple array.
+<br/>
+<br/>
+There are a variety of reasons that an array might not be ideal, though.  If you have a list of large-ish objects that need to be sorted, or if you frequently erase objects from the middle, an array of pointers might be better.
+<br/>
+<br/>
+On the DS, it's okay to iterate over a linked list of objects that are far apart in memory.  Just pay attention to the alignment of each object, and whether their cache lines are used efficiently.  A pathologically bad case would be an object that begins 1 byte below a 32-byte boundary (so almost the entire first cache line is wasted), and ends 1 byte above a 32-byte boundary (so almost the entire last cache line is also wasted).
+<br/>
+<br/>
+In the rendering code I've been using lately, the rendering manager essentially has an array of model pointers, and the models themselves reside in their parent actors (or wherever).  The pointers are an extra indirection, but removal is faster, unused entries only cost 4 bytes, and it's easier for the models to vary in size.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#153572 - silent_code - Wed Apr 02, 2008 4:37 am</h4>
+    <div class="postbody"><span class="postbody">well, that's a nice bunch of tips! :^)
+<br/>
+<br/>
+what i might add is the following: like sajiimori pointed out in 2. - repeat tasks a lot: e.g. you might find it useful to write "super vectors", which do a certain operation on several pieces of data. like a addidion, which allways adds e.g. four pairs of numbers. search the web for more info.
+<br/>
+<br/>
+also, divide your code into lots of medium/small execution fragments (functions) that will be used fairly often. this will make it more likely that the code will stay in the instruction cache. having long functions might result in more instruction fetches, especially but not only, when having lots of branches, that don't get executed but will never the less get loaded into the instruction cache (ARM processors - iirc - have no [except for the ARM 8] branch prediction!!!).
+<br/>
+<br/>
+again: alignment (starting adress), structure (only needed data preferably arranged in the most efficient way), alignmet (structure size)!!! &lt;- those are the caches friends and its friends, should also be your friends! ;^D
+<br/>
+ever wondered why some data structures have that "nonesense" unused fields? alignment is one possible reason. example:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">// assume it's "packed" and alignment is 4 bytes
+<br/>
+struct tool {
+<br/>
+uint16 rock;
+<br/>
+uint8 hard;
+<br/>
+uint8 unused;
+<br/>
+};</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+... but after all, i'm not that fluid in "cachinsh". :?D feel free to correct me. :^)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#153603 - M3d10n - Wed Apr 02, 2008 8:15 pm</h4>
+    <div class="postbody"><span class="postbody">A quick look at my animation code (by far the most time-sensitive stuff in my current project) and seems my AnimationNode class has sizeof() of 44 bytes. Will it fit neatly in a cache line if I modify it so sizeof() reports 32 bytes instead?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#153607 - silent_code - Wed Apr 02, 2008 8:58 pm</h4>
+    <div class="postbody"><span class="postbody">or you could modify it to report 64 bytes (at least for testing, if that would even affect performance). afaik, it's important that your structure is a multiple of 32 bytes. you could, e.g. interleave your data with other data (much like sprite entries and matrices are in the hw,) that is related. then, just concatinate execution of operations on both datasets. hope that's clear (and valid) enough.
+<br/>
+<br/>
+but if you can reduce your data to 32 bytes, that would of course be better anyway. :^)
+<br/>
+<br/>
+EDIT: Dwedit is right.
+<br/>
+<br/>
+so, *optimizing* for the cache is something you should only do, when there practically is no other algorithm to do a certain task and you have to avoid cache misses and trashing... just in case, i'm mentioning the infamous "code it in ASM then" step, which, in most cases, should come first. ;^)
+<br/>
+<br/>
+on the other hand, modifying an existing algorithm for better cache performance days/weeks/months into development can be a real pain.
+<br/>
+<br/>
+in the end, the best practice is therefore sitting down and actually "designing" your software. arrrr! ;^D</span><span class="gensmall"><br/><br/>Last edited by silent_code on Thu Apr 03, 2008 1:02 am; edited 2 times in total</span></div>    
+</div>
+<div class="post">
+    <h4>#153614 - Dwedit - Wed Apr 02, 2008 9:37 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>M3d10n wrote:</b></span></td> </tr> <tr> <td class="quote">A quick look at my animation code (by far the most time-sensitive stuff in my current project) and seems my AnimationNode class has sizeof() of 44 bytes. Will it fit neatly in a cache line if I modify it so sizeof() reports 32 bytes instead?</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+It doesn't really matter whether it fits on 1 cache line or 2.  With a cache, you can pretend that main memory is very fast.
+<br/>
+If you really need high performance on data which is accessed very frequently, use DTCM.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#153626 - sajiimori - Thu Apr 03, 2008 2:31 am</h4>
+    <div class="postbody"><span class="postbody">silent_code,
+<br/>
+<br/>
+The DS isn't superscalar in any way I can think of.  Writing your code to compile down to SIMD instructions is definitely misguided.  ;)
+<br/>
+<br/>
+If you branch over some code, you'll typically end up loading some extra instructions on either side of the skipped code, but I wouldn't say that "branches that aren't executed are loaded anyway".
+<br/>
+<br/>
+M3d10n,
+<br/>
+<br/>
+Reducing your AnimationNodes to 32 bytes and aligning them all to 32-byte boundaries sounds like a good optimization, assuming the size reduction doesn't imply any other huge costs.
+<br/>
+<br/>
+If you're loading all the nodes in a row, from a flat array, aligning them isn't very important (since you'll end up using all the loaded data anyway), but size reductions are always nice -- you'll spend less time waiting for the bus overall.
+<br/>
+<br/>
+Intentionally increasing the size to 64 bytes is nonsense.  Sorry, silent_code!  :)
+<br/>
+<br/>
+Dwedit,
+<br/>
+<br/>
+Feel free to pretend main memory is fast if you don't need your game to be fast.  In reality, typical DS games spend <span style="font-weight: bold">most</span> of their CPU time waiting for the memory bus.  The cache is not a silver bullet.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#153627 - M3d10n - Thu Apr 03, 2008 3:01 am</h4>
+    <div class="postbody"><span class="postbody">Actually a small change on how the node names are stored dropped the size exactly to 32 bytes (thus the question). All nodes for a specific animation are laid in a contiguous array already, as well as the keyframe (time+rotation) data for each node.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#153628 - Dwedit - Thu Apr 03, 2008 3:04 am</h4>
+    <div class="postbody"><span class="postbody">(deleted, it was some redundant reminder to keep it 32-byte aligned)<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#153629 - TwentySeven - Thu Apr 03, 2008 3:19 am</h4>
+    <div class="postbody"><span class="postbody">Wait, whats this about having to reset the cache manually before doing a DMA?
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+dmaCopyWordsAsynch(0, texture, (void*)addr, part_size); 
+<br/>
+dmaCopyWordsAsynch(1, texture + part_size,   (void*)((int16*)addr + (part_size&gt;&gt;1)),   part_size ); 
+<br/>
+dmaCopyWordsAsynch(2, texture + part_size*2, (void*)((int16*)addr + (part_size&gt;&gt;1)*2), part_size ); 
+<br/>
+dmaCopyWords(      3, texture + part_size*3, (void*)((int16*)addr + (part_size&gt;&gt;1)*3), part_size );              
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I have this block of code that'll upload a texture into an lcd vram during a vblank...  
+<br/>
+<br/>
+It *appears* to work fine on hardware without doing anything cache specific.. but am I just lucky?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#153635 - simonjhall - Thu Apr 03, 2008 7:59 am</h4>
+    <div class="postbody"><span class="postbody">LCD memory isn't cached by default, so you don't have to worry about that side. However the source (which I guess is in main memory) should be flushed first. So either flush the entire data cache or flush the range where you data lies, rounded up and down to the nearest 32b.<br/>_________________<br/><span style="font-weight: bold"><a class="postlink" href="https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&amp;business=simonjhall%40gmail%2ecom&amp;no_shipping=2&amp;no_note=1&amp;tax=0&amp;currency_code=GBP&amp;lc=GB&amp;bn=PP%2dDonationsBF&amp;charset=UTF%2d8" target="_blank">Big thanks to everyone who donated for Quake2</a></span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#153647 - masscat - Thu Apr 03, 2008 1:04 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>TwentySeven wrote:</b></span></td> </tr> <tr> <td class="quote">Wait, whats this about having to reset the cache manually before doing a DMA?
+<br/>
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+dmaCopyWordsAsynch(0, texture, (void*)addr, part_size); 
+<br/>
+dmaCopyWordsAsynch(1, texture + part_size,   (void*)((int16*)addr + (part_size&gt;&gt;1)),   part_size ); 
+<br/>
+dmaCopyWordsAsynch(2, texture + part_size*2, (void*)((int16*)addr + (part_size&gt;&gt;1)*2), part_size ); 
+<br/>
+dmaCopyWords(      3, texture + part_size*3, (void*)((int16*)addr + (part_size&gt;&gt;1)*3), part_size );              
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I have this block of code that'll upload a texture into an lcd vram during a vblank...  
+<br/>
+<br/>
+It *appears* to work fine on hardware without doing anything cache specific.. but am I just lucky?</span></td> </tr></table><span class="postbody">
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Your friendly ARM946E-S Tech Ref Manual wrote:</b></span></td> </tr> <tr> <td class="quote">During a cache access, all TAG RAMs are accessed for the first nonsequential access, and the TAG address is compared with the access address. If a match (or hit) occurs, the data from the segment is selected for return to the ARM9E-S core. If none of the TAGs match (a miss), then external memory must be accessed. If the access is a buffered write then the write buffer is used.
+<br/>
+If a read access from a cachable memory region misses, new data is loaded into one of the four segments. This is an allocate on read-miss replacement policy. Selection of the segment is performed by a segment counter that can be clocked in a pseudo-random manner, or in a predictable manner based on the replacement algorithm selected.</td> </tr></table><span class="postbody">
+<br/>
+Therefore if you never read from the main memory where the copy of the texture lives (which could be likely depending how you are using it) then it will never get loaded into the cache and all writes to it will be written out to memory immediately (well through the ARM's write buffer, so not quite immediately).
+<br/>
+<br/>
+So you are not just lucky :)
+<br/>
+<br/>
+This does mean that it is important to align the main memory copies of the textures to 32byte boundaries otherwise you are in danger of the first/last few bytes of the texture being cached because of reads from the bytes surrounding them. And to be on the safe side you should flush the cache for the memory you will use for the textures once at startup, otherwise there is a chance that the memory will have been cached by the .nds loader/flash card software (although I seem to remember that the cache is flushed by the libnds startup code).
+<br/>
+<br/>
+I have not noticed this description of the cache's operation before, meaning that I have cleaned and flushed regions of the cache unnecessarily (costing the coprocessor instructions needed to do the clean and flush - no memory writes would happen).
+<br/>
+<br/>
+<span style="font-weight: bold">Edit:</span> more crazy cache talk, you can play around with the cache line replacement algorithm:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Guess where this is from wrote:</b></span></td> </tr> <tr> <td class="quote">Bit 14, Round-robin replacement
+<br/>
+This bit controls the cache replacement algorithm.
+<br/>
+When set, round-robin replacement is used. When clear, a pseudo-random replacement algorithm is used.
+<br/>
+At reset this bit is cleared.</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#153650 - silent_code - Thu Apr 03, 2008 2:17 pm</h4>
+    <div class="postbody"><span class="postbody">hi!
+<br/>
+well, i guess i got misunderstood, so here's what i was talking about:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">// pseudo code, 4 is just an arbitrary number, use whatever you want, like 16
+<br/>
+void vector_add4(int in1[4], int in2[4], int out[4]) {
+<br/>
+out[0] = in1[0] + in2[0];
+<br/>
+out[1] = in1[1] + in2[1];
+<br/>
+out[2] = in1[2] + in2[2];
+<br/>
+out[3] = in1[3] + in2[3];
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+no simd at all. ;^) will this give you any benefit? on the "big" consoles it should.
+<br/>
+<br/>
+pushing the node size to 64 bytes should be done, as i posted before, with interleaved data and processing, only. the overhead of reading more data in is too high in other cases.
+<br/>
+<br/>
+about branches being loaded or not: as i stated before, i'm no expert, but isn't it, that at least *some* instructions following the branch will be loaded anyway? i mean, you have the conditional branches and all, but how can the machine know what a value, that will trigger a certain branch, will be, when it hasn't been computed yet?
+<br/>
+imagine you have a function with two long branches. the second branch should be executed, but when the instructions are cached, the first part would be loaded, which, in this example, also contains a part of the first branch, then some time the jump would be triggered and the execution will then be tocated to the new branch (thus some instructions might get skipped and the branch to be executed would be cached)...
+<br/>
+<br/>
+or is this absolute BS? am i getting it wrong? i'm puzzled!
+<br/>
+that's why i prefer not to fiddle around too much with cache concepts until the optimization step. arrrr! ;^p</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#153680 - sajiimori - Thu Apr 03, 2008 9:57 pm</h4>
+    <div class="postbody"><span class="postbody">silent_code, I've been talking about the DS here -- yes, there are lots of optimization techniques that only apply to other platforms.  Too many to list, many that I'm not familiar with.  (And what you've got there is an optimization aimed toward a compiler that produces SIMD instructions.)
+<br/>
+<br/>
+As I mentioned in my last post, extra instructions can get loaded at the unaligned edges of jumped-over blocks of code.  The ARM9 also reads ahead by a couple instructions.
+<br/>
+<br/>
+And I agree (in accordance with my first post) that you shouldn't be trying to optimize for cache behavior.  If you're curious about the topic, do experiments, and don't guess.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#153688 - silent_code - Thu Apr 03, 2008 11:19 pm</h4>
+    <div class="postbody"><span class="postbody">sorry.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#153699 - tepples - Fri Apr 04, 2008 1:44 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sajiimori wrote:</b></span></td> </tr> <tr> <td class="quote">The DS isn't superscalar in any way I can think of.  Writing your code to compile down to SIMD instructions is definitely misguided.  ;)</td> </tr></table><span class="postbody">
+<br/>
+Unless it lets you replace a couple LDRs or STRs with a single LDMIA or STMIA. This saves time waiting for the address generator, albeit slightly less on the DS's ARM9 than on the GBA's ARM7.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#153701 - sajiimori - Fri Apr 04, 2008 3:10 am</h4>
+    <div class="postbody"><span class="postbody">That's true, the benefit of LDMIA might be worthwhile, but only if the cost of arranging your data that way is extremely low.
+<br/>
+<br/>
+In particular, you wouldn't want to build the input arrays (from existing data) just so you could use LDMIA to get their values again -- you'd just do the work the first time you load it!  :)
+<br/>
+<br/>
+In contrast, SIMD instructions can sometimes make that approach pay off, especially if the cost of each operation is a lot higher than a simple addition.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

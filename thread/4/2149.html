@@ -1,0 +1,896 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Precision problems on hardware (Mode7) - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > Precision problems on hardware (Mode7)</h2>
+<div id="posts">
+<div class="post">
+    <h4>#11149 - poslundc - Sat Sep 27, 2003 2:40 pm</h4>
+    <div class="postbody"><span class="postbody">More adventures with my raycasting/Mode7 engine...
+<br/>
+<br/>
+Looks great so far. However when I tried it on hardware I noticed a few anomalous pixels on the occasional scanline, and the problem got worse as I increased the viewing angle (tilted the camera up).
+<br/>
+<br/>
+I went back and checked my math carefully, and it turns out I've got a tiny imprecision in my trig calculations. Basically to determine the length of the ray I divide by cosine of the ray's angle (multiply by a secant LUT) and then multiply by cosine of the angle to the field of view to correct for fisheye. Secant and cosine obviously complement each other for the same angles; for example, when looking straight down the ray length should divide out to one. It doesn't, though; it divides out to 0.9999... (0x0000FFFF in my fixed-point math.)
+<br/>
+<br/>
+It's literally the difference of a single bit in the end-result, but it shows up on screen.
+<br/>
+<br/>
+I'm already using 8.24 LUTs and 64-bit math, so I'm not sure how I can improve on this.
+<br/>
+<br/>
+Currently I'm thinking of calculating all of my ray lenghts, then doing a REALLY basic FIR filter on them ((left adjacent + 2 * current + right adjacent) &gt;&gt; 2) before going and calculating the rest of my values, but I am hesitant to add that many calculations to an already somewhat-complicated routine.
+<br/>
+<br/>
+Any advice on how to deal with this problem would be greatly appreciated.
+<br/>
+<br/>
+Thanks,
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#11152 - regularkid - Sat Sep 27, 2003 5:50 pm</h4>
+    <div class="postbody"><span class="postbody">I'm currently writing a raycaster as well, however it is a wolfenstien type engine. Anyways, I ran into sort of the same problem that you are having (precision problems). The way I fixed this was to round my numbers at the end. So, If I got the number 0.9999 like you are getting, it would round to 1 (if you take a look at some of my previous posts are about rounding). Basically, I just add 2048 (0.5 in my 12.20 numbers) to my final number before shifting back down to the integer. This works for both positive and negative numbers. Hope that helps!<br/>_________________<br/>- RegularKid</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#11153 - tepples - Sat Sep 27, 2003 5:54 pm</h4>
+    <div class="postbody"><span class="postbody">Here's what I did for TOD: Define a far clipping plane distance, and if a ray's distance is greater than that, just don't draw anything on the corresponding scanline.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#11163 - poslundc - Sat Sep 27, 2003 8:08 pm</h4>
+    <div class="postbody"><span class="postbody">regularkid: Hm... rounding certainly seems to help the more basic cases... for example, it certainly cleans up the no-perspective view, and it's a helluva lot cheaper to implement than the FIR filter, so thanks for that. The problem is still persisting, though; I'm not entirely certain what's causing it anymore.
+<br/>
+<br/>
+tepples: although the problem is naturally worse the further away from the camera the rays are being cast (and to that end I fully intend to clip the plane and have a horizon), I'm still encountering the problem within the intended display area.
+<br/>
+<br/>
+I'm a visual person, so I've put a picture on my website with a sample background for anyone who feels like helping out:
+<br/>
+<br/>
+<a href="http://www.danposluns.com/angleproblem.gif">[Images not permitted - Click here to view it]</a>
+<br/>
+<br/>
+Please note that while the problem does not seem very severe in the emulator, it is much more noticeable on hardware.
+<br/>
+<br/>
+Thanks both... any more suggestions still welcome!
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#11167 - DekuTree64 - Sat Sep 27, 2003 10:32 pm</h4>
+    <div class="postbody"><span class="postbody">That looks exactly like what my texture mapped tri-filler does. Check out the screenshot of my demo on the demo poll, look at the edge of the circling fire thing near the center of the screen, and you can see some pixels that to that every-other-line-off thing. I never did find out why though. It's definately related to affine mapping though cause there was another guy writing a texture mapper a while back with the same problem too.
+<br/>
+Higher accuracy doesn't seem to make any difference though, so I think the problem lies somewhere else. Good luck finding it though, I'm still pretty curious as to why it happens too.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#11169 - tepples - Sat Sep 27, 2003 10:39 pm</h4>
+    <div class="postbody"><span class="postbody">It looks like you're suffering from two problems: you may be losing a few bits of precision somewhere, and you may be throwing all your imprecision on one side of the screen. 
+<br/>
+<br/>
+Without a look at your code, I can't help you much with the first problem.
+<br/>
+<br/>
+Here's how I solved the second problem in one of my software rot/scale engines: GBA rot/scale takes left side and offset vector coordinates. It may be better to 1. calculate the map coordinates at the <span style="font-style: italic">center</span> of the screen and then 2. subtract 120 times the offset, and use that as the origin of the scanline. This way, instead of having all the roundoff errors accumulate at the right side of the screen, the errors will be evenly spread on both sides, where they're less noticeable. I'm pretty sure <span style="font-style: italic">Super Mario Kart</span> for Super NES does its floor raycasting in this way, as straight lines are more likely to become randomly jagged (in the manner that's a telltale sign of roundoff error) on the sides than in the center. Then make sure you actually round the offset instead of truncating it.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#11171 - poslundc - Sun Sep 28, 2003 12:07 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote">It looks like you're suffering from two problems: you may be losing a few bits of precision somewhere, and you may be throwing all your imprecision on one side of the screen. 
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Ooh, I think that might just be the screencap I did. The problem is pretty much uniform wherever on the map/screen I go to; that was just a spot that showed up well.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+Without a look at your code, I can't help you much with the first problem.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Sorry, I didn't want to waste space by reposting too much that I had already posted a day or so ago (although I guess the code has changed a fair bit since then). Anyway, ask and ye shall receive:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+slice = gCamera.fov / 160;
+<br/>
+<br/>
+phiCos = gCosLUT[gCamera.phi &gt;&gt; 7];
+<br/>
+phiSin = gCosLUT[((gCamera.phi &gt;&gt; 7) + 128) &amp; 511];
+<br/>
+<br/>
+// calculate the length of the ray (ie. zoom factor) for each scanline
+<br/>
+<br/>
+for (i = 0; i &lt; 160; i++)
+<br/>
+{
+<br/>
+   angle = gCamera.theta + (gCamera.fov &gt;&gt; 1) - (i * slice);
+<br/>
+   if (angle &lt; 0)
+<br/>
+      angle += (256 &lt;&lt; 8);
+<br/>
+   
+<br/>
+   // mulTemp is of type (long long)
+<br/>
+<br/>
+   mulTemp = ((long long)gCamera.z * gSecLUT[angle &gt;&gt; 7]);
+<br/>
+   angle -= gCamera.theta;
+<br/>
+   if (angle &lt; 0)
+<br/>
+      angle += (256 &lt;&lt; 8);
+<br/>
+   // mulTemp is now 32.32
+<br/>
+   mulTemp = ((mulTemp &gt;&gt; 8) * (gCosLUT[angle &gt;&gt; 7]));
+<br/>
+   // mulTemp is 16.48
+<br/>
+<br/>
+   dist = mulTemp &gt;&gt; 40;
+<br/>
+   // dist is 24.8, units are pixels
+<br/>
+<br/>
+   // round to nearest 7 bits
+<br/>
+   if (dist &amp; (1 &lt;&lt; 6))
+<br/>
+      dist += 1 &lt;&lt; 6;
+<br/>
+      
+<br/>
+   // we now have distance in PIXELS. we need it in SCALE FACTORS
+<br/>
+   za[i] = dist &gt;&gt; 7;   // divide by 128 (pixel distance to viewport)
+<br/>
+}
+<br/>
+<br/>
+...
+<br/>
+<br/>
+// use the zoom factor just calculated to determine the rot/scale parameters for the background
+<br/>
+<br/>
+for (i = 0; i &lt; 160; i++)
+<br/>
+{
+<br/>
+   zoom = za[i];
+<br/>
+<br/>
+   cX = gCamera.x - ((120 * (long long)zoom * phiCos) &gt;&gt; 24) - ((80 * (long long)zoom * phiSin) &gt;&gt; 24);
+<br/>
+   cY = gCamera.y - ((80 * (long long)zoom * phiCos) &gt;&gt; 24) + ((120 * (long long)zoom * phiSin) &gt;&gt; 24);
+<br/>
+   
+<br/>
+   bgTransform[i].pa = ((long long)zoom * phiCos) &gt;&gt; 24;
+<br/>
+   bgTransform[i].pb = ((long long)zoom * phiSin) &gt;&gt; 24;
+<br/>
+   bgTransform[i].pc = ((long long)zoom * -phiSin) &gt;&gt; 24;
+<br/>
+   bgTransform[i].pd = ((long long)zoom * phiCos) &gt;&gt; 24;
+<br/>
+   bgTransform[i].x = cX + ((((i * (long long)zoom)) * phiSin) &gt;&gt; 24);
+<br/>
+   bgTransform[i].y = cY + ((((i * (long long)zoom)) * phiCos) &gt;&gt; 24);
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I should probably clarify that the LUTs are 8.24 and based on a 512-degree circle.
+<br/>
+<br/>
+Anyway, it works fine except for the imperfections in the rendering. Please let me know if you can identify anything that needs fixing.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>DekuTree64 wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+Higher accuracy doesn't seem to make any difference though, so I think the problem lies somewhere else. Good luck finding it though, I'm still pretty curious as to why it happens too.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I agree that accuracy doesn't seem like the problem... insofar as while it may be the ACTUAL theoretical source of the problem, there are diminishing returns for increasing the precision of the variables such that you can't really fix the problem at the source.
+<br/>
+<br/>
+Anyway, I will keep you all posted if I make an unexpected breakthrough...
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#11207 - poslundc - Mon Sep 29, 2003 1:05 am</h4>
+    <div class="postbody"><span class="postbody">OK, I've managed to eliminate the problem pretty much entirely... <span style="font-style: italic">in software</span>. So long as I round my values carefully, VBA seems to give me the correct output.
+<br/>
+<br/>
+Hardware is another matter, though. I am still getting the misplaced scanlines, although it is now very clear where they are occurring. I have doctored up a VBA screencap to reflect what is happening on hardware:
+<br/>
+<br/>
+<a href="http://www.danposluns.com/morescanlines.gif">[Images not permitted - Click here to view it]</a>
+<br/>
+<br/>
+This is an extreme closeup shot of the right-hand side of the map, without any wraparound. (It's not actually at the top of the map; the horizon is artificial.)
+<br/>
+<br/>
+Basically, the first scanline of every set of different zoom values mysteriously jumps ahead to the next set. You can see that it's a problem that gets worse further along the right-hand side of the screen, since that's where the difference in zoom values accumulates.
+<br/>
+<br/>
+Tepples, I know that you mentioned something similar to this, but as you can see from my code (mostly unchanged from what I posted earlier) I am already centering the map to the screen. To my knowledge, scaling from the upper-left corner of the screen is not something that can be changed, since it's how the hardware processes it. (If you know of a way, I'd love to hear it.)
+<br/>
+<br/>
+Also, the problem scanlines only occur if there is a change in zoom values. When there is no perspective (ie. camera looking straight down at the map) there are no anomalies, and as the perspective increases so do the problem scanlines.
+<br/>
+<br/>
+If anyone can suggest a reason that this might be happening, I would really appreciate it!
+<br/>
+<br/>
+Thanks,
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#11230 - FluBBa - Mon Sep 29, 2003 6:01 pm</h4>
+    <div class="postbody"><span class="postbody">how are you putting all the values to their regs?
+<br/>
+your not using cpu interrupts to do it are you?<br/>_________________<br/>I probably suck, my not is a programmer.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#11235 - DekuTree64 - Mon Sep 29, 2003 6:40 pm</h4>
+    <div class="postbody"><span class="postbody">Hmm, well that screen shot DOES look more like an accuracy problem. Maybe it would help if you wait until the end to do your divide by 128 pixels to viewport, because that's cutting it down to 1 fractional bit on your distance, which really doesn't seem like enough.
+<br/>
+If all else fails, you could try plugging in values and working out the math yourself, and see if you can find where things start to get screwy.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#11239 - poslundc - Mon Sep 29, 2003 7:55 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>FluBBa wrote:</b></span></td> </tr> <tr> <td class="quote">how are you putting all the values to their regs?
+<br/>
+your not using cpu interrupts to do it are you?</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I am using HBlank interrupts to activate DMA0 (I didn't want to just set DMA0 to auto-reload because I need it for other things as well, like HBlank palette changes).
+<br/>
+<br/>
+Is this a potential problem?
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#11240 - poslundc - Mon Sep 29, 2003 7:58 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>DekuTree64 wrote:</b></span></td> </tr> <tr> <td class="quote">Hmm, well that screen shot DOES look more like an accuracy problem. Maybe it would help if you wait until the end to do your divide by 128 pixels to viewport, because that's cutting it down to 1 fractional bit on your distance, which really doesn't seem like enough.
+<br/>
+If all else fails, you could try plugging in values and working out the math yourself, and see if you can find where things start to get screwy.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I don't think that is the problem, mainly because the division-by-128 still leaves it as a 24.8 number (it just scales that number down to the GBA hardware). I've played around with changing it later on, and it doesn't seem to make a difference.
+<br/>
+<br/>
+I've already gotten screwy with the math... but I imagine I will have to get even more screwy with it before I'm through with this. :)
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#11590 - AnthC - Sun Oct 12, 2003 7:43 pm</h4>
+    <div class="postbody"><span class="postbody">Hi
+<br/>
+I think you will find that those 'notches' you describe are a result of you not defining what a pixel is, so your math is off. A common problem, it's called sux pixel accuracy.
+<br/>
+Hope this helps
+<br/>
+Anth</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#11608 - poslundc - Tue Oct 14, 2003 1:25 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>AnthC wrote:</b></span></td> </tr> <tr> <td class="quote">Hi
+<br/>
+I think you will find that those 'notches' you describe are a result of you not defining what a pixel is, so your math is off. A common problem, it's called sux pixel accuracy.
+<br/>
+Hope this helps
+<br/>
+Anth</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Well the problem is long since solved, but I must confess I have no idea what you're talking about.
+<br/>
+<br/>
+What do you mean, exactly, by my math being off on account of me not defining what a pixel is?
+<br/>
+<br/>
+And what is sux pixel accuracy? (I would've assumed you misspelled sub-pixel accuracy except for the distance between the "b" and "x" keys on a qwerty keyboard.)
+<br/>
+<br/>
+Thanks,
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#11611 - tepples - Tue Oct 14, 2003 3:05 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>poslundc wrote:</b></span></td> </tr> <tr> <td class="quote">(I would've assumed you misspelled sub-pixel accuracy except for the distance between the "b" and "x" keys on a qwerty keyboard.)</td> </tr></table><span class="postbody">
+<br/>
+<a class="postlink" href="http://www.mwbrooks.com/dvorak/layout.html" target="_blank">B and X touch on Dvorak</a>.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#11613 - col - Tue Oct 14, 2003 11:11 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>poslundc wrote:</b></span></td> </tr> <tr> <td class="quote">Well the problem is long since solved, but I must confess I have no idea what you're talking about.
+<br/>
+<br/>
+What do you mean, exactly, by my math being off on account of me not defining what a pixel is?
+<br/>
+<br/>
+And what is sux pixel accuracy? (I would've assumed you misspelled sub-pixel accuracy except for the distance between the "b" and "x" keys on a qwerty keyboard.)
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+wow - the guy was just trying to help !
+<br/>
+<br/>
+If you have started a thread like this, and used the time and knowledge of people on the list, the least you could have done is posted that you found the solution to your problem, and what the solution was!
+<br/>
+That way, you stop other people wasting their time on the already solved problem, and you will possibly help others who experience the same difficulties.
+<br/>
+<br/>
+You really need an attitude review.
+<br/>
+<br/>
+cheers
+<br/>
+<br/>
+Col</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#11616 - poslundc - Tue Oct 14, 2003 3:43 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>col wrote:</b></span></td> </tr> <tr> <td class="quote">wow - the guy was just trying to help !</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+And I was just trying to understand his post. I genuinely didn't know what he meant, and until tepples explained that "b" and "x" touch on the dvorak keyboard, for all I knew he might be describing a different method that I could use for greater accuracy than that which I currently am.
+<br/>
+<br/>
+Try rereading the post without forcing a sarcastic tone on it and you will see that I was only looking for clarification.
+<br/>
+<br/>
+As for me posting that the problem had been solved, it wasn't solved for another couple of weeks and I didn't feel it would be especially polite for me to bump a topic that had long since died a natural death, just to say it had gone away.
+<br/>
+<br/>
+The last thing I have ever intended to do is offend anyone on this board, and I apologize to anyone who has ever taken offence at my posts.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#11617 - DekuTree64 - Tue Oct 14, 2003 5:09 pm</h4>
+    <div class="postbody"><span class="postbody">Actually I was wondering what AnthC meant myself...
+<br/>
+But anyway, I'm curious as to how you fixed it too, cause my texture mapped tri-filler still has a similar problem, and I don't really have any idea why (not that I've made any attempt to fix it, but still).<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#11621 - col - Tue Oct 14, 2003 6:27 pm</h4>
+    <div class="postbody"><span class="postbody">sorry, i misunderstood the tone of your post.
+<br/>
+<br/>
+It would still be good to post the solution though :)
+<br/>
+these forums are often used as a reference resource, so its good to have a resolution to the thread. (IMO of course)
+<br/>
+<br/>
+cheers
+<br/>
+<br/>
+Col
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>poslundc wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+And I was just trying to understand his post. I genuinely didn't know what he meant, and until tepples explained that "b" and "x" touch on the dvorak keyboard, for all I knew he might be describing a different method that I could use for greater accuracy than that which I currently am.
+<br/>
+<br/>
+Try rereading the post without forcing a sarcastic tone on it and you will see that I was only looking for clarification.
+<br/>
+<br/>
+As for me posting that the problem had been solved, it wasn't solved for another couple of weeks and I didn't feel it would be especially polite for me to bump a topic that had long since died a natural death, just to say it had gone away.
+<br/>
+<br/>
+The last thing I have ever intended to do is offend anyone on this board, and I apologize to anyone who has ever taken offence at my posts.
+<br/>
+<br/>
+Dan.</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#11622 - poslundc - Tue Oct 14, 2003 7:17 pm</h4>
+    <div class="postbody"><span class="postbody">Well, the other reason that I didn't post the solution was that it stemmed from something unrelated to the discussion...
+<br/>
+<br/>
+If it's any help to others constructing similar engines, the main problem seemed to be rooted in my HBlank ISR. I'm not certain if it was the length of the ISR (which I know WAS extending past the HBlank period) or if it was my use of DMA0 (DMA has always been problematic for me on hardware, for some reason).
+<br/>
+<br/>
+The problem is symptomatic of an ISR that runs too long, but I'm quite certain that the background memory updates were finished well before I ran out of HBlank time. On the other hand, I've noticed that gcc with -O3 has a tendendcy to interleave your statements in an unpredictable way, so who knows? On the other-other hand, I still had the problem with my original HBlank ISR which was much shorter, and should easily have fit into HBlank time, which is why I think it might be the DMA. In any case, when I rewrote the ISR in ASM and got rid of the DMA, the problem up and vanished.
+<br/>
+<br/>
+It's been my observation that VisualBoy Advance either does not properly time HBlank and VBlank, or that it doesn't "cut off" and start drawing the line/frame when it should. Either way, it seems that many of the problems I've encountered when moving to hardware have been caused by me overrunning the length of a VBlank/HBlank cycle and VBA "forgiving" me for it, even though I wish it wouldn't.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#11624 - tepples - Tue Oct 14, 2003 8:15 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>poslundc wrote:</b></span></td> </tr> <tr> <td class="quote">it seems that many of the problems I've encountered when moving to hardware have been caused by me overrunning the length of a VBlank/HBlank cycle and VBA "forgiving" me for it, even though I wish it wouldn't.</td> </tr></table><span class="postbody">
+<br/>
+This is largely because VBA doesn't emulate wait states right. Any code running in EWRAM or ROM will run faster on VBA than on hardware.
+<br/>
+<br/>
+I've seen this issue quite a bit in this forum and in gbadev@yahoogroups. Added to FAQ: Testing your code.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#11645 - AnthC - Wed Oct 15, 2003 2:35 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>poslundc wrote:</b></span></td> </tr> <tr> <td class="quote">(I would've assumed you misspelled sub-pixel accuracy except for the distance between the "b" and "x" keys on a qwerty keyboard.)</td> </tr></table><span class="postbody">
+<br/>
+<a class="postlink" href="http://www.mwbrooks.com/dvorak/layout.html" target="_blank">B and X touch on Dvorak</a>.</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Yup thanks Tepples - next time I will proof read the damn thing!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#11646 - AnthC - Wed Oct 15, 2003 2:45 am</h4>
+    <div class="postbody"><span class="postbody">Sub pixel is a bit of a hard topic to explain - but it's really obvious when you know it :)
+<br/>
+You would think that when you draw a triangle, you start with your first texture position tx,ty as stored in your vertex then you interpolate down. This is wrong ? it causes pixel jitter and notches!
+<br/>
+By very careful definition of what a ?pixel? is, you can avoid this jitter.
+<br/>
+An easy way to understand this is to draw a triangle on graph paper, then defining a pixel as the center of a graph square, you can see that you run into problems with texture rounding. The idea is to only take pixels from inside the triangle at consistent positions.
+<br/>
+<br/>
+Say for example (these are the _real_ left hand co-ordinates of your texture span)
+<br/>
+<br/>
+Line 1 x=0.1 y=4.5
+<br/>
+Line 2 x=0.4 y=3.5
+<br/>
+Line 3 x=0.5 y=2.5
+<br/>
+<br/>
+You can see if we round these positions, our integer x positions are
+<br/>
+<br/>
+Line 1 x=0 y=4 (x=0 is outside the triangle!)
+<br/>
+Line 2 x=0 y=3 (x=0 is outside the triangle!)
+<br/>
+Line 3 x=1 y=2 (x=1 is inside the triangle)
+<br/>
+<br/>
+So what we need to do is take our texture positions from the pixel centers.
+<br/>
+<br/>
+Line 1 x=0 y=4 (x=0 is outside the triangle! We fix up our texture by (0.5-0.1)*inner dtx)
+<br/>
+Line 2 x=0 y=3 (x=0 is outside the triangle! We fix up our texture by (0.5-0.4)*inner dtx)
+<br/>
+Line 3 x=1 y=2 (x=1 is inside the triangle) We fix up our texture by (0.5-0.5)*inner dtx
+<br/>
+<br/>
+That corrects the notches and the bouncing. You also need to fix up your y texture positions also. This is done once per vertex.
+<br/>
+<br/>
+Here's some crude code to demonstrate sub pixel rounding to draw a correct flat shaded triangle. (assume Mode 3 screen setup)
+<br/>
+<br/>
+typedef signed int S1616;
+<br/>
+<br/>
+typedef struct
+<br/>
+{
+<br/>
+	S1616		x;
+<br/>
+	S1616		y;
+<br/>
+} POINT2D;
+<br/>
+<br/>
+#define FPS 16
+<br/>
+#define FPM (1&lt;&lt;FPS)
+<br/>
+#define FPH (FPM/2)
+<br/>
+<br/>
+S32 FPR(S1616 n)
+<br/>
+{
+<br/>
+	return (S32)((n+FPH)&gt;&gt;FPS);
+<br/>
+}
+<br/>
+<br/>
+S32 FPMUL(S1616 a,S1616 b)
+<br/>
+{
+<br/>
+	long long tmp=a;
+<br/>
+	              tmp*=b;
+<br/>
+	return (S1616)(tmp&gt;&gt;FPS);
+<br/>
+}
+<br/>
+<br/>
+S32 FPDIV(S1616 a,S1616 b)
+<br/>
+{
+<br/>
+	long long tmp=a;
+<br/>
+	          tmp&lt;&lt;=FPS;
+<br/>
+			  tmp/=b;
+<br/>
+<br/>
+	return (S1616)(tmp);
+<br/>
+}
+<br/>
+<br/>
+int TopY(POINT2D *p)
+<br/>
+{
+<br/>
+	int 	topi=0;
+<br/>
+<br/>
+	S1616	topy=p[0].y;
+<br/>
+	S1616   topx=p[0].x;
+<br/>
+<br/>
+	for (int i=1;i&lt;3;i++)
+<br/>
+	{
+<br/>
+		if (p[i].y &gt; topy)
+<br/>
+		{
+<br/>
+			topi=i;
+<br/>
+			topy=p[i].y;
+<br/>
+			topx=p[i].x;
+<br/>
+		}
+<br/>
+	}
+<br/>
+<br/>
+	return topi;
+<br/>
+}
+<br/>
+<br/>
+void DrawTri(POINT2D *p)
+<br/>
+{
+<br/>
+	int 	la,lb,ra,rb;
+<br/>
+	S1616   lx,rx,ldx,rdx;
+<br/>
+<br/>
+	lb=rb=TopY(p);
+<br/>
+<br/>
+	int ry=FPR(p[lb].y)-1;
+<br/>
+	int exit=0;
+<br/>
+	int rl=1,rr=1;
+<br/>
+<br/>
+	u16 *ps=((u16 *)0x6000000)+(160-ry)*240;
+<br/>
+<br/>
+	for (;;)
+<br/>
+	{	
+<br/>
+		int h,lh,rh;
+<br/>
+<br/>
+		if (rl)
+<br/>
+		{
+<br/>
+			for (;;)
+<br/>
+			{		
+<br/>
+				la=lb--;
+<br/>
+				if (lb&lt;0) lb+=3;
+<br/>
+				if (lb==rb) exit++;
+<br/>
+				lh=1+ry-FPR(p[lb].y);
+<br/>
+				if (lh&lt;=0)
+<br/>
+				{
+<br/>
+					if (exit) goto fini;
+<br/>
+					else continue;
+<br/>
+				}
+<br/>
+				else break;
+<br/>
+			}
+<br/>
+<br/>
+			rl=0;
+<br/>
+			lx=p[la].x;
+<br/>
+			ldx=FPDIV(p[lb].x-p[la].x,p[la].y-p[lb].y);
+<br/>
+			S1616 tmp=p[la].y-((ry&lt;&lt;FPS)+FPH);
+<br/>
+			lx+=FPH+FPMUL(ldx,tmp); // sub pixel correction
+<br/>
+		}
+<br/>
+<br/>
+		if (rr)
+<br/>
+		{
+<br/>
+			for (;;)
+<br/>
+			{	
+<br/>
+				ra=rb++;
+<br/>
+				if (rb&gt;=3) rb=0;
+<br/>
+				if (rb==lb) exit++;
+<br/>
+				rh=1+ry-FPR(p[rb].y);
+<br/>
+				if (rh&lt;=0)
+<br/>
+				{
+<br/>
+					if (exit) goto fini;
+<br/>
+					else continue;
+<br/>
+				}
+<br/>
+				else break;
+<br/>
+			}
+<br/>
+<br/>
+			rr=0;
+<br/>
+			rx=p[ra].x;
+<br/>
+			rdx=FPDIV(p[rb].x-p[ra].x,p[ra].y-p[rb].y);
+<br/>
+			S1616 tmp=p[ra].y-((ry&lt;&lt;FPS)+FPH);
+<br/>
+			rx+=FPH+FPMUL(rdx,tmp); // sub pixel correction
+<br/>
+		}
+<br/>
+<br/>
+		if (lh&lt;rh) {h=lh;rl=1;rh-=h;}
+<br/>
+		else {h=rh;rr=1;lh-=h;if (lh&lt;=0) rl=1;}
+<br/>
+		ry-=h;
+<br/>
+<br/>
+		for (;;)
+<br/>
+		{
+<br/>
+			S32 l=lx&gt;&gt;FPS;
+<br/>
+			S32 r=rx&gt;&gt;FPS;
+<br/>
+			S32 w=r-l;
+<br/>
+<br/>
+			lx+=ldx;rx+=rdx;
+<br/>
+			u16 *pl=ps+l;ps+=240;
+<br/>
+<br/>
+			for (;w--&gt;0;) *pl++=0x7fff; // Hline() ? 
+<br/>
+			if (--h&lt;=0) break;
+<br/>
+		}
+<br/>
+<br/>
+		if (exit) break;
+<br/>
+	}
+<br/>
+<br/>
+fini:
+<br/>
+	;
+<br/>
+<br/>
+}
+<br/>
+<br/>
+void ClearScreen(void)
+<br/>
+{
+<br/>
+	U16 *p=(u16 *)0x6000000;
+<br/>
+<br/>
+	for (int y=0;y&lt;160;y++)
+<br/>
+	{
+<br/>
+		for (int x=0;x&lt;240/16;x++)
+<br/>
+		{
+<br/>
+			*p++=0x0;*p++=0x0;
+<br/>
+			*p++=0x0;*p++=0x0;
+<br/>
+			*p++=0x0;*p++=0x0;
+<br/>
+			*p++=0x0;*p++=0x0;
+<br/>
+			*p++=0x0;*p++=0x0;
+<br/>
+			*p++=0x0;*p++=0x0;
+<br/>
+			*p++=0x0;*p++=0x0;
+<br/>
+			*p++=0x0;*p++=0x0;
+<br/>
+		}
+<br/>
+	}
+<br/>
+}
+<br/>
+<br/>
+void DrawIt(void)
+<br/>
+{
+<br/>
+	POINT2D pts[3]={0*FPM,16*FPM,16*FPM,-16*FPM,-16*FPM,-16*FPM}; /* clockwise */
+<br/>
+<br/>
+	for (;;)
+<br/>
+	{
+<br/>
+		POINT2D tmp[3];tmp=pts;
+<br/>
+<br/>
+		for (int i=0;i&lt;3;i++)
+<br/>
+		{
+<br/>
+			tmp[i].x+=240*65536/2;
+<br/>
+			tmp[i].y+=160*65536/2; /* fix to screen co-ordinates */
+<br/>
+<br/>
+			pts[i].x-=pts[i].y/256;
+<br/>
+			pts[i].y+=pts[i].x/256; /* crude rotate */
+<br/>
+<br/>
+		}
+<br/>
+<br/>
+		ClearScreen();
+<br/>
+		WaitVBL();
+<br/>
+		DrawTri(tmp);
+<br/>
+	}
+<br/>
+}
+<br/>
+<br/>
+<br/>
+Hope this helps.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

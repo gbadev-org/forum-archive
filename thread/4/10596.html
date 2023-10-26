@@ -1,0 +1,435 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Simple side-scrolling shooter bug - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > Simple side-scrolling shooter bug</h2>
+<div id="posts">
+<div class="post">
+    <h4>#95515 - Rogmatic - Sun Jul 30, 2006 12:42 am</h4>
+    <div class="postbody"><span class="postbody">I'm trying to code a very simple side-scrolling shooter, so far all I've coded is  the player's 'ship' sprite,  and the ability to move that sprite using the arrow keys.
+<br/>
+<br/>
+However, I've come across a very frustrating bug while coding the player's shots.
+<br/>
+<br/>
+It's set to fire a shot only if a) there are less than 10 shots on the screen already and b) if it's been 10 iterations of the main loop since the last shot.
+<br/>
+<br/>
+I've set it to turn off the shot sprite if it reaches the far side of the screen or if there are 10 shots 'in play', however, whenever a shot is 'turned off', all other shots on the screen stop moving.
+<br/>
+<br/>
+I've spent the last 3 or 4 hours trying to fix this, hopefully you guys will see something I'm not.
+<br/>
+<br/>
+Here's the code:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#include "gba.h"
+<br/>
+#include "player.h"
+<br/>
+#include "playershot.h"
+<br/>
+<br/>
+OAMEntry OAMCopy[128];
+<br/>
+int PlayerShotOffset;
+<br/>
+int PlayerShots;
+<br/>
+int Delay;
+<br/>
+int NextShot;
+<br/>
+<br/>
+void PlayerShoot();
+<br/>
+<br/>
+typedef struct
+<br/>
+{
+<br/>
+   int x,y;
+<br/>
+   OAMEntry* oam;
+<br/>
+   int gfxID;
+<br/>
+}Sprite;
+<br/>
+<br/>
+Sprite player;
+<br/>
+Sprite playershot[9];
+<br/>
+<br/>
+void WaitForVblank(void)
+<br/>
+{
+<br/>
+   while(! (REG_DISPSTAT &amp; DISPSTAT_VB));
+<br/>
+   while(REG_DISPSTAT &amp; DISPSTAT_VB);
+<br/>
+}
+<br/>
+<br/>
+void InitOAM(void)
+<br/>
+{
+<br/>
+   int i;
+<br/>
+   
+<br/>
+   for(i = 0; i &lt; 128; i++)
+<br/>
+      OAMCopy[i].attribute[0] = SPRITE_OFF;
+<br/>
+}
+<br/>
+<br/>
+void UpdateOAM(void)
+<br/>
+{
+<br/>
+   int i;
+<br/>
+   
+<br/>
+   for(i = 0; i &lt; 128 * sizeof(OAMEntry) / 4; i++)
+<br/>
+      ((u32*)OAMMem)[i] = ((u32*)OAMCopy)[i];
+<br/>
+}
+<br/>
+<br/>
+void GetInput(void)
+<br/>
+{
+<br/>
+   if(!(REG_KEYS &amp; KEY_UP))
+<br/>
+      if(player.y &gt; 2)
+<br/>
+         player.y = player.y - 3;
+<br/>
+   
+<br/>
+   if(!(REG_KEYS &amp; KEY_DOWN))
+<br/>
+      if(player.y &lt; (158 - 16))
+<br/>
+         player.y = player.y + 3;
+<br/>
+   
+<br/>
+   if(!(REG_KEYS &amp; KEY_LEFT))
+<br/>
+      if(player.x &gt; 2)
+<br/>
+         player.x = player.x - 3;
+<br/>
+   
+<br/>
+   if(!(REG_KEYS &amp; KEY_RIGHT))
+<br/>
+      if(player.x &lt; (238 - 16))
+<br/>
+         player.x = player.x + 3;
+<br/>
+   
+<br/>
+   if(!(REG_KEYS &amp; KEY_A))
+<br/>
+      if((PlayerShots &lt;= 10) &amp;&amp; (Delay &lt;= 0))
+<br/>
+         PlayerShoot();
+<br/>
+}
+<br/>
+<br/>
+void PlayerShoot(void)
+<br/>
+{
+<br/>
+   if(PlayerShots &gt;= 10) {
+<br/>
+      playershot[PlayerShots - 1].oam-&gt;attribute[0] |= SPRITE_OFF;
+<br/>
+      PlayerShots--;
+<br/>
+      NextShot = 0;
+<br/>
+   }
+<br/>
+   PlayerShots++;
+<br/>
+   playershot[NextShot].x = player.x + 20;
+<br/>
+   playershot[NextShot].y = player.y + 4;
+<br/>
+   playershot[NextShot].oam-&gt;attribute[0] ^= SPRITE_OFF;
+<br/>
+   NextShot++;
+<br/>
+   Delay = 10;
+<br/>
+}
+<br/>
+<br/>
+void MoveShots(void)
+<br/>
+{
+<br/>
+   int i;
+<br/>
+   
+<br/>
+   for(i = 0; i &lt;= PlayerShots; i++)
+<br/>
+   {
+<br/>
+      if(playershot[i].x &gt;= 240)
+<br/>
+      {
+<br/>
+         PlayerShots--;
+<br/>
+         playershot[i].oam-&gt;attribute[0] |= SPRITE_OFF;
+<br/>
+         NextShot = 0;
+<br/>
+      }
+<br/>
+      playershot[i].x = playershot[i].x + 4;
+<br/>
+   }
+<br/>
+}
+<br/>
+<br/>
+void MoveSprite(Sprite* sp)
+<br/>
+{
+<br/>
+   sp-&gt;oam-&gt;attribute[1] &amp;= 0xFE00;
+<br/>
+   sp-&gt;oam-&gt;attribute[1] |= (sp-&gt;x &amp; 0x01FF);
+<br/>
+   
+<br/>
+   sp-&gt;oam-&gt;attribute[0] &amp;= 0xFF00;
+<br/>
+   sp-&gt;oam-&gt;attribute[0] |= (sp-&gt;y &amp; 0x00FF);
+<br/>
+}
+<br/>
+<br/>
+int main(void)
+<br/>
+{
+<br/>
+   int i;
+<br/>
+   Delay = 0;
+<br/>
+   
+<br/>
+   SetMode(MODE_0 | OBJ_ENABLE | OBJ_MAP_1D);
+<br/>
+   
+<br/>
+   InitOAM();
+<br/>
+   
+<br/>
+   player.oam = &amp;OAMCopy[11];
+<br/>
+   player.x = 10;
+<br/>
+   player.y = 10;
+<br/>
+   player.gfxID = 11;
+<br/>
+   
+<br/>
+   player.oam-&gt;attribute[0] = COLOR_256 | SQUARE;
+<br/>
+   player.oam-&gt;attribute[1] = SIZE_16;
+<br/>
+   player.oam-&gt;attribute[2] = player.gfxID;
+<br/>
+   
+<br/>
+   for(i = 0; i &lt; 9; i++)
+<br/>
+   {
+<br/>
+      playershot[i].oam = &amp;OAMCopy[i];
+<br/>
+      playershot[i].x = 0;
+<br/>
+      playershot[i].y = 0;
+<br/>
+      playershot[i].gfxID = 0;
+<br/>
+      
+<br/>
+      playershot[i].oam-&gt;attribute[0] = COLOR_256 | SQUARE | SPRITE_OFF;
+<br/>
+      playershot[i].oam-&gt;attribute[1] = SIZE_8;
+<br/>
+      playershot[i].oam-&gt;attribute[2] = playershot[i].gfxID;
+<br/>
+   }
+<br/>
+   
+<br/>
+   PlayerShots = 0;
+<br/>
+   NextShot = 0;
+<br/>
+   PlayerShotOffset = playershot[0].gfxID * 8 * 4 / 2;
+<br/>
+   
+<br/>
+   
+<br/>
+   for(i = 0; i &lt; 16 * 16 / 2; i++)
+<br/>
+   {
+<br/>
+      OBJ_GFXMem[player.gfxID * 16 + i] = playerData[i];
+<br/>
+      OBJ_GFXMem[PlayerShotOffset + i] = playershotData[i];
+<br/>
+   }
+<br/>
+   
+<br/>
+   for(i = 0; i &lt; 256; i++)
+<br/>
+      OBJPaletteMem[i] = playerPalette[i];
+<br/>
+   
+<br/>
+   while(1)
+<br/>
+   {
+<br/>
+      GetInput();
+<br/>
+      MoveShots();
+<br/>
+      MoveSprite(&amp;player);
+<br/>
+      for(i = 0; i &lt;= PlayerShots; i++)
+<br/>
+         MoveSprite(&amp;playershot[i]);
+<br/>
+      WaitForVblank();
+<br/>
+      UpdateOAM();
+<br/>
+      Delay--;
+<br/>
+   }
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Note:  I'm using the include files that come with the PERN project source code.
+<br/>
+<br/>
+Thanks in advance.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#95522 - sgeos - Sun Jul 30, 2006 1:49 am</h4>
+    <div class="postbody"><span class="postbody">Your code can be better factored.  In the process you might figure out what the error is.  I'd implement the following functions:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void init(int pX, int pY, int pGfxId);
+<br/>
+void FreeShot(int pShotId);</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Also, you declare:
+<br/>
+Sprite playershot[9];
+<br/>
+<br/>
+And check:
+<br/>
+if(PlayerShots &gt;= 10) {
+<br/>
+<br/>
+That looked like a bug to me.  Don't use magic numbers, use macros instead.  Try:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#define SHOT_MAX 10
+<br/>
+Sprite playershot[SHOT_MAX];
+<br/>
+if (SHOT_MAX &lt; PlayerShots) {</td> </tr></table><span class="postbody">
+<br/>
+Why 256?  Why 158 - 16?  What are these numbers?  I might be able to figure it out, but if you a senior *nix system admin that spots bugs %1000 more effectively than I do, he's certainly not going to know.
+<br/>
+<br/>
+Some believe that the only literal constants that should be in your code are 0, 1 and -1.
+<br/>
+<br/>
+-Brendan</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#95574 - Rogmatic - Sun Jul 30, 2006 10:05 am</h4>
+    <div class="postbody"><span class="postbody">Alright, thanks for the input, I'll make those changes ASAP, and get back to you.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#95586 - Cearn - Sun Jul 30, 2006 11:50 am</h4>
+    <div class="postbody"><span class="postbody">I haven't tested it, but this might be the problem.
+<br/>
+<br/>
+You have <span style="font-style: italic">N</span> shots, which you use up from 0 to <span style="font-style: italic">N</span>-1. Say you fire a 3 shots, on screen the order will be 2, 1, 0, because earlier shots will have travelled a bit already. Now shot 0 goes out of range; it's turned off, PlayerShots (you might consider consistent naming too playershot vs PlayerShot might become confusing) is decreased, but because the shot itself is <span style="font-style: italic">still</span> moving! And because it's a low index shot, the next frame it'll still be out of range, PlayerShots again decreases until after 10 frames it reaches 0 and all the other shots stop being considered.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#95627 - Ultima2876 - Sun Jul 30, 2006 4:38 pm</h4>
+    <div class="postbody"><span class="postbody">Only thing is, I don't like having to search through header files for defines for each and every number in the code, especially insignificant things.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#95993 - Rogmatic - Mon Jul 31, 2006 8:05 pm</h4>
+    <div class="postbody"><span class="postbody">Thanks for all your advice everyone, haven't had much time to make changes lately, but I'll let you guys know when I do.
+<br/>
+<br/>
+EDIT: Thanks alot Cearn, that seems to have been the problem.  I was getting to something like that, just needed a little push, I guess.  Thanks again everyone.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#96167 - sgeos - Tue Aug 01, 2006 7:16 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Ultima2876 wrote:</b></span></td> </tr> <tr> <td class="quote">I don't like having to search through header files for defines</td> </tr></table><span class="postbody">
+<br/>
+The point is that the exact number generally doesn't matter.  If and when it really does, you can always do this instead of touching the header files:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">printf("%d\n", MY_CONSTANT);</td> </tr></table><span class="postbody">
+<br/>
+I'd rather see defines at the top of the C file, or local variables, than nothing at all.
+<br/>
+<br/>
+-Brendan</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

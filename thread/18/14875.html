@@ -1,0 +1,130 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Need help with effective VRAM setup - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Need help with effective VRAM setup</h2>
+<div id="posts">
+<div class="post">
+    <h4>#149375 - load*,8,1 - Sat Jan 19, 2008 11:40 am</h4>
+    <div class="postbody"><span class="postbody">In my OpenTTD project I'm currently trying to optimize memory usage. But I'm still a bit confused concerning the video modes. I want to pack everything as tight as possible. Here's what I need:
+<br/>
+- a 48 KB memory block mapped as a bitmap to Main Screen
+<br/>
+- a 48 KB memory block mapped as a bitmap to Sub Screen
+<br/>
+- an approximately 112 KB continuous memory block
+<br/>
+- not mandatory, but would be nice: 10KB for the debug console
+<br/>
+- the remaining memory (~448KB) in a continuous chunk
+<br/>
+<br/>
+Is this asking too much? I had a like at the possible combinations and it seems like I'm always wasting way too memory.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#149379 - PypeBros - Sat Jan 19, 2008 12:01 pm</h4>
+    <div class="postbody"><span class="postbody">It seems not to be directly compatible with the usual setup of the VRAM, at least. and it will mostly depend on what you plan to do with your "remaining one chunk".
+<br/>
+<br/>
+You can (afaik) mix bitmaps, tiles and maps in a single 128K BG bank. You might setup bank E for main BG (64K) and save 128K banks for any purpose you'd like in LCD mode ...
+<br/>
+<br/>
+Though, when one use a dynamic bitmap, we typically like to have double buffering to avoid flickering, so you might like to have 128KB at hand anyway.<br/>_________________<br/><a class="postlink" href="http://sylvainhb.blogspot.com/p/sprite-editor.html" target="_blank"> SEDS: Sprite Edition on DS</a> :: <a class="postlink" href="http://sylvainhb.blogspot.com/search/label/modplayer" target="_blank">modplayer</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#149389 - tepples - Sat Jan 19, 2008 1:31 pm</h4>
+    <div class="postbody"><span class="postbody">Why does this sub screen have to be 8 bits per pixel? Would you like to learn how to treat a 4-bit tiled background as a pseudo-bitmap background, so you can do a frame buffer in 26 KiB of VRAM?<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#149390 - load*,8,1 - Sat Jan 19, 2008 1:37 pm</h4>
+    <div class="postbody"><span class="postbody">If my dream setup is not possible, I would also be satisfied to simply put the main screen bitmap and sub screen bitmap as high in memory as possible. But do I read the specifications correctly that the highest I could put the sub screen is bank C?
+<br/>
+<br/>
+Edit (just noticed your post):
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote">Why does this sub screen have to be 8 bits per pixel? Would you like to learn how to treat a 4-bit tiled background as a pseudo-bitmap background, so you can do a frame buffer in 26 KiB of VRAM?</td> </tr></table><span class="postbody">
+<br/>
+OpenTTD uses a 256 color palette. So I'm not sure if I understand your suggestion. If only using 26 KiB would be possible that would be great. Maybe a little explanation about how the graphics in OpenTTD work can help:
+<br/>
+The blitter writes sprites to a surface whenever something changes. It then marks that area as "dirty" and the video driver copies those dirty areas over to the frame buffer at regular intervals. Note that with this setup it is not possible to use double buffering.
+<br/>
+<br/>
+What I want to use the remaining VRAM for is mainly the sprite data. My tests are indicating that I'll need ca. 500KB for it to run smoothly. More would be preferred of course. If it can't be a continuous chunk at all I might have to write an allocator for it.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#149419 - Cydrak - Sat Jan 19, 2008 10:31 pm</h4>
+    <div class="postbody"><span class="postbody">How about this?
+<br/>
+- Banks F, G, A = 2*16K + 128K = 48K main bitmap with 112K spare
+<br/>
+- Banks B, C, D, E = 3*128K + 64K = 448K spare in LCD mode
+<br/>
+- Banks H, I = 32K + 16K = 48K sub bitmap
+<br/>
+<br/>
+Something I noticed, but haven't seen done, is that F and G can map anywhere in the first 128K. The catch is, they mirror in two places:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+A,   VRAM_OFFSET(0): [AAAAAAAA--------]
+<br/>
+A,   VRAM_OFFSET(1): [--------AAAAAAAA]
+<br/>
+E      (any offset): [EEEE------------]
+<br/>
+F/G, VRAM_OFFSET(0): [X-X-------------]
+<br/>
+F/G, VRAM_OFFSET(1): [-X-X------------]
+<br/>
+F/G, VRAM_OFFSET(2): [----X-X---------]
+<br/>
+F/G, VRAM_OFFSET(3): [-----X-X--------]
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+So, it should be possible to make F and G contiguous with A (there seem not to be any special constants for this):
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+// [----FGFGAAAAAAAA] (160K, starting at 96K)
+<br/>
+VRAM_F_CR = VRAM_ENABLE | VRAM_F_MAIN_BG | VRAM_OFFSET(2);
+<br/>
+VRAM_G_CR = VRAM_ENABLE | VRAM_G_MAIN_BG | VRAM_OFFSET(3);
+<br/>
+vramSetBankA(VRAM_A_MAIN_BG_0x06020000);
+<br/>
+<br/>
+// If you need to use a console, this should offset all map and tile base past the hole, making them start at 2*64K = 128K (bank A).
+<br/>
+DISPLAY_CR |= DISPLAY_SCREEN_BASE(2) | DISPLAY_CHAR_BASE(2);
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Due to the hole, the first usable bitmap base is 6(*16K). (According to GBAtek, there's no global offset, like above, for bitmaps. You wouldn't need one since the bitmap base value is wide enough to cover all 512K.)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#149511 - load*,8,1 - Mon Jan 21, 2008 11:38 am</h4>
+    <div class="postbody"><span class="postbody">Thanks for the tips! I didn't know that the VRAM setup is so flexible. I was thinking that nothing beyond the libnds was possible. I do understand it much better now and can experiment with some possible solutions. :)</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

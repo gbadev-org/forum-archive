@@ -1,0 +1,159 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>DMA Fast Copy with single sprite frame into OAM - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > DMA Fast Copy with single sprite frame into OAM</h2>
+<div id="posts">
+<div class="post">
+    <h4>#27720 - Celeryface - Wed Oct 20, 2004 12:56 am</h4>
+    <div class="postbody"><span class="postbody">Hi there,
+<br/>
+<br/>
+I have my sprite animations updating a single element in the Sprite Data (OAMData for some) one animation frame per frame tick. So I can overwrite the frame everytime I update, rather than store all of the frames in OAM.
+<br/>
+<br/>
+I have run into a problem where if I do this on multiple animations the framerate slows down due to the big for loops and copying.
+<br/>
+<br/>
+I have tried to use DMAFastCopy on the sprite data array and OAMData but haven't been able to figure it out. Can someone give me a hand?
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void DMAFastCopy( void *source, void *destination, unsigned int count, unsigned int mode )
+<br/>
+{
+<br/>
+<br/>
+   if( mode == DMA_16NOW || mode == DMA_32NOW )
+<br/>
+   {
+<br/>
+<br/>
+      REG_DMA3SAD = (unsigned int)source;
+<br/>
+      REG_DMA3DAD = (unsigned int)destination;
+<br/>
+      REG_DMA3CNT = count | mode;
+<br/>
+<br/>
+   } // end if
+<br/>
+<br/>
+} // end DMAFastCopy()
+<br/>
+<br/>
+// This is the way I updated the frame before
+<br/>
+// Update Ryu's Sprite frame
+<br/>
+        for( n16 = (64*64/2)+512; n16 &lt; (64*64/2)+512+(64*64/2); n16++ )
+<br/>
+          SpriteData[n16] = beelData[ ( (64*64/2) * currentBeelFrame) + (n16-((64*64/2)+512)) ];</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I want to use DMA fast copy. Here is what I've tried so far:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+DMAFastCopy( (void*)beelData[ (64*64/2) * currentBeelFrame ], (void*)SpriteData[start], end, DMA_16NOW );
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Doing the DMAFastCopy  above using the square bracks to indicate the starting points of where I want to copy the data gives me the following compiler warning:  <span style="font-weight: bold">warning: cast to pointer from integer of different size</span>
+<br/>
+<br/>
+Anyone see what I can improve?
+<br/>
+<br/>
+Thanks.[/code]</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#27722 - sajiimori - Wed Oct 20, 2004 1:09 am</h4>
+    <div class="postbody"><span class="postbody">First of all, get rid of the magic numbers.  Use #defines, enums, and variables instead of inserting numbers into your code.  All of those numbers must mean something, so give them a name that reflects that meaning.
+<br/>
+<br/>
+I don't know the types of beelData and SpriteData, but you are treating them as arrays, accessing an element of each array, and casting that element to void*.  This is not necessarily wrong, if they are arrays of pointers.
+<br/>
+<br/>
+I'm guessing they are not actually arrays of pointers.  If you declared them as arrays of u8 or u16, then you are casting a u8 or u16 value to a pointer, which is 32 bits, and the compiler is warning you that it's going to fill the upper 24 or 16 bits with zeros.
+<br/>
+<br/>
+I'm also guessing that this isn't what you want at all.  Perhaps you want to get the address of an element of an array, but I honestly don't know.  If it is what you want, you can write it one of these ways:</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">&amp;array[index]
+<br/>
+array + index</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#27723 - Celeryface - Wed Oct 20, 2004 1:40 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sajiimori wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+I don't know the types of beelData and SpriteData, but you are treating them as arrays, accessing an element of each array, and casting that element to void*.  This is not necessarily wrong, if they are arrays of pointers.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+beelData is a sprite array from a header file and SpriteData is the OAMData but with a different name. 
+<br/>
+<br/>
+I tried your suggestion with:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">DMAFastCopy( (void*)&amp;beelData[ (64*64/2) * currentBeelFrame ], (void*)&amp;SpriteData[start], end, DMA_16NOW );</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+It gave me the results I was expecting, but it sped up my animations from normal to super fast, even with it updating the frame ticker after a Vertical Blank. So I used a higher modulus to keep the frame rate to update every 12 ticks or so. Previously it was set at 3. Is there something else I should be doing ?
+<br/>
+<br/>
+Thanks again :)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#27725 - sajiimori - Wed Oct 20, 2004 2:06 am</h4>
+    <div class="postbody"><span class="postbody">When I talk about the "type" of beelData, I'm not referring to where it came from but rather the C type that it carries, such as u8*, u16*, void**, Widget**, etc.
+<br/>
+<br/>
+The same goes for SpriteData.  There is more to know about an expression than its value -- each expression also carries a type.  Even if the value of SpriteData is 0x06100000 (the address for sprite pixel data), the compiler will treat it differently depending on whether you declare it as int, u16*, or whatever else.
+<br/>
+<br/>
+If you change frames every 12 vblanks, that's 5 fps.  I don't know how fast you want your animation to play.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#27741 - Celeryface - Wed Oct 20, 2004 8:20 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sajiimori wrote:</b></span></td> </tr> <tr> <td class="quote">When I talk about the "type" of beelData, I'm not referring to where it came from but rather the C type that it carries, such as u8*, u16*, void**, Widget**, etc.
+<br/>
+<br/>
+The same goes for SpriteData.  There is more to know about an expression than its value -- each expression also carries a type.  Even if the value of SpriteData is 0x06100000 (the address for sprite pixel data), the compiler will treat it differently depending on whether you declare it as int, u16*, or whatever else.
+<br/>
+<br/>
+If you change frames every 12 vblanks, that's 5 fps.  I don't know how fast you want your animation to play.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+The SpriteData is u16*, and the beelData is a u16 array.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#27759 - sajiimori - Wed Oct 20, 2004 6:59 pm</h4>
+    <div class="postbody"><span class="postbody">That's what I figured -- as you probably know, the type of the expression "beelData" will be u16*, because saying the name of an array will produce a pointer to its first element.
+<br/>
+<br/>
+Hopefully it makes sense now.  Accessing an element of beelData using * or [] will produce one of the u16's in the array, and casting one of those to void* is odd.
+<br/>
+<br/>
+Like I tell everybody, just remember that a[i] is exactly equivalent to *(a+i).  That's why you can type i[a] and get the same result (unless your compiler doesn't like it) -- addition is commutative.  =)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#27794 - Celeryface - Thu Oct 21, 2004 8:27 am</h4>
+    <div class="postbody"><span class="postbody">Yeah, thanks a lot for the help on that :)</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

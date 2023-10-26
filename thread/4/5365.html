@@ -1,0 +1,164 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Compiler Optimizations Screwing Up Blending! - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > Compiler Optimizations Screwing Up Blending!</h2>
+<div id="posts">
+<div class="post">
+    <h4>#39067 - MrD - Mon Apr 04, 2005 3:14 am</h4>
+    <div class="postbody"><span class="postbody">Hi!
+<br/>
+I'm trying to use BG0, REG_BLDMOD and REG_COLEY to fade a picture onto the screen. I've got the picture to display perfectly (spent hecka long time weeding out dupe tegels and such ._.) and such...
+<br/>
+<br/>
+The problem comes when I try to change REG_COLEY over time for my splash screen:
+<br/>
+What it's meant to do is fade the screen to white.
+<br/>
+In semi-psuedocode, what I've got looks like this:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+// Up here, BG0 is enabled in REG_DISPCNT, and palette, tiles and tegels are set-up. And the VBlank interrupt is set up. And the interrupt is set to respond by setting REG_IFBIOS.
+<br/>
+<br/>
+vu16 no_vblanks_occurred = 0;     // No effect switching volatile on or not.
+<br/>
+<br/>
+REG_BLDMOD = bit0 | bit1 | bit2 | bit3 | bit4 | bit5 | bit 7; // All A-Targets and 'whiteblend'
+<br/>
+REG_COLEY = 0;
+<br/>
+<br/>
+while (no_vblanks_occurred &lt; 64) {
+<br/>
+   asm volatile("swi 0x05");
+<br/>
+   REG_COLEY = (no_vblanks_occurred &gt;&gt; 2);
+<br/>
+   no_vblanks_occurred++;
+<br/>
+}
+<br/>
+<br/>
+// Down here I set REG_DISPCNT to a forced whiteout and set up another splash screen or something.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+It's worked before because i've been using BLDMOD and COLEY for fades all over my game, it just doesn't want to play ball with the title splash... :s
+<br/>
+I'm using DevKitARM with a modified AAS C++ Makefile.
+<br/>
+My theory is that -funroll-loops or -O3 in my gcc flags is screwing up my compiling... but when I disable them... ODD THINGS happen. Which is no good.
+<br/>
+<br/>
+All I get is either a complete lock up in VBA and hardware, or no fade and just a solid normal coloured screen...
+<br/>
+Any thoughts?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#39068 - tepples - Mon Apr 04, 2005 3:49 am</h4>
+    <div class="postbody"><span class="postbody">Have you tried moving the asm instruction out to a separate function? </span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void wait4vbl(void)
+<br/>
+{
+<br/>
+  asm volatile("swi 0x05");
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+And have you made sure that your register defines are correctly marked as volatile?<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#39093 - Lord Graga - Mon Apr 04, 2005 1:53 pm</h4>
+    <div class="postbody"><span class="postbody">I think that you are calling THUMB calls in ARM. You should call SWI 0x050000 instead of SWI 0x05.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#if   defined   ( __thumb__ )
+<br/>
+#define   SystemCall(Number)    asm ("SWI     "#Number"\n" :::  "r0", "r1", "r2", "r3")
+<br/>
+#else
+<br/>
+#define   SystemCall(Number)    asm ("SWI     "#Number"   &lt;&lt; 16\n" :::"r0", "r1", "r2", "r3")
+<br/>
+#endif
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Use this code for systemcalls in C, with DevkitARM. If you are compiling the code as THUMB, it will do THUMB system calls - if ARM, then it will do ARM calls.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#39095 - MrD - Mon Apr 04, 2005 2:13 pm</h4>
+    <div class="postbody"><span class="postbody">What'd be nice would be some kinda pair of braces which tells the compiler to get it's evil compilery mitts off-of that piece of code.
+<br/>
+<br/>
+I'm gonna try what you both said, although I'm not sure that calling something that should be called as often as VBlank should be called by a function. ._. But then again, there's no arguments for it... argh! Dilemma! (I've got it as a define atm.)
+<br/>
+<br/>
+I'm going to check mah headers for volatiles.<br/>_________________<br/>Not active on this forum. For Lemmings DS help see its website.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#39101 - MrD - Mon Apr 04, 2005 3:34 pm</h4>
+    <div class="postbody"><span class="postbody">Wahey, everything is working! Kudos for yous guys!
+<br/>
+<br/>
+Actually, I don't know what fixed it... I didn't change anything...
+<br/>
+I checked my headers, and everything seemed fine and dandy, and then I checked a whole bunch of stuff and tried anything that I could think of... Making everything volatile, making nothing volatile, fiddling with the makefile, fiddling with my path, everything!
+<br/>
+<br/>
+Turns out I'd missed one line out of my code:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">REG_BLDMOD = bit0 | bit1 | bit2 | bit3 | bit4 | bit5 | bit7;</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I feel like a complete goof. I'm sure that line was there when it wasn't working, but when I added it again, the fade worked like a charm.
+<br/>
+<br/>
+Edit: I think this might've done something, I dunno. Sometimes when variables get compiled away, I do this to 'em.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">(*(u32 *)(somewhere out of the way)) = (u32)&amp;variable;</td> </tr></table><span class="postbody">
+<br/>
+Sometimes works as a last resort making sure the compiler realises that that variable is there for a reason.
+<br/>
+<br/>
+Thanks for the help though! :)<br/>_________________<br/>Not active on this forum. For Lemmings DS help see its website.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#39139 - tepples - Tue Apr 05, 2005 2:51 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>MrD wrote:</b></span></td> </tr> <tr> <td class="quote">I'm not sure that calling something that should be called as often as VBlank should be called by a function.</td> </tr></table><span class="postbody">
+<br/>
+Compared to some other functions, waiting for vblank isn't called "often" at all. It's called only about 60 times a second.
+<br/>
+<br/>
+Later you mention that sometimes you copy variables to "nowhere" in memory when you disagree with the optimizer. That can lead to bad karma, especially when No$gba starts complaining about "errors".<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

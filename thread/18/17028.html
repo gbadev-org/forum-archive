@@ -1,0 +1,492 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>[HowTo] Debug with Eclipse + Code Completion - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > [HowTo] Debug with Eclipse + Code Completion</h2>
+<div id="posts">
+<div class="post">
+    <h4>#171836 - Gordin - Mon Dec 28, 2009 11:47 pm</h4>
+    <div class="postbody"><span class="postbody"><span style="font-weight: bold">Currently there's only a video for the setup (+compiling of libs) of devkitARM, and for extending the Makefile, other steps will follow!</span>
+<br/>
+<br/>
+Videos online:
+<br/>
+Setting up devkitARM - <a href="http://is.gd/5J3pm" target="_blank">http://is.gd/5J3pm</a>
+<br/>
+Extending the Makefile - <a href="http://is.gd/5LU7o" target="_blank">http://is.gd/5LU7o</a>
+<br/>
+<br/>
+I just managed to setup devkitARM, libnds, eclipse and gdb so I can build, run, use code completion AND debug with Eclipse (stepping through code, viewing variables n stuff) and I figured this could be helpful to some people so here is a little (maybe not that little 0o) tutorial on how to set this up. Keep in mind though that this is probably not the best way to set this up, it's just my way and it works for me and I think it will work for other people too. If you want to improve this in any way please post suggestions. Note that I done this under linux but  I don't see why this wouldn't work on windows or mac.
+<br/>
+<br/>
+So this is what you need before you can setup eclipse for debugging:
+<br/>
+<br/>
+1. You need to know where to put your devkitpro folder and how/where to set up the DEVKITPRO and DEVKITARM environment variables. This is different for windows/mac/linux but there are enough other tutorials for that.
+<br/>
+<br/>
+2. Eclipse CDT
+<br/>
+I'm not going to explain how to install that (use google). I don't know which versions are needed, I'm using Eclipse 3.5.1 with CDT 6.0.1 (the newest versions I think). It shouldn't really matter as far as functionality goes but because the Eclipse interface tends to randomly change with version numbers I think it's best to use the same versions...
+<br/>
+Also you should know a little bit about the interface of eclipse e.g. if you have to open the c++ perspective you should to be able to do it (there aren't any screenshots in this tutorial...)
+<br/>
+<br/>
+3. Desmume compiled with --enable-gdb-stub and glade or cli interface
+<br/>
+Note that you CANNOT use the normal gtk-interface of desmume (at least it doesn't work for me, maybe it works on windows? 0o), so you will have to use desmume-glade or desmume-cli when debugging
+<br/>
+first run desmume-glade --arm9gdb=2159 SOME_NDS_FILE.nds
+<br/>
+if desmume tells you, that it doesn't know what to do with the arm9gdb thing AND/OR you don't have either desmume-glade or desmume-cli you will need to get the desmume source and compile it yourself with
+<br/>
+./configure --enable-gdb-stub &amp;&amp; make &amp;&amp; make install
+<br/>
+(or whatever you do to compile and install stuff on your system)
+<br/>
+if this is working and you run desmume with the arm9gdb parameter desmume should open, but the rom will not start to run until you tell it to with a debugger.
+<br/>
+<br/>
+4. gdb compiled for NDS architecture
+<br/>
+this is actually already included in devkitARM, I just wanted to point out that you shouldn't try to use a standard gdb
+<br/>
+<br/>
+5. libs with debug information, that is correct for your system
+<br/>
+basically that means that you have to get the source for libnds and the other libs that you want to use and compile them yourself. (This may sound complicated to some people but it's really just a few simple steps, figuring out how to configure Eclipse was A LOT harder...) The reason that you need to do that is, when you step through the code, the debugger needs to know where the source files are that you wanna step through, but libnds e.g. was compiled in the folder /Users/davem/something... and that is where your debugger is going to seach for the source when you try to step through code from libnds. (besides that if you do not compile from source you probably do not even have the source at all...) So the easiest way is to just compile all your libs where you are going to use them.
+<br/>
+<br/>
+<br/>
+=== Setting up devkitARM + libs ===
+<br/>
+<br/>
+Video for this step: <a href="http://is.gd/5J3pm" target="_blank">http://is.gd/5J3pm</a>
+<br/>
+<br/>
+To make sure, that everything we use will have correct debug information, we are going to compile all libs provided by devkitPro for ds-development from source.
+<br/>
+So go and grab devkitARM, the nds-examples and the sources for libnds, dswifi, maxmod, libfat, libfilesystem and default-arm7 from sourceforge. You will also need to compile other libs yourself as well if you want to steph through their code but the stuff provided by devkitPro is enough for now.
+<br/>
+When you downloaded everything do NOT extract it in your download folder, extract it directly to the folder, WHERE YOU WANT IT TO BE WHEN YOU ARE DONE setting everything up. For me this is /opt/devkitpro. It might be good to start with a clean devkitpro folder so backup/rename/delete your old one.
+<br/>
+After extracting your devkitpro folder should look like this:
+<br/>
+<br/>
+(besides devkitARM the folder names and versions do not matter, just make sure everything has it's own folder and that you don't rename/move anything after compiling)
+<br/>
+<br/>
+default_arm7-src-0.5.8/
+<br/>
+devkitARM/
+<br/>
+dswifi-src-0.3.11/
+<br/>
+libfat-src-1.0.6/
+<br/>
+libfilesystem-src-0.9.4/
+<br/>
+libnds-src-1.4.0/
+<br/>
+maxmod-src-1.0.6/
+<br/>
+nds-examples-20091201/
+<br/>
+<br/>
+Now setup the Environment variables DEVKITPRO and DEVKITARM to their respective folders so we can start compiling things for our devkit. After that:
+<br/>
+<br/>
+The order here IS important, because some libs bepend on a lib that has to be compiled first
+<br/>
+1. go into the libnds folder and do 'make install'
+<br/>
+2. go into the dswifi folder and do 'make install'
+<br/>
+3. go into the maxmod folder and do 'make install-nds'
+<br/>
+4. go into the defaull-arm7 folder and do 'make install'
+<br/>
+5. go into the libfat folder and do 'make nds-install'
+<br/>
+6. go into the libfilesystem folder and do 'make install'
+<br/>
+<br/>
+Now we compiled everything we need to test the toolchain and the install options already put the libs where they belong, so try to compile the HelloWorld thing with the toolchain you just set up. If it works and you can successfully run the nds file in desmume we are almost ready to set up Eclipse.
+<br/>
+<br/>
+=== Extending an examle-makefile for easier debugging ===
+<br/>
+<span style="font-weight: bold">If you never use the command line and want to do everything in Eclipse from now on you can leave this step out</span>
+<br/>
+<br/>
+Video for this step: <a href="http://is.gd/5LU7o" target="_blank">http://is.gd/5LU7o</a>
+<br/>
+<br/>
+We are going to change one of the Makefiles from the examples so you can use it as a template to debug other projects. To do that we are going to add the options run and debug to the Makefile. First go to the line that starts with .PHONY and add the words run and debug at the end like this:
+<br/>
+.PHONY: $(BUILD) clean run debug
+<br/>
+<br/>
+then search for the clean: block
+<br/>
+below the 2 lines that follow add some code so it looks like this:
+<br/>
+(the free space in front of the lines has to be 1 tab!)
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+clean:
+<br/>
+    @echo clean ...
+<br/>
+    @rm -fr $(BUILD) $(TARGET).elf $(TARGET).nds $(TARGET).arm9 $(TARGET).ds.gba
+<br/>
+<br/>
+######################### CODE TO ADD STARTS HERE #############################
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+run: $(BUILD)
+<br/>
+   @echo running in desmume ...
+<br/>
+   @desmume-glade $(OUTPUT).nds
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+debug: $(BUILD)
+<br/>
+   @echo debugging in desmume ...
+<br/>
+   @desmume-glade --arm9gdb=2159 $(OUTPUT).nds
+<br/>
+<br/>
+######################### CODE TO ADD ENDS HERE ##############################
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+else</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+So what does this do? We now can call 'make run' to compile our project and start the program in desmume and we can do 'make debug' to compile and start our program in desmume waiting and listening in "debug mode" on port 2159 (Which is according to google the standard port for gdb debugging, so it shouldn't interfere with any other ports you might be using.)
+<br/>
+In the run: block you can replace desmume-glade with desmume-cli or just desmume if you don't like the glade interface but do NOT use just desmume in the debug: block because you won't be able to debug if you do! (again it SHOULD work with just desmume but for me it just doesn't, so to be sure just use the glade interface)
+<br/>
+<br/>
+=== Setting up Eclipse ===
+<br/>
+<br/>
+/// Getting Eclipse to build nds projects\\\
+<br/>
+<br/>
+Assuming you are starting from a clean workspace first make sure that you are in the c++ perspective. Than create a new c++ project (c project should work too I guess) and choose Makefile project-&gt; Empty Project and select -- Other Toolchain --.
+<br/>
+Click Next and then on 'Advanced settings...' because there are a few settings we have to change
+<br/>
+1. C/C++ Build: In the Behaviour tab remove the 'all' in the 'Build (incremental build)' field
+<br/>
+2. C/C++ Build/Environment: Add the variables DEVKITPRO and DEVKITARM there (the values should be the same values that you used to compile the toolchain) depending on your system and where you have set up your Environment you may not need to do this step (I didn't have to) You can check if eclipse already knows the variables at 'build variablas' tab when you click on 'Show system variables'. If DEVKITPRO and DEVKITARM are there and set correctly you shouldn't need to set them again in Eclipse
+<br/>
+3. C/C++ Build/Settings: select GNU Elf Parser (maybe you can leave this out, not sure here)
+<br/>
+Click OK and then Finish to finish the creation of the project.
+<br/>
+Now take the files from one of the examples and copy them over to the folder of your empty new project (you should use the modified Makefile, Eclipse doesn't need it but you will have less to type when starting a debug session).
+<br/>
+Click on your project in the project view and press F5 to refresh the files. Try to build to project in eclipse now (the little hammer symbol in the toolbar). Look at the console view. the project should have been compiled correctly. If it tells you to set one of the DEVKIT variables go to the project Properties and play around with with the environment variables, Eclipse sometimes does strange things with them.... (set them, delete them, use the whole path in DEVKITARM, etc.) DO NOT CONTINUE UNTIL THIS WORKS.
+<br/>
+<br/>
+/// Set up code completion \\\
+<br/>
+<br/>
+If you do not care about code completion you can skip this but I think it's nice to have this :)
+<br/>
+To make code completion work we have to tell eclipse where the libraries we are using are located we are using. (If you are wondering why you can build stuff without eclipse knowing the libraries thats because we dont use the eclipse compiler but the devkitARM one)
+<br/>
+To tell Eclipse where to look for the libraries go again to the project properties and then to C/C++ General-&gt; Paths and Symbols.
+<br/>
+Go to the include tab and click 'Add...'
+<br/>
+Use 'File system...' and Browse to DEVKITPRO-FOLDER/devkitARM/arm-eabi/include, click on 'Add to all languages' and click OK
+<br/>
+do the same for DEVKITPRO-FOLDER/libnds/include
+<br/>
+Now click OK, Eclipse should tell you that it needs to rebuild its idnex. click OK again.
+<br/>
+If you added the right folders eclipse now knows all the includes from devkitARM and libnds and code-completion should be working.
+<br/>
+<br/>
+/// Set up debugging \\\
+<br/>
+<br/>
+Now we are going to set up a debug-configuration for gdb-remote debugging, so Eclipse can connect to a running desmume with open debug port. First Open up Run-&gt;Debug Configurations
+<br/>
+There should already be one configuration named after the .elf file that is created besides the .nds file when you do 'make' e.g. hello_wold.elf. If there is no configuration, select C/C++ Application and create one.
+<br/>
+Then in the main tab Project should be your project-name and the application should be the .elf file
+<br/>
+Lets go to the debugger tab
+<br/>
+Set the debugger to 'gdbserver Debugger'. In the Debugger Options 'Main' tab remove the .gdbinit from the 'GDB command file' field and (this is important) set 'GDB debugger' to DEVKITPRO-FOLDER/devkitARM/bin/arm-eabi-gdb. In the Debugger Option 'Connection' tab set Type to TCP and then the Port Number to 2159
+<br/>
+If you like you can go to the 'Common' tab and put this configuration in the favorites menu.
+<br/>
+You can now close the debug configuration.
+<br/>
+<br/>
+we have now set up everything we need to do debugging and step through the code!
+<br/>
+<br/>
+But we will make the process of starting a debugging-session a bit simpler before we test the final setup.
+<br/>
+(thanks to <span style="font-weight: bold">cyril_sy</span> for the idea)
+<br/>
+<br/>
+Go to Run-&gt;External Tools-&gt; External Tools configurations and create a new Launch configuration under Program
+<br/>
+Name it desmume debug-mode (or something else that indicates that desmume is going to be started in debug mode)
+<br/>
+<br/>
+In the Main tab:
+<br/>
+in Location choose Browse File System and point to the desmume executable. For me this is /usr/bin/desmume-glade (remember to NOT choose just desmume...)
+<br/>
+in Working Directory put ${project_loc} as the nds-file will be located there
+<br/>
+in Arguments put --arm9gdb=2159 ${project_name}.nds
+<br/>
+(the nds file is named after the folder you compile it in which is named after the project. if you changed this somehow you might have to put something different in front of .nds)
+<br/>
+<br/>
+In the Build tab:
+<br/>
+choose 'The project containing...' instead of 'The entire workspace'
+<br/>
+<br/>
+In the Common tab you can check the 'Display in favorites menu' if you want
+<br/>
+<br/>
+Now press Apply and close and go to Debug configurations one last time
+<br/>
+<br/>
+This time Create create a new Launch Group and name it something...
+<br/>
+in the Launches tab:
+<br/>
+click 'Add...' and choose Launch Mode: run-&gt;Program-&gt;desmume debug-mode and click OK
+<br/>
+Then add Launch Mode: debug-&gt;C/C++ Application-&gt;SOMETHING.elf
+<br/>
+if you want you can add this to a favorites menu in the common tab (you should do that because you will use this to start debugging...)
+<br/>
+<br/>
+NOW we really set up everything we need to start debugging :)
+<br/>
+<br/>
+/// Actually DO debugging \\\
+<br/>
+To start debugging now all we have to do is go to the debug or run favorites menu and click on the Launch Group we just created. (It's the one with the green arrow) Note that you have to be somewhere IN the project e.g. inside the editor with code from your project or eclipse will tell you that a problem occurred and ${project_loc} is empty.
+<br/>
+<br/>
+Now if you click on the Launch group Eclipse will automatically compile the project, start desmume with your nds file in debug mode and after about 5-20 seconds (don't know where that delay comes from) go in debug mode and connect to desmume.
+<br/>
+<br/>
+You should now be ably to step through the code, set breakpoints, view variables and all the other cool stuff you can do with gdb :)
+<br/>
+Note that after you are done debugging and terminated the session you will need to close desmume yourself
+<br/>
+<br/>
+If someone actually read through this and done this please tell me if it worked ^^</span><span class="gensmall"><br/><br/>Last edited by Gordin on Sun Jan 17, 2010 9:23 pm; edited 13 times in total</span></div>    
+</div>
+<div class="post">
+    <h4>#171837 - ritz - Tue Dec 29, 2009 4:21 am</h4>
+    <div class="postbody"><span class="postbody">I haven't read this yet, but I will at work tomorrow. I've always used notepad and haven't ever found anything compelling to pull me away yet. However, I think I'll try this out as I already have a bastardized version of eclipse at work - I use stupid fat IBM's RAD 7.5 for Portal crap. It'll be a challenge to mix business with pleasure :)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#171845 - Gordin - Tue Dec 29, 2009 2:21 pm</h4>
+    <div class="postbody"><span class="postbody">With Notepad do you mean something like notepad++ or the Microsoft notepad? I'm just curious because i never understood how people can code with that...
+<br/>
+I mostly also don't use IDEs but I'm a vim user and try to avoid editors that do not have a vim plugin and are not vim ^^
+<br/>
+(fortunately there are multiple vim-plugins for Eclipse ^^)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#171846 - ritz - Tue Dec 29, 2009 2:39 pm</h4>
+    <div class="postbody"><span class="postbody">I use Microsoft's notepad. I know it's a bit silly nowadays but it's what I like... I don't care for a lot of bells and whistles as they tend to distract me and I don't like unknown/unused bloated features trying to make my life easier. I do have a copy of <a href="http://www.flos-freeware.ch/notepad2.html" target="_blank">http://www.flos-freeware.ch/notepad2.html</a> for when dealing with unix files (the line endings) but that's about as far as I go. I used to be a linux fanboy starting way back the day Debian was released, used it for over a decade. Hated vi, loved joe ( <a href="http://joe-editor.sourceforge.net/" target="_blank">http://joe-editor.sourceforge.net/</a> ). Life and work pushed me back to windows, so now I use notepad. I keep everything (toolchain, projects, svn repos) on a usb drive that I spent time making work on any windows box no matter where I was: work, home, friend's, etc. I can just plug it in and double click make (or other stuff I set up).
+<br/>
+<br/>
+At work I use the exact opposite of notepad. A big, bloated IBM injected version of eclipse tied into websphere portal. I can't even fathom the number of layers and moving pieces envolved starting at me entering in a bit of java or jsf code in the editor all the way down to the metal on the distributed cluster this shit runs on. I always ask myself "Why?", even though I know the answer.
+<br/>
+<br/>
+I guess that's why I like fartin' around on my DS with C using ridiculous variable names on purpose :)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#171951 - cyril_sy - Mon Jan 04, 2010 4:45 am</h4>
+    <div class="postbody"><span class="postbody">Thanks a lot, it works on my mac :)
+<br/>
+<br/>
+I just had problems compiling desmume-cli, solved with these hacks :
+<br/>
+<ul>
+<br/>
+<li><a class="postlink" href="http://forums.desmume.org/viewtopic.php?pid=3198#p3198" target="_blank">http://forums.desmume.org/viewtopic.php?pid=3198#p3198</a>
+<br/>
+</li><li><a class="postlink" href="http://forums.desmume.org/viewtopic.php?pid=5325#p5325" target="_blank">http://forums.desmume.org/viewtopic.php?pid=5325#p5325</a>
+<br/>
+(also commented all the INITOGLEXT(PFNGLACTIVETEXTUREPROC,glActiveTexture))</li></ul>
+<br/>
+<br/>
+To launch DeSmuMe more easily, you can :
+<br/>
+<ul>
+<br/>
+<li> Run/Extarnal Tools/Extarnal Tools Configuration...
+<br/>
+</li><li> New launch configuration
+<br/>
+</li><li> Location : where is your desmume executable
+<br/>
+</li><li> Working Directory : ${project_loc}
+<br/>
+</li><li> Arguments : --arm9gdb=2159 ${project_name}.nds
+<br/>
+</li><li> Common/Display in favorite menu
+<br/>
+</li><li> Launch it with the External Tools icon
+<br/>
+</li></ul>
+<br/>
+<br/>
+Then you can launch automatically both desmume and the debug with a Debug Launch Group (in Debug Configurations)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#171952 - keldon - Mon Jan 04, 2010 6:21 am</h4>
+    <div class="postbody"><span class="postbody">Hi Gordin, there is a dos command to execute a program with options not to wait; I can't remember what it is, but I had to do a similar thing with batch files.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#171956 - SteveH - Mon Jan 04, 2010 10:44 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>keldon wrote:</b></span></td> </tr> <tr> <td class="quote">Hi Gordin, there is a dos command to execute a program with options not to wait; I can't remember what it is, but I had to do a similar thing with batch files.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+It's called "start", and it's not a dos program per say, it's more of an NT addon command line application.
+<br/>
+<br/>
+basicaly you just type "start &lt;command to run&gt;" and it will run, for example:
+<br/>
+<br/>
+start c:\ds_dev\myndsgame\ndsgame.nds
+<br/>
+<br/>
+With start running the ndsgame but only if you have the nds files associated with a program</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#171960 - Gordin - Mon Jan 04, 2010 1:04 pm</h4>
+    <div class="postbody"><span class="postbody">@SteveH &amp; keldon
+<br/>
+I'm using linux and there is no start NT command ;) That's why I was wondering how to do it in a makefile so it would work on all systems
+<br/>
+<br/>
+@cyril_sy
+<br/>
+I thought about doing the external tool thing but I didn't know it was possible to put external tools in a debug-launch group :D gonna try this now and update the tutorial if this works :)
+<br/>
+<br/>
+OK it works ^^ I will put it in the tutorial now
+<br/>
+<br/>
+Done! tutorial is now updated :)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#172643 - SatNav - Mon Feb 22, 2010 5:32 pm</h4>
+    <div class="postbody"><span class="postbody">Hi,
+<br/>
+<br/>
+I'm trying to get this up and running on my ubuntu install, and have got most of the way through without problems, but now I've finished, it doesn't seem to work.
+<br/>
+<br/>
+It's a great tutorial and, for it's length, surprisingly straightforward and non-confusing, but I'm having trouble wrapping my head around what you're doing in eclipse at the end.
+<br/>
+<br/>
+In the /// Set up debugging \\\ section, you say:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">There should already be one configuration named after the .elf file that is created besides the .nds file when you do 'make' e.g. hello_wold.elf. If there is no configuration, select C/C++ Application and create one.
+<br/>
+Then in the main tab Project should be your project-name and the application should be the .elf file</td> </tr></table><span class="postbody">
+<br/>
+this configuration is then used in the Launch group a little later on. Surely then, If I try to use this launch group in a different project, it won't work since it references the .elf file from this first project. Do I have to create a new launch group for each project? Am I missing something?
+<br/>
+<br/>
+Also, whenever I try to run a project, I get the error:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">Failed to create ARM9 gdbstub on port 2159</td> </tr></table><span class="postbody">
+<br/>
+I don't know whether this is related to my other query or not - in fact, I have no idea what it means at all.
+<br/>
+<br/>
+Any help or thoughts appreciated.
+<br/>
+Mark.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#172698 - Gordin - Thu Feb 25, 2010 7:45 pm</h4>
+    <div class="postbody"><span class="postbody">I actually never thought about multiple projects but I suppose you will have to create a different launch group for each project.
+<br/>
+<br/>
+This error usually means that there is already a program running that uses the specified port, so closing all running instances of desmume and eclipse should fix it.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#175733 - menchi - Tue Jan 25, 2011 10:25 pm</h4>
+    <div class="postbody"><span class="postbody">I have just executed this tutorial with the latest versions of the devkitpro software mentioned above:
+<br/>
+<br/>
+default_arm7 0.5.18
+<br/>
+dswifi 0.3.13
+<br/>
+libfat 1.0.8
+<br/>
+libfilesystem 0.9.7
+<br/>
+libnds 1.4.9
+<br/>
+maxmod 1.0.6
+<br/>
+nds examples 20110107
+<br/>
+<br/>
+Also, I used Eclipse Galileo 20090619-0625 for C/C++ (That was the version I got when searching for Eclipse Galileo C++, I guess I could have used a more recent version of Eclipse)
+<br/>
+<br/>
+Overall, the tutorial was very easy to follow and I didn't have major problems. However, I had following issues:
+<br/>
+- When compiling the libnds lib, I received an error. It turned out the libnds.dox wasn't included. I used the version of the pre-compiled version and compilation was successful. (Not a problem of the tutorial)
+<br/>
+- Location of desmume-glade is at /usr/games/desmume-glade. (I use Ubuntu 10.10)
+<br/>
+- The part where you say: "Now press Apply and close and go to Debug configurations one last time " I had to do this part in the "run configurations". I couldn't find the launch group in the debug configuration.
+<br/>
+<br/>
+But in the end I could perform all steps.
+<br/>
+<br/>
+(For my project, I will need also to add the sqlite library, since my project would include a database. I have seen that this library is now available in portutils of devkitpro. How to integrate this lib with its sources ready to debug will be "interesting")<br/>_________________<br/>dog = animal = food</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

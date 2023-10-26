@@ -1,0 +1,279 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Loading code on demand possible? Something like DLL's ... - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Loading code on demand possible? Something like DLL's ...</h2>
+<div id="posts">
+<div class="post">
+    <h4>#147534 - Peter - Sat Dec 22, 2007 11:32 am</h4>
+    <div class="postbody"><span class="postbody">This is something that spins around in my head for quite a while.
+<br/>
+<br/>
+In my experience, performance is not really an issue on DS, but the limited amount of memory is. 4MB is not that bad, but since you have to hold everything in RAM there isn't full 4MB available. This is when I came up with the thought that having the possibility to load code on demand, would help to reduce memory usage. Except if that means you have to hold the same code several times in memory, heh.
+<br/>
+<br/>
+For example, our .text section was about 600-700KB big. The menu-system and mini-games code were about 200KB afaik, but we actually never needed those ingame. If we had the possility to disconnect the menu and minigames code from the rest, we would had circa 5% more memory available ingame (twelf 128x128 textures in 8bit!!!). 
+<br/>
+<br/>
+I already did some research on how DLL's / code sharing works back then, but it's darn complicated imo (reusing global variables from modules etc, hell!). Has anybody of you already done something like this or maybe it's already supported by devkitarm and I just don't know that?<br/>_________________<br/>Kind Regards,
+<br/>
+Peter</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#147535 - keldon - Sat Dec 22, 2007 11:55 am</h4>
+    <div class="postbody"><span class="postbody">Huh, why would your code and data be in RAM? If the data is declared as const then it will be stored in ROM, and your functions too unless you explicitly tell it to load into RAM ... or have I misread your post?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#147536 - Peter - Sat Dec 22, 2007 12:05 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>keldon wrote:</b></span></td> </tr> <tr> <td class="quote">Huh, why would your code and data be in RAM? If the data is declared as const then it will be stored in ROM</td> </tr></table><span class="postbody">
+<br/>
+The Nintendo DS does not have ROM like the GBA, it's all (code, data, etc) located in main memory.<br/>_________________<br/>Kind Regards,
+<br/>
+Peter</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#147538 - simonjhall - Sat Dec 22, 2007 12:14 pm</h4>
+    <div class="postbody"><span class="postbody">Take a look into the dldi driver system, or talk to chishm and co about it. This'll be probably just what you need, except you're patching your executable at runtime. The link scripts would be pretty similar, and compiling the loadable parts of code is probably the hardest part! But here most of the work is done for you.<br/>_________________<br/><span style="font-weight: bold"><a class="postlink" href="https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&amp;business=simonjhall%40gmail%2ecom&amp;no_shipping=2&amp;no_note=1&amp;tax=0&amp;currency_code=GBP&amp;lc=GB&amp;bn=PP%2dDonationsBF&amp;charset=UTF%2d8" target="_blank">Big thanks to everyone who donated for Quake2</a></span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#147539 - chishm - Sat Dec 22, 2007 12:36 pm</h4>
+    <div class="postbody"><span class="postbody">DLDI functions are called in one direction only. The functions inside a DLDI cannot call functions from the host app. You'll probably want to be able to go both ways. 
+<br/>
+<br/>
+I suggest looking into using code overlays. Read up on using <a class="postlink" href="http://linux.web.cern.ch/linux/scientific4/docs/rhel-ld-en-4/sections.html#OVERLAY-DESCRIPTION" target="_blank">overlays in linker scripts</a>, you can look in gba_cart.ld included with a DevkitARM install for an example. Then use arm-eabi-objcopy to exclude the overlay sections when creating the ARM9 binary so that you don't actually have the code sitting in memory until you need it. You also need to use arm-eabi-objcopy to create a separate bin file for each code overlay. Write a function to load the relevant overlay from disc when needed, and you're almost done. Data won't be included in the overlay, so I suggest you store any large constant data on disc and load it as needed.<br/>_________________<br/><a class="postlink" href="http://chishm.drunkencoders.com" target="_blank">http://chishm.drunkencoders.com</a>
+<br/>
+<a class="postlink" href="http://dldi.drunkencoders.com" target="_blank">http://dldi.drunkencoders.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#147542 - wintermute - Sat Dec 22, 2007 1:17 pm</h4>
+    <div class="postbody"><span class="postbody">The DLDI system is a bit awkward for this kind of situation - really you need to end up writing an OS layer to handle loading and relocation not to mention calling functions from the host layer which I can't help feeling would probably be better handled by implementing an ELF loader. devkitARM is designed primarily for a static linked bare metal system and I'm not really convinced there's sufficient gain from attempting that particular route.
+<br/>
+<br/>
+Something we've been experimenting with lately is the use of overlays which could be loaded from the file system. On the surface this seems much less complicated than other methods so it probably warrants some more investigation.
+<br/>
+<br/>
+The basis of this method uses some linkscript magic to place overlay code in separate sections which are later extracted separately using objcopy. it's similar to how the .itcm.c/cpp files currently work.
+<br/>
+<br/>
+Firstly add an extra exclusion category to the main text segment.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+   .text :   /* ALIGN (4): */
+<br/>
+   {
+<br/>
+      *(EXCLUDE_FILE (*.itcm* *.overlay*) .text)
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Then later, after the .bss section we generate the overlays.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+   __ewram_overlay_lma = __bss_lma + SIZEOF(.bss);
+<br/>
+<br/>
+   OVERLAY ALIGN(4) : NOCROSSREFS AT (__ewram_overlay_lma)
+<br/>
+   {
+<br/>
+      .overlay0 { *(.overlay0) *.overlay0*(.text) . = ALIGN(4); }
+<br/>
+      .overlay1 { *(.overlay1) *.overlay1*(.text) . = ALIGN(4); }
+<br/>
+      .overlay2 { *(.overlay2) *.overlay2*(.text) . = ALIGN(4); }
+<br/>
+      .overlay3 { *(.overlay3) *.overlay3*(.text) . = ALIGN(4); }
+<br/>
+      .overlay4 { *(.overlay4) *.overlay4*(.text) . = ALIGN(4); }
+<br/>
+      .overlay5 { *(.overlay5) *.overlay5*(.text) . = ALIGN(4); }
+<br/>
+      .overlay6 { *(.overlay6) *.overlay6*(.text) . = ALIGN(4); }
+<br/>
+      .overlay7 { *(.overlay7) *.overlay7*(.text) . = ALIGN(4); }
+<br/>
+      .overlay8 { *(.overlay8) *.overlay8*(.text) . = ALIGN(4); }
+<br/>
+      .overlay9 { *(.overlay9) *.overlay9*(.text) . = ALIGN(4); }
+<br/>
+   }
+<br/>
+<br/>
+   PROVIDE (__overlay0_size = SIZEOF(.overlay0));
+<br/>
+   PROVIDE (__overlay1_size = SIZEOF(.overlay1));
+<br/>
+   PROVIDE (__overlay2_size = SIZEOF(.overlay2));
+<br/>
+   PROVIDE (__overlay3_size = SIZEOF(.overlay3));
+<br/>
+   PROVIDE (__overlay4_size = SIZEOF(.overlay4));
+<br/>
+   PROVIDE (__overlay5_size = SIZEOF(.overlay5));
+<br/>
+   PROVIDE (__overlay6_size = SIZEOF(.overlay6));
+<br/>
+   PROVIDE (__overlay7_size = SIZEOF(.overlay7));
+<br/>
+   PROVIDE (__overlay8_size = SIZEOF(.overlay8));
+<br/>
+   PROVIDE (__overlay9_size = SIZEOF(.overlay9));
+<br/>
+<br/>
+   /* find the largest allocated overlay section */
+<br/>
+   __ewram_overlay_alloc = MAX( SIZEOF(.overlay0) , SIZEOF(.overlay1) );
+<br/>
+   __ewram_overlay_alloc = MAX( __ewram_overlay_alloc , SIZEOF(.overlay2) );
+<br/>
+   __ewram_overlay_alloc = MAX( __ewram_overlay_alloc , SIZEOF(.overlay3) );
+<br/>
+   __ewram_overlay_alloc = MAX( __ewram_overlay_alloc , SIZEOF(.overlay4) );
+<br/>
+   __ewram_overlay_alloc = MAX( __ewram_overlay_alloc , SIZEOF(.overlay5) );
+<br/>
+   __ewram_overlay_alloc = MAX( __ewram_overlay_alloc , SIZEOF(.overlay6) );
+<br/>
+   __ewram_overlay_alloc = MAX( __ewram_overlay_alloc , SIZEOF(.overlay7) );
+<br/>
+   __ewram_overlay_alloc = MAX( __ewram_overlay_alloc , SIZEOF(.overlay8) );
+<br/>
+   __ewram_overlay_alloc = MAX( __ewram_overlay_alloc , SIZEOF(.overlay9) );
+<br/>
+<br/>
+   /* if we use . here then _end points to overlay_lma + SIZEOF(overlay0) ... SIZEOF(overlay9) */
+<br/>
+<br/>
+   _end = __ewram_overlay_lma + __ewram_overlay_alloc ;
+<br/>
+   __end__ = __ewram_overlay_lma + __ewram_overlay_alloc ;
+<br/>
+   PROVIDE (end = _end);
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+We then build the main arm9 binary without the overlay sections using something like 
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+$(OUTPUT).arm9   :   $(OUTPUT).elf
+<br/>
+   @$(OBJCOPY) -O binary -R .overlay0 -R .overlay1 ... $&lt; $@
+<br/>
+   @echo build ... $(notdir $@) minus OVERLAY
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+and extract the overlay sections separately with
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+$(OUTPUT).ovl0   :   $(OUTPUT).elf
+<br/>
+   $(OBJCOPY) -O binary -j .overlay0 $&lt; $@
+<br/>
+   @echo build ... Overlay $(notdir $@)
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+It does need quite a bit more looking at but if we can get together something halfway sensible that works I'll consider adding support for this into devkitARM r22.<br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#147543 - keldon - Sat Dec 22, 2007 1:17 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Peter wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>keldon wrote:</b></span></td> </tr> <tr> <td class="quote">Huh, why would your code and data be in RAM? If the data is declared as const then it will be stored in ROM</td> </tr></table><span class="postbody">
+<br/>
+The Nintendo DS does not have ROM like the GBA, it's all (code, data, etc) located in main memory.</span></td> </tr></table><span class="postbody">
+<br/>
+Oooh, good thing I read this topic then; the <a class="postlink" href="http://nocash.emubase.de/gbatek.htm#dsmemorymaps" target="_blank">memory map</a> is something I haven't really paid much attention to with the DS spec!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#147550 - sajiimori - Sat Dec 22, 2007 9:50 pm</h4>
+    <div class="postbody"><span class="postbody">Overlays saved me several hundred KB of RAM on my last project.  I used to think they were hackish and lame compared to DLLs, but after finding the right abstraction for them in C++, they were both safe and transparent: using a class would automatically load its overlay and assert that no conflicting objects still existed.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#147576 - Peter - Sun Dec 23, 2007 9:47 pm</h4>
+    <div class="postbody"><span class="postbody">Hmm I don't really get the overlay.
+<br/>
+<br/>
+When I use an overlay section, the code which is inside the overlay section can access symbols from the regular .text section and knows their addresses at link-time?
+<br/>
+<br/>
+Code in the .text section does not know anything about symbols in overlays i guess. Would I have to map functions from an overlay like functions from a .dll file? I mean something like GetProcAddress and then use this pointer to call the function, or is the compiler/linker smart enough to magically resolve the symbol names from the overlay when I call one from the .text section?
+<br/>
+<br/>
+I tried to find something about relocation tables, as it seems to be a must read, but couldn't find anything decent. Any recommendations?<br/>_________________<br/>Kind Regards,
+<br/>
+Peter</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#147581 - M3d10n - Sun Dec 23, 2007 10:23 pm</h4>
+    <div class="postbody"><span class="postbody">Linkscripts are still moonspeak for me so I might be very wrong, but I gotta ask:
+<br/>
+<br/>
+Wintermute, does those changes you made work on per-file basis, like the ITCM stuff does by automatically dealing with .itcm named files? I'd just need to:
+<br/>
+<br/>
+- Name my files <span style="font-style: italic">foo.overlay0.cpp</span> and <span style="font-style: italic">bar.overlay1.cpp</span>.
+<br/>
+- Include <span style="font-style: italic">foo.h</span> and <span style="font-style: italic">bar.h</span> as usual.
+<br/>
+- Make sure I load <span style="font-style: italic">foo.ovl0</span> or <span style="font-style: italic">bar.ovl1</span> into RAM before calling any functions defined in foo.h and bar.h, respectively.
+<br/>
+<br/>
+Is that how it should work (something tells me it can't be that simple)? Being able to dynamically load/unload code would fit perfectly with the way I'm handling game state in my project: I could overlay my different game state loops and save memory by only having the current one loaded.
+<br/>
+<br/>
+--EDIT--
+<br/>
+Now that I look at it... the linkscript code seems to check the largest overlay code and reserves space for it, right? So I just load and copy the .ovl file I want to use at the same location in RAM? How do I know where to copy it to?
+<br/>
+(BTW, you are god among men, wintermute!)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#147586 - chishm - Mon Dec 24, 2007 12:26 am</h4>
+    <div class="postbody"><span class="postbody">Peter:
+<br/>
+The overlays are all compiled and treated like normal code, so they can call functions in the surrounding app and the app can call functions in them. The thing that makes them special is you have multiple functions all occupying the same location in memory, from the linker's perspective, but there can only be one set loaded at a time. It is your responsibility to make sure the correct set of functions is loaded before they are used.
+<br/>
+<br/>
+M3d10n:
+<br/>
+__ewram_overlay_lma should give you the start address of the place to load overlays, and __ewram_overlay_alloc will give you the size of the section. Simply load the overlays to there, taking care not to go past the end of the section.
+<br/>
+The following should give you the correct address to load to (overlay_section). This is untested, so take with a grain of salt.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">extern char __ewram_overlay_lma;
+<br/>
+char* overlay_section = &amp;__ewram_overlay_lma;</td> </tr></table><span class="postbody"><br/>_________________<br/><a class="postlink" href="http://chishm.drunkencoders.com" target="_blank">http://chishm.drunkencoders.com</a>
+<br/>
+<a class="postlink" href="http://dldi.drunkencoders.com" target="_blank">http://dldi.drunkencoders.com</a></span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

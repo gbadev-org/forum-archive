@@ -1,0 +1,187 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>DS: Profiling, Optimisation and Things Not To Do - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > DS: Profiling, Optimisation and Things Not To Do</h2>
+<div id="posts">
+<div class="post">
+    <h4>#85319 - MrD - Sun May 28, 2006 11:43 pm</h4>
+    <div class="postbody"><span class="postbody">Hey,
+<br/>
+<br/>
+I'm converting a prototype engine currently using Windows-based libraries to the DS. The game currently renders the world and the sprites using pixel-by-pixel methods (without any HW acceleration, or gfx library sprite functions), and I'm trying to recreate the engine using an exrot background (mode 5) on the DS main screen. There's a lot of VRAM writes using this method though, and I think the engine will slow down greatly...
+<br/>
+<br/>
+At this stage, (almost) everything is running on the arm9... I'm trying to figure out some way of using the arm7 also, but I'm not sure how I'd time the two so that they worked correctly.
+<br/>
+<br/>
+Does anybody have any hints on common slow-spots in game engines, and could they recommend a method of discovering exactly which functions or actions are taking the most time?
+<br/>
+<br/>
+I think trying to rewrite the sprite rendering engine to use the OAM would take too long, but would it be worth it for the speed increase?<br/>_________________<br/>Not active on this forum. For Lemmings DS help see its website.</span><span class="gensmall"><br/><br/>Last edited by MrD on Mon May 29, 2006 2:42 am; edited 1 time in total</span></div>    
+</div>
+<div class="post">
+    <h4>#85323 - Lazy1 - Mon May 29, 2006 12:35 am</h4>
+    <div class="postbody"><span class="postbody">A small piece of the profiling code I use every now and then...
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+extern u32 g_timerBaseMS;
+<br/>
+#define MILLISECOND_COUNTER ( TIMER1_DATA + g_timerBaseMS )
+<br/>
+<br/>
+#ifndef PROFILE
+<br/>
+   #define SetupProfile( )
+<br/>
+   #define BeginProfile( )
+<br/>
+   #define EndProfile( )
+<br/>
+#else
+<br/>
+   #define SetupProfile( ) int ____startMS_ = 0;
+<br/>
+   #define BeginProfile( ) ____startMS_ = MILLISECOND_COUNTER;
+<br/>
+   #define EndProfile( ) iprintf( "Function %s took %dms\n", __FUNCTION__, ( MILLISECOND_COUNTER - ____startMS_ ) );
+<br/>
+#endif
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+There are probably better ones out there, but thats what I use anyway.
+<br/>
+You'll also need to adjust the MILLISECOND_COUNTER macro to however your counting time.
+<br/>
+<br/>
+This is how I count time...
+<br/>
+Again, it could probably be done better.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#include &lt;nds.h&gt;
+<br/>
+<br/>
+/* Lazy:
+<br/>
+ * Since TIMER1_DATA will overflow in 65536 milliseconds, it is necessary
+<br/>
+ * to add 65536 to this variable every time TIMER1_DATA overflows.
+<br/>
+ * So, the total time elapsed since Timer_Init in milliseconds is g_timerBaseMS + TIMER1_DATA.
+<br/>
+ */
+<br/>
+u32 g_timerBaseMS = 0;
+<br/>
+<br/>
+/* nds_timer1_overflow:
+<br/>
+ * Adds 65536 to the base millisecond counter so we
+<br/>
+ * don't lose any time when TIMER1_DATA rolls over.
+<br/>
+ */
+<br/>
+static void nds_timer1_overflow( void ) {
+<br/>
+   g_timerBaseMS+= 65536;
+<br/>
+}
+<br/>
+<br/>
+/* Timer_GetMS:
+<br/>
+ * Returns: The time in milliseconds since Timer_Init was called.
+<br/>
+ */
+<br/>
+int Timer_GetMS( void ) {
+<br/>
+   return g_timerBaseMS + TIMER1_DATA;
+<br/>
+}
+<br/>
+<br/>
+/* Timer_Sleep:
+<br/>
+ * Waits until ( usec ) microseconds have passed.
+<br/>
+ */
+<br/>
+void Timer_Sleep( int usec ) {
+<br/>
+   swiDelay( usec );
+<br/>
+}
+<br/>
+<br/>
+/* Timer_Init:
+<br/>
+ * Initialize NDS hardware timers.
+<br/>
+ */
+<br/>
+void Timer_Init( void ) {
+<br/>
+   /* Timer0 will overflow roughly every 0.98 milliseconds */
+<br/>
+   TIMER0_CR = TIMER_ENABLE | TIMER_DIV_1;
+<br/>
+   TIMER0_DATA = 32768;
+<br/>
+<br/>
+   /* When timer0 overflows, TIMER1_DATA will be incremented by 1.
+<br/>
+    * When timer1 overflows 65536 is added to g_timerBaseMS so we don't lose
+<br/>
+    * any time.
+<br/>
+    */
+<br/>
+   TIMER1_CR = TIMER_CASCADE | TIMER_IRQ_REQ;
+<br/>
+   TIMER1_DATA = 0;
+<br/>
+<br/>
+   /* Set and enable the interrupts for timer 1 */
+<br/>
+   irqSet( IRQ_TIMER1, nds_timer1_overflow );
+<br/>
+   irqEnable( IRQ_TIMER1 );
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#85379 - silent_code - Mon May 29, 2006 5:00 pm</h4>
+    <div class="postbody"><span class="postbody">i rewrote my simple (old) qbasic engine that used direct framebuffer rendering for nds and it worked fine. but then i rewrote it, so it makes use of the hardware now. and i tell ya, i have more things in higher resolution, with even more special effects and a constant framerate than with software rendering. the speed increese is great! now i can do some software rendering for thousands of particles and get the backgrounds and (4 times bigger) sprites for free! try it, it won't gurt! ;)
+<br/>
+<br/>
+it will certainly take some time to figure things out, but it's worth the time, just believe me! especially if you draw big sprites, like bosses, that take half the screen, you won't notice any speed issues with the hardware sprites, but, depending on your implementation, a software renderer can cause a notable performance drop...
+<br/>
+<br/>
+greets,
+<br/>
+<br/>
+Rob</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

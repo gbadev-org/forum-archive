@@ -1,0 +1,176 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>plotting a circle in ASM - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>ASM > plotting a circle in ASM</h2>
+<div id="posts">
+<div class="post">
+    <h4>#18792 - niallz - Mon Apr 05, 2004 4:48 pm</h4>
+    <div class="postbody"><span class="postbody">hi,
+<br/>
+<br/>
+can anybody tell me what is wrong with the following code snippet? not the actual assembly, just the way I'm using the registers etc. gcc 3.02 just tells me its encountered an internal error when I try to compile it.
+<br/>
+<br/>
+Thanks
+<br/>
+Niall
+<br/>
+<br/>
+void PlotPixel16(u32 centre_x, u32 centre_y, u32 radius, u32 t)
+<br/>
+{ // PlotPixel16(int in_iX, int in_iY, unsigned short int in_usColour)
+<br/>
+	//g_uspVideoBuffer[(in_iY) * 240 + (in_iX)] = (in_usColour);
+<br/>
+<br/>
+            asm volatile (  "mov	r4, %3 \n"			// r4 = t
+<br/>
+                            "mov	r7, #0 \n"			// reset the negate value
+<br/>
+                            "bl		SIN \n"				// branch with link to SIN
+<br/>
+                            "mov	r5, %2 \n"			// r5 = radius
+<br/>
+                            "mul	r4, r5 \n"			// r4 = (radius * Sin(t))
+<br/>
+                            "lsr	r4, #8 \n"			// r4 = (radius * Sin(t)) &gt;&gt; BITSHIFT
+<br/>
+                            "mov	r5, %1 \n"			// r5 = centre_y
+<br/>
+                            "sub	r6, r5, r4 \n"		// r6 = centre_y - (Sin(t) * radius) &gt;&gt; BITSHIFT
+<br/>
+<br/>
+                            "mov	r4, %3 \n"			// r4 = t
+<br/>
+                            "add	r4, r4, #90 \n"		// r4 = t + 90
+<br/>
+                            "mov	r7, #0 \n"			// reset the negate value
+<br/>
+                            "bl		SIN \n"				// branch with link to SIN
+<br/>
+                            "mov	r5, %2 \n"			// r5 = radius
+<br/>
+                            "mul	r4, r5 \n"			// r4 = (radius * Cos(t))
+<br/>
+                            "lsr	r4, #8 \n"			// r4 = (radius * Cos(t)) &gt;&gt; BITSHIFT
+<br/>
+                            "mov	r5, %0 \n"			// r5 = centre_x
+<br/>
+                            "add	r5, r5, r4 \n"		// r5 = centre_x + (radius * Cos(t)) &gt;&gt; BITSHIFT
+<br/>
+<br/>
+                            "mul	r6, #240 \n"		// r6 = y * 240
+<br/>
+                            "add	r6, r6, r5 \n"		// r6 = (y * 240) + x
+<br/>
+							"ldr	r7, %5 \n"			// r7 = g_uspVideoBuffer
+<br/>
+                            "strh	0x8FFF, [r7, r4] \n"// [r7 + r6] = 0x8FFF
+<br/>
+<br/>
+                "SIN:		cmp     r4, #90 \n"      
+<br/>
+                            "ble    LESS90 \n"          // if r4 &lt;= 90 goto LESS90
+<br/>
+                            "cmp	r4, #180 \n"		// 
+<br/>
+                            "ble	LESS180 \n"         // if r4 &lt;= 180 goto LESS180
+<br/>
+							"mov	r8, #90 \n"
+<br/>
+							"lsr	r8, #2 \n"			// r8 = 360
+<br/>
+                            "cmp	r4, r8 \n"			// 
+<br/>
+                            "ble	LESS360 \n"			// if r4 &lt;= 360 goto LESS360
+<br/>
+                            "bgt	GREAT360 \n"		// if r4 &gt; 360 goto GREAT360
+<br/>
+<br/>
+                "LESS90:	ldr		r5, %0 \n"			// r5 = mysin
+<br/>
+                            "ldr	r4, [r5, r4] \n"	// r4 = mysin[r4]
+<br/>
+                            "b		NEG \n"             // goto NEG
+<br/>
+<br/>
+                "LESS180:	ldr		r5, %0 \n"          // r5 = mysin
+<br/>
+                            "sub	r4, #180, r4 \n"	// r4 = 180 - r4
+<br/>
+                            "ldr	r4, [r5, r4] \n"	// r4 = mysin[180-r4]
+<br/>
+                            "b		NEG \n"             // goto NEG
+<br/>
+<br/>
+                "LESS360:	sub		r4, r4, #180 \n"	// r4 = r4 - 180
+<br/>
+                            "mov	r7, #1 \n"			// set the negate value
+<br/>
+                            "b		SIN \n"             // branch to SIN
+<br/>
+<br/>
+                "GREAT360:	"mov	r8, #90 \n"
+<br/>
+							"lsr	r8, #2 \n"			// r8 = 360
+<br/>
+							"sub	r4, r4, r8 \n"		// r4 = r4 - 360
+<br/>
+                            "b		SIN \n"             // branch to SIN
+<br/>
+<br/>
+                "NEG:		cmp		r7, #0 \n"			//
+<br/>
+                            "bgt	NEGTRUE	\n"			// goto NEGTRUE if negate is set
+<br/>
+                            "mov	pc, lr \n"			// return using the lr
+<br/>
+                "NEGTRUE:	neg		r4, r4 \n"			// negate r0
+<br/>
+                            "mov	pc, lr \n"			// return using the lr
+<br/>
+<br/>
+                : : "r"(centre_x),
+<br/>
+                    "r"(centre_y),
+<br/>
+                    "r"(radius),
+<br/>
+                    "r"(t),
+<br/>
+					"m"(mysin),
+<br/>
+                    "m"(g_uspVideoBuffer)
+<br/>
+				:	"r4","r5","r6","r7","r8" 
+<br/>
+                  );
+<br/>
+}</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#18803 - poslundc - Mon Apr 05, 2004 7:47 pm</h4>
+    <div class="postbody"><span class="postbody">I've only barely glanced at your code, but I notice you are using the MUL instruction with a constant, which is illegal.
+<br/>
+<br/>
+There could be any number of other errors, though.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

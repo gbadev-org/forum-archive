@@ -1,0 +1,249 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>DSWifi socket send problem, anyone had similar problems? - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > DSWifi socket send problem, anyone had similar problems?</h2>
+<div id="posts">
+<div class="post">
+    <h4>#165336 - azaydius - Wed Dec 17, 2008 10:36 am</h4>
+    <div class="postbody"><span class="postbody">I am wondering if anyone else has had similar problems with socket send using DSWifi? We have been developing a simple FTP client for the DS (for a school project) and will be releasing it to the community, but would like to fix a major bug we have been baffled by. We are able to connect to ftp sites, change directories, disconnect, reconnect, download, etc... The problem lies when we try to upload files.
+<br/>
+<br/>
+Essentially what happens is send fails when it has sent 8192 bytes. We have tried changing the buffer to a smaller size and the upload loop will iterate until the sent bytes reach this 'magic' number and then it returns error. Debugging this has been quite difficult as you can imagine. We have even setup a packet sniffer on the ftp server side in order to see what is going on and have received some malformed tcp packets during this process. This is what lead us to the error possibly being in the library. Receiving works wonderfully and there are no malformed packets during the download process.
+<br/>
+<br/>
+Any thoughts or suggestions would be greatly appreciated!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#165455 - leinad - Sun Dec 21, 2008 5:56 pm</h4>
+    <div class="postbody"><span class="postbody">Im also interested in this.
+<br/>
+<br/>
+I played around with WiFi commands some time ago, and after some seconds of sending at 20kb/s it just goes down to  1kb/s and my whole network starts to die.
+<br/>
+[ EVERY computer connected to the router the DS is on loses connection to the web ]
+<br/>
+<br/>
+The other side, downloading, works completly without problems. Already downloaded around 10MB with the DS once just to do a stress test... worked at nice speed, if you ignore FAT writing times.
+<br/>
+<br/>
+Anyone has some idea ?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#165458 - kusma - Sun Dec 21, 2008 6:52 pm</h4>
+    <div class="postbody"><span class="postbody">This sounds a bit like what I encountered when trying to port a remote-control application to the DS. After a given amount of (small) packages were sent, the PC-side server stopped receiving packages. Then, after a while the server sent some packages to the DS-client, and all the "missed" packages were all of a sudden sent in one big package.
+<br/>
+<br/>
+I described the issue more in <a class="postlink" href="http://forum.gbadev.org/viewtopic.php?t=15059&amp;highlight=dswifi" target="_blank">this thread</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#165505 - sgstair - Tue Dec 23, 2008 6:17 pm</h4>
+    <div class="postbody"><span class="postbody">Copy+Paste my reply from the other place you opened this thread:
+<br/>
+<br/>
+Hi, You are most certainly losing data, but it's not due to the wifi lib.
+<br/>
+The current buffer size in the wifi lib is indeed 8192 bytes, which means the maximum number of bytes that can be sent is 8191 bytes. The "send" call does fail when you send more bytes than are available in the buffer- but it fails telling you how many bytes it sent; this is by the design of the BSD Sockets layer, to allow you to know that a certain number of bytes were sent.
+<br/>
+I think it's very unlikely that you would be losing data if you handled the return code of send() appropriately and retried the send of the bytes that weren't sent until they were added to the buffer
+<br/>
+<br/>
+Also, if you're pretty new to packet sniffers, a lot of times "malformed" packets come up in normal traffic. They're more likely in the case of DS traffic as the wifi hardware is far from perfect and often packets get retransmitted a lot. (wireshark/ethereal almost always mark duplicate packets as "malformed")
+<br/>
+<br/>
+Let me know if you continue to have problems after fixing your use of send(), I'm not aware of any errors in this code path but it's not a very well tested one.
+<br/>
+<br/>
+-Stephen<br/>_________________<br/><a class="postlink" href="http://blog.akkit.org/" target="_blank">http://blog.akkit.org/</a> - <a class="postlink" href="http://www.akkit.org/dswifi/" target="_blank">http://www.akkit.org/dswifi/</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#165561 - azaydius - Sat Dec 27, 2008 6:36 pm</h4>
+    <div class="postbody"><span class="postbody">Thank you for your reply sgstair, I am very thankful for all the work you have put in to the dswifi library.  I haven't had much time to test your suggestion, but will do so soon since the holidays are calming down.  
+<br/>
+<br/>
+A little clarification if you don't mind though, do you mean that the send call will <span style="font-style: italic">frequently </span>return and say it has sent less bytes than were requested be sent by the call to the function?  
+<br/>
+<br/>
+For example:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">amountRead = fread(buffer, 1, 8191, openFile);
+<br/>
+amountSent = send(openSocket, buffer, amountRead, 0);
+<br/>
+if( amountSent != amountRead )
+<br/>
+    //Oh crap... it didn't send the amount requested... what now?
+<br/>
+else
+<br/>
+    //Sweet... the send call worked as expected</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+So in the circumstance where the amountSent is not the same as the amount read, it is expected to modify the buffer and retry the bytes that were not sent?  
+<br/>
+<br/>
+This seems contrary to my (limited) understanding of the socket send function, I thought that if send() returned less than the amount requested be sent, it is considered an error condition and is treated as such.  Is this not true?
+<br/>
+<br/>
+*Edit*
+<br/>
+I wanted to mention that during testing, we have tried using various different sizes of buffer, not just 8191.  Some of them as small as 400 bytes.  The send function would return indicating amountRead == amountSent for many send calls in a while loop.  We kept a running total of bytes sent and when exactly 8192 was reached, the send call failed on the next iteration, either by returning less than the amountRead or with the -1 error message.  Not sure why this would occur since each send was only 400 bytes and the only place 8192 is present is in dswifi itself. (I know I mentioned this similarly above, but my wording wasn't very clear so I just wanted to clarify).
+<br/>
+<br/>
+Additionally between send calls, we have a socket wait function based on the corresponding function present in ftplib, that is called between sends.  Not sure if that is significant at all, but it is supposed to give the socket functionality time to send the data.
+<br/>
+<br/>
+Since this post seems to be the one that has received the most attention I figured it was the best place to continue the discussion.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#165562 - dovoto - Sat Dec 27, 2008 7:42 pm</h4>
+    <div class="postbody"><span class="postbody">I normally do something along the lines of:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">sendAll(buffer, size, socket)
+<br/>
+{
+<br/>
+int sent = 0;
+<br/>
+<br/>
+while(sent &lt; size)
+<br/>
+{
+<br/>
+   sent += send(socket, buffer + sent, size - sent, 0)
+<br/>
+}
+<br/>
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Not an expert though so may be a more proper approach.<br/>_________________<br/><a href="http://www.drunkencoders.com" target="_blank">www.drunkencoders.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#165568 - sgstair - Sun Dec 28, 2008 3:42 am</h4>
+    <div class="postbody"><span class="postbody">Hi azaydius,
+<br/>
+<br/>
+When the send() function has filled it's internal buffer, it will return a value less than what you pass in, until it has received confirmation that the other end of the connection has in fact received the data, and it removes that data from it's buffer (making space for more data).
+<br/>
+So what you are seeing, in all cases, is exactly how it was designed to act.
+<br/>
+<br/>
+If send returns less than 0, that's an error condition, otherwise it has successfully "sent" (or more correctly, buffered) the number of bytes corresponding to it's return value, and it's just indicating that it is unable to send more at the moment, so you need to wait and try to send the rest of the bytes later.
+<br/>
+I'm not sure what "socket wait" function you're using (select, maybe?), but even with something like this there are no guarantees of how much you can send at once. 
+<br/>
+<br/>
+Dovoto's code is very much the right idea, though he's not handling error codes in that example ;)
+<br/>
+<br/>
+Good luck!
+<br/>
+-Stephen<br/>_________________<br/><a class="postlink" href="http://blog.akkit.org/" target="_blank">http://blog.akkit.org/</a> - <a class="postlink" href="http://www.akkit.org/dswifi/" target="_blank">http://www.akkit.org/dswifi/</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#165570 - azaydius - Sun Dec 28, 2008 8:00 am</h4>
+    <div class="postbody"><span class="postbody">I will give it a shot and see what happens!  Thanks for the suggestions!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#165633 - ninjalj - Wed Dec 31, 2008 2:10 am</h4>
+    <div class="postbody"><span class="postbody">The way I usually do this is something like:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+do {
+<br/>
+        wret = write(fdo, buf, to_write);
+<br/>
+        if (wret &lt; 0 &amp;&amp; errno == EINTR)
+<br/>
+                continue;
+<br/>
+        if (wret &lt; 0) {
+<br/>
+                perror("write");
+<br/>
+                exit(1);
+<br/>
+        }
+<br/>
+<br/>
+        to_write -= wret;
+<br/>
+        buf += wret;
+<br/>
+} while (to_write &gt; 0); 
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#165725 - elhobbs - Mon Jan 05, 2009 3:47 pm</h4>
+    <div class="postbody"><span class="postbody">I am having a similiar problem. When I have wifi enabled and in use my ds will freeze after about 20-30 seconds. I was not experiencing this problem until I upgraded to the latest libnds and dswifi. I am not certain that the issue is with the the dswifi library though. in libnds 23b I had wifi setup almost identically to how it is setup under version 24 and there does not appear to be any major changes to dswifi aside from the FIFO setup. The only major difference is that I was using a different FIFO library. I was using the IPCFifo library by DekuTree64 with version 23b.
+<br/>
+<br/>
+does anyone have any suggestions for how to go about tracking down this freeze? it does not appear to be an exception as I have the default exception handler in place.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#165728 - dovoto - Mon Jan 05, 2009 4:36 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>elhobbs wrote:</b></span></td> </tr> <tr> <td class="quote">I am having a similiar problem. When I have wifi enabled and in use my ds will freeze after about 20-30 seconds. I was not experiencing this problem until I upgraded to the latest libnds and dswifi. I am not certain that the issue is with the the dswifi library though. in libnds 23b I had wifi setup almost identically to how it is setup under version 24 and there does not appear to be any major changes to dswifi aside from the FIFO setup. The only major difference is that I was using a different FIFO library. I was using the IPCFifo library by DekuTree64 with version 23b.
+<br/>
+<br/>
+does anyone have any suggestions for how to go about tracking down this freeze? it does not appear to be an exception as I have the default exception handler in place.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Can you create a simple test case which exhibits this problem and send it to us?<br/>_________________<br/><a href="http://www.drunkencoders.com" target="_blank">www.drunkencoders.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#165782 - elhobbs - Tue Jan 06, 2009 7:11 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>dovoto wrote:</b></span></td> </tr> <tr> <td class="quote">Can you create a simple test case which exhibits this problem and send it to us?</td> </tr></table><span class="postbody">I have not had any luck creating a simple test case.
+<br/>
+<br/>
+I think that I may be getting stack corruption. I was able to get guru mediation screens a couple of times and lr and pc are usually at really odd address like 0xffff0290 or 0x00000fff or 0x00001004 or 0xde0c9ffc. is it possible that the user stack and interrupt stack are colliding?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#165805 - sgstair - Wed Jan 07, 2009 9:02 am</h4>
+    <div class="postbody"><span class="postbody">elhobbs:
+<br/>
+Most likely the problem you're seeing is due to allocating huge structures as local variables (arrays, big structs, etc), and running out of stack space. IRQ and User stack won't collide because IRQ mode switches to User stack; it's all the same stack. However there is a limit of 16KB stack space (it's in DTCM), so if you have functions with big local variables, those may be causing your problem.
+<br/>
+<br/>
+-Stephen<br/>_________________<br/><a class="postlink" href="http://blog.akkit.org/" target="_blank">http://blog.akkit.org/</a> - <a class="postlink" href="http://www.akkit.org/dswifi/" target="_blank">http://www.akkit.org/dswifi/</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#165814 - elhobbs - Wed Jan 07, 2009 2:28 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sgstair wrote:</b></span></td> </tr> <tr> <td class="quote">elhobbs:
+<br/>
+Most likely the problem you're seeing is due to allocating huge structures as local variables (arrays, big structs, etc), and running out of stack space. IRQ and User stack won't collide because IRQ mode switches to User stack; it's all the same stack. However there is a limit of 16KB stack space (it's in DTCM), so if you have functions with big local variables, those may be causing your problem.
+<br/>
+<br/>
+-Stephen</td> </tr></table><span class="postbody">I do not think that this is the case as sp on the guru meditation screen has been well above 0x0b000000 in every case that occured. when I have had stack issues in the past it would always be below - like 0x0afffff4 or something like that. I was thinking that there may be an issue with IRQ stack switching. this code was running without a problem under 23b.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#165819 - sgstair - Wed Jan 07, 2009 6:56 pm</h4>
+    <div class="postbody"><span class="postbody">In that case, the most likely thing would be something overwriting stack memory incorrectly. This could be a local variable array out of bounds, or returning a pointer to a local variable.
+<br/>
+<br/>
+-Stephen<br/>_________________<br/><a class="postlink" href="http://blog.akkit.org/" target="_blank">http://blog.akkit.org/</a> - <a class="postlink" href="http://www.akkit.org/dswifi/" target="_blank">http://www.akkit.org/dswifi/</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#165841 - elhobbs - Fri Jan 09, 2009 5:03 am</h4>
+    <div class="postbody"><span class="postbody">I think there is an issue with the new fifosystem api in libnds version 24. I completely removed the fifosystem in libnds and I replaced it with the ipcfifo library by DekuTree64 and now I am no longer experiencing freezes/crashes when I am using dswifi.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

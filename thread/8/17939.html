@@ -1,0 +1,134 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Calling a C Function From ASM - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>ASM > Calling a C Function From ASM</h2>
+<div id="posts">
+<div class="post">
+    <h4>#177891 - Bond697 - Sun Apr 21, 2013 1:34 am</h4>
+    <div class="postbody"><span class="postbody">Hello,
+<br/>
+<br/>
+I've been programming on the DS for awhile and I'm able to call ASM functions in my C and C++ source files no problem, but lately I've been trying to call in the other direction, calling C functions from ASM.  Is this possible?  I can't seem to figure out exactly how to do it, if so.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177892 - Dwedit - Sun Apr 21, 2013 3:04 am</h4>
+    <div class="postbody"><span class="postbody">Store the return address into lr, and use bx to jump to the C code.
+<br/>
+<br/>
+Here's an example:
+<br/>
+<br/>
+add lr,pc,#4
+<br/>
+ldr r12,=FunctionName
+<br/>
+bx r12
+<br/>
+@code executes here after the function returns
+<br/>
+<br/>
+r0,r1,r2,r3 are the first 4 arguments to the function, r0 is the return value after it finishes.  If you want two return values, you can also do that by returning a single int64.
+<br/>
+For C++ classes, the "this" pointer is the first argument to the class method.
+<br/>
+If you have more than 4 arguments, or if you're passing or returning a struct, check the ARM Procedure Call Standard for more information.
+<br/>
+<br/>
+On the NDS9, you can use "BLX FunctionName" instead of the 3 instructions above, but then you lose compatibility with the ARM7TDMI.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177893 - Bond697 - Sun Apr 21, 2013 3:56 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Dwedit wrote:</b></span></td> </tr> <tr> <td class="quote">Store the return address into lr, and use bx to jump to the C code.
+<br/>
+<br/>
+Here's an example:
+<br/>
+<br/>
+add lr,pc,#4
+<br/>
+ldr r12,=FunctionName
+<br/>
+bx r12
+<br/>
+@code executes here after the function returns
+<br/>
+<br/>
+r0,r1,r2,r3 are the first 4 arguments to the function, r0 is the return value after it finishes.  If you want two return values, you can also do that by returning a single int64.
+<br/>
+For C++ classes, the "this" pointer is the first argument to the class method.
+<br/>
+If you have more than 4 arguments, or if you're passing or returning a struct, check the ARM Procedure Call Standard for more information.
+<br/>
+<br/>
+On the NDS9, you can use "BLX FunctionName" instead of the 3 instructions above, but then you lose compatibility with the ARM7TDMI.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+ok, this is what i'm getting for an error:
+<br/>
+<br/>
+c:/users/mat/projects/mydsprojects/16bit_color_bmp/source/Mem_int.s:34: undefined reference to `mat_test_func'
+<br/>
+<br/>
+mat_test_func is just a throwaway test thing in my main.c file.  i'm using it in another asm function that is just this:
+<br/>
+<br/>
+push	{r14}
+<br/>
+blx		mat_test_func
+<br/>
+pop		{r15}
+<br/>
+<br/>
+the file that it's in has other asm functions that i'm using with no issue in my main.c file.  am i maybe doing something wrong there and not realizing it?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177894 - Dwedit - Sun Apr 21, 2013 4:49 am</h4>
+    <div class="postbody"><span class="postbody">If it's c++ code, it must be declared as extern "C", otherwise it will have a mangled name.
+<br/>
+Function must not be declared as static, otherwise it won't be exported.
+<br/>
+Linker must see both object code files, but since it's successfully calling ASM code from C, that doesn't seem to be an issue.
+<br/>
+<br/>
+In other assemblers, you need to use things like IMPORT to get it to use an external symbol in an ASM file, but in Gnu Assembler, you don't need to do anything, it will just assume any unrecognized label is external.
+<br/>
+<br/>
+Maybe try the three instruction method to see if it needed all 32 bits to store the address?<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177895 - Bond697 - Sun Apr 21, 2013 4:53 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Dwedit wrote:</b></span></td> </tr> <tr> <td class="quote">If it's c++ code, it must be declared as extern "C", otherwise it will have a mangled name.
+<br/>
+Function must not be declared as static, otherwise it won't be exported.
+<br/>
+Linker must see both object code files, but since it's successfully calling ASM code from C, that doesn't seem to be an issue.
+<br/>
+<br/>
+In other assemblers, you need to use things like IMPORT to get it to use an external symbol in an ASM file, but in Gnu Assembler, you don't need to do anything, it will just assume any unrecognized label is external.
+<br/>
+<br/>
+Maybe try the three instruction method to see if it needed all 32 bits to store the address?</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+<br/>
+throwing it in a header file with "extern C" took care of it, actually.  it was just a junk, throwaway function i was using for testing other things before this, so it never occurred to me that i might need to declare it in a header and not just in the main file where it was used.  don't i feel stupid. :)
+<br/>
+<br/>
+thanks a lot.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

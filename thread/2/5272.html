@@ -1,0 +1,373 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Any x86 assembly gurus around? - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>OffTopic > Any x86 assembly gurus around?</h2>
+<div id="posts">
+<div class="post">
+    <h4>#38303 - sajiimori - Fri Mar 25, 2005 5:44 pm</h4>
+    <div class="postbody"><span class="postbody">Here's some functionality I implemented for ARM.   I'd like to do the same thing on x86 but I don't really know that architecture very well.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+struct SavedRegs
+<br/>
+{
+<br/>
+    int r4, r5, r6, r7, r8, r9, r10, r11, r13, r14, r15;
+<br/>
+};
+<br/>
+<br/>
+asm int exchange(
+<br/>
+    int result,                    // r0
+<br/>
+    SavedRegs* oldState,           // r1
+<br/>
+    SavedRegs* newState)           // r2
+<br/>
+{
+<br/>
+    stmea r1, {r4-r11, r13-r14}    // Store regs into oldState, except pc.
+<br/>
+    add r3, pc, #4                 // Store pc seperately, because it must
+<br/>
+                                   // be modified to point at bx lr.
+<br/>
+    str r3, [r1, #40]              // pc is 40 bytes from start of struct.
+<br/>
+    ldmfd r2, {r4-r11, r13-r15}    // Restore from newState
+<br/>
+    bx lr                          // Later, exchanging for oldState puts
+<br/>
+                                   // us back here.
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+The routine above swaps out sets of registers, excluding the ones that don't need to be saved between function calls (r0-r3, r12).
+<br/>
+<br/>
+Swapping again with the old set should resume execution just after the first exchange was performed.
+<br/>
+<br/>
+Just before the new registers are loaded, the register used for return values (r0 or eax) must contain "result".</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#38336 - notb4dinner - Sat Mar 26, 2005 12:00 pm</h4>
+    <div class="postbody"><span class="postbody">I can't really help with the x86 ASM but I'm just chiming in to say it's interesting to see someone else doing multithreaded stuff on the GBA - I wrote some code that was basically the start of a GBA RTOS for a class I took a while back.  If you'd like I can probably get some sample code from a classmate who did the same project on a PC...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#39089 - keldon - Mon Apr 04, 2005 1:29 pm</h4>
+    <div class="postbody"><span class="postbody"><a class="postlink" href="http://betov.free.fr" target="_blank">The best x86 assembler/IDE + community known to man</a>
+<br/>
+I recommend the RosAsm assembler for anyone doing x86 coding.
+<br/>
+<br/>
+if you're doing this on the x86, wouldn't you also want to keep the local stack variables too?
+<br/>
+<br/>
+Anyway here is some code for loading/saving a state how you wanted to. There are seperate methods also for loading/saving a state. "RSLT" was used instead because the register can only store 4 bytes.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+; To help preventing from stack sizes' mistakes (upper "SizeOf#x" fall here):
+<br/>
+<br/>
+[SizeOf1 4     SizeOf2 8     SizeOf3 12    SizeOf4 16    SizeOf5 20
+<br/>
+ SizeOf6 24    SizeOf7 28    SizeOf8 32    SizeOf9 36    SizeOf10 40]
+<br/>
+<br/>
+<br/>
+; your two states
+<br/>
+[State0: D$ ? #8 ]
+<br/>
+[State1: D$ ? #8 ]
+<br/>
+<br/>
+Main:
+<br/>
+    ; state 0
+<br/>
+    mov ebx 2
+<br/>
+    mov ecx 3
+<br/>
+    mov edx 4
+<br/>
+    mov esi 5
+<br/>
+    mov edi 6
+<br/>
+    mov ebp 7
+<br/>
+    
+<br/>
+    push State0
+<br/>
+    call SaveRegs
+<br/>
+    
+<br/>
+    ; state 1
+<br/>
+    mov ebx 7
+<br/>
+    mov ecx 6
+<br/>
+    mov edx 5
+<br/>
+    mov esi 4
+<br/>
+    mov edi 3
+<br/>
+    mov ebp 2
+<br/>
+    
+<br/>
+    
+<br/>
+    push State0
+<br/>
+    push State1
+<br/>
+    call ExchangeState
+<br/>
+    
+<br/>
+    push &amp;NULL
+<br/>
+    call 'KERNEL32.ExitProcess'
+<br/>
+<br/>
+; *************************************************
+<br/>
+; param 1 - old state Address
+<br/>
+; param 2 - new state
+<br/>
+ExchangeState:
+<br/>
+<br/>
+    ; **** SaveRegs code
+<br/>
+    mov eax D$esp   ; eax = PC
+<br/>
+    pushad
+<br/>
+    
+<br/>
+    mov ebp esp |   add ebp 32  ; ebp = esp at time of call
+<br/>
+    
+<br/>
+    mov edi D$esp+4             ; dst = state Address
+<br/>
+    add edi 32
+<br/>
+    
+<br/>
+    ; load stack into StateAddress
+<br/>
+    mov ecx 8
+<br/>
+    L0:
+<br/>
+        sub edi 4
+<br/>
+        pop D$edi
+<br/>
+    loop L0&lt;                    ; sub ecx and jump to L0 if nonzero
+<br/>
+    
+<br/>
+    
+<br/>
+    ; ***** loadRegs code
+<br/>
+<br/>
+    ; load stateAddress into stack
+<br/>
+    mov esi D$esp+8
+<br/>
+    mov ecx 8
+<br/>
+    L0:
+<br/>
+        push D$esi
+<br/>
+        add esi 4
+<br/>
+    loop L0&lt;
+<br/>
+    
+<br/>
+    popad
+<br/>
+    
+<br/>
+    mov D$esp eax       ; restore return address
+<br/>
+    mov eax 'RSLT'
+<br/>
+    
+<br/>
+    ret SizeOf2
+<br/>
+    
+<br/>
+    
+<br/>
+    
+<br/>
+; *************************************************
+<br/>
+; param 1 - StateAddress
+<br/>
+SaveRegs:
+<br/>
+    mov eax D$esp   ; eax = PC
+<br/>
+    pushad
+<br/>
+    
+<br/>
+    mov ebp esp |   add ebp 32  ; ebp = esp at time of call
+<br/>
+    
+<br/>
+    mov edi D$ebp+4             ; dst = state Address
+<br/>
+    add edi 32
+<br/>
+    
+<br/>
+    ; load stack into StateAddress
+<br/>
+    mov ecx 8
+<br/>
+    L0:
+<br/>
+        sub edi 4
+<br/>
+        pop D$edi
+<br/>
+    loop L0&lt;                    ; sub ecx and jump to L0 if nonzero
+<br/>
+    
+<br/>
+    ret SizeOf1                 ; return and pop 1 parameter
+<br/>
+    
+<br/>
+<br/>
+; *************************************************
+<br/>
+; param 1 - state Address
+<br/>
+LoadRegs:
+<br/>
+<br/>
+    ; load stateAddress into stack
+<br/>
+    mov esi D$esp+4
+<br/>
+    mov ecx 8
+<br/>
+    L0:
+<br/>
+        push D$esi
+<br/>
+        add esi 4
+<br/>
+    loop L0&lt;
+<br/>
+    
+<br/>
+    popad
+<br/>
+    
+<br/>
+    mov D$esp eax       ; restore return address
+<br/>
+    mov eax 'RSLT'
+<br/>
+    
+<br/>
+    ret SizeOf1
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Now the save method uses the PC of the method that calls it, so if you are implementing this from an interrupt the following code is necessary
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+InterruptMethod:
+<br/>
+   mov eax D$esp   ; esp = PC of interrupted method
+<br/>
+   push newState
+<br/>
+   push oldSTate
+<br/>
+   push eax
+<br/>
+   mov eax 'RSLT'
+<br/>
+   jp ExchangeState
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+P.S. how are you implementing this on x86? for dos?? - and I used the name ExchangeState because there was a macro called Exchange.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#39128 - sajiimori - Mon Apr 04, 2005 10:15 pm</h4>
+    <div class="postbody"><span class="postbody">Wow, that's pretty intimidating stuff, especially since I'm not familiar with that particular x86 assembler dialect.
+<br/>
+<br/>
+ExchangeState is the pertinent part, right?  As far as I know, I shouldn't need additional save and load routines, because I'm never doing a save without a load or vice versa.
+<br/>
+<br/>
+I actually don't know what RSLT is... I thought eax was used for return values.  o_o
+<br/>
+<br/>
+It's ok if return values are restricted to 4 bytes -- the important thing is to provide the same functionality as the ARM version, which requires that ExchangeState takes an argument that will become the return value of the opposing call to exchange.
+<br/>
+<br/>
+Ok, so...
+<br/>
+pushad = push eax
+<br/>
+D$ = double-word dereference
+<br/>
+<br/>
+Why is PC immediately duplicated on the stack?  After it's duplicated, isn't D$esp+4 still just PC, and not the state address?
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">if you're doing this on the x86, wouldn't you also want to keep the local stack variables too?</td> </tr></table><span class="postbody">If the stack pointer is being moved to point at a completely different stack, then the locals should still be there when I exchange back.
+<br/>
+<br/>
+Thanks for the reply -- I only hope you'll humor me as I stumble about this relatively mystical architecture. ^_^
+<br/>
+<br/>
+Oh, and this will probably be used in GCC or VC6 or both.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

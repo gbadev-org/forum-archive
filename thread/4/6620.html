@@ -1,0 +1,590 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>My new fixed point math system - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > My new fixed point math system</h2>
+<div id="posts">
+<div class="post">
+    <h4>#51397 - jarobi - Fri Aug 19, 2005 4:34 am</h4>
+    <div class="postbody"><span class="postbody">Hi all!
+<br/>
+I have created a new way to handle fixed point numbers after researching them a bit more and noticing flaws in my previous fixed point code.  The following code is meant to be used exclusively for the GBA, but could be modified for other uses:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+//Header File
+<br/>
+typedef struct
+<br/>
+{
+<br/>
+   s16 integer:8;
+<br/>
+   u16 fraction:8;
+<br/>
+} Fixed_S;
+<br/>
+<br/>
+typedef struct
+<br/>
+{
+<br/>
+   u32 filler:4;
+<br/>
+   s32 integer:20;
+<br/>
+   u32 fraction:8;   
+<br/>
+} Fixed_L;
+<br/>
+<br/>
+//...
+<br/>
+<br/>
+#define FIXED_SC 256f
+<br/>
+#define FLOAT_SC 0.0039f //(1/256)
+<br/>
+#define floatToFixed_S(n) (Fixed_S)(n*FIXED_SC)  
+<br/>
+#define floatToFixed_L(n) (Fixed_L)(n*FIXED_SC)
+<br/>
+#define fixedToFloat(n) (((float)n)*FLOAT_SC)
+<br/>
+#define fixedFract(n) (n&amp;0xff)  //isolates the fractional part of a fixed point number
+<br/>
+#define fixedInt_S(n) ((n&amp;0xff00)&gt;&gt;8)  //isolates the integer part of a fixed point number for Fixed_S
+<br/>
+#define fixedInt_L(n) ((n&amp;0xfffff00)&gt;&gt;8)  //isolates the integer part of a fixed point number for Fixed_L
+<br/>
+#define newFixed(i, f) ((i&lt;&lt;8)|(f&amp;0xff)) //i = integer part (signed), f = fraction part (unsigned)
+<br/>
+#define fixedNeg(n) (0-n)
+<br/>
+<br/>
+Fixed_S fixedMult_S(Fixed_S, Fixed_S);
+<br/>
+Fixed_L fixedMult_L(Fixed_L, Fixed_L);
+<br/>
+Fixed_S fixedDiv_S(Fixed_S, Fixed_S);
+<br/>
+Fixed_L fixedDiv_L(Fixed_L, Fixed_L);
+<br/>
+Fixed_S fixedAbs_S(Fixed_S);
+<br/>
+Fixed_L fixedAbs_L(Fixed_L);
+<br/>
+<br/>
+//...
+<br/>
+//Source File
+<br/>
+<br/>
+Fixed_S fixedMult_S(Fixed_S a, Fixed_S b)
+<br/>
+{
+<br/>
+   s32 temp, la, lb;
+<br/>
+   Fixed_S product;
+<br/>
+   la = ((s32)(a.integer)&lt;&lt;8)+(u32)(a.fraction);
+<br/>
+   lb = ((s32)(b.integer)&lt;&lt;8)+(u32)(b.fraction);
+<br/>
+   temp = la * lb;
+<br/>
+   temp /= 256; //using division instead of bit shifting to preserve sign
+<br/>
+   product.integer = fixedInt_S(temp);
+<br/>
+   product.fraction = fixedFract(temp);
+<br/>
+   return product;
+<br/>
+}
+<br/>
+<br/>
+Fixed_L fixedMult_L(Fixed_L a, Fixed_L b)
+<br/>
+{
+<br/>
+   s64 temp, la, lb;
+<br/>
+   Fixed_L product;
+<br/>
+   la = ((s64)(a.integer)&lt;&lt;8)+(u64)(a.fraction);
+<br/>
+   lb = ((s64)(b.integer)&lt;&lt;8)+(u64)(b.fraction);
+<br/>
+   temp = la * lb;
+<br/>
+   temp /= (s64)256; //using division instead of bit shifting to preserve sign
+<br/>
+   product.integer = fixedInt_L(temp);
+<br/>
+   product.fraction = fixedFract(temp);
+<br/>
+   return product;
+<br/>
+}
+<br/>
+<br/>
+Fixed_S fixedDiv_S(Fixed_S n, Fixed_S d)
+<br/>
+{
+<br/>
+   s32 temp, ln, ld;
+<br/>
+   Fixed_S quotient;
+<br/>
+   ln = ((s32)(n.integer)&lt;&lt;8)+(u32)(n.fraction);
+<br/>
+   ld = ((s32)(d.integer)&lt;&lt;8)+(u32)(d.fraction);
+<br/>
+   temp = ln&lt;&lt;8;
+<br/>
+   temp /= ld;
+<br/>
+   quotient.integer = fixedInt_S(temp);
+<br/>
+   quotient.fraction = fixedFract(temp);
+<br/>
+   return quotient;
+<br/>
+}
+<br/>
+<br/>
+Fixed_L fixedDiv_L(Fixed_L n, Fixed_L d)
+<br/>
+{
+<br/>
+   s64 temp, ln, ld;
+<br/>
+   Fixed_S quotient;
+<br/>
+   ln = ((s64)(n.integer)&lt;&lt;8)+(u64)(n.fraction);
+<br/>
+   ld = ((s64)(d.integer)&lt;&lt;8)+(u64)(d.fraction);
+<br/>
+   temp = ln&lt;&lt;8;
+<br/>
+   temp /= ld;
+<br/>
+   quotient.integer = fixedInt_L(temp);
+<br/>
+   quotient.fraction = fixedFract(temp);
+<br/>
+   return quotient;
+<br/>
+}
+<br/>
+<br/>
+Fixed_S fixedAbs(Fixed_S num)
+<br/>
+{
+<br/>
+   return (num &lt; 0) ? -num : num;
+<br/>
+}
+<br/>
+<br/>
+Fixed_L fixedAbs(Fixed_L num)
+<br/>
+{
+<br/>
+   s32 temp;
+<br/>
+   Fixed_L abs;
+<br/>
+   temp = ((s32)(num.integer)&lt;&lt;8)+(s32)(num.fraction);
+<br/>
+   temp = (temp &lt; 0) ? -temp : temp;
+<br/>
+   abs.integer = fixedInt_L(temp);
+<br/>
+   abs.fraction = fixedFract(temp);
+<br/>
+   return abs;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+If anyone notices any flaws with this system or anything that can be improved upon, please let me know.  Thanks in advance!<br/>_________________<br/>Nihongo o hanasemasen!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#51399 - sajiimori - Fri Aug 19, 2005 4:44 am</h4>
+    <div class="postbody"><span class="postbody">That won't even compile.  Why are you trying to compare a Fixed_S struct using the &lt; operator?  Why are you wasting the high 4 bits of your 32 bit fixed format?  Why is fixedAbs(Fixed_L) so complicated when the regular integer abs would work fine?  Why use structs at all?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#51404 - jarobi - Fri Aug 19, 2005 5:56 am</h4>
+    <div class="postbody"><span class="postbody">I now realize my error with comparing the Fixed_S struct using the &lt; operator; I probably should have casted it first.  However, I wasted the 4 top bits in the 32 bit fixed format because I read in the cowbite specs that they are not used in the rotation and scaling registers.
+<br/>
+<a class="postlink" href="http://www.cs.rit.edu/~tjh8300/CowBite/CowBiteSpec.htm#Background%20Rotation/Scaling%20Regi" target="_blank">http://www.cs.rit.edu/~tjh8300/CowBite/CowBiteSpec.htm#Background%20Rotation/Scaling%20Regi</a>
+<br/>
+I did this so that I would not run into issues with the sign bit, but please let me know whether this is really necessary or not.  I'm not entirely sure if this is how "32 bit" fixed point numbers are represented on hardware; I'm placing a lot of faith on the cowbite specs.
+<br/>
+<br/>
+My reason for using structs is so that I can easily isolate the integer and fraction parts and not have to deal so much with shifting, etc.
+<br/>
+<br/>
+The reason why the 32 bit fixed point abs is so complex is because I do not know what is in the first 4 bits and I do not want unexpected results by just negating the number.  But when I think of it now, the only time this is an issue is when there is overflow, and it wouldn't make sense to want overflow for a scaling/rotation value.  I must have been really tired when I wrote this code :).  Maybe what I should do instead is define a minimum and maximum value for fixed point numbers instead...
+<br/>
+<br/>
+I think you may be right about the structs to begin with too; now that I think of it, why was I using them to begin with?  My main motivation for creating this system is to be able to work with fixed point numbers almost as easily as regular ints, because fixed point numbers are kind of a pain.
+<br/>
+<br/>
+Thanks for your input sajimori!  You really helped me think critically about my code which is what I wanted to begin with.  If anyone has any neat tricks I can use for messing around with fixed point numbers please let me know.
+<br/>
+<br/>
+P.S. I have not even tried to compile my code yet, I'm not that masochistic :)<br/>_________________<br/>Nihongo o hanasemasen!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#51405 - sajiimori - Fri Aug 19, 2005 6:17 am</h4>
+    <div class="postbody"><span class="postbody">I don't know what the format of the registers are off the top of my head.  The reason I don't know is that there's no need for me to think about it.  I wouldn't design my whole fixed point system around the format a couple registers happen to use.
+<br/>
+<br/>
+The best trick for making fixed point values as easy to work with as ints is to write a fixed point class that uses operator overloading.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#51406 - poslundc - Fri Aug 19, 2005 6:40 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sajiimori wrote:</b></span></td> </tr> <tr> <td class="quote">The best trick for making fixed point values as easy to work with as ints is to write a fixed point class that uses operator overloading.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Or, failing that, just do the math yourself. One of the reasons fixed-point math is so popular is that it's easy, and nearly all of the normal mathematical operations are the same or only slightly changed from their int counterparts.
+<br/>
+<br/>
+A good wrapper class may help reduce your programmer error, and spare you from having to document your code exhaustively. But calling macros or functions everywhere when all you want to do is shift or multiply or something does little more than serve to obfuscate code, I find.
+<br/>
+<br/>
+On the other hand, I've written large pieces of code where the only data type is int, and I simply make consistent comments every time the precision changes. It lets me have as much versatility with precision as I want, and the code is easy to read and understand for anyone who understands fixed-point mathematics.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#51407 - sajiimori - Fri Aug 19, 2005 7:13 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Or, failing that, just do the math yourself.</td> </tr></table><span class="postbody">Well, I've got this computer in front of me... I just figured its job was to like, compute stuff for me.  ;)
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">But calling macros or functions everywhere when all you want to do is shift or multiply or something does little more than serve to obfuscate code, I find.</td> </tr></table><span class="postbody">That's what operator overloading is for.  Have you seen the Fixed template?</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">Fx32 a = 5.2;  // Floats?  Not in the output!
+<br/>
+Fx32 b = 125.7;
+<br/>
+f(a * b + 2);</td> </tr></table><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">On the other hand, I've written large pieces of code where the only data type is int, and I simply make consistent comments every time the precision changes.</td> </tr></table><span class="postbody">That's good, your readers will need them.  I'd rather build those facts directly into typesafe code.  Did I mention that Fx32 is a typedef?</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">Fixed&lt;short, 4&gt; a = 55.2;  // 12 integer bits, 4 fractional.
+<br/>
+Fixed&lt;int, 16&gt; b = a;  // 16 integer bits, 16 fractional, safe conversion.</td> </tr></table><span class="postbody">Oh, and debugging!</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">Fx32 val = 5823.784;
+<br/>
+cout &lt;&lt; val.toFloat();  // Wouldn't do it in production code, of course.</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#51410 - poslundc - Fri Aug 19, 2005 7:53 am</h4>
+    <div class="postbody"><span class="postbody">I have no problem with the Fixed template, and I've no doubt as to its utility in the kind of environment we work in.
+<br/>
+<br/>
+But there are tradeoffs as well. How much code do you suppose is written in our studio using 20.12 just because it is typedefed, when say, 16.16 would be in the acceptable range and provide a tangibly better level of accuracy? How many cycles do you suppose we lose by automatically using generic division routines instead of compiler-optimized inverse multiplication? Or by not knowing when 64-bit multiplication is necessary/warranted? How about the ability to dynamically adjust precision without either instantiating new objects or invalidating the substance of the class?
+<br/>
+<br/>
+Don't get me wrong; I appreciate both the encapsulation and elegance of the Fixed class. But there are plenty of advantages to working in the literal domain as well.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#51449 - sajiimori - Fri Aug 19, 2005 6:52 pm</h4>
+    <div class="postbody"><span class="postbody">As I see it, there are only psychological trade-offs, and no real ones.
+<br/>
+<br/>
+If someone chooses to use the Fx32 typedef because it is the easier thing to do, you cannot blame the fact that it was made easy, especially considering that other typedefs could be made as desired.  I'd be inclined to blame the programmers if they are using something inappropriate.
+<br/>
+<br/>
+(As a side note, having 19 bits of integer actually mattered for us in some cases, particularly when dealing with squared lengths and some of our larger side-scrolling levels.  A few more fractional bits might have helped for normals or time values in the range 0-1, but it worked out anyway.)
+<br/>
+<br/>
+If you want to use unusual division or multiplication methods, you can define your own operations (or unwrap the value and do it by hand).  I've never had occasion to do it, myself.  My optimization efforts were always better spent elsewhere.
+<br/>
+<br/>
+Dynamically adjusting precision sounds like floating point.  I'd be enormously confused if the same raw integer variable represented different precisions at different times.  At least the fixed class would require explicit casts, but the whole thing sounds fishy to me.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#85426 - wintermute - Tue May 30, 2006 3:59 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sajiimori wrote:</b></span></td> </tr> <tr> <td class="quote">As I see it, there are only psychological trade-offs, and no real ones.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+The trade offs are very real. As psolundc has pointed out fixed point doesn't have to be 16.16 or indeed any particular combination of integer and fractional part. If you write a class or a set of macros to deal with one particular precision you're basically stuck with it.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+Dynamically adjusting precision sounds like floating point.  I'd be enormously confused if the same raw integer variable represented different precisions at different times.  At least the fixed class would require explicit casts, but the whole thing sounds fishy to me.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Dynamic precision adjustment is actually quite common in code where the programmer is doing it by hand. In places where you know the integer part is quite small you can increase the fractional part for increased accuracy ( in trig tables for instance ). 
+<br/>
+<br/>
+If I'm writing fixed point code from scratch I'll tend to handle precision dynamically as required. On the other hand, fixed point encapsulation classes would be very useful for porting float heavy code. Both have their uses.<br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#85437 - keldon - Tue May 30, 2006 10:40 am</h4>
+    <div class="postbody"><span class="postbody">I was thinking of doing something similar to my texture mapping code because 1/z is very innacurate in 16:16</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#85471 - Cearn - Tue May 30, 2006 6:10 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sajimori wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>jarobi wrote:</b></span></td> </tr> <tr> <td class="quote">The reason why the 32 bit fixed point abs is so complex is because I do not know what is in the first 4 bits and I do not want unexpected results by just negating the number.  But when I think of it now, the only time this is an issue is when there is overflow, and it wouldn't make sense to want overflow for a scaling/rotation value.</td> </tr></table><span class="postbody">I don't know what the format of the registers are off the top of my head. The reason I don't know is that there's no need for me to think about it. I wouldn't design my whole fixed point system around the format a couple registers happen to use.</span></td> </tr></table><span class="postbody">
+<br/>
+And there's more to it than this. The affine registers are only the last stop; all the actual mathematical operations should be completely oblivious to the hardware formats. In fact, they can't be anything <span style="font-style: italic">but</span> oblivious, at least for backgrounds, because BG affine registers are write-only. The fixed point math should be done in as many bits as you can or as many as is convenient. That means 32 or maybe 64 bits. Cutting off the top 4 bits or even the top 16 bits in the Fixed_S struct serves no purpose and only makes things more difficult for yourself, slower and probably less accurate as well. If there is going to be overflow when you out things in the registers, you can't stop that. There's no need to make it worse by forcing all the intermediary calculations to have overflow problems too.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>jarobi wrote:</b></span></td> </tr> <tr> <td class="quote">My reason for using structs is so that I can easily isolate the integer and fraction parts and not have to deal so much with shifting, etc.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+But there is rarely a need for to get the fractional part, and in the mean time you're making everything else ? all the things that you do use a lot ? more complicated. Because you've split the number into two parts, addition, subtraction, multiplication and division all need a lot of extra code now. They used to be one operation, two for mul/div. Now they're well over 20 (bitfields are compiled to shifts and masks, a lot of them. You may not see them, but they're there.)
+<br/>
+Fixed points aren't divided into an integer and fractional part, they <span style="font-style: italic">are</span> fractions. The numerators of fractions to be precise, the denominators are determined by the fixed-point position. Because of how fraction math works add and sub are still simple, but mul and div need extra attention because the resultant denominator changes as well. While this can be annoying, the fixed point numbers still form one single integer.
+<br/>
+<br/>
+Aside from that, you still can't easily isolate the integer and fractional parts easily, because they won't be correct for negative numbers. Take the 8-point fixed version of -1.25, for example. This is -0x140= FFFFFE.C0. This would resolve to an integer part of -2, and a fractional part of +192. While this is technically correct, these are not the int and fractional parts that you might have expected.
+<br/>
+<br/>
+<span style="font-size: 9px; line-height: normal">EDIT: 0xC0 is 192, not 64.</span>
+<br/>
+<br/>
+@ sajimori: I think I saw that Fixed template once, but can't find it anymore. Linky?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#85565 - crossraleigh - Wed May 31, 2006 7:32 pm</h4>
+    <div class="postbody"><span class="postbody">In case sajiimori isn't allowed to post their template, I thought I'd show one I made. I've not tested it very rigorously but it has worked OK so far and I think it's fairly complete. It seems to be more or less compatible with the examples he posted.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#include &lt;ostream&gt;
+<br/>
+<br/>
+template&lt;class T, int fractionBits&gt; struct Fixed {
+<br/>
+    T value;
+<br/>
+<br/>
+    Fixed() {}
+<br/>
+    Fixed(double d) : value(static_cast&lt;T&gt;(d * (1 &lt;&lt; fractionBits) + 0.5)) {}
+<br/>
+<br/>
+    template&lt;class oldT, int oldFractionBits&gt;
+<br/>
+    Fixed(const Fixed&lt;oldT, oldFractionBits&gt;&amp; f)
+<br/>
+    {
+<br/>
+        int shift = fractionBits - oldFractionBits;
+<br/>
+        value = (shift &gt; 0) ? f.value &lt;&lt; shift : f.value &gt;&gt; -shift;
+<br/>
+    }
+<br/>
+<br/>
+    const Fixed&amp; operator += (const Fixed&amp; rhs) { value += rhs.value; return *this; }
+<br/>
+    const Fixed&amp; operator -= (const Fixed&amp; rhs) { value -= rhs.value; return *this; }
+<br/>
+    const Fixed&amp; operator *= (const Fixed&amp; rhs) { value *= rhs.value; value &gt;&gt;= fractionBits; return *this; }
+<br/>
+    const Fixed&amp; operator /= (const Fixed&amp; rhs) { value &lt;&lt;= fractionBits; value /= rhs.value; return *this; }
+<br/>
+<br/>
+    const Fixed  operator +  (const Fixed&amp; rhs) const { return Fixed(*this) += rhs; }
+<br/>
+    const Fixed  operator -  (const Fixed&amp; rhs) const { return Fixed(*this) -= rhs; }
+<br/>
+    const Fixed  operator *  (const Fixed&amp; rhs) const { return Fixed(*this) *= rhs; }
+<br/>
+    const Fixed  operator /  (const Fixed&amp; rhs) const { return Fixed(*this) /= rhs; }
+<br/>
+<br/>
+    const Fixed&amp; operator + () const { return *this; }
+<br/>
+    const Fixed  operator - () const { Fixed f; f.value = -value; return f; }
+<br/>
+<br/>
+    bool operator == (const Fixed&amp; rhs) const { return value == rhs.value; }
+<br/>
+    bool operator != (const Fixed&amp; rhs) const { return value != rhs.value; }
+<br/>
+    bool operator &lt;= (const Fixed&amp; rhs) const { return value &lt;= rhs.value; }
+<br/>
+    bool operator &gt;= (const Fixed&amp; rhs) const { return value &gt;= rhs.value; }
+<br/>
+    bool operator &lt;  (const Fixed&amp; rhs) const { return value &lt;  rhs.value; }
+<br/>
+    bool operator &gt;  (const Fixed&amp; rhs) const { return value &gt;  rhs.value; }
+<br/>
+<br/>
+    friend std::ostream&amp; operator &lt;&lt; (std::ostream&amp; lhs, const Fixed&amp; rhs)
+<br/>
+    {
+<br/>
+        lhs &lt;&lt; static_cast&lt;double&gt;(rhs.value) / (1 &lt;&lt; fractionBits);
+<br/>
+        return lhs;
+<br/>
+    }
+<br/>
+};</td> </tr></table><span class="postbody">
+<br/>
+Notice that you have to be careful when using operators across different precisions.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">typedef Fixed&lt;int, 12&gt;  F32;
+<br/>
+typedef Fixed&lt;short, 4&gt; T16;
+<br/>
+<br/>
+F32 a = 1.61803399; // Becomes approx 1.61792.
+<br/>
+T16 b = 2.71828183; // Becomes 2.6875.
+<br/>
+<br/>
+std::cout &lt;&lt; a &lt;&lt; " * " &lt;&lt; b &lt;&lt; " = " &lt;&lt; a * b &lt;&lt; "\n"; // F32::operator*(F32(T16)).
+<br/>
+std::cout &lt;&lt; b &lt;&lt; " * " &lt;&lt; a &lt;&lt; " = " &lt;&lt; b * a &lt;&lt; "\n"; // T16::operator*(T16(F32)) is less accurate.
+<br/>
+<br/>
+b = a;
+<br/>
+std::cout &lt;&lt; a &lt;&lt; ((a == b) ? " == " : " != ") &lt;&lt; b &lt;&lt; "\n"; // Not equal as F32s.
+<br/>
+std::cout &lt;&lt; b &lt;&lt; ((b == a) ? " == " : " != ") &lt;&lt; a &lt;&lt; "\n"; // Equal as T16s.</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#85575 - sajiimori - Wed May 31, 2006 9:42 pm</h4>
+    <div class="postbody"><span class="postbody">wintermute,
+<br/>
+<br/>
+A templatized class like the one crossraleigh just posted keeps you from being locked into a particular format.
+<br/>
+<br/>
+Your example of trig tables does not sound like an instance of dynamically adjusting precision.  That sounds like statically determining precision, but choosing different precisions for different cases, which I agree is perfectly normal.
+<br/>
+<br/>
+crossraleigh,
+<br/>
+<br/>
+That's very much like the class we use here.  I'd probably make the conversion constructor explicit.  You might want to specialize the multiply to use a double-sized workspace for common types (like 16.16 or 20.12) to avoid overflow (since it's very easy to overflow a 32x32 multiplication when using a 32 bit workspace).  Also, the divide could be specialized to use the coprocessor.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#85581 - wintermute - Thu Jun 01, 2006 12:07 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sajiimori wrote:</b></span></td> </tr> <tr> <td class="quote">wintermute,
+<br/>
+<br/>
+A templatized class like the one crossraleigh just posted keeps you from being locked into a particular format.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+but doesn't it automatically adjust the precision of the values as they're calculated?
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+Your example of trig tables does not sound like an instance of dynamically adjusting precision.  That sounds like statically determining precision, but choosing different precisions for different cases, which I agree is perfectly normal.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+but dealing with different precisions leads to yet more different precisions when you're performing calculations on them. Admittedly addition and subtraction requires the values to be normalised to the same precision but multiplication does not. It can be extremely useful to retain the increased fractional accuracy of these calculations as long as possible.<br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#85586 - sajiimori - Thu Jun 01, 2006 1:50 am</h4>
+    <div class="postbody"><span class="postbody">I don't know what you mean by automatically adjusting precision.
+<br/>
+<br/>
+About retaining precision after multiplies, I assume you mean using a larger data type.  Here's one example of that:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+typedef Fixed&lt;int, 16&gt; Fx32;
+<br/>
+typedef Fixed&lt;long long, 32&gt; Fx64;
+<br/>
+<br/>
+Fx32 a = ...;
+<br/>
+Fx32 b = ...;
+<br/>
+Fx64 c = Fx64(a) * Fx64(b);
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+However, since operator*() should be written to work well in the general case, it would use a 128 bit temporary workspace to perform that multiplication.  If I was having speed problems, I'd use a separate function that multiplies two Fx32s and returns a Fx64.
+<br/>
+<br/>
+In any case, these decisions are made statically.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#85709 - tepples - Thu Jun 01, 2006 11:13 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>wintermute wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sajiimori wrote:</b></span></td> </tr> <tr> <td class="quote">wintermute,
+<br/>
+<br/>
+A templatized class like the one crossraleigh just posted keeps you from being locked into a particular format.</td> </tr></table><span class="postbody">
+<br/>
+but doesn't it automatically adjust the precision of the values as they're calculated?</span></td> </tr></table><span class="postbody">
+<br/>
+No, because that'd be called "floating point" ;-)<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#85792 - wintermute - Fri Jun 02, 2006 11:15 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>wintermute wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sajiimori wrote:</b></span></td> </tr> <tr> <td class="quote">wintermute,
+<br/>
+<br/>
+A templatized class like the one crossraleigh just posted keeps you from being locked into a particular format.</td> </tr></table><span class="postbody">
+<br/>
+but doesn't it automatically adjust the precision of the values as they're calculated?</span></td> </tr></table><span class="postbody">
+<br/>
+No, because that'd be called "floating point" ;-)</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+You're missing the point completely :P
+<br/>
+<br/>
+when you multiply and divide, the point <span style="font-weight: bold">moves</span>. When I say "adjust the  precision" I'm talking about renormalising back to where you've decided the point should be.<br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#85861 - sajiimori - Fri Jun 02, 2006 7:12 pm</h4>
+    <div class="postbody"><span class="postbody">Alright, then I already explained how it's easy to avoid unwanted precision loss from normalization.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

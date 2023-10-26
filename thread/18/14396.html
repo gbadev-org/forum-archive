@@ -1,0 +1,92 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Pressure sensitivity mini-tutorial - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Pressure sensitivity mini-tutorial</h2>
+<div id="posts">
+<div class="post">
+    <h4>#143696 - Jesse - Thu Oct 25, 2007 12:02 pm</h4>
+    <div class="postbody"><span class="postbody">I just answered an email about how to best read pressure sensitivity and thought that more people may be interested:
+<br/>
+<br/>
+The pressure is read from the z1/z2 values of the touchdata structure:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">touchPosition touchXY = touchReadXY();
+<br/>
+int intPressure = (touchXY.x * touchXY.z2) / (64 * touchXY.z1) - touchXY.x / 64;</td> </tr></table><span class="postbody">
+<br/>
+The pressure needs to be calibrated for a specific NDS:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">int Range = m_MaxPressure - m_MinPressure;
+<br/>
+if(Range &lt;= 0)
+<br/>
+   Range = 1;
+<br/>
+float TargetPressure = Clamp01(1.0f - float(intPressure - m_MinPressure) / Range);</td> </tr></table><span class="postbody">
+<br/>
+Max-pressure is per default 90 and Min-pressure 65 (note the the terminology is kind of screwed up, since harder pressure gives a lower value). These values should be calibrated for a specific NDS but the default ones seem to work on most NDS Lite.
+<br/>
+<br/>
+You probably want to make sure that the pressure is evened out across frames, since it?s a bit jumpy otherwise. This is run before every frame:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">TargetPressure *= TargetPressure * TargetPressure;
+<br/>
+if(TargetPressure &lt; 0.05f)
+<br/>
+   TargetPressure = 0.05f;
+<br/>
+Pressure = Pressure + (TargetPressure - Pressure) * 0.1f;</td> </tr></table><span class="postbody">
+<br/>
+You probably want to change the curve and the magic numbers into something that suits your application.<br/>_________________<br/><a href="http://www.collectingsmiles.com/colors" target="_blank">http://www.collectingsmiles.com/colors</a> &amp; <a href="http://www.collectingsmiles.com/hyena" target="_blank">http://www.collectingsmiles.com/hyena</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#143697 - Lick - Thu Oct 25, 2007 12:05 pm</h4>
+    <div class="postbody"><span class="postbody">Thanks for sharing valuable information! It makes the forum wiser as a knowledge base.<br/>_________________<br/><a class="postlink" href="http://licklick.wordpress.com" target="_blank">http://licklick.wordpress.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#143763 - Crache - Thu Oct 25, 2007 9:42 pm</h4>
+    <div class="postbody"><span class="postbody">Hey Jesse, thanks for replying to my e-mail.  The Nintendo DS is such a great device with a lot of potential, it'd be a shame to see a great feature like touchscreen pressure sensitivity continue to go to waste in many of the homebrew apps/games out there.  This is the kind of code that needs to be perfected and included in the various dev libraries so that people can take advantage of it easily and we can start to see more creative use of it.
+<br/>
+<br/>
+I look forward to making use of it and appreciate your willingness to share.  :)  I was heading down the path to write the code to do this, but was stopped rather early on when Z1 and Z2 were always returning 0.  Perhaps it was just that they were returning a value between 0-1, and it was getting rounded down to 0 when displayed.  I'll have to look into that again tonight.
+<br/>
+<br/>
+Thanks again!
+<br/>
+<br/>
+-Crache</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#143769 - DragonMinded - Thu Oct 25, 2007 10:13 pm</h4>
+    <div class="postbody"><span class="postbody">I experimented with my own pressure reading controls awhile back, and found that it returns different results in the center than the outside, which is what I think everyone else that's tried it has stated.  I was going to add a five point calibration system to get the relative sensitivity of the corners and center of the screen to try to even it out, but I realized it wasn't really worth it.  While in concept the touch is cool, the results across the screen aren't consistent enough to be useful, at least for my app.<br/>_________________<br/>Enter the mind of the dragon.
+<br/>
+<br/>
+<a href="http://dragonminded.blogspot.com" target="_blank">http://dragonminded.blogspot.com</a>
+<br/>
+<br/>
+Seriously guys, how hard is it to simply TRY something yourself?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#143817 - Jesse - Fri Oct 26, 2007 10:49 am</h4>
+    <div class="postbody"><span class="postbody">You are correct DragonMinded. This consistency problems differs from DS to DS, where some are almost prefect and others suffer greatly.
+<br/>
+<br/>
+I've also been working with a number of approches to make calibration better. My ideal approach is an autocalibration system that lies directly on arm7. Currently in Colors! I spend all excess time on arm7 to read input and validate it to avoid stylus jumping. This works really well and has practically removed the problem of stylus jumping. It also gives even more information that can be used for pressure calibration, probably making it possible to do it completely automatically. I've mapped out the screen into a 16x12 grid that remembers the maximum pressure, and it seems to work decently. It currently takes too much time for the calibration system to work well, so my idea is that I could "hint" the neigbouring tiles with pressure information if the stylus moves from one grid from another, assuming that user is pressing the stylus pretty much the same. Once I get this up and running correctly, I'll make sure to post that code.<br/>_________________<br/><a href="http://www.collectingsmiles.com/colors" target="_blank">http://www.collectingsmiles.com/colors</a> &amp; <a href="http://www.collectingsmiles.com/hyena" target="_blank">http://www.collectingsmiles.com/hyena</a></span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

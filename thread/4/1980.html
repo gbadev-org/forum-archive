@@ -1,0 +1,892 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>OOP Sprite Management - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > OOP Sprite Management</h2>
+<div id="posts">
+<div class="post">
+    <h4>#10265 - hnager - Mon Sep 01, 2003 2:52 am</h4>
+    <div class="postbody"><span class="postbody">Wondering if anybody has had any luck with an OOP approach toward handing sprite data...I'm currently working with 256 color sprites and copying all of my sprites in to memory in one fell swoop. I would rather have each sprite set in a seperate header file with it's own 16 color palette and not have to know specifically where in the sprite memory a given sprite is...and also only have the sprites that are needed copied in to memory. Anyhow - I'd love to see what any body has come up with...thanks! Howard</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10271 - sajiimori - Mon Sep 01, 2003 7:45 am</h4>
+    <div class="postbody"><span class="postbody">If I'm interpreting correctly, you're saying you want a system for automatically allocating blocks of character RAM, presumably in C++.
+<br/>
+<br/>
+Forgive my C++; it might be a little rusty.  The following is not guaranteed to be bug-free, or even to compile.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+// Number of sprite characters in VRAM
+<br/>
+#define NUM_CHARS            1024
+<br/>
+<br/>
+// Blocks must be allocated in multiples of 16
+<br/>
+#define MIN_ALLOC_SIZE         16
+<br/>
+<br/>
+// Macro for rounding length up to a multiple of 16
+<br/>
+#define ROUND_TO_MIN_SIZE(x)   (x &amp; 15 ? (x &gt;&gt; 4) + 16 : x &gt;&gt; 4)
+<br/>
+<br/>
+// Couldn't possibly have more than this many seperate free blocks.
+<br/>
+// One extra for end marker.
+<br/>
+#define FREE_BLOCK_ENTRIES      (NUM_CHARS / MIN_ALLOC_SIZE + 1)
+<br/>
+<br/>
+struct CharacterBlock
+<br/>
+{
+<br/>
+   int start;
+<br/>
+   int length;
+<br/>
+};
+<br/>
+<br/>
+// I'm inlining everything for simplicity.
+<br/>
+// Don't do it in real life.
+<br/>
+class CharacterRAM
+<br/>
+{
+<br/>
+private:
+<br/>
+<br/>
+   // Map of available character blocks.
+<br/>
+   // Last one is marked by setting its length to 0.
+<br/>
+   // Being static, they are all 0 initially.
+<br/>
+   static CharacterBlock free_blocks[FREE_BLOCK_ENTRIES];
+<br/>
+<br/>
+public:
+<br/>
+<br/>
+   // Gotta call this first.
+<br/>
+   // There aren't static constructors in C++, right?
+<br/>
+   static void Init()
+<br/>
+   {
+<br/>
+      free_blocks[0].length = NUM_CHARS;
+<br/>
+   }
+<br/>
+<br/>
+   // Return start of first free block of requested length.
+<br/>
+   static int Allocate(int length)
+<br/>
+   {
+<br/>
+      // Round up to multiple of 16
+<br/>
+      length = ROUND_TO_MIN_SIZE(length);
+<br/>
+<br/>
+      CharacterBlock* b = free_blocks;
+<br/>
+<br/>
+      // length of 0 means no more free blocks
+<br/>
+      while(b-&gt;length)
+<br/>
+      {
+<br/>
+         // Have we found one?
+<br/>
+         if(b-&gt;length &gt;= length)
+<br/>
+         {
+<br/>
+            // Got it!
+<br/>
+            int found = b-&gt;start;
+<br/>
+<br/>
+            // Bite chunk off beginning of free block.
+<br/>
+            b-&gt;length -= length;
+<br/>
+            b-&gt;start += length;
+<br/>
+<br/>
+            // Is the block all used up?
+<br/>
+            if(b-&gt;length == 0)
+<br/>
+            {
+<br/>
+               // Move the rest of the blocks down.
+<br/>
+               do
+<br/>
+               {
+<br/>
+                  ++b;
+<br/>
+                  (b-1)-&gt;start = b-&gt;start;
+<br/>
+                  (b-1)-&gt;length = b-&gt;length;
+<br/>
+<br/>
+               } while(b-&gt;length);
+<br/>
+            }
+<br/>
+<br/>
+            // Done.
+<br/>
+            return found;
+<br/>
+         }
+<br/>
+<br/>
+         // Haven't found it, try the next one.
+<br/>
+         ++b;
+<br/>
+      }
+<br/>
+<br/>
+      // No more room...
+<br/>
+      return -1;
+<br/>
+   }
+<br/>
+<br/>
+   // Free is much harder.
+<br/>
+   static void Free(int start, int length)
+<br/>
+   {
+<br/>
+      // Just to be sure.  Maybe start should be
+<br/>
+      // checked too...
+<br/>
+      if(length == 0)
+<br/>
+         return;
+<br/>
+<br/>
+      CharacterBlock* b = free_blocks;
+<br/>
+      int temp;
+<br/>
+<br/>
+      // Find first free block that is after the
+<br/>
+      // block to be freed.
+<br/>
+      while(b-&gt;start &lt;= start &amp;&amp; b-&gt;length)
+<br/>
+         ++b;
+<br/>
+<br/>
+      // If the block before the freeing block
+<br/>
+      // ends where the freeing block begins...
+<br/>
+      if(b &gt; free_blocks &amp;&amp;
+<br/>
+         (b-1)-&gt;start + (b-1)-&gt;length == start)
+<br/>
+      {
+<br/>
+         // Lengthen the block before.
+<br/>
+         (b-1)-&gt;length += length;
+<br/>
+<br/>
+         // If the freeing block also ends where the
+<br/>
+         // block after starts, then the block before
+<br/>
+         // and the block after need to be merged.
+<br/>
+         if(start + length == b-&gt;start)
+<br/>
+         {
+<br/>
+            // Increase the block before to cover
+<br/>
+            // the space of the block after.
+<br/>
+            (b-1)-&gt;length += b-&gt;length;
+<br/>
+<br/>
+            // Move the rest of the blocks down one.
+<br/>
+            while(b-&gt;length)
+<br/>
+            {
+<br/>
+               ++b;
+<br/>
+               (b-1)-&gt;start = b-&gt;start;
+<br/>
+               (b-1)-&gt;length = b-&gt;length;
+<br/>
+            }
+<br/>
+         }
+<br/>
+      }
+<br/>
+      // Either there isn't a free block before the
+<br/>
+      // block to be freed, or it doesn't end where
+<br/>
+      // the block to be freed begins.
+<br/>
+      else
+<br/>
+      {
+<br/>
+         // If the block after begins where the
+<br/>
+         // freeing block ends, move the beginning
+<br/>
+         // of the block after to cover the freed
+<br/>
+         // block (if there is a block after).
+<br/>
+         if(start + length == b-&gt;start &amp;&amp; b-&gt;length)
+<br/>
+         {
+<br/>
+            b-&gt;start -= length;
+<br/>
+            b-&gt;length += length;
+<br/>
+         }
+<br/>
+         // If neither end can be merged in any way,
+<br/>
+         // create a new free block and move the
+<br/>
+         // rest up one.
+<br/>
+         else
+<br/>
+         {
+<br/>
+            do
+<br/>
+            {
+<br/>
+               temp = b-&gt;start;
+<br/>
+               b-&gt;start = start;
+<br/>
+               start = temp;
+<br/>
+<br/>
+               temp = b-&gt;length;
+<br/>
+               b-&gt;length = length;
+<br/>
+               length = temp;
+<br/>
+<br/>
+               ++b;
+<br/>
+<br/>
+            } while(length);
+<br/>
+         }
+<br/>
+      }
+<br/>
+   }
+<br/>
+};
+<br/>
+<br/>
+// Palettes are arrays of 16 unsigned 16-bit ints.
+<br/>
+// Here, they can be allocated one at a time, and
+<br/>
+// freed all at once.  You can store an unlimited
+<br/>
+// library of palettes (elsewhere), and use up to 16
+<br/>
+// of them at a time.
+<br/>
+class SpritePalettes
+<br/>
+{
+<br/>
+private:
+<br/>
+<br/>
+   // Pointers to the palettes currently in use.
+<br/>
+   // Make sure the palettes have a permanent home
+<br/>
+   // (i.e. ROM or static arrays, but not on the
+<br/>
+   // stack), or this list will quickly become useless.
+<br/>
+   static u16* palettes_used[16];
+<br/>
+<br/>
+public:
+<br/>
+<br/>
+   static int Allocate(u16* palette)
+<br/>
+   {
+<br/>
+      for(int i = 0; i &lt; 16; ++i)
+<br/>
+      {
+<br/>
+         // Is it already loaded?
+<br/>
+         if(palettes_used[i] == palette)
+<br/>
+            return i;
+<br/>
+<br/>
+         // Is this spot free?
+<br/>
+         if(palettes_used[i] == 0)
+<br/>
+         {
+<br/>
+            palettes_used[i] = palette;
+<br/>
+<br/>
+            // &lt;Insert code here to copy palette to
+<br/>
+            // hardware at appropriate address&gt;
+<br/>
+<br/>
+            return i;
+<br/>
+         }
+<br/>
+      }
+<br/>
+<br/>
+      // If we got here, there was no room for another
+<br/>
+      // palette.
+<br/>
+<br/>
+      return -1;
+<br/>
+   }
+<br/>
+<br/>
+   static void FreeAll()
+<br/>
+   {
+<br/>
+      for(int i = 0; i &lt; 16; ++i)
+<br/>
+         palettes_used[i] = 0;
+<br/>
+<br/>
+      // Clear hardware palettes here if you want,
+<br/>
+      // but you probably don't need to.
+<br/>
+   }
+<br/>
+};
+<br/>
+<br/>
+// Only need one of these for each kind of sprite.
+<br/>
+struct SpriteType
+<br/>
+{
+<br/>
+   // Pixel data, probably in ROM
+<br/>
+   u8* character_data;
+<br/>
+<br/>
+   // Total characters for all frames
+<br/>
+   int num_chars;
+<br/>
+<br/>
+   // Pointer to preferred palette
+<br/>
+   u16* palette;
+<br/>
+<br/>
+   // Number of the first character in VRAM.
+<br/>
+   // Make it -1 or something if it's not loaded.
+<br/>
+   int character_start;
+<br/>
+<br/>
+   // Hardware palette number.
+<br/>
+   int palette_number;
+<br/>
+};
+<br/>
+<br/>
+<br/>
+// Example
+<br/>
+<br/>
+class Goblin
+<br/>
+{
+<br/>
+private:
+<br/>
+<br/>
+   static SpriteType type;
+<br/>
+   static int num_goblins;
+<br/>
+<br/>
+public:
+<br/>
+<br/>
+   Goblin()
+<br/>
+   {
+<br/>
+      ++num_goblins;
+<br/>
+<br/>
+      if(type.character_start == -1)
+<br/>
+      {
+<br/>
+         type.character_start =
+<br/>
+            CharacterRAM.Allocate(type.num_chars);
+<br/>
+<br/>
+         if(type.character_start == -1)
+<br/>
+            ; // handle out-of-space error
+<br/>
+<br/>
+         type.palette_number =
+<br/>
+            SpritePalettes.Allocate(type.palette);
+<br/>
+<br/>
+         // should handle palette error, too.
+<br/>
+      }
+<br/>
+   }
+<br/>
+<br/>
+   ~Goblin()
+<br/>
+   {
+<br/>
+      --num_goblins;
+<br/>
+<br/>
+      if(num_goblins == 0)
+<br/>
+      {
+<br/>
+         CharacterRAM.Free(type.character_start,
+<br/>
+            type.num_chars);
+<br/>
+         type.character_start = -1;
+<br/>
+<br/>
+         // palette isn't freed... gotta free
+<br/>
+         // them all from time to time, or make
+<br/>
+         // a more robust system.
+<br/>
+      }
+<br/>
+   }
+<br/>
+};
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Let me know if there are errors.
+<br/>
+<br/>
+To those who don't like my style/indentation/whatever, bite me. ;-)
+<br/>
+<br/>
+Edit: Master Mofo's post just reminded me that I forgot to actually copy the char data to VRAM in the example.  The copy would be performed just after CharacterRAM.Allocate() is called.  Waiting for vblank shouldn't really be necessary in this case, because it can be assumed that nobody is using those characters yet anyway.  Of course, the usual rules about the OAM still apply.</span><span class="gensmall"><br/><br/>Last edited by sajiimori on Mon Sep 01, 2003 8:11 am; edited 1 time in total</span></div>    
+</div>
+<div class="post">
+    <h4>#10272 - Master Mofo - Mon Sep 01, 2003 7:45 am</h4>
+    <div class="postbody"><span class="postbody">Yes it is possible. you can make a sprite class that has member methods for handeling sprite and palette, so you could only call these methods and pass them the data. the idea is in making sure to write in the OAM and Char memories in the right time. try the VBlank period for example.<br/>_________________<br/>"You have to finish what you have started"</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10279 - hnager - Mon Sep 01, 2003 2:18 pm</h4>
+    <div class="postbody"><span class="postbody">sajiimori! thanks for the replay - I'll copy that all down and give it a go...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10282 - hnager - Mon Sep 01, 2003 3:51 pm</h4>
+    <div class="postbody"><span class="postbody">It looks as if it would be relatively easy to swap in 256 color sprites by plugging in a different SpriteType. I know that it is possible to have both 256 and 16 color sprites at the same time (with some tricky palette management) but I could set a flag or use a factory to provide the proper SpriteType...anyhow, it seems as if I may want to have SpriteType be a class aswell so that I can allocate the correct number of frames in the spriteFrame array and assign them their values based on the type of sprite. 
+<br/>
+<br/>
+For example, a 256 color sprite would be:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">spriteFrame[0] = character_start;
+<br/>
+spriteFrame[1] = character_start + 8;
+<br/>
+spriteFrame[2] = character_start + 16;</td> </tr></table><span class="postbody">
+<br/>
+and 16 colors:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">spriteFrame[0] = character_start;
+<br/>
+spriteFrame[1] = character_start + 4;
+<br/>
+spriteFrame[2] = character_start + 8;</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Aswell as have the copy to OAM of sprite data as part of that class...again, changeable based on 16 or 256 color sprites.
+<br/>
+<br/>
+Let me know if that doesn't sound correct...thanks again.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10283 - hnager - Mon Sep 01, 2003 4:21 pm</h4>
+    <div class="postbody"><span class="postbody">Are you using the Goblin class as the actual Sprite or is it to just manage the sprite data? either way, where would you set type.num_chars and type.palette? or would it make more sense to set all of that up outside of the Goblin class and have Goblin point to the instance of the SpriteType? again, to easily swap between 256 and 16 color sprites.
+<br/>
+<br/>
+On the subject, what else is there beside how the data is stored and copied to memory that differenciates 16 and 256 color sprites? Are there things that can be done with one and not the other? rotation? hflip? etc.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10285 - hnager - Mon Sep 01, 2003 4:39 pm</h4>
+    <div class="postbody"><span class="postbody">compiling errors - I'm going to do some looking, but why would I get:
+<br/>
+<br/>
+main.o: In function `CharacterRAM::Init()':
+<br/>
+main.o(.text+0xdc): undefined reference to `CharacterRAM::free_blocks'
+<br/>
+main.o: In function `CharacterRAM::Allocate(int)':
+<br/>
+main.o(.text+0x160): undefined reference to `CharacterRAM::free_blocks'
+<br/>
+<br/>
+with the provided code?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10288 - sajiimori - Mon Sep 01, 2003 7:15 pm</h4>
+    <div class="postbody"><span class="postbody">re: Compiler errors (technically linker errors):  I didn't actually declare the static data anywhere.  In a .cpp file somewhere:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+// I think this is the syntax...
+<br/>
+CharacterBlock CharacterRAM::free_blocks[FREE_BLOCK_ENTRIES];
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+This is necessary in C++ because the static data cannot be created in the header (CharacterRAM.h or whatever) because then it would be created once for every time the header was included, giving "multiple definition" errors instead of "no definition" errors.  It's the price to pay for truly seperate compilation.  I don't think it's worth it.  ;-)
+<br/>
+<br/>
+Because of the dynamic nature of the palette manager, I would recommend against using it while mixing 16 color and 256 color sprites.  The palette manager is made to abstract the process of allocating 16 color palettes, so you don't have to think about where the palettes are located in VRAM.  Consequently, it would become difficult to predict which colors should be used in a 256 color image, as the order of the colors could potentially change between different runs, or when small changes are made to the order that characters are loaded.  If you want to mix 4-bit and 8-bit sprites, come up with a permanent palette layout and ditch the palette manager.
+<br/>
+<br/>
+But yes, it's trivial to use 256 color sprites with the CharacterRAM class and SpriteType.  Just double num_chars in the SpriteType.
+<br/>
+<br/>
+The Goblin class is made to illustrate how one might keep track of both individual sprites and shared data (such as sprite characters).  The idea is that when the first Goblin is created, the characters and palette are allocated, and when the last Goblin is destroyed, the characters are freed (but the palette isn't because the palette system is fairly weak; easily remedied with some effort).
+<br/>
+<br/>
+So the static data includes num_goblins and a SpriteType.  The instance data should then include perhaps a pointer to an OAM (copy) entry, and logical data such as hit points.  Maybe you could change the constructor to Goblin(int x, int y) to create them at particular locations.  I'll leave the instance stuff to you.
+<br/>
+<br/>
+As far as where to put SpriteTypes, you could make them global, like this:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+SpriteType GoblinType =
+<br/>
+{
+<br/>
+   goblin_char_ptr,
+<br/>
+   goblin_num_chars,
+<br/>
+   palette_ptr,
+<br/>
+   -1,
+<br/>
+   -1
+<br/>
+};
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+You could also move character_start and palette_number from SpriteType to Goblin, leaving the rest of SpriteType constant.  Declaring it 'const' would then locate it in ROM.
+<br/>
+<br/>
+Oh, and Goblin only really needs a pointer to the SpriteType, so you can change that if you want.
+<br/>
+<br/>
+I don't know of any differences between 16 color and 256 color sprites other than palette stuff and how much space they take up.  Check the usual docs to be sure.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10298 - hnager - Mon Sep 01, 2003 10:22 pm</h4>
+    <div class="postbody"><span class="postbody">I've since remedied the linker errors I was getting - and at least partial implementation is working! (as a singleton):
+<br/>
+<br/>
+int b;
+<br/>
+<br/>
+b = CharacterRAM::Instance()-&gt;Allocate(4);
+<br/>
+<br/>
+sprintf(tracebuffer,"%d\n",b);
+<br/>
+trace(tracebuffer); //traces out to the logging screen in VBA - traces 0
+<br/>
+<br/>
+b = CharacterRAM::Instance()-&gt;Allocate(4);
+<br/>
+<br/>
+sprintf(tracebuffer,"%d\n",b);
+<br/>
+trace(tracebuffer); // traces 16
+<br/>
+<br/>
+but I'm actually a little confused by what I get back from this, here is how I was copying sprite data in before:
+<br/>
+<br/>
+DMA_Copy(3,(void*)spriteData,(void*)OAMData,128,DMA_16NOW);
+<br/>
+<br/>
+for a single 256 color sprite.
+<br/>
+<br/>
+how would that translate in to what we're doing with the CharacterRAM controller? Thanks again for all your help.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10300 - hnager - Mon Sep 01, 2003 10:43 pm</h4>
+    <div class="postbody"><span class="postbody">oh BTW:
+<br/>
+<br/>
+what are we looking to have returned with this macro?
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">// Macro for rounding length up to a multiple of 16 
+<br/>
+#define ROUND_TO_MIN_SIZE(x)   (x &amp; 15 ? (x &gt;&gt; 4) + 16 : x &gt;&gt; 4) </td> </tr></table><span class="postbody">
+<br/>
+<br/>
+SHould ROUND_TO_MIN_SIZE(16) result in '1' or in '16' ? I'm getting strange results depending on what I pass it. 
+<br/>
+<br/>
+For example:
+<br/>
+<br/>
+ROUND_TO_MIN_SIZE(32) //2 which seems to be correct
+<br/>
+ROUND_TO_MIN_SIZE(33) //18 which seems to be incorrect (I'd expect '3')
+<br/>
+<br/>
+thanks.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10303 - sajiimori - Tue Sep 02, 2003 12:53 am</h4>
+    <div class="postbody"><span class="postbody">That macro was totally, utterly incorrect. ;-)  I have no idea how I came to the conclusion that it was anywhere near what we want.
+<br/>
+<br/>
+Expected results:
+<br/>
+1 -&gt; 16
+<br/>
+16 -&gt; 16
+<br/>
+17 -&gt; 32
+<br/>
+32 -&gt; 32
+<br/>
+33 -&gt; 48
+<br/>
+etc.
+<br/>
+<br/>
+I think this is more like it:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#define ROUND_TO_MIN_SIZE(x)   (x &amp; 15 ? (x &amp; ~15) + 16 : x)
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+CharacterRAM.Allocate() returns a character "name", which is an offset from the beginning of character RAM.  Multiply the offset by 32 to get the offset in bytes (shifting left by 5 is faster).
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#define CHAR_MEMORY    (u8*)0x6010000
+<br/>
+#define NUM_CHARS 4
+<br/>
+<br/>
+int b = CharacterRAM::Instance()-&gt;Allocate(NUM_CHARS);
+<br/>
+<br/>
+DMA_Copy(
+<br/>
+   3,   // I guess this is the DMA channel?
+<br/>
+   spriteData,
+<br/>
+   CHAR_MEMORY + (b &lt;&lt; 5),
+<br/>
+   NUM_CHARS * 16,   // 16 words per character
+<br/>
+   DMA_16NOW);
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10304 - hnager - Tue Sep 02, 2003 1:04 am</h4>
+    <div class="postbody"><span class="postbody">I'll plug in the new macro and see what I get - thanks for looking - right after I posted that it appeared to be working I looked again and realized that it actually was giving me odd values.
+<br/>
+<br/>
+Excuse my confusion, but why is the result multiplied by 32?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10309 - sajiimori - Tue Sep 02, 2003 6:15 am</h4>
+    <div class="postbody"><span class="postbody">Because there are 32 bytes per character (or 64 for 8-bit sprites).</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10316 - col - Tue Sep 02, 2003 11:43 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sajiimori wrote:</b></span></td> </tr> <tr> <td class="quote">That macro was totally, utterly incorrect. ;-)  I have no idea how I came to the conclusion that it was anywhere near what we want.
+<br/>
+<br/>
+Expected results:
+<br/>
+1 -&gt; 16
+<br/>
+16 -&gt; 16
+<br/>
+17 -&gt; 32
+<br/>
+32 -&gt; 32
+<br/>
+33 -&gt; 48
+<br/>
+etc.
+<br/>
+<br/>
+I think this is more like it:
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#define ROUND_TO_MIN_SIZE(x)   (x &amp; 15 ? (x &amp; ~15) + 16 : x)
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+...</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I'd suggest that what you want is:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#define ROUND_TO_MIN_SIZE(x) ( (x+15) &amp; (~15) )
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+cheers
+<br/>
+<br/>
+col</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10319 - hnager - Tue Sep 02, 2003 12:25 pm</h4>
+    <div class="postbody"><span class="postbody">col
+<br/>
+I'll see where that gets me - so far everythign seems to be working as expected except for one unrelated (to the macro) problem...more testing should narrow it down, but it seems as if the call to Free() isn't acting as expected...if i allocate a single sprite and then free it it doesnt seem to work - there may be other issues...i'll do some testing later on. thanks again.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10331 - sajiimori - Tue Sep 02, 2003 6:32 pm</h4>
+    <div class="postbody"><span class="postbody">Pretty nice, col.  Your version looks like it should be several cycles faster.  I'm pretty sure both are correct, though.
+<br/>
+<br/>
+hnager, I just compiled and ran my code (for the first time), and noticed that I forgot to round the length up when freeing.  After adding that, I ran some sparse tests and things looked ok.
+<br/>
+<br/>
+In other words, the remaining bugs should be subtle and hard to track down.  ;-)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10333 - hnager - Tue Sep 02, 2003 6:38 pm</h4>
+    <div class="postbody"><span class="postbody">ah 'easter egg bugs' - I don't have the file on me now, where should the length round up be?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10334 - sajiimori - Tue Sep 02, 2003 6:59 pm</h4>
+    <div class="postbody"><span class="postbody">Any time before length is used, e.g. the first line of Free.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10487 - hnager - Sat Sep 06, 2003 2:07 pm</h4>
+    <div class="postbody"><span class="postbody">Is this another potential hidden bug:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code"> // Gotta call this first. 
+<br/>
+   // There aren't static constructors in C++, right? 
+<br/>
+   static void Init() 
+<br/>
+   { 
+<br/>
+      free_blocks[0].length = NUM_CHARS; 
+<br/>
+   }</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+wouldn't you want to have all blocks assigned an initial length of 1024?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#10497 - sajiimori - Sat Sep 06, 2003 4:59 pm</h4>
+    <div class="postbody"><span class="postbody">No.  The first block with a length of zero marks the end of the free blocks.  Look at it this way: when the memory is empty, there is only one big free block.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

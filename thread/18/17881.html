@@ -1,0 +1,604 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>malloc overwriting previously allocated memory - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > malloc overwriting previously allocated memory</h2>
+<div id="posts">
+<div class="post">
+    <h4>#177566 - fluffypants - Wed Sep 05, 2012 4:26 am</h4>
+    <div class="postbody"><span class="postbody">Hi everyone.  Longtime lurker, first time poster.  I am running into an issue dynamically allocating arrays.  I'll post the section of code after I give a quick overview of the problem.  
+<br/>
+<br/>
+I am using nitroFS to read in a file containing texture data.  The format is something like this:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">//Palette length
+<br/>
+10
+<br/>
+//Palette entries R,G,B newline deliniated
+<br/>
+1
+<br/>
+1
+<br/>
+1
+<br/>
+21
+<br/>
+21
+<br/>
+21
+<br/>
+10
+<br/>
+7
+<br/>
+10
+<br/>
+....
+<br/>
+//Tile length
+<br/>
+96
+<br/>
+//Tiledata len*64 (8x8)
+<br/>
+1
+<br/>
+1
+<br/>
+5
+<br/>
+6
+<br/>
+...</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Nothing too complicated there.  I've stuck various iprintf statements for debugging to ensure that the values I'm getting are correct.  So far no problems, I get the exact values I see in my file.
+<br/>
+<br/>
+    However, since I don't know the size of the palette and tiles beforehand, I have to dynamically allocate pent and tent (paletteEntries and tileEntries, I realize I should rename these to something more descriptive) as I parse the file.  This works for the first array, but as soon as I malloc the second array, the last 4 positions in the first get clobbered.  I'm baffled.  
+<br/>
+<br/>
+Here's my entry point from main:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">int main(int argc, char **argv) {
+<br/>
+   int paletteLen;
+<br/>
+   u16 *paletteEntries;
+<br/>
+   int tileLen;
+<br/>
+   u8 *tileEntries;
+<br/>
+<br/>
+   ReadGraphics(&amp;paletteLen, &amp;paletteEntries, &amp;tileLen, &amp;tileEntries, "bg_tiles.h");
+<br/>
+....
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+and here's the function in question:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void ReadGraphics(int *plen, u16 **pent, int *tlen, u8 **tent, char *fileName)
+<br/>
+{
+<br/>
+   if (nitroFSInit()) {
+<br/>
+      {
+<br/>
+         // now, try reading a file to make sure things are working OK.
+<br/>
+         FILE* fileIn = fopen(fileName,"rb");
+<br/>
+         if(fileIn)
+<br/>
+         {
+<br/>
+            int i,j;
+<br/>
+            int R, G, B;
+<br/>
+<br/>
+            {
+<br/>
+               char line[64] = { 0 };
+<br/>
+            
+<br/>
+               // Get palette length
+<br/>
+               readLine(line, fileIn);   // first line is a comment
+<br/>
+               readLine(line, fileIn);   // Palette length
+<br/>
+               *plen = (int)atoi(line);
+<br/>
+               //allocate a big enough palette
+<br/>
+               *pent = (u16 *) malloc(*plen); 
+<br/>
+               // Get palette entries
+<br/>
+               readLine(line, fileIn);   // line is a comment
+<br/>
+               for(i = 0; i &lt; *plen; i++)
+<br/>
+               {
+<br/>
+                  readLine(line, fileIn);
+<br/>
+                  R = (int)atoi(line);
+<br/>
+                  readLine(line, fileIn);
+<br/>
+                  G = (int)atoi(line);
+<br/>
+                  readLine(line, fileIn);
+<br/>
+                  B = (int)atoi(line);
+<br/>
+<br/>
+<br/>
+                  (*pent)[i] = (u16)RGB15(R, G, B);
+<br/>
+                  
+<br/>
+               }
+<br/>
+<br/>
+               // Get tile block len
+<br/>
+               readLine(line, fileIn);   // line is a comment
+<br/>
+               readLine(line, fileIn);   // number of 8x8 blocks
+<br/>
+               *tlen = (int)atoi(line);
+<br/>
+               
+<br/>
+               // Get tiles
+<br/>
+               readLine(line, fileIn);   // line is a comment
+<br/>
+               
+<br/>
+               iprintf("pE func: %d\n",(*pent)[7]);
+<br/>
+               *tent = (u8*) malloc((*tlen)*64);
+<br/>
+               iprintf("pE func: %d\n",(*pent)[7]);
+<br/>
+               
+<br/>
+               for(i = 0; i &lt; *tlen; i++)
+<br/>
+               {
+<br/>
+                  for(j = 0; j &lt; 64; j++)
+<br/>
+                  {
+<br/>
+                     readLine(line, fileIn);
+<br/>
+                     (*tent)[i*64 + j] = (u8)atoi(line);
+<br/>
+                  }
+<br/>
+               }
+<br/>
+            }
+<br/>
+<br/>
+            fclose(fileIn);
+<br/>
+         }
+<br/>
+      }
+<br/>
+   } else {
+<br/>
+      iprintf("nitroFSInit failure: terminating\n");
+<br/>
+   }
+<br/>
+   
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+<br/>
+This is the part that I'm confused about:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">iprintf("pE func: %d\n",(*pent)[7]);
+<br/>
+*tent = (u8*) malloc((*tlen)*64);
+<br/>
+iprintf("pE func: %d\n",(*pent)[7]);</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+The first print statement gives me: 
+<br/>
+23254 which is correct.  After the malloc line, that same print now gives me 0.  If I comment that line out then pent[7] retains the correct value.  Also, the issue happens regardless of how much memory I am allocating (even 1 byte creates a problem).  Most of the paletteEntries are fine, it's just a couple at the tail end of my array that get clobbered, and the tent array is just fine.
+<br/>
+<br/>
+I'm still very much a novice, so feel free to point out any glaring problems with my code, related or not to the issue at hand.  And thanks for reading thus far.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177567 - Quirky - Wed Sep 05, 2012 7:58 am</h4>
+    <div class="postbody"><span class="postbody">We don't know what "readLine" does, but it could be overwriting the end of the line buffer, which would mess up the stack and cause something like this. Do you ensure you never read more than 64 bytes at a time?
+<br/>
+<br/>
+Also, general style things: you have a couple of extra scopes that aren't needed (extra {}), but that could be a side effect of snipping the code for posting here if you've redacted it a bit. There are lots of spurious casts. atoi returns an int, no need to cast that. In C you don't need to cast the return value of malloc either. I prefer the "if (exceptional condition) { return; }" style to avoid really deep nesting down the happy-path of the code, but that one is debatable.
+<br/>
+<br/>
+If I were you, I'd try and get this working on the PC first. It'd compile if you #define iprintf printf, change your u8 and u16 to uint8_t and uint16_t and #include &lt;stdint.h&gt;. That way you can use gdb or whatever to debug the problem more easily.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177568 - fluffypants - Wed Sep 05, 2012 9:09 am</h4>
+    <div class="postbody"><span class="postbody">Thanks Quirky,
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Also, general style things: you have a couple of extra scopes that aren't needed (extra {}), but that could be a side effect of snipping the code for posting here if you've redacted it a bit</td> </tr></table><span class="postbody">
+<br/>
+I actually just modified part of the nitrofs example in devkitPro, hence a couple of straggling curlies.  It certainly needs cleanup and I'm always embarrassed to show code, especially a frankenstein.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">We don't know what "readLine" does, but it could be overwriting the end of the line buffer, which would mess up the stack and cause something like this. Do you ensure you never read more than 64 bytes at a time?</td> </tr></table><span class="postbody">
+<br/>
+Currently readLine doesn't do any buffer overflow checks.  I'm planning on adding that, but was trying to get the simplest scenario working.  I've double checked the contents of 'line' for the entire file and it seems fine (no lines bigger than a couple of characters, besides the comments).  It's only when I start memory management that it goes awry.  I've printed the entire file line by line, and it seems OK.  I was thinking that I might be thrashing my stack for a while, but then I noticed that even allocating 1 byte was clobbering my first array (which is only 20 bytes long).  I suppose the next test would be to just malloc the two arrays without reading the file at all to see what happens.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">There are lots of spurious casts. atoi returns an int, no need to cast that. In C you don't need to cast the return value of malloc either.</td> </tr></table><span class="postbody">
+<br/>
+Oh, man, I totally spaced those (int)atoi(), completely redundant.  The mallocs I didn't know about, chalk it up to being nervous about data alignment.  I'll remove them.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">If I were you, I'd try and get this working on the PC first. It'd compile if you #define iprintf printf, change your u8 and u16 to uint8_t and uint16_t and #include &lt;stdint.h&gt;. That way you can use gdb or whatever to debug the problem more easily.</td> </tr></table><span class="postbody">
+<br/>
+This is an excellent suggestion.  Debugging on the console has been pretty tedious.  I'll have to leave it there for the moment as it's getting late.  When I get some time tomorrow, I'll see what I can figure out.
+<br/>
+<br/>
+Thanks again for the pointers, Quirky</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177569 - sverx - Wed Sep 05, 2012 10:17 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>fluffypants wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+This is the part that I'm confused about:
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">iprintf("pE func: %d\n",(*pent)[7]);
+<br/>
+*tent = (u8*) malloc((*tlen)*64);
+<br/>
+iprintf("pE func: %d\n",(*pent)[7]);</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+The first print statement gives me: 
+<br/>
+23254 which is correct.  After the malloc line, that same print now gives me 0.  If I comment that line out then pent[7] retains the correct value.</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Simply allocating memory into the heap shouldn't modify any value in your array... are you modifying pent pointer value? I mean, is your tent variable using the same memory location as pent? :|<br/>_________________<br/><a class="postlink" href="http://bit.ly/yiQrz9" target="_blank">libXM7</a> | <a class="postlink" href="http://bit.ly/yJwcOo" target="_blank">NDS programming tutorial (Italiano)</a> | <a class="postlink" href="http://disjointedstudio.blogspot.com/" target="_blank">Waimanu DS</a> | <a class="postlink" href="http://adshomebrewersdiary.blogspot.com" target="_blank">A DS Homebrewer's Diary</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177576 - PypeBros - Wed Sep 05, 2012 4:56 pm</h4>
+    <div class="postbody"><span class="postbody">[quote="sverx"]</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>fluffypants wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+This is the part that I'm confused about:
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">iprintf("pE func: %d\n",(*pent)[7]);
+<br/>
+*tent = (u8*) malloc((*tlen)*64);
+<br/>
+iprintf("pE func: %d\n",(*pent)[7]);</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+The first print statement gives me: 
+<br/>
+23254 which is correct.  After the malloc line, that same print now gives me 0.  If I comment that line out then pent[7] retains the correct value.</span></td> </tr></table><span class="postbody">
+<br/>
+That suggests to me that you should double-check plen. If it wasn't as high as you expected, then pent may have been allocated only a very small area and [7] is already beyond what malloc gave you ...<br/>_________________<br/><a class="postlink" href="http://sylvainhb.blogspot.com/p/sprite-editor.html" target="_blank"> SEDS: Sprite Edition on DS</a> :: <a class="postlink" href="http://sylvainhb.blogspot.com/search/label/modplayer" target="_blank">modplayer</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177578 - elhobbs - Wed Sep 05, 2012 5:15 pm</h4>
+    <div class="postbody"><span class="postbody">this is a problem:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">*pent = (u16 *) malloc(*plen);</td> </tr></table><span class="postbody">
+<br/>
+this does not allocate enough memory for for *plen u16 values - so this buffer is too short by half. u16 is 2 bytes.
+<br/>
+sb
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+*pent = (u16 *) malloc((*plen)*sizeof(u16));</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+there are more problems I am sure</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177583 - fluffypants - Wed Sep 05, 2012 8:17 pm</h4>
+    <div class="postbody"><span class="postbody">I think you are right elhobbs.  I didn't calculate the appropriate size on either mallocs.  Likely tent would have had this issue too if the data wasn't u8.  
+<br/>
+<br/>
+I'll test this tonight after work and try to clean up this code a bit.  Thanks everyone for your help so far, I know these are amateur mistakes, but I'm learning a lot.
+<br/>
+<br/>
+EDIT: Yep, that was it.  I wasn't allocating enough for u16.  Thanks all!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177585 - fluffypants - Thu Sep 06, 2012 5:33 am</h4>
+    <div class="postbody"><span class="postbody">Quirky wrote:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">In C you don't need to cast the return value of malloc either</td> </tr></table><span class="postbody">
+<br/>
+I cleaned up the unnecessary casts, but found that without casting malloc it spit out a compiler error "invalid conversion from 'void *' to 'u16 *'", so I left those in there.
+<br/>
+<br/>
+Here's the revised function.  Hopefully it's a little tidier.  I would love any final input/critique about my code (style, readability, better methods).
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void ReadGraphics(int *plen, u16 **pent, int *tlen, u8 **tent, char *fileName)
+<br/>
+{
+<br/>
+   // now, try reading a file to make sure things are working OK.
+<br/>
+   FILE* fileIn = fopen(fileName,"rb");
+<br/>
+   
+<br/>
+   if(fileIn)
+<br/>
+   {
+<br/>
+      int i,j;
+<br/>
+      int R, G, B;
+<br/>
+<br/>
+      char line[64] = { 0 };
+<br/>
+         
+<br/>
+      // Get palette length
+<br/>
+      readLine(line, fileIn);   // first line is a comment
+<br/>
+      readLine(line, fileIn);   // Palette length
+<br/>
+      *plen = atoi(line);
+<br/>
+      //allocate a big enough palette
+<br/>
+      *pent = (u16 *)malloc(*plen * sizeof(u16)); 
+<br/>
+      // Get palette entries
+<br/>
+      readLine(line, fileIn);   // line is a comment
+<br/>
+      for(i = 0; i &lt; *plen; i++)
+<br/>
+      {
+<br/>
+         readLine(line, fileIn);
+<br/>
+         R = atoi(line);
+<br/>
+         readLine(line, fileIn);
+<br/>
+         G = atoi(line);
+<br/>
+         readLine(line, fileIn);
+<br/>
+         B = atoi(line);
+<br/>
+<br/>
+         (*pent)[i] = RGB15(R, G, B);
+<br/>
+      }
+<br/>
+<br/>
+      // Get tile block len
+<br/>
+      readLine(line, fileIn);   // line is a comment
+<br/>
+      readLine(line, fileIn);   // number of 8x8 blocks
+<br/>
+      *tlen = atoi(line);
+<br/>
+            
+<br/>
+      // Get tiles
+<br/>
+      readLine(line, fileIn);   // line is a comment
+<br/>
+            
+<br/>
+      iprintf("pE func: %d\n",(*pent)[7]);
+<br/>
+      *tent = (u8 *)malloc((*tlen) * 64 * sizeof(u8));
+<br/>
+      iprintf("pE func: %d\n",(*pent)[7]);
+<br/>
+            
+<br/>
+      for(i = 0; i &lt; *tlen; i++)
+<br/>
+      {
+<br/>
+         for(j = 0; j &lt; 64; j++)
+<br/>
+         {
+<br/>
+            readLine(line, fileIn);
+<br/>
+            (*tent)[i*64 + j] = (u8)atoi(line);
+<br/>
+         }
+<br/>
+      }
+<br/>
+<br/>
+      fclose(fileIn);
+<br/>
+   }
+<br/>
+   else { iprintf("could not open: %s\n", fileName); }
+<br/>
+}</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177586 - elhobbs - Thu Sep 06, 2012 7:42 am</h4>
+    <div class="postbody"><span class="postbody">a couple suggestions
+<br/>
+create a struct to hold your graphics object
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+//define the struct
+<br/>
+typedef struct {
+<br/>
+  int palette_len;
+<br/>
+  u16 *palette;
+<br/>
+  int tile_len;
+<br/>
+  u8 *tiles;
+<br/>
+} graphic_t;
+<br/>
+<br/>
+//declare a variable of type graphic_t
+<br/>
+graphic_t graphic;
+<br/>
+<br/>
+//modified function spec
+<br/>
+int ReadGraphics(char *filename, graphic_t * graphic);
+<br/>
+<br/>
+//call the function
+<br/>
+if(ReadGraphics("filename",&amp;graphic) != 0) {
+<br/>
+   //failed to read graphic
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+this avoids the confusing pointers and pointers to pointers. the return value from ReadGraphics would be used to determine if the graphic was read correctly.
+<br/>
+<br/>
+I would change
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">FILE* fileIn = fopen(fileName,"rb"); 
+<br/>
+    
+<br/>
+   if(fileIn)
+<br/>
+   {
+<br/>
+      //read data
+<br/>
+   }
+<br/>
+   else
+<br/>
+   {
+<br/>
+      iprintf("could not open: %s\n", fileName);
+<br/>
+   }
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+to
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">FILE* fileIn = fopen(fileName,"rb"); 
+<br/>
+    
+<br/>
+   if(fileIn == 0) {
+<br/>
+      iprintf("could not open: %s\n", fileName);
+<br/>
+      return -1;
+<br/>
+   }
+<br/>
+<br/>
+   //read data
+<br/>
+   return 0;</td> </tr></table><span class="postbody">
+<br/>
+I find it a little easier to read as it keeps the error handling closer to the source of the error - in this case the fopen call</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177587 - sverx - Thu Sep 06, 2012 8:51 am</h4>
+    <div class="postbody"><span class="postbody">Good that the bug has been found and squashed, but I'd really like to know how that code
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">iprintf("pE func: %d\n",(*pent)[7]);
+<br/>
+*tent = (u8*) malloc((*tlen)*64);
+<br/>
+iprintf("pE func: %d\n",(*pent)[7]);</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+could print two different values. After all, malloc() it's only writing a pointer into *tent variable, not writing to (*pent)[7]...
+<br/>
+<br/>
+Any idea?<br/>_________________<br/><a class="postlink" href="http://bit.ly/yiQrz9" target="_blank">libXM7</a> | <a class="postlink" href="http://bit.ly/yJwcOo" target="_blank">NDS programming tutorial (Italiano)</a> | <a class="postlink" href="http://disjointedstudio.blogspot.com/" target="_blank">Waimanu DS</a> | <a class="postlink" href="http://adshomebrewersdiary.blogspot.com" target="_blank">A DS Homebrewer's Diary</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177589 - elhobbs - Thu Sep 06, 2012 1:01 pm</h4>
+    <div class="postbody"><span class="postbody">malloc allocates extra space in front of the returned buffer for housekeeping. Buffer size etc.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177590 - sverx - Thu Sep 06, 2012 1:44 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>elhobbs wrote:</b></span></td> </tr> <tr> <td class="quote">malloc allocates extra space in front of the returned buffer for housekeeping. Buffer size etc.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+There's always something new to learn :) Thanks!<br/>_________________<br/><a class="postlink" href="http://bit.ly/yiQrz9" target="_blank">libXM7</a> | <a class="postlink" href="http://bit.ly/yJwcOo" target="_blank">NDS programming tutorial (Italiano)</a> | <a class="postlink" href="http://disjointedstudio.blogspot.com/" target="_blank">Waimanu DS</a> | <a class="postlink" href="http://adshomebrewersdiary.blogspot.com" target="_blank">A DS Homebrewer's Diary</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177591 - fluffypants - Thu Sep 06, 2012 7:10 pm</h4>
+    <div class="postbody"><span class="postbody">elhobbs, thanks for the suggestions.  points well taken :)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177609 - Quirky - Tue Sep 11, 2012 11:49 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>fluffypants wrote:</b></span></td> </tr> <tr> <td class="quote">Quirky wrote:
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">In C you don't need to cast the return value of malloc either</td> </tr></table><span class="postbody">
+<br/>
+I cleaned up the unnecessary casts, but found that without casting malloc it spit out a compiler error "invalid conversion from 'void *' to 'u16 *'", so I left those in there.
+<br/>
+</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+ah, if you're compiling it as C++ then you do need the casts. In that case "new" is more idiomatic C++ - you'd do </span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">new u16[*plen];</td> </tr></table><span class="postbody"> or whatever. That would have avoided the bug too probably, since you wouldn't worry about the size of the things you allocate, just the number of them.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

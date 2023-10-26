@@ -1,0 +1,504 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>GBA data glitch - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > GBA data glitch</h2>
+<div id="posts">
+<div class="post">
+    <h4>#132312 - ThousandKnives - Mon Jun 25, 2007 8:37 pm</h4>
+    <div class="postbody"><span class="postbody">Hi.  I'm brand new to this forum, I only started GBA programming in c++ about 10 days ago, although I've done a lot of DirectX programming previously and have some experience with assembly.  I've managed to get my arms around graphical basics and have a simple tile-based 2D sidescroller set up in Mode 0.  It is a re-creation of a game I originally made on DirectX many many years ago for a 72-hour contest (placed 2nd at the time).
+<br/>
+<br/>
+In setting up the audio, I've been using several tutorials but have yet to find any of them that is really helpful. I am having two problems with audio playback.  For now I only want to touch on one problem as they are very different issues and this one doesn't actually have all that much to do with audio, which is why I'm putting it in the general forum.
+<br/>
+<br/>
+The issue comes when inserting the audio data into the program.  I am using a combination of wav2gba and bin2c to create header files for each of the sound files (I am deficient at the intricacies of linking bins, so thats why I use the headers).  The sound files are each 22kHz 8-bit mono PCM and I had no problem creating the headers by using those tools.
+<br/>
+<br/>
+The code looks well formed afterward and the 20 files total 1.18 MB as source.  When specifying outputs I made sure that the data structures were prefixed with "SFX" so there was no possibility of overwriting any variable names.  The code compiles without an error or warning at any rate.  When including all of these files in the compile the ELF file ends up at 3.08MB and the GBA at 729 KB (the GBA file is 506KB without the audio headers).
+<br/>
+<br/>
+The trouble starts when I am including the headers that hold the audio data.  Including one or two of them causes no distress, but after including three or more of these headers, things start to go wonky with the graphics in Mode 0. (the title screen is in mode 4 and behaves normally).  Sprite graphics are all correct, as are the tiles stored in char block 1 (mostly) - but not those stored in char block 0.  Although, somehow the tiles positions for screen map 29 (which referenced char block 0) appear OK.
+<br/>
+<br/>
+I know that the audio data is there and is correct because even though there are these graphics issues, when I try to play one of the sounds it plays properly (somewhat- thats my other problem I will get into sperately).
+<br/>
+<br/>
+Note that these problems appear after merely uncommenting the include files for the DATA.  I am not actually USING any of the data for any reason at this point.
+<br/>
+<br/>
+The results are from VisualBoy Advance, not running on hardware.
+<br/>
+<br/>
+Is there some kind of limitation I'm running into here that I should be aware of? I am baffled by this problem and could use some suggestions on where to even begin looking for the problem &amp; solution.  I can give more data but as I'm not even sure where the source of this problem lies I'm uncertain what data to give.
+<br/>
+<br/>
+Thanks for any help in advance.
+<br/>
+-Paul</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#132313 - gauauu - Mon Jun 25, 2007 9:03 pm</h4>
+    <div class="postbody"><span class="postbody">One possibility is that you aren't declaring the data to be const.  In that case, it tries to put it in the gba's ram, instead of just loading it straight off the cart...so you could be filling up the ram space?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#132314 - ThousandKnives - Mon Jun 25, 2007 9:15 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>gauauu wrote:</b></span></td> </tr> <tr> <td class="quote">One possibility is that you aren't declaring the data to be const.  In that case, it tries to put it in the gba's ram, instead of just loading it straight off the cart...so you could be filling up the ram space?</td> </tr></table><span class="postbody">
+<br/>
+Bingo, the bin2c program created the arrays as static, not const.
+<br/>
+Changing them all to const by hand has fixed the problem.
+<br/>
+<br/>
+I wasn't aware of all the ramifications of distingiushing variables as const on the GBA hardware (not something the tutorials cover, maybe because its common sense to someone with more hardware-level experience).  I will take that into consideration in the future.
+<br/>
+<br/>
+Many thanks gauauu!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#132318 - keldon - Mon Jun 25, 2007 9:37 pm</h4>
+    <div class="postbody"><span class="postbody">Welcome to the forum!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#132344 - wintermute - Tue Jun 26, 2007 2:41 am</h4>
+    <div class="postbody"><span class="postbody">The problem is caused by alignment issues. All the graphics need to be on 16bit boundaries or odd things happen as you've seen.
+<br/>
+<br/>
+Don't include your data as C arrays in headers - this is particularly prone to causing alignment issues and increases your compile time quite drastically. I've provided some helpful macros in the devkitARM build system which will help you avoid these issues.
+<br/>
+<br/>
+In the gba template makefile you'll see these lines at the top
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+# TARGET is the name of the output, if this ends with _mb a multiboot image is generated
+<br/>
+# BUILD is the directory where object files &amp; intermediate files will be placed
+<br/>
+# SOURCES is a list of directories containing source code
+<br/>
+# DATA is a list of directories containing data files
+<br/>
+# INCLUDES is a list of directories containing header files
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+TARGET      :=   $(shell basename $(CURDIR))_mb
+<br/>
+BUILD      :=   build
+<br/>
+SOURCES      :=   source
+<br/>
+DATA      :=   
+<br/>
+INCLUDES   :=
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+The DATA line is used to tell the makefile which directories contain data to be added to the project. These are relative to the folder where the Makefile lives.
+<br/>
+<br/>
+Later in the file you'll see
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+BINFILES   :=   $(foreach dir,$(DATA),$(notdir $(wildcard $(dir)/*.*)))
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+which picks up all the files found in those data directories.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+export OFILES   := $(addsuffix .o,$(BINFILES)) ...
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+adds a .o to the filename to create the object file name
+<br/>
+<br/>
+and finally
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+%.bin.o   :   %.bin
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+   @echo $(notdir $&lt;)
+<br/>
+   @$(bin2o)
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+tells the makefile how to create a bin.o from a .bin file. You'll need a rule like this for each extension you wish to place in a data directory. Note: currently this last rule seems to be missing in the provided template - I'll fix that in CVS and sort out a new release soon.
+<br/>
+<br/>
+In your case you might want to have a rule which creates raw data from a wav file, perhaps using something like sox or modify your wav2c code to output raw binary data instead. Let's take the latter approach, calling the new tool wav2raw.
+<br/>
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+%.raw   :   %.wav
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+   @echo $(notdir $&lt;)
+<br/>
+   @wav2raw $&lt; $@
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+%.raw.o   :   %.raw
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+   @echo $(notdir $&lt;)
+<br/>
+   @$(bin2o)
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+The first rule here tells the makefile that creating a .raw file from a .wav file is achieved by calling wav2raw with the input file as the first parameter ( $&lt; ) and the target or output file as the second parameter ( $@ )
+<br/>
+<br/>
+The second rule takes the .raw file and turns it into an object file ( .raw.o) using the bin2o macro defined in the devkitARM rules files. This macro also produces a nice header which allows your C code to use the arrays defined  in this way - the header will be &lt;name&gt;_raw.h in this case. It will define the following names.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+extern const u8 &lt;name&gt;_raw_end[];
+<br/>
+extern const u8 &lt;name&gt;_raw[];
+<br/>
+extern const u32 &lt;name&gt;_raw_size;
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+The arrays will be automatically aligned to a 4 byte boundary.
+<br/>
+<br/>
+For audio I generally recommend using one of the excellent GBA libraries available rather than writing your own from scratch. I believe most people use <a class="postlink" href="http://synk.at/krawall/" target="_blank">Krawall</a> ( currently not loading for me, hopefully it hasn't vanished) but I was rather fond of <a class="postlink" href="http://www.apex-designs.net/tools_aas.html" target="_blank">Apex Audio</a>. There are examples for both of these libraries in the libgba examples provided with devkitARM. You'll need to follow the instructions in the examples and obtain your own copies of the actual sound libraries though.
+<br/>
+<br/>
+edit: I see your problem wasn't caused by alignment as I guessed but this is useful information anyway.
+<br/>
+<br/>
+I guess you're not using devkitARM? This *should* have given you an error at link time saying that the RAM region was full. The bin2o method specified above will also place the data into the correct section of memory.<br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#132348 - gauauu - Tue Jun 26, 2007 3:27 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote"> I believe most people use Krawall ( currently not loading for me, hopefully it hasn't vanished) .....</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Last I checked, Krawall didn't work with the newer versions of GCC that devkitARM uses.  I didn't see your examples, so maybe there's something I missed, but I emailed Sebastian (author of Krawall) and he said he never got around to making it work with the newer GCC.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#132349 - wintermute - Tue Jun 26, 2007 3:42 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>gauauu wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote"> I believe most people use Krawall ( currently not loading for me, hopefully it hasn't vanished) .....</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Last I checked, Krawall didn't work with the newer versions of GCC that devkitARM uses.  I didn't see your examples, so maybe there's something I missed, but I emailed Sebastian (author of Krawall) and he said he never got around to making it work with the newer GCC.</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+That's actually easy enough to do - the readme with the krawall example gives some details.
+<br/>
+<br/>
+<a href="http://devkitpro.cvs.sourceforge.net/devkitpro/examples/gba/audio/Krawall/readme.txt?revision=1.2&amp;view=markup" target="_blank">http://devkitpro.cvs.sourceforge.net/devkitpro/examples/gba/audio/Krawall/readme.txt?revision=1.2&amp;view=markup</a>
+<br/>
+<br/>
+I did email Sebastian when I moved to arm-eabi and he said he would get around to recompiling with the latest toolchain at some point.<br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#132363 - ThousandKnives - Tue Jun 26, 2007 5:15 am</h4>
+    <div class="postbody"><span class="postbody">Thanks for the pointers, wintermute.  I will try to implement what you've explained but unfortunately I have absolutely no experience fiddling manually with makefiles.  In that past I've always just used compiler settings (I became a fan of Bloodshed Dev/C++ in my DirectX days).
+<br/>
+<br/>
+I am currently using devkitAdv.  I downloaded devkitPro but couldn't get my code to compile using devkitARM (I received a slew of "undefined reference" errors when compiling).  Again, I have very little knowledge of linkers and setting up compilers by hand and couldn't find any documentation for devkitARM that I understood.  I found a good tutorial to help me set up devkitAdv with little fuss, so I just went with that.
+<br/>
+<br/>
+Ultimately I am planning to move on to NDS programming.  There is a much wider array of entry-level tutorials available for GBA programming, so I decided to start there- there wasn't a single NDS tutorial that could even successfully walk me through setting up the compiler.  But, after I have more experience getting the nuts and bolts together I would like to move on to the "latest and greatest" ARM.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#132434 - wintermute - Tue Jun 26, 2007 6:05 pm</h4>
+    <div class="postbody"><span class="postbody">links of note.
+<br/>
+<br/>
+<a href="http://www.coranac.com/tonc/text/setup.htm" target="_blank">http://www.coranac.com/tonc/text/setup.htm</a>
+<br/>
+<br/>
+<a href="http://www.dev-scene.com/NDS/Tutorials#Day_1:_Getting_Started" target="_blank">http://www.dev-scene.com/NDS/Tutorials#Day_1:_Getting_Started</a>
+<br/>
+<br/>
+Elevator instructions for setting up devkitPro toolchains on windows.
+<br/>
+<br/>
+1. Run devkitPro installer.
+<br/>
+2. Navigate to the examples directory - c:\devkitPro\examples by default
+<br/>
+3. Navigate further to a GBA example - c:\devkitPro\examples\gba\graphics\ansi_console for example
+<br/>
+4. Double click the .pnproj file found there
+<br/>
+5. Click Tools-&gt;make or use the ALT 1 key combo
+<br/>
+6. You should now have a shiny .gba file you can run in an emulator
+<br/>
+<br/>
+Starting a new GBA project.
+<br/>
+<br/>
+1. copy the gba template folder ( c:\devkitPro\examples\gba\template ) somewhere, say c:\projects\template
+<br/>
+2. rename the folder from template to something meaningful
+<br/>
+3. double click the .pnproj file found inside
+<br/>
+4. replace the code in template.c with your own code
+<br/>
+5. Click Tools-&gt;make or use the ALT 1 key combo
+<br/>
+6. You should now have a shiny .gba file you can run in an emulator
+<br/>
+7. repeat as needed.
+<br/>
+<br/>
+Any .c/.cpp files you place in the source folder will be automatically compiled and linked into your project.<br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#132483 - ThousandKnives - Wed Jun 27, 2007 6:17 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>wintermute wrote:</b></span></td> </tr> <tr> <td class="quote">links of note.
+<br/>
+1. Run devkitPro installer.
+<br/>
+2. Navigate to the examples directory - c:\devkitPro\examples by default
+<br/>
+3. Navigate further to a GBA example - c:\devkitPro\examples\gba\graphics\ansi_console for example
+<br/>
+4. Double click the .pnproj file found there
+<br/>
+5. Click Tools-&gt;make or use the ALT 1 key combo
+<br/>
+6. You should now have a shiny .gba file you can run in an emulator
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+OK, I'm taking another shot at devkitpro using your instructions.  First I re-installed devkitPro just to be sure, and then opened the example project you mentioned in Programmers Notebook.  When I used Tools-&gt;make on the ANSI example, I received this error:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">&gt; "make" 
+<br/>
+<br/>
+&gt; Failed to create process: The system cannot find the file specified.
+<br/>
+<br/>
+&gt; Process Exit Code: 0
+<br/>
+&gt; Time Taken: 00:00
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+When I looked at the FAQ there were instructions for configuring make and clean, but all of the settings had been automatically configured properly.
+<br/>
+<br/>
+Any help on this is much appreciated, thanks.
+<br/>
+<br/>
+<span style="font-weight: bold">edit:</span>
+<br/>
+OK, I tried copying the make.exe from my Dev-Cpp and placing it in the msys/bin folder, which made the make possible.  But now I'm getting this error:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">&gt; "make" 
+<br/>
+makefile:10: /c/DevKitPro/devkitARM/gba_rules: No such file or directory
+<br/>
+process_begin: CreateProcess((null), basename C:/DevKitPro/examples/gba/graphics/ansi_console, ...) failed.
+<br/>
+make: *** No rule to make target `/c/DevKitPro/devkitARM/gba_rules'.  Stop.
+<br/>
+<br/>
+&gt; Process Exit Code: 2
+<br/>
+&gt; Time Taken: 00:01</td> </tr></table><span class="postbody">
+<br/>
+The bizarre part is that the '/c/DevKitPro/devkitARM/gba_rules' file it's throwing up a red flag about actualy DOES exist at that location.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#132527 - wintermute - Wed Jun 27, 2007 3:22 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>ThousandKnives wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+<span style="font-weight: bold">edit:</span>
+<br/>
+OK, I tried copying the make.exe from my Dev-Cpp and placing it in the msys/bin folder, which made the make possible.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+That was a spectacularly bad idea as it happens. Msys make is special and dev-cpp's make is not a suitable replacement. There is also the small problem that executables in the msys bin folder are assumed to have been linked with the msys dll. If they haven't then they fail in various interesting ways.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+  But now I'm getting this error:
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">&gt; "make" 
+<br/>
+makefile:10: /c/DevKitPro/devkitARM/gba_rules: No such file or directory
+<br/>
+process_begin: CreateProcess((null), basename C:/DevKitPro/examples/gba/graphics/ansi_console, ...) failed.
+<br/>
+make: *** No rule to make target `/c/DevKitPro/devkitARM/gba_rules'.  Stop.
+<br/>
+<br/>
+&gt; Process Exit Code: 2
+<br/>
+&gt; Time Taken: 00:01</td> </tr></table><span class="postbody">
+<br/>
+The bizarre part is that the '/c/DevKitPro/devkitARM/gba_rules' file it's throwing up a red flag about actualy DOES exist at that location.</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Yes, I'd expect all of those due to the incorrect make.
+<br/>
+<br/>
+I have to confess to being a little confused by this - your first problem suggests that you don't have make in the path yet the result of your attempted solution would seem to indicate that it was.
+<br/>
+<br/>
+Why did you copy make from dev-cpp? Was this file missing from msys?
+<br/>
+<br/>
+If you look in the installed.ini file found in your devkitPro folder you'll see a block like this.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+[msys]
+<br/>
+Version=1.0.10
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+if you change that number to anything else, save the file &amp; re-run the installer/updater then msys will be reinstalled.
+<br/>
+<br/>
+Once you have msys repaired open a bash shell ( start-&gt;Programs-&gt;devkitPro-&gt;MSys ) type "set &gt; env.txt" and show us the contents of env.txt.
+<br/>
+<br/>
+You can also test if everything is working from the shell
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+$ cd /c/devkitPro/examples/gba/graphics/PCXView/
+<br/>
+<br/>
+davem@NEUROMANCER /c/devkitPro/examples/gba/graphics/PCXView
+<br/>
+$ make clean
+<br/>
+clean ...
+<br/>
+<br/>
+davem@NEUROMANCER /c/devkitPro/examples/gba/graphics/PCXView
+<br/>
+$ make
+<br/>
+splash.pcx
+<br/>
+pcx_view.c
+<br/>
+arm-eabi-gcc -MMD -MP -MF /c/devkitPro/examples/gba/graphics/PCXView/build/pcx_view.d -g -Wall -O0 -mcpu=arm7tdmi -mtune=arm7tdmi -fomit-frame-pointer -ffast-math -mthumb -mthumb-interwork  -I/c/devkitPro/libgba/include -I/c/devkitPro/examples/gba/graphics/PCXView/build -c /c/devkitPro/examples/gba/graphics/PCXView/src
+<br/>
+/pcx_view.c -o pcx_view.o
+<br/>
+linking cartridge
+<br/>
+built ... PCXView.gba
+<br/>
+ROM fixed!
+<br/>
+<br/>
+davem@NEUROMANCER /c/devkitPro/examples/gba/graphics/PCXView
+<br/>
+$
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+It might help if you came and joined us on IRC at irc.blitzed.org in #dsdev. Sometimes being in a more real time environment brings up things we might miss otherwise.<br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#132535 - ThousandKnives - Wed Jun 27, 2007 5:16 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>wintermute wrote:</b></span></td> </tr> <tr> <td class="quote">Why did you copy make from dev-cpp? Was this file missing from msys?
+<br/>
+<br/>
+If you look in the installed.ini file found in your devkitPro folder you'll see a block like this.
+<br/>
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+[msys]
+<br/>
+Version=1.0.10
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+</span></td> </tr></table><span class="postbody">
+<br/>
+My msys folder was completely empty save for the bin subfolder, which was also empty.  That is why I decided to copy the make.exe, because I wasn't sure where else to get it from and coouldn't figure out why it wasn't included in the package.
+<br/>
+<br/>
+I checked the installed.ini as you suggested it and it read "[msys]Version=0" so I ran the installer again, which did the trick.  Apparantly when I ran the installer the first time it decided not to install msys even though the box was most certainly checked.
+<br/>
+<br/>
+After that, I was able to successfully compile the example code.  Many thanks for your continued patience!</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

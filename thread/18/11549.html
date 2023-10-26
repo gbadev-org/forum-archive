@@ -1,0 +1,418 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Ortho Z-Fighting - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Ortho Z-Fighting</h2>
+<div id="posts">
+<div class="post">
+    <h4>#107150 - Goosey - Fri Oct 27, 2006 6:55 am</h4>
+    <div class="postbody"><span class="postbody">Been banging my head on this all night..
+<br/>
+<br/>
+I am using orthographic projection in a 2 quad test case. When the 'front' quad moved below the 'back' quad on the y axis it would be drawn behind, otherwise drawn in front. 
+<br/>
+<br/>
+I recreated this demo using perspective mode and found I could recreate the 'flicker' effect if I set both quads to the same Z-depth. This leads me to believe this is how the DS handles z-fighting (low the scanline the poly reaches, the sooner it is drawn). The odd thing about this all is that changing the Z-Depth in orthographic mode did not make the flickering stop.
+<br/>
+<br/>
+NOTE: this is a problem appear only on hardware, emulators are not showing this behavior. 
+<br/>
+<br/>
+Here is an *.nds for the ortho:
+<br/>
+<a href="http://www.goosey.info/temp/wtf_Ortho.nds" target="_blank">www.goosey.info/temp/wtf_Ortho.nds</a>
+<br/>
+<br/>
+Here is an *.nds for the perspective: 
+<br/>
+<a href="http://www.goosey.info/temp/wtf_Persp.nds" target="_blank">www.goosey.info/temp/wtf_Persp.nds</a>
+<br/>
+<br/>
+Controls for both:
+<br/>
+ - arrows - move jet
+<br/>
+ - l/r - rotate jet (this can cause flicker if rotations cause it to go 'south' of the drunken coders quad).
+<br/>
+ - y/x - change jet z-depth
+<br/>
+ - a/b - change drunken z-depth
+<br/>
+<br/>
+ ( same controls )
+<br/>
+<br/>
+I am pretty fucking stumped, any ideas? 
+<br/>
+<br/>
+Things I did look at: 
+<br/>
+ - The ortho appears to not 'squish' z as I thought for a bit, i set up the camera to look at it from an angle and z obviously effected something. 
+<br/>
+ - Changing the draw order doesn't solve this issue (jet is drawn second in those demos tho)
+<br/>
+ - :(
+<br/>
+<br/>
+Ill post code tomorrow (making this post quickly as security shoos the students out, building closing for the night).</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#107274 - Goosey - Sat Oct 28, 2006 4:34 am</h4>
+    <div class="postbody"><span class="postbody">Here is the code for the Ortho
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+<br/>
+#include "ARM9Common.h"
+<br/>
+<br/>
+#include "texture_bin.h"
+<br/>
+#include "OrangeJet_bin.h"
+<br/>
+<br/>
+//-------------------------------------------------------------------------------
+<br/>
+int main( void ) {
+<br/>
+<br/>
+   powerON(POWER_ALL);
+<br/>
+<br/>
+   //---------------------------------------------------------------------------------
+<br/>
+   // initialize the irq dispatcher
+<br/>
+   ForceIrqInit();
+<br/>
+<br/>
+   FIFOCommand9::Init();
+<br/>
+<br/>
+   // a vblank interrupt is needed to use swiWaitForVBlank()
+<br/>
+   // since the dispatcher handles the flags no handler is required
+<br/>
+   irqEnable(IRQ_VBLANK);
+<br/>
+   videoSetMode(MODE_0_3D);   // 3d on main screen
+<br/>
+   videoSetModeSub(MODE_0_2D | DISPLAY_BG0_ACTIVE);   //sub bg 0 will be used to print text
+<br/>
+<br/>
+   vramSetBankC(VRAM_C_SUB_BG);
+<br/>
+<br/>
+   SUB_BG0_CR = BG_MAP_BASE(31);
+<br/>
+<br/>
+   BG_PALETTE_SUB[255] = RGB15(31,31,31);   //by default font will be rendered with color 255
+<br/>
+<br/>
+   // consoleInit() is a lot more flexible but this gets you up and running quick
+<br/>
+   consoleInitDefault((u16*)SCREEN_BASE_BLOCK_SUB(31), (u16*)CHAR_BASE_BLOCK_SUB(0), 16);
+<br/>
+<br/>
+   float rZ = 0.0;
+<br/>
+   float z1   = 0;
+<br/>
+   float z2   = 0;
+<br/>
+   int x      = 0;
+<br/>
+   int y      = 0;
+<br/>
+   int width   = 128;
+<br/>
+   int height   = 128;
+<br/>
+<br/>
+   //this should work the same as the normal gl call
+<br/>
+   glViewPort(0,0,255,191);
+<br/>
+<br/>
+   glClearColor(0,0,0);
+<br/>
+   glClearDepth(0x7FFF);
+<br/>
+<br/>
+   vramSetBankA(VRAM_A_TEXTURE);
+<br/>
+<br/>
+   int textureID[2];
+<br/>
+   glGenTextures(2, textureID);
+<br/>
+   glBindTexture(GL_TEXTURE_2D, textureID[0]);
+<br/>
+   glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, TEXTURE_SIZE_64 , TEXTURE_SIZE_64, 0, TEXGEN_TEXCOORD, (u8*)OrangeJet_bin);
+<br/>
+<br/>
+   glBindTexture(GL_TEXTURE_2D, textureID[1]);
+<br/>
+   glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, TEXTURE_SIZE_128 , TEXTURE_SIZE_128, 0, TEXGEN_TEXCOORD, (u8*)texture_bin);
+<br/>
+<br/>
+#define transX(x) (inttov16(x)&gt;&gt;6)
+<br/>
+#define transY(y) (inttov16(y)&gt;&gt;6)
+<br/>
+#define glVertex2v16_Ortho(xg,yg,zz) glVertex3v16(transX(xg), transY(yg), floattov16(zz) );
+<br/>
+#define glTextureCoord2t16_Ortho(u,v) glTexCoord2t16(v,u);
+<br/>
+<br/>
+   forever()
+<br/>
+   {
+<br/>
+      // Scan keys for input
+<br/>
+      scanKeys();
+<br/>
+      u16 keys = keysHeld();
+<br/>
+      if((keys &amp; KEY_R))      rZ += 3;
+<br/>
+      if((keys &amp; KEY_L))      rZ -= 3;
+<br/>
+      if((keys &amp; KEY_X))      z1 += 0.05;
+<br/>
+      if((keys &amp; KEY_Y))      z1 -= 0.05;
+<br/>
+      if((keys &amp; KEY_A))      z2 += 0.05;
+<br/>
+      if((keys &amp; KEY_B))      z2 -= 0.05;
+<br/>
+      if((keys &amp; KEY_UP))      y -= 1;
+<br/>
+      if((keys &amp; KEY_DOWN))   y += 1;
+<br/>
+      if((keys &amp; KEY_LEFT))   x -= 1;
+<br/>
+      if((keys &amp; KEY_RIGHT))   x += 1;      
+<br/>
+<br/>
+      printf("x:%d y:%d rZ:%f\n drunkZ:%f jetZ:%f\n", x, y, rZ, z1, z2);
+<br/>
+<br/>
+      glReset(); // Must be per-frame
+<br/>
+      glEnable(GL_ALPHA_TEST);
+<br/>
+      glOrtho(0, 4,      3, 0,      1, -1);
+<br/>
+<br/>
+      glPushMatrix(); 
+<br/>
+<br/>
+      glMatrixMode(GL_TEXTURE);
+<br/>
+      glIdentity();
+<br/>
+      glMatrixMode(GL_MODELVIEW);
+<br/>
+      
+<br/>
+      //draw the objects
+<br/>
+      glPushMatrix();
+<br/>
+      glBindTexture(GL_TEXTURE_2D, textureID[1]);
+<br/>
+      glPolyFmt(POLY_ALPHA(31) | POLY_CULL_NONE | POLY_ID(0));
+<br/>
+      glBegin(GL_QUAD);
+<br/>
+      {
+<br/>
+         glColor3b(0,255,255);
+<br/>
+<br/>
+         glTextureCoord2t16_Ortho(0,0);
+<br/>
+         glVertex2v16_Ortho(50,   50,         z1);
+<br/>
+<br/>
+         glTextureCoord2t16_Ortho(inttot16(128), 0);
+<br/>
+         glVertex2v16_Ortho(150,      50,      z1);
+<br/>
+<br/>
+         glTextureCoord2t16_Ortho(inttot16(128),inttot16(128));
+<br/>
+         glVertex2v16_Ortho(150,      150,   z1);
+<br/>
+<br/>
+         glTextureCoord2t16_Ortho(0, inttot16(128));
+<br/>
+         glVertex2v16_Ortho(50,   150,      z1);
+<br/>
+      }
+<br/>
+      glEnd();
+<br/>
+      glPopMatrix(1);
+<br/>
+<br/>
+      glPushMatrix();
+<br/>
+      glTranslate3f32(inttof32( x )&gt;&gt;6, inttof32( y )&gt;&gt;6, floattof32(0));
+<br/>
+      glRotateZ(rZ);
+<br/>
+      glBindTexture(GL_TEXTURE_2D, textureID[0]);
+<br/>
+      glPolyFmt(POLY_ALPHA(31) | POLY_CULL_NONE | POLY_ID(1));
+<br/>
+      glBegin(GL_QUAD);
+<br/>
+      {
+<br/>
+         glColor3b(255,0,0);
+<br/>
+<br/>
+         float depth = 0.0;
+<br/>
+<br/>
+         glTextureCoord2t16_Ortho(0,0);
+<br/>
+         glVertex2v16_Ortho(-width/2,   -height/2,   z2);
+<br/>
+<br/>
+         glTextureCoord2t16_Ortho(inttot16(64), 0);
+<br/>
+         glVertex2v16_Ortho(width/2,      -height/2,   z2);
+<br/>
+<br/>
+         glTextureCoord2t16_Ortho(inttot16(64),inttot16(64));
+<br/>
+         glVertex2v16_Ortho(width/2,      height/2,   z2);
+<br/>
+<br/>
+         glTextureCoord2t16_Ortho(0, inttot16(64));
+<br/>
+         glVertex2v16_Ortho(-width/2,   height/2,   z2);
+<br/>
+      }
+<br/>
+      glEnd();
+<br/>
+      glPopMatrix(1);
+<br/>
+<br/>
+<br/>
+      glFlush();
+<br/>
+<br/>
+      swiWaitForVBlank();
+<br/>
+   }
+<br/>
+<br/>
+   return 0;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#108136 - ollhak - Sun Nov 05, 2006 6:59 pm</h4>
+    <div class="postbody"><span class="postbody">Guess this thread is a few days old but anyway...
+<br/>
+<br/>
+Goosey, I tried setting up the perspective in the way you showed but for some reason the quads are sometimes scaled by a pixel in the y-direction (64x63 instead of 64x64) - rounding error maybe? Have you noticed this when you try the code?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#108165 - Goosey - Mon Nov 06, 2006 2:15 am</h4>
+    <div class="postbody"><span class="postbody">Can't say I noticed this ollhak. Have decided to just use perspective mode and hope it will allow me to do some cool effects, so havn't been looking too closely at it.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#108206 - ollhak - Mon Nov 06, 2006 6:58 pm</h4>
+    <div class="postbody"><span class="postbody">Alright, I found the problem. Not really sure how to handle it gracefully though :/ 
+<br/>
+<br/>
+It's a rounding error in the glOrthof32-function, 
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+MATRIX_LOAD4x4 = divf32(inttof32(2), top - bottom);
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+In this case, it divides 2 by -3 and the result is trucated to -2730 - which should have been -2731.
+<br/>
+<br/>
+My hacky solution for the moment is this:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+MATRIX_LOAD4x4 = -1 + divf32(inttof32(2), top - bottom);
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+...which seems to work well with positive coordinates but not so great when the objects move into negative coordinates. A 64x64-quad at the coordinates (x, -64) should be completely out of the screen, but it isn't - one row is still displayed as if it was at (x, -63).. not sure how to fix this except for another hacky solution - moving up the origin by say 256 pixels so no object can be in negative y-space. Meh.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#108275 - Sunray - Tue Nov 07, 2006 10:56 am</h4>
+    <div class="postbody"><span class="postbody">Huh, why bother with floats? :)
+<br/>
+<br/>
+To draw a fullscreen quad:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+glReset();
+<br/>
+glMatrixMode(GL_PROJECTION);
+<br/>
+glOrthof32(0, 256, 192, 0, Z_NEAR, Z_FAR);
+<br/>
+glMatrixMode(GL_MODELVIEW);
+<br/>
+...
+<br/>
+glBegin(GL_QUAD);
+<br/>
+glVertex3v16(0, 0, 0);
+<br/>
+glVertex3v16(0, 192, 0);
+<br/>
+glVertex3v16(256, 192, 0);
+<br/>
+glVertex3v16(256, 0, 0);
+<br/>
+glEnd();
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#108433 - ollhak - Wed Nov 08, 2006 7:37 pm</h4>
+    <div class="postbody"><span class="postbody">Thanks sunray, works like a charm.
+<br/>
+<br/>
+Another thing, depth testing works just fine if you replace glFlush() with GFX_FLUSH = 0;</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

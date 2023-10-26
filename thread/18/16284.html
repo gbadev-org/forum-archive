@@ -1,0 +1,347 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Multiplayer game help :(... - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Multiplayer game help :(...</h2>
+<div id="posts">
+<div class="post">
+    <h4>#165376 - spinal_cord - Thu Dec 18, 2008 2:11 pm</h4>
+    <div class="postbody"><span class="postbody">Hi guys, As you can tell by the title, I'm having a little trouble attempting a multiplayer game. Currently All i'm trying to do is pass button presses from one ds to the other, then pass back the player location. I have no idea if this is the best (or even remotely correct) way to do things.
+<br/>
+<br/>
+Anyway (please excuse the use of PAlib, I know a lot of people don't like it) After a couple of minutes, it goes a bit crap and dies. Can someone have a look and tell me what's going wrong?
+<br/>
+<br/>
+Thanks.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+// Includes
+<br/>
+#include &lt;PA9.h&gt;             // Include for PA_Lib
+<br/>
+<br/>
+#include "MessageQueue.h"   // Includes for liblobby
+<br/>
+#include "802.11.h"
+<br/>
+#include "lobby.h"
+<br/>
+<br/>
+#include "gfx/all_gfx.h"
+<br/>
+#include "gfx/all_gfx.c"
+<br/>
+<br/>
+int player=0; // which player number you are
+<br/>
+int player2_x=0; // player2 x
+<br/>
+int player2_y=0; // player2 y
+<br/>
+char player2_action[2]; // player2 keypress
+<br/>
+<br/>
+int player1_x=0; // player1 x
+<br/>
+int player1_y=0; // player1 y
+<br/>
+char dat[10]; 
+<br/>
+<br/>
+// We need a custom VBL function which is called every VBlank to update liblobby; if you want to play mp3's simultaneously, add a AS_SoundVBL(); in this function
+<br/>
+// and call PA_VBLFunctionInit(customVBL) instead of PA_VBLFunctionInit(AS_SoundVBL) when initializing aslib
+<br/>
+void customVBL(void)
+<br/>
+{
+<br/>
+   IPC_RcvCompleteCheck();
+<br/>
+   LOBBY_Update();
+<br/>
+}
+<br/>
+<br/>
+// The receive handler - it is called every time something is received on the stream which with it is registered
+<br/>
+void Receive(unsigned char *data, int length, LPLOBBY_USER from)
+<br/>
+{
+<br/>
+   if(player==1)
+<br/>
+   {
+<br/>
+      player2_action[0] = data[0];
+<br/>
+      player2_action[1] = data[1];
+<br/>
+   }   
+<br/>
+<br/>
+   if(player==2)
+<br/>
+   {
+<br/>
+      PA_SetSpriteX(1,0,data[0]);
+<br/>
+   }   
+<br/>
+}
+<br/>
+<br/>
+// Function: main()
+<br/>
+int main(int argc, char ** argv)
+<br/>
+{
+<br/>
+   PA_Init();    // Initializes PA_Lib
+<br/>
+   PA_InitVBL(); // Initializes a standard VBL
+<br/>
+   PA_InitText(0, 0);
+<br/>
+   
+<br/>
+   // Initialize libLobby and output some information ...
+<br/>
+   PA_VBLFunctionInit(customVBL);
+<br/>
+   if (!IPC_Init())
+<br/>
+   {
+<br/>
+      PA_OutputText(0, 1, 3, "Couldn't IPC_Init()!");
+<br/>
+      return 1;
+<br/>
+   }
+<br/>
+   IPC_SetChannelCallback(0, &amp;LWIFI_IPC_Callback);
+<br/>
+//   PA_OutputText(0, 1, 2, "LOBBY_Init() ...");
+<br/>
+   LOBBY_Init();
+<br/>
+   
+<br/>
+   // Register a stream handler for stream number 1;
+<br/>
+   // Streams below number 0x8000 are "acknowledged streams", that means liblobby will make sure that everything you send reaches its destination.
+<br/>
+   LOBBY_SetStreamHandler(0x0001, &amp;Receive);
+<br/>
+<br/>
+<br/>
+//////////////////////////////////////
+<br/>
+   PA_OutputText(0, 1, 3, "Start Game = Up/n Join Game = Down");
+<br/>
+<br/>
+while(player==0)
+<br/>
+{
+<br/>
+ if(Pad.Newpress.Up)player=1;
+<br/>
+ if(Pad.Newpress.Down)player=2;
+<br/>
+ PA_WaitForVBL();
+<br/>
+}   
+<br/>
+<br/>
+   PA_OutputText(0, 1, 10, "You are player %d",player);
+<br/>
+<br/>
+   PA_OutputText(0,1,11,"Waiting for other player");
+<br/>
+   int max = LOBBY_GetNumberOfKnownUsers();
+<br/>
+<br/>
+   while(max&lt;1 &amp;&amp; dat[0] !=255)
+<br/>
+   {
+<br/>
+      max = LOBBY_GetNumberOfKnownUsers();  
+<br/>
+      PA_WaitForVBL();
+<br/>
+   }   
+<br/>
+///////////////////////////////////////   
+<br/>
+<br/>
+<br/>
+   PA_EasyBgLoad(1,2,background); // snow foreground
+<br/>
+// some sprites...
+<br/>
+<br/>
+   PA_LoadSprite16cPal(1, // Screen
+<br/>
+               0, // Palette number
+<br/>
+               (void*)men_Pal);   // Palette name
+<br/>
+               
+<br/>
+   PA_CreateSprite(1, // Screen
+<br/>
+               0, // Sprite number
+<br/>
+               (void*)men_Sprite, // Sprite name
+<br/>
+               OBJ_SIZE_32X32, // Sprite size
+<br/>
+               0, // 16 color mode
+<br/>
+               0, // Sprite palette number
+<br/>
+               50, 150); // X and Y position on the screen
+<br/>
+<br/>
+<br/>
+<br/>
+   // main loop
+<br/>
+   PA_OutputText(0, 1, 3, "Entering main loop ...");
+<br/>
+   while (1)
+<br/>
+   {
+<br/>
+<br/>
+   if(player==2)
+<br/>
+   {      
+<br/>
+      // player 2 only sends the controls to player 1
+<br/>
+      dat[0] = 0;
+<br/>
+      dat[1] = 0;
+<br/>
+      if (Pad.Held.Up)      {dat[0]=1;}         // bit 1
+<br/>
+      if (Pad.Held.Down)   {dat[0] |= 2;}      // bit 2
+<br/>
+      if (Pad.Held.Left)   {dat[0] |= 4;}      // bit 3
+<br/>
+      if (Pad.Held.Right)   {dat[0] |= 8;}      // bit 4
+<br/>
+      if (Pad.Held.Start)   {dat[0] |= 16;}   // bit 5
+<br/>
+      if (Pad.Held.Select)   {dat[0] |= 32;}   // bit 6
+<br/>
+<br/>
+      if (Pad.Held.R)      {dat[1] = 1;}      // bit 7
+<br/>
+      if (Pad.Held.L)      {dat[1] |= 2;}      // bit 8
+<br/>
+      if (Pad.Held.A)      {dat[1] |= 4;}      // bit 9
+<br/>
+      if (Pad.Held.B)      {dat[1] |= 8;}      // bit 10
+<br/>
+      if (Pad.Held.X)      {dat[1] |= 16;}   // bit 11
+<br/>
+      if (Pad.Held.Y)      {dat[1] |= 32;}   // bit 12
+<br/>
+      
+<br/>
+      LOBBY_SendToUser(LOBBY_GetUserByID(0),0x0001,(unsigned char *) dat,2);
+<br/>
+   }   
+<br/>
+<br/>
+   if(player==1)
+<br/>
+   {
+<br/>
+      if(player2_action[0] &amp; 4)player2_x--;   // left
+<br/>
+      if(player2_action[0] &amp; 8)player2_x++;   // right
+<br/>
+<br/>
+      PA_OutputText(0, 1, 20, "Player 2 X: %d ", player2_x);
+<br/>
+      PA_OutputText(0, 1, 21, "Player 2 Y: %d ", player2_y);
+<br/>
+<br/>
+      dat[0]=player2_x;
+<br/>
+      PA_SetSpriteX(1,0,dat[0]);
+<br/>
+      LOBBY_SendToUser(LOBBY_GetUserByID(0),0x0001,(unsigned char *) dat,1);
+<br/>
+   }
+<br/>
+<br/>
+<br/>
+      // Write all connections to the screen
+<br/>
+      int i=0;
+<br/>
+         LPLOBBY_USER user = LOBBY_GetUserByID(i) ;
+<br/>
+            PA_OutputText(0, 1, 5+i, "-&gt;%s (%s)       ", LOBBY_GetUserName(user), LOBBY_IsTimedOut(user) ? "TIMEOUT" : "OK");
+<br/>
+<br/>
+<br/>
+      
+<br/>
+      PA_WaitForVBL();
+<br/>
+   }
+<br/>
+   
+<br/>
+   return 0;
+<br/>
+} // End of main()
+<br/>
+</td> </tr></table><span class="postbody"><br/>_________________<br/>I'm not a boring person, it's just that boring things keep happening to me.
+<br/>
+<a class="postlink" href="http://spinal.dizidesigns.co.uk/" target="_blank">Homepage</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#165417 - josath - Fri Dec 19, 2008 11:22 pm</h4>
+    <div class="postbody"><span class="postbody">I've heard liblobby still has a lot of bugs to be worked out. And I know palib has a lot of bugs to be worked out. So it's likely a combination of bugs in the two libraries causing things to crash, so unfortunately if you keep using them you're going to have to dig into their source code and fix their bugs.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#165431 - wintermute - Sat Dec 20, 2008 2:32 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>spinal_cord wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+Anyway (please excuse the use of PAlib, I know a lot of people don't like it) After a couple of minutes, it goes a bit crap and dies. Can someone have a look and tell me what's going wrong?
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Basically that's what happens with liblobby and one of the many reasons we strongly recommend not using it.
+<br/>
+<br/>
+Sgstair has threatened to rewrite dswifi and include ad hoc support so really the only thing I can recommend is waiting until that turns up.<br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

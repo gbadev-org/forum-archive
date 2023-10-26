@@ -1,0 +1,710 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Over Optimization Troubles [Solved] - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Over Optimization Troubles [Solved]</h2>
+<div id="posts">
+<div class="post">
+    <h4>#124439 - relpats_eht - Fri Apr 06, 2007 12:22 am</h4>
+    <div class="postbody"><span class="postbody">I have come across the problem of the compiler over optimizing my code in the following manner: I will have, for example, a function such as this:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">inline F32 Model::LoadF32(byte*&amp; ptr){
+<br/>
+    int tmpF32 = ((*(u8*)(ptr+3))&lt;&lt;24) | ((*(u8*)(ptr+2))&lt;&lt;16) | ((*(u8*)(ptr+1))&lt;&lt;8) | (*(u8*)ptr);
+<br/>
+<br/>
+    ptr += sizeof(float);
+<br/>
+    return F32(*(float*)(&amp;tmpF32));
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Which I then may call multiple times in rapid succession such as this:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">F32 location[] = { LoadF32(ptr), LoadF32(ptr), LoadF32(ptr) };</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Which the compiler will then over optimize into something like this:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">int tmpF32 = ((*(u8*)(ptr+3))&lt;&lt;24) | ((*(u8*)(ptr+2))&lt;&lt;16) | ((*(u8*)(ptr+1))&lt;&lt;8) | (*(u8*)ptr);
+<br/>
+<br/>
+F32 location[] = { F32(*(float*)(&amp;tmpF32)), F32(*(float*)(&amp;tmpF32)), F32(*(float*)(&amp;tmpF32)) };
+<br/>
+ptr += sizeof(float)*3;</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Clearly, this is a problem and produces incorrect results. I was wondering if anyone could tell me some simple and hopefully less hacky method than I am currently using to get around this problem?<br/>_________________<br/>- relpats_eht</span><span class="gensmall"><br/><br/>Last edited by relpats_eht on Thu Apr 12, 2007 11:16 pm; edited 1 time in total</span></div>    
+</div>
+<div class="post">
+    <h4>#124440 - sajiimori - Fri Apr 06, 2007 12:37 am</h4>
+    <div class="postbody"><span class="postbody">The order of evaluation is not defined for function arguments or array initializers.  Try this:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">F32 location[3];
+<br/>
+<br/>
+// Unroll if desired.
+<br/>
+for(int i = 0; i &lt; 3; ++i)
+<br/>
+  location[i] = LoadF32(ptr);</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#124441 - relpats_eht - Fri Apr 06, 2007 12:58 am</h4>
+    <div class="postbody"><span class="postbody">The problem persists.<br/>_________________<br/>- relpats_eht</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#124451 - sajiimori - Fri Apr 06, 2007 2:07 am</h4>
+    <div class="postbody"><span class="postbody">I've never used references to pointers in that way, so maybe there's some rule I don't know about.
+<br/>
+<br/>
+Try passing a regular pointer to the function, and modify the pointer outside the function.
+<br/>
+<br/>
+If that doesn't work, I'd guess you have a bug elsewhere.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#124478 - HyperHacker - Fri Apr 06, 2007 6:08 am</h4>
+    <div class="postbody"><span class="postbody">What about this?
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">F32 location[] = { (volatile F32)LoadF32(ptr), (volatile F32)LoadF32(ptr), (volatile F32)LoadF32(ptr) };</td> </tr></table><span class="postbody"><br/>_________________<br/>I'm a PSP hacker now, but I still &lt;3 DS.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#124481 - 3D_geek - Fri Apr 06, 2007 6:23 am</h4>
+    <div class="postbody"><span class="postbody">I think the code is flat out illegal.  You aren't allowed to change any memory location more than once in the same expression.  The result is random...you deserve what you got.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#124498 - simonjhall - Fri Apr 06, 2007 10:29 am</h4>
+    <div class="postbody"><span class="postbody">Now that's just not true... How about fred = ++fred? Or is that different?
+<br/>
+But anyway, I have no idea regarding the actual problem! My C++ isn't too good, and I've never used references. Can't you remove the reference stuff and do it another way?<br/>_________________<br/><span style="font-weight: bold"><a class="postlink" href="https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&amp;business=simonjhall%40gmail%2ecom&amp;no_shipping=2&amp;no_note=1&amp;tax=0&amp;currency_code=GBP&amp;lc=GB&amp;bn=PP%2dDonationsBF&amp;charset=UTF%2d8" target="_blank">Big thanks to everyone who donated for Quake2</a></span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#124504 - chishm - Fri Apr 06, 2007 12:29 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>simonjhall wrote:</b></span></td> </tr> <tr> <td class="quote">Now that's just not true... How about fred = ++fred? Or is that different?
+<br/>
+But anyway, I have no idea regarding the actual problem! My C++ isn't too good, and I've never used references. Can't you remove the reference stuff and do it another way?</td> </tr></table><span class="postbody">
+<br/>
+Actually, I'm pretty sure that's undefined too. You're modifying the same variable twice in the one statement (more technically, you're modifying a variable more than once between two consecutive sequence points). 
+<br/>
+<br/>
+Also, don't expect a function to evaluate its arguments in any particular order, as sajimori said. 
+<br/>
+<br/>
+The <a class="postlink" href="http://c-faq.com/" target="_blank">comp.lang.c FAQ</a> has some good information about <a class="postlink" href="http://c-faq.com/expr/index.html" target="_blank">expressions</a>, including a <a class="postlink" href="http://c-faq.com/expr/comma.html" target="_blank">question</a> that seems similar to yours.<br/>_________________<br/><a class="postlink" href="http://chishm.drunkencoders.com" target="_blank">http://chishm.drunkencoders.com</a>
+<br/>
+<a class="postlink" href="http://dldi.drunkencoders.com" target="_blank">http://dldi.drunkencoders.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#124519 - relpats_eht - Fri Apr 06, 2007 3:00 pm</h4>
+    <div class="postbody"><span class="postbody">Alright, thanks for the suggestion; I didn't know C++ left such things undefined.
+<br/>
+<br/>
+Edit:
+<br/>
+To clarify, the problem lies in lines such as this:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">int tmpF32 = ((*(u8*)(ptr+3))&lt;&lt;24) | ((*(u8*)(ptr+2))&lt;&lt;16) | ((*(u8*)(ptr+1))&lt;&lt;8) | (*(u8*)ptr);</td> </tr></table><span class="postbody">
+<br/>
+and in calling the function as an argument of some sort, correct? There is no problem with passing the pointer as a reference?<br/>_________________<br/>- relpats_eht</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#124526 - chishm - Fri Apr 06, 2007 4:26 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>relpats_eht wrote:</b></span></td> </tr> <tr> <td class="quote">To clarify, the problem lies in lines such as this:
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">int tmpF32 = ((*(u8*)(ptr+3))&lt;&lt;24) | ((*(u8*)(ptr+2))&lt;&lt;16) | ((*(u8*)(ptr+1))&lt;&lt;8) | (*(u8*)ptr);</td> </tr></table><span class="postbody">
+<br/>
+and in calling the function as an argument of some sort, correct? There is no problem with passing the pointer as a reference?</span></td> </tr></table><span class="postbody">
+<br/>
+That line is ok. You may be reading a variable more than once (ptr), but you're only writing to tmpF32 once. You can also call that function as an argument, as long as ptr is modified no more than once. The problem was that you were calling LoadF32 multiple times in the array initializer, without knowing which result would be put into which part of the array. 
+<br/>
+<br/>
+For example, if int f() returns 1 the first time it is called, 2 the second, 3 the third, etc., you don't know the results of this:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">int a[3] = {f(), f(), f()};</td> </tr></table><span class="postbody">
+<br/>
+It could be a = {1,2,3}, or a = {2, 3, 1}, or something else entirely.
+<br/>
+<br/>
+Now imagine you have the function int g (int &amp;x) {return x++;}, and the function void h (int a, int b);. The following would all cause problems:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">h (g(x), g(x));  // (1) Modifies x twice, and unknown which order the arguments will be evaluated
+<br/>
+h (g(x), x++);  // (2) Same problems as above
+<br/>
+h (x++, x++); // (3) Same problems as above
+<br/>
+h (g(x), x); // (4) Is the value first argument going to be more than, less than or equal to the second argument?
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Note, however, that if g was defined as int g (int x) {return x++;}, lines (1) and (4) would be okay. In the case of (1), the compiler would most likely call g only once, then use the result for both arguments. This is an optimization it can make, given the details of the standards. It's the same assumptions made for the optimization that are possibly causing your problems.<br/>_________________<br/><a class="postlink" href="http://chishm.drunkencoders.com" target="_blank">http://chishm.drunkencoders.com</a>
+<br/>
+<a class="postlink" href="http://dldi.drunkencoders.com" target="_blank">http://dldi.drunkencoders.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#124529 - relpats_eht - Fri Apr 06, 2007 5:09 pm</h4>
+    <div class="postbody"><span class="postbody">If I understand you correctly, then there is no problem with the function itself; however, why then would these two segments of code produce different results?
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code"> // This doesn't work, all three values are the same
+<br/>
+F32 location[3];
+<br/>
+location[0] = LoadF32(ptr);
+<br/>
+location[1] = LoadF32(ptr);
+<br/>
+location[2] = LoadF32(ptr);</td> </tr></table><span class="postbody">
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code"> // This works as expected
+<br/>
+F32 location[3];
+<br/>
+int tmpLocation[3];
+<br/>
+<br/>
+tmpLocation[0] = ((*(u8*)(ptr+3))&lt;&lt;24) | ((*(u8*)(ptr+2))&lt;&lt;16) | ((*(u8*)(ptr+1))&lt;&lt;8) | (*(u8*)ptr);
+<br/>
+ptr+=sizeof(float);
+<br/>
+location[0] = F32(*(float*)(&amp;tmpLocation[0]));
+<br/>
+<br/>
+tmpLocation[1] = ((*(u8*)(ptr+3))&lt;&lt;24) | ((*(u8*)(ptr+2))&lt;&lt;16) | ((*(u8*)(ptr+1))&lt;&lt;8) | (*(u8*)ptr);
+<br/>
+ptr+=sizeof(float);
+<br/>
+location[1] = F32(*(float*)(&amp;tmpLocation[1]));
+<br/>
+<br/>
+tmpLocation[2] = ((*(u8*)(ptr+3))&lt;&lt;24) | ((*(u8*)(ptr+2))&lt;&lt;16) | ((*(u8*)(ptr+1))&lt;&lt;8) | (*(u8*)ptr);
+<br/>
+ptr+=sizeof(float);
+<br/>
+location[2] = F32(*(float*)(&amp;tmpLocation[2]));</td> </tr></table><span class="postbody"><br/>_________________<br/>- relpats_eht</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#124532 - Miked0801 - Fri Apr 06, 2007 5:18 pm</h4>
+    <div class="postbody"><span class="postbody">I find when I get 'obscure' bugs like this, it's much better to simplify the code than blame the compiler.  While we all (probably) understand what you are trying to accomplish, why not simplify it a bit and move it across a couple lines of code.  It will be easier to read, easier to maintain, and easier to debug and decode for the compiler.
+<br/>
+<br/>
+Or, if speed is essential, just code it in assembly and get rid of the compiler completely.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#124567 - relpats_eht - Fri Apr 06, 2007 11:14 pm</h4>
+    <div class="postbody"><span class="postbody">Don't worry, there is no importance in what I am doing. Compilers are programs, it takes no effort for it to translate the input into machine code. There is no need for me to clean up my debugging code. Also, as to maintenance and debugging, don't worry there, my code is commented well enough and generally much more readable in actuality, I merely condensed it for the sake of my posts not taking up too much space.
+<br/>
+<br/>
+Nonetheless, knowing now the expressions C++ leaves undefined, my problem is solved well enough.<br/>_________________<br/>- relpats_eht</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#124593 - chishm - Sat Apr 07, 2007 3:00 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>relpats_eht wrote:</b></span></td> </tr> <tr> <td class="quote">If I understand you correctly, then there is no problem with the function itself; however, why then would these two segments of code produce different results?
+<br/>
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code"> // This doesn't work, all three values are the same
+<br/>
+F32 location[3];
+<br/>
+location[0] = LoadF32(ptr);
+<br/>
+location[1] = LoadF32(ptr);
+<br/>
+location[2] = LoadF32(ptr);</td> </tr></table><span class="postbody">
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code"> // This works as expected
+<br/>
+F32 location[3];
+<br/>
+int tmpLocation[3];
+<br/>
+<br/>
+tmpLocation[0] = ((*(u8*)(ptr+3))&lt;&lt;24) | ((*(u8*)(ptr+2))&lt;&lt;16) | ((*(u8*)(ptr+1))&lt;&lt;8) | (*(u8*)ptr);
+<br/>
+ptr+=sizeof(float);
+<br/>
+location[0] = F32(*(float*)(&amp;tmpLocation[0]));
+<br/>
+<br/>
+tmpLocation[1] = ((*(u8*)(ptr+3))&lt;&lt;24) | ((*(u8*)(ptr+2))&lt;&lt;16) | ((*(u8*)(ptr+1))&lt;&lt;8) | (*(u8*)ptr);
+<br/>
+ptr+=sizeof(float);
+<br/>
+location[1] = F32(*(float*)(&amp;tmpLocation[1]));
+<br/>
+<br/>
+tmpLocation[2] = ((*(u8*)(ptr+3))&lt;&lt;24) | ((*(u8*)(ptr+2))&lt;&lt;16) | ((*(u8*)(ptr+1))&lt;&lt;8) | (*(u8*)ptr);
+<br/>
+ptr+=sizeof(float);
+<br/>
+location[2] = F32(*(float*)(&amp;tmpLocation[2]));</td> </tr></table><span class="postbody"></span></td> </tr></table><span class="postbody">
+<br/>
+That's harder to explain. What happens when you don't inline the function?<br/>_________________<br/><a class="postlink" href="http://chishm.drunkencoders.com" target="_blank">http://chishm.drunkencoders.com</a>
+<br/>
+<a class="postlink" href="http://dldi.drunkencoders.com" target="_blank">http://dldi.drunkencoders.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#124597 - relpats_eht - Sat Apr 07, 2007 3:17 am</h4>
+    <div class="postbody"><span class="postbody">I'd rather not rewrite all my debugging code, but if memory serves me, as I did check that case, the same problem occurred.
+<br/>
+<br/>
+In any event, only continue with this thread if you are curious, I have merely settled on the idea that the compiler optimizes the creation of an array followed by a rapid succession of array initializers as shows  in my earlier code example as the array merely being truly initialized by those values in the manner which you explained was undefined. Although this is most likely untrue, it is of no real concern as now that I have moved away from that debugging code and have put the Load functions on more complex data structures -- dynamically allocated arrays of structures containing the arrays -- the problem is no longer present. Yes, I know that was extremely hard to follow.<br/>_________________<br/>- relpats_eht</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#125189 - relpats_eht - Thu Apr 12, 2007 12:21 am</h4>
+    <div class="postbody"><span class="postbody">I take it back. I just discovered that this over optimization is a thorn in my side textures. I have tried removing the inlining of the function, but to no avail. 
+<br/>
+<br/>
+Thus, I ask again, any suggestions?<br/>_________________<br/>- relpats_eht</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#125191 - sajiimori - Thu Apr 12, 2007 1:05 am</h4>
+    <div class="postbody"><span class="postbody">If I were you, I'd take Mike's suggestion: simplify the code.  The combination of casting and weird modifications of nonlocal variables via non-const references makes things very hard to follow.
+<br/>
+<br/>
+Try writing this function as a starting point:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+u32 read32(const u8*);
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#125199 - relpats_eht - Thu Apr 12, 2007 1:48 am</h4>
+    <div class="postbody"><span class="postbody">No matter how hard the code is to follow, it is still correct. Even though it is a mere helper function designed to make the actual code for loading the model much easier to read, it is still heavily commented in Real Life, comments which I merely did not copy over with the function.
+<br/>
+<br/>
+Since you insist, however, I will show you a simplified version of the function with more explanations that does the exact same thing.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">/* This inline function loads an F32 from the model file, where it is stored as a float. It takes a reference to the pointer that is the current position in the model file, loads the float as a series of bytes, for loading all four simultanesouly as a single float variable does not work, ORs these bytes together, then is set as a float and returned as an F32.*/
+<br/>
+inline F32 Model::LoadF32(byte*&amp; ptr){
+<br/>
+    u8 byte1 = (*(u8*)(ptr+3)); // The first byte of the float Because of little endianess, is the final byte in binary data
+<br/>
+   u8 byte2 = (*(u8*)(ptr+2)); // Second
+<br/>
+   u8 byte3 = (*(u8*)(ptr+1)); // Third
+<br/>
+   u8 byte4 = (*(u8*)ptr);     // Fourth
+<br/>
+   
+<br/>
+   int tmpF32 = (byte1&lt;&lt;24) | (byte2&lt;&lt;16) | (byte3&lt;&lt;8) | byte4; // OR the bytes together, shifting as necessary, to create the same binary representation of the original float, only stored in an integer. It is just easier to read this way, converting to a float later. This will break the strict aliasing rule and cause a warning on compile, but to no ill effects.
+<br/>
+<br/>
+   ptr += sizeof(float); // Move the pointer forward the size of a floating point variable (4 bytes), so the next number can be loaded simply from another call to this, or a similar, function from the model file. This is why I pass a reference to the pointer, and not just a pointer, and especially not a constant pointer.
+<br/>
+   
+<br/>
+   return F32(*(float*)(&amp;tmpF32)); // Cast a pointer to the integer as a pointer to a float and return the value at that pointer. This effectively makes the bytes loaded earlier, which were stored in an integer, come out to the same floating point value they originally contained, albeit breaks the aliasing rule and results in a warning. The F32 class handles the loading of floats.
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+But that is all beside the point. I am not looking for a problem -- I see the problem, the same code in an function sometimes does not in the same fashion as the exact same segment of code would outside of the function -- I am looking for a more efficient workaround than not using the function, either that, or some explanation as to some segment of the language which is causing the problem, as was the case earlier.
+<br/>
+<br/>
+I deeply apologize if I sound rude, it is not my intention.<br/>_________________<br/>- relpats_eht</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#125208 - sajiimori - Thu Apr 12, 2007 2:46 am</h4>
+    <div class="postbody"><span class="postbody">I don't know.
+<br/>
+<br/>
+Maybe ptr is getting destroyed between calls.
+<br/>
+Maybe it's a compiler bug.
+<br/>
+Maybe F32 is a class and it's doing something weird in its constructor or destructor.
+<br/>
+Maybe 'byte' is a complex type rather than just a u8, and it's doing something weird.
+<br/>
+Maybe it's just a problem with the client code.
+<br/>
+Maybe your test results are wrong.
+<br/>
+<br/>
+Anyway, write the function I described earlier.  It'll work.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#125215 - relpats_eht - Thu Apr 12, 2007 3:48 am</h4>
+    <div class="postbody"><span class="postbody">I know the function you described will work, but my goal here isn't to make things work, I already have functions that work 99% of the time replaceable with their contents during the extra 1%. My model loader is working exactly as it should right now, all vertices are in the right place, the animation is smooth, etc. What I want is a compact, easy to read, consistent method. Constantly loading u32 and converting them over all the variables I load does no fit these qualifiers.
+<br/>
+<br/>
+None the less, I will answer your maybes, as the answer may warrant some assistance.
+<br/>
+There is no modification to the pointer anywhere but in these functions, I have thoroughly tested and minimized all allocations not directly related to the problem at hand, I doubt the pointer is being destroyed.
+<br/>
+Maybe.
+<br/>
+F32 is a class, but there is nothing weird in the constructor and nothing at all in the destructor.
+<br/>
+Byte is a typedef for unsigned char
+<br/>
+Maybe.
+<br/>
+Unless my eyes deceive me, which they have been doing recently, no.
+<br/>
+<br/>
+Further information: While writing the function out for each load where it is necessary, using the same variable as a temporary integer storage for the float has the same effect as using the function itself.<br/>_________________<br/>- relpats_eht</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#125231 - HyperHacker - Thu Apr 12, 2007 8:05 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>relpats_eht wrote:</b></span></td> </tr> <tr> <td class="quote">There is no modification to the pointer anywhere but in these functions, I have thoroughly tested and minimized all allocations not directly related to the problem at hand, I doubt the pointer is being destroyed.</td> </tr></table><span class="postbody">It could be destroyed by memory corruption elsewhere in the program, or being changed in an interrupt handler.<br/>_________________<br/>I'm a PSP hacker now, but I still &lt;3 DS.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#125338 - sajiimori - Thu Apr 12, 2007 6:39 pm</h4>
+    <div class="postbody"><span class="postbody">Does F32 hold anything by reference, or take anything by non-const reference?
+<br/>
+<br/>
+If you're more interested in knowing the cause than fixing the problem, then I'd suggest putting together a stand-alone demo that illustrates the issue, so readers can compile it.  If you're using the usual homebrew devkit, there are people who will want to know about potential compiler bugs.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#125381 - relpats_eht - Thu Apr 12, 2007 11:14 pm</h4>
+    <div class="postbody"><span class="postbody">sajiimori, now I really have to apologize for you for stating that I did not have a problem. I did, I even wrote exactly what it was in the code I posted.
+<br/>
+<br/>
+I, being too tired to code, set out to thinking. The thought occurred to me: if my code previously was attempting undefined operations, who is to say it still isn't? I grabbed some caffeine and started from the most obvious location, the warning about breaking the strict-aliasing rule. Well, I did a bit of research on that, and it turns out the first search result I clicked last time wasn't the best source in the world, and that, in fact, breaking that rule lead to undefined results. Thus, I replaced what I was doing previously -- int tmpF32 = ((*(u8*)(ptr+3))&lt;&lt;24) | ((*(u8*)(ptr+2))&lt;&lt;16) | ((*(u8*)(ptr+1))&lt;&lt;8) | (*(u8*)ptr); -- with this: byte tmpF32[] = {*(ptr), *(ptr+1), *(ptr+2), *(ptr+3)}; using information <a class="postlink" href="http://www.cellperformance.com/mike_acton/2006/06/understanding_strict_aliasing.html" target="_blank">this much better source</a> which stated that types of char* are not aliased and a bit of guessing as to how the memory would be stored.
+<br/>
+<br/>
+Now everything works as it should, my code does nothing (I hope) undefined, and I know a bit more about C/C++. Yes, it is knowledge I never hoped I would have to know, but it is good nonetheless.
+<br/>
+<br/>
+Thank you all for your assistance, even those who provided none, for continuous posting in this topic gave me some motivation to actually fix the problem, rather than continue writing workarounds.<br/>_________________<br/>- relpats_eht</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#125383 - masscat - Fri Apr 13, 2007 12:46 am</h4>
+    <div class="postbody"><span class="postbody">Turn on as many of gcc's warnings as you can. If gcc is warning you about something then change the code to remove the warning. If you are sure that the warning can be ignored then make sure you understand why gcc is producing it and that your code is not going to break.
+<br/>
+<br/>
+gcc is your friend.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#125384 - kusma - Fri Apr 13, 2007 12:58 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>relpats_eht wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">   return F32(*(float*)(&amp;tmpF32));
+<br/>
+</td> </tr></table><span class="postbody"></span></td> </tr></table><span class="postbody">
+<br/>
+as you're noting yourself, this breaks the strict aliasing rules in C99 (strict aliasing dependent optimizations are enabled by default by gcc when the optimization level is high enough). Try this instead:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">union {
+<br/>
+   int i;
+<br/>
+   F32 f;
+<br/>
+} u;
+<br/>
+u.i = tmp;
+<br/>
+return u.f;
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#125389 - relpats_eht - Fri Apr 13, 2007 1:38 am</h4>
+    <div class="postbody"><span class="postbody">masscat: Yes, I do always check my warning and have them all on, it just so happens that, as I stated, the first link I clicked giving information gave false information, since I was tired, I researched no more.
+<br/>
+<br/>
+kusma: Considering that I am moving this data from a large array of bytes to individual variables, some of which are type F32, which is the fixed point representation of a float, a union would not work, it would make the value of the F32 the literal byte interpretation of a float (which is no where near a sane number) divided by 4096. The method I have set up now may not be the most obvious and may obfuscate the code a bit, but it is fully commented and it works.<br/>_________________<br/>- relpats_eht</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#125396 - kusma - Fri Apr 13, 2007 2:08 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>relpats_eht wrote:</b></span></td> </tr> <tr> <td class="quote">kusma: Considering that I am moving this data from a large array of bytes to individual variables, some of which are type F32, which is the fixed point representation of a float, a union would not work, it would make the value of the F32 the literal byte interpretation of a float (which is no where near a sane number) divided by 4096. The method I have set up now may not be the most obvious and may obfuscate the code a bit, but it is fully commented and it works.</td> </tr></table><span class="postbody">
+<br/>
+If float and F32 are different types, just do a cast / call the constructor in the end. 
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">union {
+<br/>
+   int i;
+<br/>
+   float f;
+<br/>
+} u;
+<br/>
+u.i = tmp;
+<br/>
+return F32(u.f);</td> </tr></table><span class="postbody">The point here is that reinterpreting the data pointed to by a pointer with a simple cast is not allowed with strict aliasing. You should get rid of that invalid code.
+<br/>
+<br/>
+By the way, I'm also a bit pizzeled by comments like "for loading all four simultanesouly as a single float variable does not work"... Why does it not work? Due to alignment issues? If so, is there a reason why you're not just fixing the alignment?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#125415 - relpats_eht - Fri Apr 13, 2007 4:13 am</h4>
+    <div class="postbody"><span class="postbody">My code is legal now. I didn't post both changes, just the one.
+<br/>
+<br/>
+Your point, however, is still invalid. A union explicitly casts data it reads in by the respective type you are using, it does not use the same byte interpretation for all types. Print a floating point number as binary data into a file and open that in a hex editor, or read it in again as an integer to see what the result would be of using a union. A floating point number is stored in a radically different manner than an integer, reading it in as an integer from a pointer, where the value is not changed from a floating point number to an integer, returns the integer value that is the bytes of the floating point number, which is in no way sane; however, if this was is a union with a float, if I then used the float accesser, I would get a floating point number that is the same completely inane value. I can't really explain it any better, just stick with it won't work.
+<br/>
+<br/>
+As for loading for bytes simultaneously, if I recall correctly, the DS cannot access more than sixteen bits across a pointer (or something like that) due to hardware limitation. Therefore, I have to break up the 32 bit value into smaller representations, where bytes make the most sense due to endianess. I may be wrong in my reasoning, but in practice, loading four bytes at once from a block of memory via pointer does not work and the values are nonsensical.<br/>_________________<br/>- relpats_eht</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#125426 - sajiimori - Fri Apr 13, 2007 6:06 am</h4>
+    <div class="postbody"><span class="postbody">The DS has no trouble reading 32 bit values from memory, as long as it's from an aligned address.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#125443 - kusma - Fri Apr 13, 2007 12:08 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>relpats_eht wrote:</b></span></td> </tr> <tr> <td class="quote">My code is legal now. I didn't post both changes, just the one.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>relpats_eht wrote:</b></span></td> </tr> <tr> <td class="quote">Your point, however, is still invalid. A union explicitly casts data it reads in by the respective type you are using, it does not use the same byte interpretation for all types. [...]</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+A union stores all members at the same memory address, and you can access the same memory as all types.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+   union {
+<br/>
+      float f;
+<br/>
+      unsigned int i;
+<br/>
+   } u;
+<br/>
+   printf("address of u.f: %p\n", &amp;u.f);
+<br/>
+   printf("address if u.i: %p\n", &amp;u.i);
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+When assigning to one of the members, you can access the underlying memory as one of the other types.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+   u.i = 0x3f800000;
+<br/>
+   printf("%x %f\n", u.i, u.f);
+<br/>
+<br/>
+   u.f = 2.0f;
+<br/>
+   printf("%x %f\n", u.i, u.f);
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+If you're still not convinced, try this code that performs your conversion and my conversion on random input and tests the result for equality:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#include &lt;assert.h&gt;
+<br/>
+#include &lt;stdlib.h&gt;
+<br/>
+<br/>
+float convert_relpats(const unsigned int val)
+<br/>
+{
+<br/>
+   return *(float*)(&amp;val);
+<br/>
+}
+<br/>
+<br/>
+float convert_kusma(const unsigned int val)
+<br/>
+{
+<br/>
+   union {
+<br/>
+      float f;
+<br/>
+      unsigned int i;
+<br/>
+   } u;
+<br/>
+   u.i = val;
+<br/>
+   return u.f;
+<br/>
+}
+<br/>
+<br/>
+int main(int argc, char* argv[])
+<br/>
+{
+<br/>
+   for (int i = 0; i &lt; 10000000; ++i)
+<br/>
+   {
+<br/>
+      unsigned int v = rand() * rand();
+<br/>
+      float f1 = convert_relpats(v);
+<br/>
+      float f2 = convert_kusma(v);
+<br/>
+      if (f1 != f2)
+<br/>
+      {
+<br/>
+         printf("*** ERROR: %d -&gt; %f %f\n", v, f1, f2);
+<br/>
+      }
+<br/>
+   }
+<br/>
+<br/>
+   return 0;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>relpats_eht wrote:</b></span></td> </tr> <tr> <td class="quote">I can't really explain it any better, just stick with it won't work.</td> </tr></table><span class="postbody"> You can't because it makes no sense. You are simply confused on this one :)
+<br/>
+<br/>
+Also note that I'm only talking about the reinterpret-casting here, not the entire routine (or even line of code). As for the 16bit stuff, you're confused there as well. There's no problems reading 32bit values from memory as long as they are aligned.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#125484 - relpats_eht - Fri Apr 13, 2007 8:51 pm</h4>
+    <div class="postbody"><span class="postbody">And I thought I had aligned my structures, I will admit defeat in that regard, it does make sense, but you are still misinterpreting me kusma.
+<br/>
+<br/>
+Perhaps code will explain...
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">float convert_kusma(const char* val) // val is a collection of bytes, the one we are currently loading being a float of value, say 2.
+<br/>
+{
+<br/>
+   union {
+<br/>
+      float f;
+<br/>
+      unsigned int i;
+<br/>
+   } u;
+<br/>
+   u.i = *(int*)val; // This will set the integer to some obscure amount, most certainly not 2, because it is reading in a float as if it is an integer
+<br/>
+   return u.f; // u.f will not equal two, it will equal the same obscure value as u.i because it casted the value from an integer to a float by calling the float variable of the union. It does not matter that they use the same bytes.
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+But this is all really besides the point. I'll look into what more is necessary for alignment.<br/>_________________<br/>- relpats_eht</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#125494 - kusma - Fri Apr 13, 2007 10:53 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>relpats_eht wrote:</b></span></td> </tr> <tr> <td class="quote">And I thought I had aligned my structures, I will admit defeat in that regard, it does make sense, but you are still misinterpreting me kusma.</td> </tr></table><span class="postbody">
+<br/>
+Actually, you're the one misunderstanding here. I'm telling you NOT to do that pointer cast. not to do it into a union.
+<br/>
+<br/>
+Here's the full function that performs my technique, not just the cast isolated like last time.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+float convert_kusma(const char* val)
+<br/>
+{
+<br/>
+   union {
+<br/>
+      float f;
+<br/>
+      unsigned int i;
+<br/>
+   } u;
+<br/>
+<br/>
+   u.i = (val[3] &lt;&lt; 24) | (val[2] &lt;&lt; 16) | (val[1] &lt;&lt; 8) | val[0];
+<br/>
+   return u.f;
+<br/>
+}
+<br/>
+<br/>
+int main(int argc, char* argv[])
+<br/>
+{
+<br/>
+   char temp[4] = { 0x00, 0x00, 0x00, 0x40 }; /* 2.0 in binary */
+<br/>
+   printf("%f\n", convert_kusma(temp));
+<br/>
+   return 0;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+edit: actually, the int-cast you did also works, but it has the same aliasing issue as the previous technique. And it should also only work when the input array is aligned.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#125503 - relpats_eht - Sat Apr 14, 2007 1:38 am</h4>
+    <div class="postbody"><span class="postbody">I actually checked this time and you are correct, that union does work, but I still don't see how. My knowledge of unions must be off, I was under the assumption the output of that code would be 1073741824.<br/>_________________<br/>- relpats_eht</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#125511 - wintermute - Sat Apr 14, 2007 2:54 am</h4>
+    <div class="postbody"><span class="postbody">It would only be 1073741824 if the return was u.i since that is the number  represented by 0x40000000 as a 32 bit integer.
+<br/>
+<br/>
+Since a union is being used to access the memory as if it were actually a float then we obtain the float whose binary representation is 0x40000000. This is pretty much equivalent to 
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+<br/>
+int i = 0x40000000;
+<br/>
+<br/>
+float f = *(float*)&amp;i;
+<br/>
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+This code however is what is known as type punning, recent versions of gcc consider this to be incredibly bad form and you will get bitten if you write code like this.
+<br/>
+<br/>
+The union approach will work but I think you'd be much better off ensuring your structures are aligned properly in the data you're giving the DS.<br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#125523 - HyperHacker - Sat Apr 14, 2007 5:32 am</h4>
+    <div class="postbody"><span class="postbody">So would this be considered bad too?
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">int i = 0x40000000;
+<br/>
+float f = (float)i;</td> </tr></table><span class="postbody"><br/>_________________<br/>I'm a PSP hacker now, but I still &lt;3 DS.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#125524 - chishm - Sat Apr 14, 2007 5:40 am</h4>
+    <div class="postbody"><span class="postbody">HyperHacker:
+<br/>
+No, because that cast performs a conversion on the data itself, and doesn't merely reinterpret the data as a different type.<br/>_________________<br/><a class="postlink" href="http://chishm.drunkencoders.com" target="_blank">http://chishm.drunkencoders.com</a>
+<br/>
+<a class="postlink" href="http://dldi.drunkencoders.com" target="_blank">http://dldi.drunkencoders.com</a></span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

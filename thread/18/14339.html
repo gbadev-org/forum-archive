@@ -1,0 +1,205 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>VOLUMETRIC SHADOW Mini-Tutorial - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > VOLUMETRIC SHADOW Mini-Tutorial</h2>
+<div id="posts">
+<div class="post">
+    <h4>#143065 - silent_code - Tue Oct 16, 2007 2:29 pm</h4>
+    <div class="postbody"><span class="postbody"><span style="text-decoration: underline">VOLUMETRIC SHADOW Mini-Tutorial</span>
+<br/>
+<span style="font-style: italic"><span style="font-size: 9px; line-height: normal">by silent_code (<a class="postlink" href="http://www.code-basement.net" target="_blank">http://www.code-basement.net</a>), 2007
+<br/>
+Updated on July 7th 2008 (2013: Moved to a new domain.)</span></span>
+<br/>
+<br/>
+There are three basic steps you need to follow to render volumetric shadows, but first, lets see what we need to get started:
+<br/>
+<ul>- Some geometry to receive shadows
+<br/>
+<br/>
+- Some geometry to cast shadows (just regular geometry, like the "receivers" above)
+<br/>
+<br/>
+- Some shadow volume(s) (also regular geometry)
+<br/>
+<br/>
+- A working code base, that can load and render geometry, as well as "do other stuff" (input etc.) - or at least one of the examples available on the net (like the "Volumetric Shadow Demo" on my web site.) </ul>
+<br/>
+You can create all of the geometry with your favorite 3D modelling application and convert it to a format, that your base code can load and display on the NDS.
+<br/>
+Alternatively, you could also compute any shadow geometry, but that is beyond the scope of this mini-tutorial.
+<br/>
+<br/>
+Prepare volumetric shadow rendering by setting the "flush mode" to "manual transparency sorting" and "w-depth-sorting" and sort your translutient geometry - not on a per primitive base, just the translutient objects - as needed. Note, that this also includes shadow geometry!
+<br/>
+<br/>
+To set the right flush mode, use the following setting in the frame <span style="font-style: italic">before</span> any shadow geometry is rendered. That means, whenever shadows are involved, use this:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">glFlush(GL_TRANS_MANUALSORT | GL_WBUFFERING);</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Then do the following in each frame:
+<br/>
+<ul>1) Render all shadow casting and receiving geometry as usually, then for each and all shadow volumes do the next two steps in exactly that order:
+<br/>
+<br/>
+2) Shadow geometry <span style="font-weight: bold">must</span> be translutient, so make sure you enable blending. Then render the shadow geometry's front (the "Stencil Mask") using the following polygon format. Note, that for the mask, alpha <span style="font-weight: bold">must</span> be between 1 and 30 and the polygon ID <span style="font-weight: bold">must</span> be 0!
+<br/>
+<br/>
+</ul></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">glPolyFmt(POLY_ALPHA(1) | POLY_CULL_FRONT | POLY_ID(0) | POLY_SHADOW);</td> </tr></table><span class="postbody">
+<br/>
+3) Finally, draw the shadow geometry's back (the "Stencil Shadow") with the next polygon format. Again, alpha <span style="font-weight: bold">must</span> to be between 1 and 30, though this time the polygon ID <span style="font-weight: bold">must not</span> be 0!
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">glPolyFmt(POLY_ALPHA(20) | POLY_CULL_BACK | POLY_ID(63) | POLY_SHADOW);</td> </tr></table><span class="postbody">
+<br/>
+Now you should have volumetric shadowing on screen - all hardware accelerated and rendered. :^)
+<br/>
+<br/>
+<br/>
+<span style="text-decoration: underline">ADDITIONAL NOTES</span>
+<br/>
+<ul>- This is <span style="font-weight: bold">NOT</span> your usual PC stencil buffer! Actually, there is just a single line stencil buffer, which is not accessible by software. Shadow geometry must <span style="font-weight: bold">allways</span> be transparent, as that's part of the "shadow polygon mode trigger" for the graphics hardware!
+<br/>
+<br/>
+- If you're using hardware fogging, you also need to enable it in step 3's polygon format or you will get unfogged shadow areas.
+<br/>
+You can do that on purpose, though. Just like with the flashlight in "Dementium - The Ward".
+<br/>
+<br/>
+- Setting different polygon IDs for different shadow geometry will result in "overlapping" shadows, which create even darker areas. Of course, the that depends on the amount of blending used.
+<br/>
+<br/>
+- Shadow geometry counts just like "regular" geometry, so watch the hardware limits!
+<br/>
+<br/>
+- Shadow geometry can be colored (real world shadows are rarely black, too!)
+<br/>
+<br/>
+- Use closed volumes! The algorithm the hardware is using (the only one available on the NDS), is called "z-pass". Penetrating shadow geometry with the "camera" (so the geometry gets clipped by the near plane) will break it and result in "shadow holes"! Thank you Creative Labs, for that damn "z-Fail" software patent! Really! X^C
+<br/>
+<br/>
+- If the shadows are flickering or the scene isn't rendered at all, go back to the beginning. You probably forgot to set manual transparency sorting and w-sorting correctly.
+<br/>
+<br/>
+- For an object to shadow itself, simply set the polygon ID for it's shadow geometry to something different, as it's regular geometry's polygon ID.
+<br/>
+<br/>
+- <span style="font-weight: bold">ALLWAYS</span> follow the three steps and especially step two and three for <span style="font-style: italic">each</span> shadow geometry! <span style="font-weight: bold">DO NOT</span> draw all masks first and then all shadows! That's a <span style="font-weight: bold">bad</span> idea!</ul>
+<br/>
+That's everything!
+<br/>
+<br/>
+Happy programming! :^)
+<br/>
+<br/>
+<span style="font-style: italic"><span style="font-size: 9px; line-height: normal">PS: If this helped you, feel free to mention me and / or the URL to my web site (<a class="postlink" href="http://www.robs-basement.de" target="_blank">http://www.robs-basement.de</a>) somewhere in your program or its documentation. :^)
+<br/>
+<br/>
+<span style="text-decoration: underline">Disclaimer</span>: Use this information at your own risk. I can't be held liable for any damage, direct or indirect, of any sort, that might result from using this information.
+<br/>
+<br/>
+Hereby I grant everyone the right to freely use (commercially or not, it doesn't matter) and distribute (in it's current form, not altered without the author's permission) this information.
+<br/>
+Selling this information is strictly prohibited.</span></span><br/>_________________<br/><span style="font-size: 9px; line-height: normal"><span style="text-decoration: underline"><span style="font-weight: bold"></span></span> July 5th 08: "<span style="font-weight: bold">Volumetric Shadow Demo</span>" 1.6.0 (final) source released
+<br/>
+June 5th 08: "<span style="font-weight: bold">Zombie NDS</span>" WIP released!
+<br/>
+It's all on my page, just click <span style="font-weight: bold">WWW</span> below.</span></span><span class="gensmall"><br/><br/>Last edited by silent_code on Wed Jan 16, 2013 2:55 am; edited 15 times in total</span></div>    
+</div>
+<div class="post">
+    <h4>#143071 - M3d10n - Tue Oct 16, 2007 3:31 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>silent_code wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+- If you're using hardware fogging, you also need to enable it in the latter poly format or you will get unfogged areas where shadows are (though you can do that on purpose).</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Ah! So this is how they implemented the flashlight in Dementium: The Ward. I thought it was something way, way more complicated, but it's just clever abuse of the hardware. :)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#143085 - Noda - Tue Oct 16, 2007 7:04 pm</h4>
+    <div class="postbody"><span class="postbody">Thanks for the tutorial ;)
+<br/>
+<br/>
+Hmm that is exactly what I was doing, but I think I got the missing point in my program: the shadow volume g?ometry itself.
+<br/>
+<br/>
+I just thought that the shadow volume would be generated by step 2-3, and the DS just needed the object volume that is casting shadow to calculate the shadow volume...
+<br/>
+<br/>
+Then my question is: how to calculate/define the shadow volume geomtery?
+<br/>
+<br/>
+Thanks :)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#143089 - silent_code - Tue Oct 16, 2007 7:24 pm</h4>
+    <div class="postbody"><span class="postbody">if the hw did it, how would it know the shadow's orientation? ;^D
+<br/>
+<br/>
+well... there are some algorithms out there, if you don't want to build (static) volumes by hand (like i did for the sake of simplicity for the demo).
+<br/>
+<br/>
+basically you have to build an edge list for your caster's regular geometry. you can do that once, offline.
+<br/>
+<br/>
+you then use that edge list ("online", in the game engine) to check if the two connected triangles, relative to a specific light's position, create a silhuette edge. that is, if one triangle normal points "away" from the light and the other points "towards" the light.
+<br/>
+<br/>
+after you have all silhuette edges, you construct the shadow volume. this depends on what shadow algorithm you're using.
+<br/>
+for the nds, as it's only capable of "z-pass"ing, you'll create a front cap (you can get away without it, but miss it in some situation and the weird artifacts will ruin the whole image!) - which needs to take the near plane into account for "penatratable" shadow volumes. then you "stretch" the silhuette edges into "infinity" (just so the volume penetrates the to be shadowed geometry - commonly read: far away).
+<br/>
+<br/>
+you can also use an infinity projection matrix, where everything you send to the hw will be projected close to the far plane (just make sure it doesn't surpass it!). though that's impractical here - half of the vertices need to be pretty much *far* away from the far plane and into the view frutum. (any other opinions on how to use an ipm for volume stretching?)
+<br/>
+<br/>
+you don't need a back cap here.
+<br/>
+<br/>
+if your edgelist has flaws, you'll see shadow artifacts ("shadow holes") mostly noticable due to the extreme flickering when moving *anything* that affects the volume's computation (thus recomputing the volume).
+<br/>
+<br/>
+look for more specific information on the internet, this goes beyond the time i have to share with you guys. sorry!
+<br/>
+<br/>
+there's a very good and valuable article series by some id software programmer on intel's developper site. it's about how to optimize shadow volume creation and skinned meshes (also a good read for matrix palette skinning) with sse on pentium processors (and of course AMDs! ;^p ), but it also features "less" and "not" optimized implementations (in fact it goes all the way from "naive" to sse) and is a great inspiraton if you're into "optimizing" and all. ;^p it also explains the algorithm and data structures used and all is downloadable as .pdf.
+<br/>
+<br/>
+yippie-kay-yay [...]</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#143115 - Ishi - Wed Oct 17, 2007 12:01 am</h4>
+    <div class="postbody"><span class="postbody">Nice tutorial, silent_code. If only I'd had this a couple of weeks ago ;)
+<br/>
+<br/>
+Something else I don't think was mentioned, the shadow volumes have to be convex for them to always work correctly. That limits you to mostly circular shadows and stuff like that unfortunately.
+<br/>
+<br/>
+You can get away with a bit of concave-ness without people noticing though. Go on the kart selection in Mario Kart DS, and Bowser's plane-kart's shadow can be seen breaking. Areas that shouldn't be shadowed end up getting shadowed sometimes.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#159650 - silent_code - Thu Jul 03, 2008 3:38 pm</h4>
+    <div class="postbody"><span class="postbody">I did a little update and made a little fix to one statement, that was misleading. Thanks to zeruda for pointing it out to me. ;^)<br/>_________________<br/><span style="font-size: 9px; line-height: normal"><span style="text-decoration: underline"><span style="font-weight: bold"></span></span> July 5th 08: "<span style="font-weight: bold">Volumetric Shadow Demo</span>" 1.6.0 (final) source released
+<br/>
+June 5th 08: "<span style="font-weight: bold">Zombie NDS</span>" WIP released!
+<br/>
+It's all on my page, just click <span style="font-weight: bold">WWW</span> below.</span></span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

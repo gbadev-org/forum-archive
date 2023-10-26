@@ -1,0 +1,471 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Bullet Sprites - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > Bullet Sprites</h2>
+<div id="posts">
+<div class="post">
+    <h4>#12868 - sigma - Sat Nov 29, 2003 1:56 am</h4>
+    <div class="postbody"><span class="postbody">Suppose I have an array of bullets. Each bullet structure has a byte that indicates its type. When a bullet "dies" the type by is set to zero to indicate that it's "dead", and the collision, spawn and other routines use this to detect empty slots. But I want to know if it would be better to instead defragment the bullet array every time one dies in a collision or screen exit. This would make the control logic more efficient, but I wonder if the defrag overhead would kill it, because it seems more likely for the earliest bullets to die, thus requiring the largest block copy.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12869 - DekuTree64 - Sat Nov 29, 2003 2:19 am</h4>
+    <div class="postbody"><span class="postbody">Depends on how many bullets are likely to be around. It probably wouldn't take too long to just skip the defragmenting and search through the array every time. I think the best solution would be a linked list. Just keep an array like you are right now of the maximum possible bullets, but give each bullet a 'next' member that just hold the index of the next bullet in the list. If you limit your max bullets to 255, you only need one byte extra per bullet for the linked list pointer, and you can set it to 255 to mean that it's the last alive bullet in the list. Then keep a 'free' list as well, and whenever you need a bullet, take the current free list head. Let's call it bill, just for clarity (and to make a joke of Mario's Bullet Bill^^). Now set the free list head to bill's 'next' index, set bill's next to the used list head, and set the used list head to bill, and you're done. If a bullet dies, let's name this one fred, because it rhymes with dead, just go through the list until you hit one whose next is set to fred's index, then set that one's next to fred's next, set fred's next to the free list head, and set the free list head to fred.
+<br/>
+Is that confusing or what? Linked lists are tricky at first but it's really a neat way of keeping track of things to where you can insert/remove them as you wish, and not have any dead space.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12871 - sajiimori - Sat Nov 29, 2003 3:31 am</h4>
+    <div class="postbody"><span class="postbody">Limiting your max objects (bullets) and simultaneously using a linked list would be weird, because the primary purpose of a linked list is to avoid arbitrary limitations.
+<br/>
+<br/>
+When you're using a fixed-size array, on-the-fly defragmentation would be best when the array tends to have a lot of empty entries.  It's quite simple, as long as the order of the objects in the array doesn't matter.  When you create a new object, put it in the first unused slot.  When you destroy an object, move the last object to the newly freed slot.
+<br/>
+<br/>
+If the order of the objects matters, defragmentation will be slow.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12875 - torne - Sat Nov 29, 2003 5:58 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sajiimori wrote:</b></span></td> </tr> <tr> <td class="quote">Limiting your max objects (bullets) and simultaneously using a linked list would be weird, because the primary purpose of a linked list is to avoid arbitrary limitations.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Not if you use links which are array indexes, instead of pointers. What I believe Deku was describing was having an array of 255 bullet structs, each one of which had the index of the next valid bullet (not neccecarily next in the array, just the list) as an extra byte field. This is a perfectly reasonable way to use a linked list/array as it saves 3 bytes per entry at the (probably trivial) cost of having a maximum number of entries. No dynamic memory allocation any kind is required to do it this way either, which helps a lot. =)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12878 - sajiimori - Sat Nov 29, 2003 8:43 am</h4>
+    <div class="postbody"><span class="postbody">How does it save 3 bytes per entry?
+<br/>
+<br/>
+edit: I guess you're just saying that having a 1-byte reference to the next array index is 3 bytes shorter than having an actual pointer.  I still think the method is odd, and the added complexity and memory use doesn't seem necessary.
+<br/>
+<br/>
+You're saving time when destroying objects (maybe), but using more time when traversing the array (definitely).  Since you traverse more often than you destroy, it just seems strange to me.
+<br/>
+<br/>
+Oh well, maybe there's some situation that it's useful and I just can't think of it right now.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12885 - torne - Sat Nov 29, 2003 4:52 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sajiimori wrote:</b></span></td> </tr> <tr> <td class="quote">edit: I guess you're just saying that having a 1-byte reference to the next array index is 3 bytes shorter than having an actual pointer.  I still think the method is odd, and the added complexity and memory use doesn't seem necessary.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I don't see why it's more complex, and it only uses a fixed amount of memory. Linked lists within arrays are used a lot; it's a very common technique.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">You're saving time when destroying objects (maybe), but using more time when traversing the array (definitely).  Since you traverse more often than you destroy, it just seems strange to me.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+It's exactly as fast as using a linked list for all operations, but uses no dynamic memory allocation and makes entries 3 bytes shorter. Where's the problem?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12886 - poslundc - Sat Nov 29, 2003 4:56 pm</h4>
+    <div class="postbody"><span class="postbody">It seems to me the biggest advantage is sparing the dynamic memory allocation, which can be a real bugger on a platform like the GBA.
+<br/>
+<br/>
+That is to say, I don't know how effective or efficient the malloc() and free() routines are in DevKitAdvance, but I would probably want to maintain my own heap, which is a lot of extra work and processing to do.
+<br/>
+<br/>
+It seems to me that if you know the limits of your gameplay then it makes much more sense to reserve the necessary memory ahead of time than rolling the dice with dynamic memory allocation. It keeps everything far more structured and less fragmented.
+<br/>
+<br/>
+You can take the exact same time in traversing the array: just store pointers instead of indices, and it will behave exactly the way a linked list does. Then maintain a separate stack of available pointers in EWRAM that you can simply push/pop pointers onto as you free/allocate them.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12891 - torne - Sat Nov 29, 2003 7:45 pm</h4>
+    <div class="postbody"><span class="postbody">You don't need pointers; a decent optimiser will generate code that's equivalent using array indexes. =)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12892 - col - Sat Nov 29, 2003 8:22 pm</h4>
+    <div class="postbody"><span class="postbody">One great advantage of using array indices instead of pointers is that you can seperate the list mechanism from the objects you are managing, but with little(or no?) overhead.
+<br/>
+This means that if the objects are used in speed critical code, you can keep all the list management stuff in iwram, but keep your(possible large) objects data in ewram.
+<br/>
+<br/>
+say you have an array of 20 baddies.
+<br/>
+<br/>
+create a seperate array of indices
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+Baddie myBaddies[20];
+<br/>
+u8 myList[20];
+<br/>
+u8 firstFree;
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+you must do some initialisation to create a complete free list after you have initialised the baddie array:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+void initBaddieList(){
+<br/>
+    for (int i = 0; i &lt; 19; ++i){
+<br/>
+        myList[i] = i+1;
+<br/>
+    }
+<br/>
+    myList[i] = 0xff;    //a guard to check for out of baddies with an assert
+<br/>
+    firstFree = 0;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+and you need functions to manage the list
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+u32 reserveBaddie(){
+<br/>
+    assert(firstFree != 0xff);
+<br/>
+    u32 index = firstFree;
+<br/>
+    firstFree = myList[firstFree];    //update the list
+<br/>
+    return index;
+<br/>
+}
+<br/>
+<br/>
+void releaseBaddie(u32 idx){
+<br/>
+    myList[idx] = firstFree;
+<br/>
+    firstFree = idx;
+<br/>
+}
+<br/>
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+what this means if instead of using pointers as object handles, you use indices.
+<br/>
+<br/>
+you can use the same indexListArray (in this example - 'myList'), and generalized versions of the management functions to manage your active objects as well.
+<br/>
+for each list,  you just need to keep the index value of the first object in the list... 
+<br/>
+<br/>
+this technique is not perfect, its not really a linked list at all, its just an stack (Edit. it's a linked list but you can only insert and remove easily at the front ?), but in the right situation, it can be more efficient than a standard linked list approach, and it can also be used to manage objects that don't have internal list pointers...
+<br/>
+<br/>
+I hope this is useful to someone.
+<br/>
+<br/>
+<br/>
+cheers
+<br/>
+<br/>
+Col</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12896 - sigma - Sun Nov 30, 2003 1:19 am</h4>
+    <div class="postbody"><span class="postbody">I decided to do the defragmenting method anyway. It was easier to code than I'd figured, and it allowed me to optimize register use in several procedures. It is also not possible to do too much indirection and dereferencing for what I'm doing (arrays of pointers and linked lists are definitely out).</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12897 - sajiimori - Sun Nov 30, 2003 2:35 am</h4>
+    <div class="postbody"><span class="postbody">torne et al.,
+<br/>
+<br/>
+Somehow I must have given the impression that I thought a dynamically allocated linked list was appropriate for this situation.  I don't, so there's no need to argue against using one.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12901 - poslundc - Sun Nov 30, 2003 7:01 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>torne wrote:</b></span></td> </tr> <tr> <td class="quote">You don't need pointers; a decent optimiser will generate code that's equivalent using array indexes. =)</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I would think pointers would actually be more efficient in the general case, although consuming slightly more memory than just storing indices.
+<br/>
+<br/>
+If I'm traversing the list using indices, it means I need to load the next index from memory, shift and add it to the base pointer register, and load the new value. If I'm using pointers, I just load the next pointer and I'm there, without having to keep track of the base in another register. If it's in IWRAM, there is no speed difference to loading a 32-bit word as opposed to 16- or 8-bits.
+<br/>
+<br/>
+It should make very little difference either way, though; using indices instead of pointers would only mean one extra register and one extra ALU instruction (two in Thumb). If you're using EWRAM instead of IWRAM, on the other hand, indices will be much more efficient so long as you store them using u8 or u16 data types.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#13019 - Miked0801 - Wed Dec 03, 2003 7:19 pm</h4>
+    <div class="postbody"><span class="postbody">Another way to prevent fragmentation would be to allocate your bullet list as a stack.  push your max bullet amount onto the stack as empty (0) and pop them off when created - then pushing them back when they die.  No fragmentation, and stacks are as easy as an array of items with an index to the top element.  Fast and assembly friendly as well.
+<br/>
+<br/>
+Mike</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#13028 - sajiimori - Wed Dec 03, 2003 11:14 pm</h4>
+    <div class="postbody"><span class="postbody">Mike,
+<br/>
+<br/>
+I don't understand your suggestion.  You want to make a stack of all zeros ("push your max bullet amount onto the stack as empty"), then pop zeros off the stack ("pop them off when created") and put them somewhere (where would that be?), then later push the zero back onto the stack ("pushing them back when they die")?
+<br/>
+<br/>
+Perhaps you meant to suggest pushing objects onto the stack when they're created, and popping them off when they're destroyed.  But that still wouldn't work unless the last object that was created will be the first one that is destroyed (which is obviously not the case for things like bullets).</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#13035 - Miked0801 - Thu Dec 04, 2003 1:07 am</h4>
+    <div class="postbody"><span class="postbody">I'll try again and explain a bit better (take longer to type the message :)
+<br/>
+<br/>
+I'm suggesting pushing the max number possible (for your game/app)of "I'm dead now" or if you want "uninitialized"  bullet structures onto this stack.  When a new bullet is needed, pop a bullet off this stack and initialize it for your game.  When you're all finished with the bullet (its dead or whatever), set it back to dead (or not, this is just a practice to help with dangling pointer.  If your careful, you technically don't need to set it as dead) and push it back onto the stack.  Doing it this way (opposed to putting live bullets in a stack and removing when they die) completely eliminates fragmentation.  
+<br/>
+<br/>
+We do a similar trick here with in-game actor structures - create an array of the maximum arrays needed, pop off this stack when the actors are created, and push them back on when they die.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#13037 - ampz - Thu Dec 04, 2003 2:06 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>poslundc wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>torne wrote:</b></span></td> </tr> <tr> <td class="quote">You don't need pointers; a decent optimiser will generate code that's equivalent using array indexes. =)</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I would think pointers would actually be more efficient in the general case, although consuming slightly more memory than just storing indices.
+<br/>
+<br/>
+If I'm traversing the list using indices, it means I need to load the next index from memory, shift and add it to the base pointer register, and load the new value. If I'm using pointers, I just load the next pointer and I'm there, without having to keep track of the base in another register. If it's in IWRAM, there is no speed difference to loading a 32-bit word as opposed to 16- or 8-bits.
+<br/>
+<br/>
+It should make very little difference either way, though; using indices instead of pointers would only mean one extra register and one extra ALU instruction (two in Thumb). If you're using EWRAM instead of IWRAM, on the other hand, indices will be much more efficient so long as you store them using u8 or u16 data types.
+<br/>
+<br/>
+Dan.</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Loading a value from a array using the index is a single instruction operation in ARM mode. No matter the size of each element in the array.
+<br/>
+It is a single instruction operation even if the index is a constant.
+<br/>
+<br/>
+Loading a value from a array using a pointer is a two instruction operation when the pointer is a constant, otherwise it is a single cycle operation as well.
+<br/>
+<br/>
+Not sure of the number of instructions in thumb mode.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#13038 - poslundc - Thu Dec 04, 2003 2:33 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>ampz wrote:</b></span></td> </tr> <tr> <td class="quote">Loading a value from a array using the index is a single instruction operation in ARM mode. No matter the size of each element in the array.
+<br/>
+It is a single instruction operation even if the index is a constant.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+That's the case only if you already know which index you are loading (ie. the index is already stored in a register). We are discussing forming a pseudo-linked-list by including the index into the array for next item as part of the data structure. In which case, you would need to load that index from memory, so it will take at least as many instructions as loading a pointer directly.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#13039 - sajiimori - Thu Dec 04, 2003 2:49 am</h4>
+    <div class="postbody"><span class="postbody">Miked0801,
+<br/>
+<br/>
+Maybe the reason I don't understand you is because you are using the terms 'push' and 'pop' in very unconventional ways.  Typically, when you 'push' something, you add information to a stack.  When you 'pop' something, you remove information from a stack.
+<br/>
+<br/>
+If the stack contains no information, it sounds very strange to say you are 'pushing' things onto it.  The stack you describe is either all zero/null, or may as well be all zero/null (because all the objects are considered 'dead'), and thus it contains no information.
+<br/>
+<br/>
+By interpreting your explanation more generously, I would guess that by 'popping' off the stack you mean allocating that area on the stack to be used as a live object, and by 'pushing' onto the stack you mean freeing it to be reused.  (Incidentally, the 'stack' would then be backwards because all the live data is beyond the top of the stack, and the stack itself contains undefined values in the form of dead objects.)  However, to maintain some sort of an analogy to a stack, the object that was allocated last would still have to be freed first.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#13055 - Miked0801 - Thu Dec 04, 2003 6:38 pm</h4>
+    <div class="postbody"><span class="postbody">No, I mean what I say with push (onto stacK) and pop (off of stack).  Im just creating a dead list instead of a live one.
+<br/>
+<br/>
+An example:
+<br/>
+<br/>
+Say there can be a maximum of 20 bullets in the game.  1st step then is to Push all 20 uninitialized bullets onto the stack.  This stack is now where you will grab bullets as there are needed in the game.  
+<br/>
+<br/>
+Now, lets say that a bullet is needed.  You Pop a bullet structure off this stack and initialized its contents for its lifetime.  Lets say you need another bullet before the 1st one dies.  You Pop another structure off the stack (truthfully, your probably only storing pointers as that's much more efficient, but I digress) and set it up.  
+<br/>
+<br/>
+The stack now currently has only 18 entries in it.
+<br/>
+<br/>
+Now lets say that one of the two bullets has died (doesn't matter which.)  You take that structure (pointer) and Push it back onto the stack making 19 available.  
+<br/>
+<br/>
+Another bullet is needed, Pop whatever is available from the stack and set in up for use.  Now 18 on the stack.
+<br/>
+<br/>
+Both die, push them both back on the stack and 20 are available.  
+<br/>
+<br/>
+As you can see, no memory fragmentation and only pointer pointer manipulation needed if done right.  The only minor catch is that the bullet must keep track of its own pointer while alive so it can properly push itself back into the stack on death.
+<br/>
+<br/>
+I stated this above, but for maximum efficiency, you Malloc an array of 20 bullet structures to begin with and only place 20 pointers in the stack.  That way you only need play with pointers and malloc memory doesn't fragment with constant alloc/frees.
+<br/>
+<br/>
+Hope this makes it clear what I'm saying.  It's just a slightly different way of approaching the problem that completely removes fragmentation and is very fast to boot.
+<br/>
+<br/>
+Mike</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#13063 - torne - Thu Dec 04, 2003 7:10 pm</h4>
+    <div class="postbody"><span class="postbody">Mike, I don't think that gets anything over using an array. You still have a maximum number of bullets, which is the only problem with using a fixed-size array, and I would've said, from the amount of time it's taken for us to understand what you mean, that your method is more complex than just using a free list. (which is effectively the same as using a stack, just laid out a different way in memory). Fragmentation in terms of the actual memory allocation is zero in both cases; if you were assuming that fragmentation of *active* bullets would be reduced, then you're wrong (unless the most/least recently created bullet is always the first to be destroyed, which is again the same as using an array).</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#13064 - sajiimori - Thu Dec 04, 2003 7:18 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+Now, lets say that a bullet is needed. You Pop a bullet structure off this stack and initialized its contents for its lifetime.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+That implies making a copy of the structure.  Since the structure is 'dead' (and thus contains no information), copying it is useless.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+truthfully, your probably only storing pointers as that's much more efficient, but I digress
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+No, you don't digress ;-) because popping a pointer off a stack makes sense, while popping 'no information' (a dead struct) off a stack makes no sense.
+<br/>
+<br/>
+It then follows that the array is not an array of objects, but rather an array of object references.  The objects themselves can be allocated anywhere, and if they are also allocated as an array then they will not be fragmented in memory.
+<br/>
+<br/>
+However, that was not the sort of fragmentation the original question was referring to.  The original poster assumed that an array would be used, and thus was not concerned about memory fragmentation, but rather fragmentation of live entries in the array of structs.
+<br/>
+<br/>
+The reason the poster was concerned was because he/she did not want to iterate over the entire array if many of the entries are dead, because that is less efficient than iterating over the live objects and stopping when a dead object is reached (which can be accomplished by defragmenting the live entries).
+<br/>
+<br/>
+A side effect of defragmenting the live entries is that the addresses of the objects can change, so other objects should not store their pointers or indexes.  I really should have mentioned that earlier, but I didn't think of it.
+<br/>
+<br/>
+Anyway, the objects need to be visited periodically to update their status.  If you want to take a shot at answering the original question, you could describe what sort of structure you organize the live objects into for fast access.  Of course, it's unlikely that you have a method that's more efficient than array iteration!  ;-)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#13065 - Miked0801 - Thu Dec 04, 2003 7:37 pm</h4>
+    <div class="postbody"><span class="postbody">Hehe.  Objects and references.  I'm such a straight C/Asm and guy that talk like that makes me nervous  :)
+<br/>
+<br/>
+I'll go re-read the parent again at yoru request and see what I missed...
+<br/>
+<br/>
+Ok, if there weren't going to be too many objects in the game, I'd not worry about reading too many 0s.  But, if there were going to be lots (say more than about 50), I'd do it as a linked list traversal.  
+<br/>
+<br/>
+Why are we even worring about this from a performance stand-point anyways (besides the fact that the question was asked)?  This sort of code, while called every tic, isn't going to make or break an application unless this is all its doing.  The physics/collision/redering code for these objects are going to take by far more CPU time.  From an academic view, its fun to debate, but real life, this is probably one of the last things you'd want to optimize seriously.
+<br/>
+<br/>
+Mike</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#13067 - torne - Thu Dec 04, 2003 7:42 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Miked0801 wrote:</b></span></td> </tr> <tr> <td class="quote">Why are we even worring about this from a performance stand-point anyways (besides the fact that the question was asked)?</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+You'd be suprised what can turn out to be a problem. Perhaps the original poster had profiled. =)
+<br/>
+<br/>
+I write everything in asm, personally, but that's just because after I'd rewritten large chunks of GCC-generated Thumb code to be much faster, I gave up on its code generation. Much easier (for me, because I'm mad) to just do it in asm to start with (using soon-to-actually-exist tools such as my high-level assembler which will hopefully end up being integrated in the the Eclipse IDE with a semantically-aware editor and support for refactoring).
+<br/>
+<br/>
+Assembler plan is at <a href="http://whitefang.fitz.cam.ac.uk/proposal/" target="_blank">http://whitefang.fitz.cam.ac.uk/proposal/</a> if you're interested. =)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#13069 - Miked0801 - Thu Dec 04, 2003 7:52 pm</h4>
+    <div class="postbody"><span class="postbody">Lol.  Perhaps he did indeed.  I'm not yet used to the competance level on this board.  I'll have to be a bit more careful with my own comments. :)
+<br/>
+<br/>
+On to the assembly comments - please, this is not meant to start the old "Which is better C or Assembly" holy war.  We all know all the different answers to that...
+<br/>
+<br/>
+While I love programming in Assembler, I find I can get much more done in C and deal with the loss of performance that our no so wonderful C compiler gives us.  If ever I need something to go real fast, then I'll go back and hand assemble it, but most of the time, I'm lazy and can deal with our menu subsystem (or whatever non performance critical area) running a bit slow.  Besides, my coworkers enjoy reading C code much more that assembler.  There's always that "It's assembly, I can't touch this or everything will explode" additude.  :)
+<br/>
+<br/>
+This coming from a guy who worked on GBC Z80 for years.  All hand assembly there, scrapping for every byte/cycle possible.  My how my additude has changed when given a somewhat decent compiler.
+<br/>
+<br/>
+Mike</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#13070 - sajiimori - Thu Dec 04, 2003 7:52 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+Objects and references. I'm such a straight C/Asm and guy that talk like that makes me nervous :) 
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Oh don't get me wrong...I am too!  But the word 'variable' is so ambiguous.  I mean, what the hell is a 'const variable'?!  ;-)  By 'object' I mean any block of memory that stores data, so it could mean a primitive value (like char or int or void*), an array, or a struct -- anything that takes up memory.
+<br/>
+<br/>
+'Reference', on the other hand, is more general than 'pointer'.  A reference can be an index into an array, or a unique ID of some sort, whereas a pointer is strictly a memory address.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#13073 - torne - Thu Dec 04, 2003 8:19 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Miked0801 wrote:</b></span></td> </tr> <tr> <td class="quote">On to the assembly comments - please, this is not meant to start the old "Which is better C or Assembly" holy war.  We all know all the different answers to that...</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I wasn't intending to start a holy war; just mentioning it in passing.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">While I love programming in Assembler, I find I can get much more done in C and deal with the loss of performance that our no so wonderful C compiler gives us.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I generally find it's no great deal to write asm code; I can do it about as fast as C. Perhaps faster once I have my HLA tools. =)
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Besides, my coworkers enjoy reading C code much more that assembler.  There's always that "It's assembly, I can't touch this or everything will explode" additude.  :)</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Again, HLA allows you to write selfdocumenting assembler, just as I already write selfdocumenting code in other languages. Unit testing is the answer to 'can't touch this or everything will explode', which is not a phenomemon unique to assembly, but rather to any complex code. I'm working on an AsmUnit, but it will need a simulator, probably. Could always write one.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">My how my additude has changed when given a somewhat decent compiler.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+GCC's Thumb code generation is not exactly 'decent', and ARM's own compiler is still not as good as I'd like. I can beat GCC on almost any reasonably long code sequence. =)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#13075 - Miked0801 - Thu Dec 04, 2003 8:39 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+GCC's Thumb code generation is not exactly 'decent', and ARM's own compiler is still not as good as I'd like. I can beat GCC on almost any reasonably long code sequence. =)
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Not a feat to do that :)  
+<br/>
+<br/>
+But the true question is, can that assembler be written as quickly as the C and is it as easy for other people to work with.  I guess if everyone on your project is working in Assembler, it wouldn't be that big of a deal.  But here, assembler knowledge is not required so therefore it cannot be maintained by anyone but me or a few other leads.  
+<br/>
+<br/>
+Ah well, I'm dropping this thread here.  Nothing to see, moving along ;)</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

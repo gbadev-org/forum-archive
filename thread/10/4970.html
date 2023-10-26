@@ -1,0 +1,310 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Using my own interrupts with a music library - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Audio > Using my own interrupts with a music library</h2>
+<div id="posts">
+<div class="post">
+    <h4>#35378 - headspin - Thu Feb 03, 2005 8:35 pm</h4>
+    <div class="postbody"><span class="postbody">This seems like such a trivial thing, but for the life of me can't get it happening. Any help would be greatly appreciated.
+<br/>
+<br/>
+I'm trying to implement AFM (Another F**king MOD Player) by <a class="postlink" href="http://www.hitmen-console.org/" target="_blank">http://www.hitmen-console.org/</a> to run along side my own VBlank &amp; HBlank interrupts. I can get my own interrupt to work or the AFM interrupts, but not both at the same time.
+<br/>
+<br/>
+I'll give you some code to explain what I'm trying to achieve
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void initInterrupt()
+<br/>
+{
+<br/>
+   REG_IME=0;
+<br/>
+<br/>
+   // Or'ing REG_IE should keep the settings done by AFM???
+<br/>
+   REG_IE |= INT_VBLANK | INT_HBLANK;
+<br/>
+<br/>
+   // These bits enable the VBlank &amp; HBlank interrupts
+<br/>
+   // This is where the program will crash &amp; burn
+<br/>
+   REG_DISPSTAT |= BIT03 | BIT04;
+<br/>
+<br/>
+   REG_IME=1;   //enable interrupt
+<br/>
+}
+<br/>
+<br/>
+void killInterrupt()
+<br/>
+{
+<br/>
+   // this function is not required to work as of yet, but
+<br/>
+   // comments on the code is welcome
+<br/>
+   REG_IME=0; // disable interrupt
+<br/>
+   REG_IE = 0;
+<br/>
+   REG_DISPSTAT = 0;
+<br/>
+}
+<br/>
+<br/>
+void HBlankInterrupt(void)
+<br/>
+{
+<br/>
+   unsigned long int regs = REG_IE;
+<br/>
+   REG_IF |= INT_HBLANK;
+<br/>
+   
+<br/>
+   // do stuff
+<br/>
+<br/>
+   REG_IE = regs;
+<br/>
+}
+<br/>
+<br/>
+void VBlankInterrupt(void)
+<br/>
+{
+<br/>
+   unsigned long int regs = REG_IE;
+<br/>
+   REG_IF |= INT_VBLANK;
+<br/>
+   
+<br/>
+   // do stuff
+<br/>
+   
+<br/>
+   REG_IE = regs;
+<br/>
+}
+<br/>
+<br/>
+//IntrTable for crt0
+<br/>
+void (*IntrTable[])() = {
+<br/>
+   0, // v-blank
+<br/>
+   0, // h-blank 
+<br/>
+   0, // vcount
+<br/>
+   0, // timer0
+<br/>
+   0, // timer1
+<br/>
+   0, // timer2
+<br/>
+   0, // timer3
+<br/>
+   0, // serial
+<br/>
+   0, // dma0
+<br/>
+   0, // dma1
+<br/>
+   0, // dma2
+<br/>
+   0, // dma3
+<br/>
+   0, // key
+<br/>
+   0  // cart
+<br/>
+};
+<br/>
+<br/>
+int main(void)
+<br/>
+{
+<br/>
+   FILEPTR = find_first_gbfs_file(find_first_gbfs_file);   
+<br/>
+<br/>
+   IntrTable[0] = VBlankInterrupt;
+<br/>
+   IntrTable[1] = HBlankInterrupt;
+<br/>
+<br/>
+   // install player
+<br/>
+   afm_install();
+<br/>
+<br/>
+   // now setup my vblank and hblank interrupts
+<br/>
+   initInterrupt();
+<br/>
+<br/>
+   afm_init(gbfs_get_obj(FILEPTR, "Afraid.mod", NULL));
+<br/>
+   afm_sound_param(0xff,1); // volume, 1 = Mono, 0 = Stereo
+<br/>
+<br/>
+   while (1)
+<br/>
+   {
+<br/>
+      // call this every frame this routine may be delayed
+<br/>
+      afm_update();
+<br/>
+<br/>
+      WaitVBlank();
+<br/>
+<br/>
+      // must call this right at the start of vblank with minimum delay
+<br/>
+      afm_sync();
+<br/>
+   }
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Acording to the AFM docs, only Timer0, Timer1, dma1, dma2 and dma3 interrupts are used, so I can't see why my code would be conflicting.
+<br/>
+<br/>
+Until I get some resolution I can't use my own custom interrupts with AFM which is a total bitch.[/code]<br/>_________________<br/><a class="postlink" href="http://headsoft.com.au/index.php?category=warhawk" target="_blank">Warhawk DS</a> | <a class="postlink" href="http://headsoft.com.au/index.php?category=mmll" target="_blank">Manic Miner: The Lost Levels</a> | <a class="postlink" href="http://headsoft.com.au/index.php?category=tdg" target="_blank">The Detective Game</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#35399 - Miked0801 - Fri Feb 04, 2005 3:46 am</h4>
+    <div class="postbody"><span class="postbody">What are the symptoms of the failure?  Missed interrupts or none?  Bad music timing?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#35410 - sasq - Fri Feb 04, 2005 9:44 am</h4>
+    <div class="postbody"><span class="postbody">Well stuttering will be a problem since you're not allowing an interrupt to happen during another interrupt - but allowing that causes other problems since then you need to save all registers.
+<br/>
+<br/>
+Oh, and also - if AFM uses interrupts, where do you make sure the AFM-rotuines are called? a 0 in the IntrTable for an interrupt that occurs will of course crash.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#35415 - headspin - Fri Feb 04, 2005 12:21 pm</h4>
+    <div class="postbody"><span class="postbody">Thanks for the reply guys!
+<br/>
+<br/>
+Miked0801: As soon as I enable my interrupts the whole thing crashes, rendering Visualboy to GPF and close.
+<br/>
+<br/>
+sasq: No stuttering, just a complete crash and burn!
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">since you're not allowing an interrupt to happen during another interrupt</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+The interrupts I am using (VBLANK &amp; HBLANK) are not used by AFM according to the docs therefore, why should I need to service it's interrupts... unless (i guess your aluding to here) that once I enable interrupts his are ignored.. and somehow I need to service them?
+<br/>
+<br/>
+I'm guessing it's some magick code in Jeff's crt0 that I need to address to allow both interrupts. I'm using the crt0 modified for Krawall which also works with AFM and a few other mod players.
+<br/>
+<br/>
+I don't know what AFM routines to point the IntrTable to to allow AFM to continue. I don't have that knowledge but I do know I've spent many hours trying to fix it. Any more info would be appreciated!<br/>_________________<br/><a class="postlink" href="http://headsoft.com.au/index.php?category=warhawk" target="_blank">Warhawk DS</a> | <a class="postlink" href="http://headsoft.com.au/index.php?category=mmll" target="_blank">Manic Miner: The Lost Levels</a> | <a class="postlink" href="http://headsoft.com.au/index.php?category=tdg" target="_blank">The Detective Game</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#35416 - headspin - Fri Feb 04, 2005 12:25 pm</h4>
+    <div class="postbody"><span class="postbody">P.S I was assuming Oring REG_IE would keep the original values intact so that I could just add my two V/HBlank handlers to coencide with AFM's.
+<br/>
+<br/>
+I have a feeling my whole idea of how Jeff's crt0 implements interrupts is wrong. Not that I have any clue all the same, my ARM assembly skills are limited to say the least.<br/>_________________<br/><a class="postlink" href="http://headsoft.com.au/index.php?category=warhawk" target="_blank">Warhawk DS</a> | <a class="postlink" href="http://headsoft.com.au/index.php?category=mmll" target="_blank">Manic Miner: The Lost Levels</a> | <a class="postlink" href="http://headsoft.com.au/index.php?category=tdg" target="_blank">The Detective Game</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#35417 - sasq - Fri Feb 04, 2005 1:25 pm</h4>
+    <div class="postbody"><span class="postbody">AFAIK the Hitmen player does not use interrupts at all (which is the only reason I can see to use that old peace of crap ;) - it uses DMA and Timers to do things but not the interrupts, so I don't think that's your problem. Try disabling interrupts (including your own) completely and see if you can get music to play.
+<br/>
+<br/>
+It also uses IWRAM without allocating it first, so if you have your own data there it will be overwitten unless you've taken steps to avoid using the memory space used by the player.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#35467 - headspin - Sat Feb 05, 2005 6:18 am</h4>
+    <div class="postbody"><span class="postbody">Your right sasq, AFM dosn't use interrupts at all. That makes things more clear. You were also right about a conflict in IWRAM, AFM was overwriting the my interrupt code.
+<br/>
+<br/>
+I modified Jeff's crt0 to place my interrupt handler in ROM and it now works, but there is a slight skipping in the audio. I guess thats because the handler is now in the slower ROM memory.
+<br/>
+<br/>
+So now the question is how do I modify crt0 so that I can place my IRQ handler in IWRAM for faster processing but *after* the AFM code?
+<br/>
+<br/>
+Below is the code to allocate memory for AFM... so I have to somehow place the handler just after this.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">unsigned char __afm_work[0x400+0x100] __attribute__ ((section (".iwram")));</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Here is the line in crt0.s that places the handler in IWRAM. I need to place this section at offset 0x500.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code"> .ifdef __ISRinIWRAM
+<br/>
+    .SECTION    .iwram,"ax",%progbits
+<br/>
+ .endif</td> </tr></table><span class="postbody"><br/>_________________<br/><a class="postlink" href="http://headsoft.com.au/index.php?category=warhawk" target="_blank">Warhawk DS</a> | <a class="postlink" href="http://headsoft.com.au/index.php?category=mmll" target="_blank">Manic Miner: The Lost Levels</a> | <a class="postlink" href="http://headsoft.com.au/index.php?category=tdg" target="_blank">The Detective Game</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#35481 - DekuTree64 - Sat Feb 05, 2005 10:26 am</h4>
+    <div class="postbody"><span class="postbody">Looking at the main AFM header, it looks like what you need to do is change the __iwram_start define in your link script to 0x3000500 instead of 0x3000000. It's up toward the top, hard to miss.
+<br/>
+Kind of a strange way to do it, but I guess it works.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#35499 - tepples - Sat Feb 05, 2005 5:26 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>headspin wrote:</b></span></td> </tr> <tr> <td class="quote">As soon as I enable my interrupts the whole thing crashes, rendering Visualboy to GPF and close.</td> </tr></table><span class="postbody">
+<br/>
+An emulator should never crash, even with a completely bugged ROM. Get a SourceForge account and report the crash, attaching the ROM as a test case.
+<br/>
+<br/>
+(If this doesn't get fixed quickly, Niиtendo will probably have all its licensees use this code to crash emulators that run pirated games.)<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"><br/><br/>Last edited by tepples on Fri Mar 04, 2005 12:41 am; edited 1 time in total</span></div>    
+</div>
+<div class="post">
+    <h4>#35512 - headspin - Sat Feb 05, 2005 8:41 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Looking at the main AFM header, it looks like what you need to do is change the __iwram_start define in your link script to 0x3000500 instead of 0x3000000. It's up toward the top, hard to miss. </td> </tr></table><span class="postbody">
+<br/>
+<br/>
+That worked! Thanks :)
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">(If this doesn't get fixed quickly, Nintendo will probably have all its licensees use this code to crash emulators that run pirated games.)</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I'll just have to secretly offer the big N my top secret emulator crash code for ... one bill-i-on dollars... :D<br/>_________________<br/><a class="postlink" href="http://headsoft.com.au/index.php?category=warhawk" target="_blank">Warhawk DS</a> | <a class="postlink" href="http://headsoft.com.au/index.php?category=mmll" target="_blank">Manic Miner: The Lost Levels</a> | <a class="postlink" href="http://headsoft.com.au/index.php?category=tdg" target="_blank">The Detective Game</a></span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

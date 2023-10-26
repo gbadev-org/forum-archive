@@ -1,0 +1,365 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Copying speeds - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > Copying speeds</h2>
+<div id="posts">
+<div class="post">
+    <h4>#111634 - gmiller - Fri Dec 08, 2006 5:13 pm</h4>
+    <div class="postbody"><span class="postbody">I have bench marked the DMA verses the memcpy and in the past the inability of memcpy to do copies to video memory (minimum 2 byte write) I have given up using it for copies to video memory (which I believe OAM is considered in this category).  I was tempted to look at the code in memcpy and see why it was slow but never got around to it.  
+<br/>
+<br/>
+Since DMA stops the CPU from getting to memory (and the ARM7 does not have cache) DMA does "pause" the CPU while it is running.  Based on test code using DMA and timers I think the trade off is worth it.  I would appreciate any other feedback from others.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#111635 - wintermute - Fri Dec 08, 2006 5:18 pm</h4>
+    <div class="postbody"><span class="postbody">memcpy should work with VRAM fine provided both source &amp; destination are aligned to the same boundary. memset will not work since it operates in bytes.
+<br/>
+<br/>
+An optimised ldmia/stmia loop or cpufastset call should both be slightly faster than DMA for this size of data and have the advantage of being interruptible. It matters more if your game uses serial communication.<br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#111638 - gmiller - Fri Dec 08, 2006 5:30 pm</h4>
+    <div class="postbody"><span class="postbody">I think in the past some of the buffers I copied from might not have been aligned so that could explain the issues with memcpy.  I also ran into a problem with DMA from a non-aligned buffer that failed as well.  I had for force the buffer to me aligned to get my DMA to work.  Since the data was an array of structures and the structures were just the sprite attributes (4 shorts) I did not understand why is was transferring badly.  come to think about it I might have done 32 bit transfers and the alignment might not have been on a 4 byte boundary.  I better go check that out.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#111639 - poslundc - Fri Dec 08, 2006 5:34 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote">For a 1024 byte aligned copy, is DMA much better than a memcpy() that uses an LDMIA/STMIA loop?</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+LDMIA/STMIA loop:
+<br/>
+<br/>
+- Assuming 8 registers used, 32 iterations need to take place
+<br/>
+- Assume source is IWRAM with 0/0 waitstate, destination and code execution is IWRAM with 0/0 waitstate
+<br/>
+- Each iteration would have a LDM at (nS + 1N + 1I) = 10
+<br/>
+- Each iteration would have a STM at ((n-1)S + 2N) = 9
+<br/>
+- Each iteration would have a subtract and branch, about 4 cycles in IWRAM.
+<br/>
+<br/>
+So about 23 cycles per iteration over 32 iterations, for a total of about 736 cycles, not counting any setup and take-down functionality (certainly a generic memcpy() function that knows it can do an aligned 8-register copy loop will take some checking and branching to reach that conclusion).
+<br/>
+<br/>
+According to Cowbite's DMA transfer ratings table, a 32-bit transfer from IWRAM to IWRAM for the necessary 256 copies would be 512 cycles.
+<br/>
+<br/>
+So you are saving about 30% by using the DMA over a fast software copy (if you have one available).
+<br/>
+<br/>
+Saving 224 cycles certainly won't make much difference if it's only being done once per frame, even in VBlank. The better question may be: why not to use the DMA if you can? (Wintermute raises some good points, although I think for a 1024 byte copy during VBlank DMA is probably fine.)
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#111645 - Vengyr - Fri Dec 08, 2006 6:04 pm</h4>
+    <div class="postbody"><span class="postbody">Could you guys maybe give an example of that DMA system and also the data what does what?
+<br/>
+<br/>
+Seeing in none of my header files I can find something back about it and neither in the tutorial I was using.
+<br/>
+<br/>
+Thanks in advance
+<br/>
+<br/>
+<br/>
+is this all I need or is there more?
+<br/>
+<br/>
+// DMA channel 1 register definitions
+<br/>
+#define REG_DMA1SAD         *(u32*)0x40000BC  // source address
+<br/>
+#define REG_DMA1DAD         *(u32*)0x40000C0  // destination address
+<br/>
+#define REG_DMA1CNT         *(u32*)0x40000C4  // control register
+<br/>
+<br/>
+// DMA flags
+<br/>
+#define WORD_DMA            0x04000000
+<br/>
+#define HALF_WORD_DMA       0x00000000
+<br/>
+#define ENABLE_DMA          0x80000000
+<br/>
+#define START_ON_FIFO_EMPTY 0x30000000
+<br/>
+#define DMA_REPEAT          0x02000000
+<br/>
+#define DEST_REG_SAME       0x00400000
+<br/>
+<br/>
+// Timer 0 register definitions
+<br/>
+#define REG_TM0D            *(u16*)0x4000100
+<br/>
+#define REG_TM0CNT          *(u16*)0x4000102
+<br/>
+<br/>
+// Timer flags
+<br/>
+#define TIMER_ENABLED       0x0080
+<br/>
+<br/>
+// FIFO address defines
+<br/>
+#define REG_FIFO_A          0x040000A0
+<br/>
+#define REG_FIFO_B          0x040000A4
+<br/>
+<br/>
+// our Timer interval that we calculated earlier (note that this
+<br/>
+// value depends on our playback frequency and is therefore not set in
+<br/>
+// stone)
+<br/>
+#define TIMER_INTERVAL      (0xFFFF - 761)
+<br/>
+<br/>
+// set the timer to overflow at the appropriate frequency and start it
+<br/>
+REG_TM0D   = TIMER_INTERVAL;
+<br/>
+REG_TM0CNT = TIMER_ENABLED;
+<br/>
+<br/>
+// start the DMA transfer (assume that pSample is a (signed char*)
+<br/>
+// pointer to the buffer containing our sound data)
+<br/>
+REG_DMA1SAD = (u32)(pSample);
+<br/>
+REG_DMA1DAD = (u32)REG_FIFO_A;
+<br/>
+REG_DMA1CNT = ENABLE_DMA | START_ON_FIFO_EMPTY | WORD_DMA | DMA_REPEAT;</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#111659 - tepples - Fri Dec 08, 2006 8:41 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>poslundc wrote:</b></span></td> </tr> <tr> <td class="quote">LDMIA/STMIA loop:
+<br/>
+<br/>
+- Assuming 8 registers used, 32 iterations need to take place
+<br/>
+- Assume source is IWRAM with 0/0 waitstate, destination and code execution is IWRAM with 0/0 waitstate
+<br/>
+- Each iteration would have a LDM at (nS + 1N + 1I) = 10
+<br/>
+- Each iteration would have a STM at ((n-1)S + 2N) = 9
+<br/>
+- Each iteration would have a subtract and branch, about 4 cycles in IWRAM.</td> </tr></table><span class="postbody">
+<br/>
+But how many LDMIAs and STMIAs per iteration? For copy sizes around 512 to 1024 bytes (32x32 pixel sprite cel at 16 or 256 colors), you could cut the cycles by unrolling the loop; an unroll factor of 8 copies 8*8*4=256 bytes per iteration. Copies are also likely to be from ROM (3/1 16-bit) or from EWRAM (2/2 16-bit) to VRAM (0/0 16-bit). I might do the math later.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#111687 - poslundc - Sat Dec 09, 2006 12:06 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote">But how many LDMIAs and STMIAs per iteration? For copy sizes around 512 to 1024 bytes (32x32 pixel sprite cel at 16 or 256 colors), you could cut the cycles by unrolling the loop; an unroll factor of 8 copies 8*8*4=256 bytes per iteration. Copies are also likely to be from ROM (3/1 16-bit) or from EWRAM (2/2 16-bit) to VRAM (0/0 16-bit). I might do the math later.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Then you are looking at more overhead for checks in your generic memcpy() function (which slows down its general performance) or writing a custom routine to do your OAM copy... and if you custom-build everything you can beat almost anything.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#111701 - gmiller - Sat Dec 09, 2006 3:37 am</h4>
+    <div class="postbody"><span class="postbody">This code is a little ugly but at the time I was writing it I did not go back and clean it up.  The compile at 'O2' and 'O3' inlines the code when I look at the assembly output.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+// DMA Definitions
+<br/>
+<br/>
+typedef enum _DMA_FLAG
+<br/>
+{ DF_DST_INC = 0x0,
+<br/>
+  DF_DST_DEC = 0x200000,
+<br/>
+  DF_DST_CONST = 0x400000,
+<br/>
+  DF_SRC_INC = 0x0,
+<br/>
+  DF_SRC_DEC = 0x800000,
+<br/>
+  DF_SRC_CONST = 0x1000000,
+<br/>
+  DF_COPY_16 = 0x0,
+<br/>
+  DF_COPY_32 = 0x4000000,
+<br/>
+  DF_IMM = 0x0,
+<br/>
+  DF_VBLANK = 0x10000000,
+<br/>
+  DF_HBLANK = 0x20000000,
+<br/>
+}
+<br/>
+DMA_FLAG;
+<br/>
+<br/>
+// Registers for using DMA3 source, destination, and control
+<br/>
+#define REG_DMA3SAD *(volatile unsigned int *)0x040000D4
+<br/>
+#define REG_DMA3DAD *(volatile unsigned int *)0x040000D8
+<br/>
+#define REG_DMA3CNT *(volatile unsigned int *)0x040000DC
+<br/>
+#define DMA_ENABLE  0x80000000
+<br/>
+<br/>
+// IMPLEMENTATION
+<br/>
+<br/>
+void
+<br/>
+Memory_DMAFastCopy (void *pvDest, const void *pvSource, unsigned int unCount,
+<br/>
+                    unsigned int unMode)
+<br/>
+{
+<br/>
+  // make sure unCount is not zero or else DMA will do very bad things to memory!!!
+<br/>
+  if (unCount) {
+<br/>
+    // clear out the DMA control bits or else DMA will yet again do very bad things
+<br/>
+    // to memory next time you use it!!!
+<br/>
+    REG_DMA3CNT = 0;
+<br/>
+<br/>
+    REG_DMA3DAD = (unsigned int) pvDest;    // Set Destination
+<br/>
+    REG_DMA3SAD = (unsigned int) pvSource;  // Set Source
+<br/>
+    REG_DMA3CNT |= unCount | unMode | DMA_ENABLE;   // Put count , mode, ENABLE
+<br/>
+  }
+<br/>
+}
+<br/>
+<br/>
+#define DMAFastCopy(toAddr, fromAddr, count, countType) Memory_DMAFastCopy((void *)(toAddr), (void *)(fromAddr), (unsigned int)(count), (unsigned int)(countType))
+<br/>
+<br/>
+// Sample call
+<br/>
+<br/>
+  //Copy the background
+<br/>
+  DMAFastCopy (videoBuffer,     // Copy to Video Memory
+<br/>
+               bg_Bitmap,       // From background bitmap
+<br/>
+               bg_Bitmap_Size () &gt;&gt; 2,  // Bit map size in 32 bit chunks
+<br/>
+               DF_COPY_32);     // Copy 32 bit at a time
+<br/>
+<br/>
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#111702 - Dwedit - Sat Dec 09, 2006 4:12 am</h4>
+    <div class="postbody"><span class="postbody">Do you really need to write 0 to DMA3CNT before writing the final value?<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#111715 - tepples - Sat Dec 09, 2006 10:09 am</h4>
+    <div class="postbody"><span class="postbody">The extra write to DMA3CNT clears out any detritus that a previous use of DMA3CNT (e.g. in hblank mode) may have left. Specifically, I know of at least one very popular emulator on the GBA that puts three out of the four DMA channels into hblank mode in order to get raster effects to work.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#111730 - gmiller - Sat Dec 09, 2006 3:42 pm</h4>
+    <div class="postbody"><span class="postbody">The zero will stop any possible in progress (or to be done next vblank) DMA which could be changing the values in the registers.  Of course if the DMA is in progress our code would not be running since the DMA controller would have us locked out of memory.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#111754 - DekuTree64 - Sat Dec 09, 2006 9:37 pm</h4>
+    <div class="postbody"><span class="postbody">IMO, starting a DMA that was already in use should be considered a bug and fixed properly, not just silently killed off.
+<br/>
+To prevent conflicts, I generally use DMA3 strictly for memcopy/memset, 1 and 2 for sound, and 0 for HBlank/VBlank transfers. And if one HBlank/VBlank transfer isn't enough, I use an interrupt instead.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#111761 - tepples - Sat Dec 09, 2006 10:07 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>DekuTree64 wrote:</b></span></td> </tr> <tr> <td class="quote">IMO, starting a DMA that was already in use should be considered a bug and fixed properly, not just silently killed off. </td> </tr></table><span class="postbody">
+<br/>
+Right, but if it's a bug in software that one does not control (such as a bootloader), how does one fix it? I've seen both PogoShell and the GBAMP menu fail to properly reset registers before starting a program.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">To prevent conflicts, I generally use DMA3 strictly for memcopy/memset, 1 and 2 for sound, and 0 for HBlank/VBlank transfers. And if one HBlank/VBlank transfer isn't enough, I use an interrupt instead.</td> </tr></table><span class="postbody">
+<br/>
+And watch half your CPU time get sucked up servicing interrupts, in which case you make an exception to "generally", right?<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#111772 - DekuTree64 - Sat Dec 09, 2006 11:55 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote">Right, but if it's a bug in software that one does not control (such as a bootloader), how does one fix it? I've seen both PogoShell and the GBAMP menu fail to properly reset registers before starting a program.</td> </tr></table><span class="postbody">
+<br/>
+Then clear all the DMA control registers at startup.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>dekutree64 wrote:</b></span></td> </tr> <tr> <td class="quote">To prevent conflicts, I generally use DMA3 strictly for memcopy/memset, 1 and 2 for sound, and 0 for HBlank/VBlank transfers. And if one HBlank/VBlank transfer isn't enough, I use an interrupt instead.</td> </tr></table><span class="postbody">
+<br/>
+And watch half your CPU time get sucked up servicing interrupts, in which case you make an exception to "generally", right?</span></td> </tr></table><span class="postbody">
+<br/>
+Right, but if another DMA came along and killed off my second HBlank transfer, the effect would get messed up and have to be fixed anyway.
+<br/>
+<br/>
+I'm not saying clearing the control for safety is a bad thing, but maybe setting up some flags to track when you have HBlank/VBlank transfers active and asserting that there are no conflicts may be better. Silent failures should only be used if you expect them to happen. Otherwise you might end up spending an hour tracking down some obscure bug later.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

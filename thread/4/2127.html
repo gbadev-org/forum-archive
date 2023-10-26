@@ -1,0 +1,194 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>16-bit color - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > 16-bit color</h2>
+<div id="posts">
+<div class="post">
+    <h4>#11033 - Gopher - Tue Sep 23, 2003 9:43 pm</h4>
+    <div class="postbody"><span class="postbody">I'm very new to GBA programming but have been programming in c, c++, and asm for years.  I've been implementing some basic 3d routines and plan to develop a full engine.
+<br/>
+<br/>
+I plan to use BSP trees, and am debating the best approach. Given the limited processor speed on the GBA it would seem wasteful to do a large amount of overdraw. A software depth buffer seems like it would be just as slow as the overdraw. 
+<br/>
+<br/>
+The idea I'm toying with right now is using the unused 16th bit to contain 'masking' information, and test that rather than calculating the distance per-pixel and testing it against a seperate buffer. If the 16th bit is really unused and will be preserved, I should be able to traverse my bsp tree front-to-back.
+<br/>
+<br/>
+Suggestions or tips from anyone who's already tackled this problem would be appreciated.
+<br/>
+<br/>
+Will Thomas</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#11035 - DekuTree64 - Tue Sep 23, 2003 10:34 pm</h4>
+    <div class="postbody"><span class="postbody">Yes, that should be fine. You will have to clear the screen every frame though, which is a waste of time if you're drawing over the whole thing anyway, so you might want to try using a C-buffer instead. My demo for the compo has some tri filler code with a nice C-buffer, though it isn't actually used, since I rewrote all the tri filler code in ASM without it, since I wasn't going to be doing much overdraw anyway. You can download the source at &lt;a href="http://www.angelfire.com/wizard/deku/program/eternity-source.zip"&gt;http://www.angelfire.com/wizard/deku/program/eternity-source.zip&lt;/a&gt;. Check triflat.c since it's the simplest, and the bottom of render.c for the C-buffer setup/clearing code.
+<br/>
+It's basically just a pool of memory, with a linked list of entries. Entry 0 is the head of the free list, and contains the index of the first free entry, the next 160 entries are the heads of the line lists (one for each scanline, each frame you set it up so each line has one entry for -512-0, and one for 120-511 (since I use half resolution), so you get free horizontal screen clipping), and the rest is free at the start of the frame, and all linked to entry 0. Each entry is 4 bytes, the lower 12 bits are the index of the next entry (0 for end of line's list), bit12-21 is the left x coord, and bit22-31 is the right x coord. 
+<br/>
+Hope it helps a little, and good luck. 3D on GBA really is a lot of fun<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#11044 - Gopher - Wed Sep 24, 2003 7:19 am</h4>
+    <div class="postbody"><span class="postbody">&gt;Yes, that should be fine. You will have to clear the screen every frame though, which is a waste of time if you're drawing over the whole thing anyway
+<br/>
+<br/>
+<br/>
+Actually, I planned to just switch the used state from 0 to 1 each frame, so no clear would be needed
+<br/>
+<br/>
+<br/>
+As for C-Buffering, I am not familiar with the term, but it sounds similiar to what I was already implementing when the idea of toggling the 16th-bit occurred to me. For simplicity I have them allocating dynamically at the moment, but I plan to port my memory management code to work on the GBA at some point later and was planning to add the pool then. 
+<br/>
+<br/>
+Anyway, I am using an array of linked lists for each scanline, each having a start color, end color, start x, and end x. (I'm planning to render tris with interpolated color but no texture mapping; later I hope to add dynamic per-vertex lighting if I can keep the fps up) It was my thought when I came up with the idea that I might be able to get a 'blit' function rendering that structure out to the screen as a kind of 'compressed' back-buffer for mode 3, though I'm less than confident now that it could be done quickly enough.
+<br/>
+<br/>
+I've downloaded your source, along with the source of most of the compo entries, though I hadn't studied any of them much yet. I'll look over the CBuffering you're talking about.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#11048 - DekuTree64 - Wed Sep 24, 2003 5:32 pm</h4>
+    <div class="postbody"><span class="postbody">What you're talking about sounds like S-buffering, S meaning span, which is storing the screen as a list of spans until you render it. Good for mode3 if you can render it all in one frame so you never see a half-drawn screen. 
+<br/>
+The C in C-buffer means coverage. It just tells you if something's covered or not, so you render front-to-back, drawing to a backbuffer as you go, using the C-buffer to keep from drawing over already drawn areas. Then when you get to the end of the screen, everything's already drawn and since spans in the C-buffer get merged together when they touch, by the end of the screen each line should only have one span all the way across, so there's no big linked list to go through like with an S-buffer. The drawback is that you need a backbuffer, so in mode3, that means either a very slow buffer in EWRAM, or cutting the resolution. The most common way is to scale the screen to twice the normal width, and use the scrolling regs to 'flip' the 2 buffers. So actually you're just drawing to the right or left half of the screen, and scrolling back and forth.
+<br/>
+<br/>
+But anyway, if you were going to use a linked list to store spans, how exactly does the 16th bit thing come into play? You can just clip spans rather than check each pixel.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#11049 - Gopher - Wed Sep 24, 2003 5:53 pm</h4>
+    <div class="postbody"><span class="postbody">yeah, it sounds like S-Buffering is what I'm doing, tho there's a definate similarity. I looked into your CBuffer code, the two are definately very similar structures applied differently.
+<br/>
+<br/>
+<br/>
+&gt; if you were going to use a linked list to store spans, how exactly does the 16th bit thing come into play? You can just clip spans rather than check each pixel.
+<br/>
+<br/>
+The two weren't meant to be used together. I'm implementing the triangle-drawing routines using the S-Buffer right now, which was my first idea for dealing with the lack of a mode-3 back buffer. using bit 15 as the 'covered' bit was a completely different approach that occurred to me since. I've been unsure if I could get the SBuffers running quickly enough. 
+<br/>
+<br/>
+For now I'm planning a GBA port of a game I made for DOS back in high school, really a simple Asteroids game I called Polymancer, but if I can get the 3d routines fast enough I have bigger plans for them.
+<br/>
+<br/>
+On a random note before I close, The biggest task I need to complete is the 3d math library, and I've been debating what the best way to do it would be. GBA has no floats, so I guess I'll do it with fixed-point math, use [s]u32s as 16.16 fixed-points
+<br/>
+<br/>
+I know, I should just look at other people's code, but the main thing I'm enjoying about GBA programming is I can control my code base 100%, and looking at other peoples' code feels like cheating. :)   The only thing I didn't write included in any of my gba stuff so far is malloc.h and even that will probably go when I port my memory manager to GBA</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#11053 - DekuTree64 - Wed Sep 24, 2003 7:50 pm</h4>
+    <div class="postbody"><span class="postbody">Yeah, you might want to look into writing your math functions in pure ASM though, especially matrix multiplication, cause using an fpMul function to do a 16.16x16.16 multiplication is kinda slow, but you lose your entire integer part if you just multiply and shift down normally. And the ASM for matrix multiplication is absolutely beautiful using the smlal instruction^_^
+<br/>
+But yeah, it is more fun to do stuff on your own than to just copy/paste, other peoples' code, and I wouldn't go by my matrix stuff anyway, since I didn't understand it that well to begin with, and did some pretty screwy stuff to speed it up a little.
+<br/>
+<br/>
+Oh, and one mroe thing, you might want to think about doing your S-buffer approach in mode4, so you don't have to worry about having the frame drawn while you're in the middle of rendering it, cause you could probably get some major speed going by rendering 4 pixels at a time so you can just store 32 bits once instead of 16 bits 4 times in mode3, and with all the spans precalculated, if you hit an odd pixel at the end of your span, it would be easy to just move on to the next span and calculate the pixels into your temporary value, and still store them 4 at a time, thusly removing the problem of writing smigle pixels.
+<br/>
+Hey, if you're really hardcore, do it in ASM and render 8 or 16 pixels into some registers and stmia them^_^<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#11055 - Gopher - Wed Sep 24, 2003 8:29 pm</h4>
+    <div class="postbody"><span class="postbody">&gt;Yeah, you might want to look into writing your math functions in pure ASM though, especially matrix multiplication, cause using an fpMul function to do a 16.16x16.16 multiplication is kinda slow, but you lose your entire integer part if you just multiply and shift down normally.
+<br/>
+&gt;
+<br/>
+<br/>
+For now I'm going to prototype it in C, I'll convert it to asm later once I get all the pieces working.  As for the 16.16 multiplication, there's some precision loss but you can just do (a&gt;&gt;8)*(b&gt;&gt;8)=c, which is the equivilant of (a*b)&gt;&gt;16 and prevents losing the integer part.
+<br/>
+<br/>
+&gt;And the ASM for matrix multiplication is absolutely beautiful using the smlal instruction^_^ 
+<br/>
+&gt;
+<br/>
+<br/>
+I'll have more to ask about this later; I haven't really been looking at the GBA asm too much; all my asm experience was on x86, mostly in 286 mode (this was back when I was in high-school) So the GBA instruction set is still a little foreign to me right now.
+<br/>
+<br/>
+<br/>
+&gt;But yeah, it is more fun to do stuff on your own than to just copy/paste, other peoples' code
+<br/>
+&gt;
+<br/>
+<br/>
+I agree completely. Besides, if you've never solved a problem yourself, you're not in a very good position to judge or understand someone else's solution to that problem. 
+<br/>
+<br/>
+<br/>
+<br/>
+&gt;Oh, and one mroe thing, you might want to think about doing your S-buffer approach in mode4, so you don't have to worry about having the frame drawn while you're in the middle of rendering it, cause you could probably get some major speed going by rendering 4 pixels at a time so you can just store 32 bits once instead of 16 bits 4 times in mode3, and with all the spans precalculated, if you hit an odd pixel at the end of your span, it would be easy to just move on to the next span and calculate the pixels into your temporary value, and still store them 4 at a time, thusly removing the problem of writing smigle pixels. Hey, if you're really hardcore, do it in ASM and render 8 or 16 pixels into some registers and stmia them^_^
+<br/>
+&gt;
+<br/>
+<br/>
+At present the routine to blit from my s-buffer is in highly-unoptimized c code. However, it is the first thing I intend to optimize once I get everything working. first off I've made it store c1 and c2, but I'm going to change that and store c1 and cs, where c1 is the color and cs is the color step, the amount the color is incremented by each pixel across the screen.
+<br/>
+I'll also rewrite the routines in asm. That'll make it a lot faster to draw, but also faster to split the spans around existing spans when adding them to the linked lists. I may switch to mode4 if I can't get the speed high enough later, but for now I want to stay in mode3. The whole thing hinges on getting the blit-from-sbuffer fast enough really, which is why it's optimization priority 1<br/>_________________<br/>"Only two things are infinite: the universe, and human stupidity. The first is debatable." -Albert Einstein</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#11057 - DekuTree64 - Wed Sep 24, 2003 9:32 pm</h4>
+    <div class="postbody"><span class="postbody">Yeah, that's a good optimization, especially when put together with another little texture mapping trick in your triangle edge tracing. Don't go writing everything in ASM right off the bat, make sure everything works and all your algorithms are as good as you can get them first.
+<br/>
+<br/>
+So, if you just have triangles that are one color, but with different brightnesses at each vertex, you can do goraud shading as basically do 1 dimensional texture mapping, with a black-to-color gradient as your texture. So just interpolate the brightness down the edges of the triangle like you would the r, g and b color values and look up the current brightness in the gradient each pixel. You've just saved yourself 2 interpolations and the time of putting the red, green and blue values together into your fnial pixel color too. You can't have like a triangle with a red, a green, and a blue corner, but most of the time that's not really neccessary anyway. 
+<br/>
+But anyway, when you're interpolating values down the edges of a triangle, it just so happens that the horizontal step stays the same every time, so instead of doing step = (cRight - cLeft) / (xRight - xLeft) each line, just do step = (cMidRight - cMidLeft) - (xMidRight - xMidLeft) at the start of your triangle and using that each scanline. You can do it anywhere on the triangle, but it works best at the widest scanline (that would be wherever the second vertex from the top is, which is what I meant by Mid), since that will get you the most accuracy. 
+<br/>
+<br/>
+That was harder to explain than I thought, but it goes good with your storing c1 and cStep, because you only have to calculate the step once, and just store that at each span. And even better, cStep won't ever change, even if you have to clip the span. You'll have to adjust c1 if you clip off the left part of the span, but that's just a multiplication by cStep.
+<br/>
+Actually you could use that trick on interpolating rgb values too, it's just that interpolating 3 values instead of 1 is a waste of time unless you really need it.
+<br/>
+<br/>
+...dang, I was gonna stop, but another mode4 thing occurred to me. Using the 1D texture mapping thing for your shading, you could generate your gradient by first calculating the 16-bit colors that you'd use in mode3, and then search through the palette and find the closest match to each entry and store those in the actual 'texture', so all you have to do each pixel you render is look up the current brightness in the texture and you get whatever color in the palette is the closest match to that brightness of the current color.
+<br/>
+<br/>
+Don't mind me too much though, I'm just spouting ideas. Like you said, the fun is being free to do everything exactly how YOU want to, not how I'd do it^_^<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#11058 - Gopher - Wed Sep 24, 2003 9:48 pm</h4>
+    <div class="postbody"><span class="postbody">I do intend it to support interpolating r,g,b across the face; the trick of calculating the step will work fine for rgb as well as for the brightness, as you noted; tho there definately is extra cost in calculating the step for the rgb value
+<br/>
+I can't think of any way to calculate the step correctly for all 3 without seperating them. It's my intention to store a lookup table to get the step for a given component - tiny table, since there are only 32 values. Still have a lot of instructions, but eliminate the division altogether. My biggest worry is that the error from the truncation will make the values diverge too much from the correct values over the length of a span. Not sure how I'm going to deal with this; storing each as a seperate var and merging them per-pixel would be too expensive, perhaps I can store them in u32s with 10 bits each instead of 5; lot of steps to convert that down to the u16 for blitting, they'd all be 1-tick instructions at least.
+<br/>
+<br/>
+What kind of performance I'll get remains to be seen, of course; I am after all trying to make the gba do things it clearly was not designed to facilitate.<br/>_________________<br/>"Only two things are infinite: the universe, and human stupidity. The first is debatable." -Albert Einstein</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

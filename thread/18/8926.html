@@ -1,0 +1,183 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>WIFI-LIB:stops receiveing messages after about 10 mins HELP! - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > WIFI-LIB:stops receiveing messages after about 10 mins HELP!</h2>
+<div id="posts">
+<div class="post">
+    <h4>#75739 - qw3rty - Wed Mar 15, 2006 5:18 pm</h4>
+    <div class="postbody"><span class="postbody">After I got my initial problems with the wifi-lib under control, it works quite well, but after about 10 minutes I can't receive any incoming messages anymore (outgoing still works like a charm).
+<br/>
+<br/>
+I tried the original wifi-lib0.2 and the lib with the changes from stonebone, NO DIFFERENCE !
+<br/>
+<br/>
+Anybody experienced similar problems ? 
+<br/>
+I read in the changelog of the original lib(0.2) :
+<br/>
+"* Probably fixed issue with transmit locking up. Transmit is far more stable 
+<br/>
+  now."
+<br/>
+<br/>
+Is this my problem ?!
+<br/>
+<br/>
+P.S. : I just found out, that the problems must be somewhere in my transfer-funtions.
+<br/>
+UDPTest() still works after aprox. 20 mins.
+<br/>
+At least I have a trace to follow :)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#75821 - qw3rty - Thu Mar 16, 2006 6:51 am</h4>
+    <div class="postbody"><span class="postbody">I replaced my receiveand send routines with simple calls to "sendto" and "receivefrom" - and it was working the whole night !
+<br/>
+<br/>
+Here are my receive &amp; send functions :
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+<br/>
+s16 sen_and_ack_COMM(COMMUNICATION* send_com, u32 destip, u32 portnum)//returns -1 if no (complete) packet was sent or acknowledged
+<br/>
+{                                   //else returns num of bytes sent      
+<br/>
+   int sain_size = sizeof(sa_incoming);
+<br/>
+   u16 counter = 0;
+<br/>
+   s16 num_bytes_rcvd = 0;
+<br/>
+   s16 num_bytes_sent = 0;
+<br/>
+   u16 i;
+<br/>
+   COMMUNICATION in_com[1];
+<br/>
+   
+<br/>
+   
+<br/>
+   sa_outgoing.sin_family=AF_INET;
+<br/>
+   sa_outgoing.sin_port=htons(portnum);
+<br/>
+   sa_outgoing.sin_addr.s_addr=destip;
+<br/>
+   send_com[0].PAK_NUM++;//increment the PAK-NUM
+<br/>
+   //send packet
+<br/>
+   num_bytes_sent = sendto(sock,((u8*)&amp;send_com[0]),sizeof(COMMUNICATION),0,(struct sockaddr *)&amp;sa_outgoing,sizeof(sa_outgoing));
+<br/>
+   printf("senandack %i\n",num_bytes_sent);
+<br/>
+   
+<br/>
+   if (num_bytes_sent != sizeof(COMMUNICATION))
+<br/>
+   {
+<br/>
+      printf("sent not enough\n");
+<br/>
+      return -1;
+<br/>
+   }
+<br/>
+   while (counter &lt;= TIMEOUT)
+<br/>
+   {//wait for acknowledge packet
+<br/>
+      //swiWaitForVBlank();
+<br/>
+      
+<br/>
+      
+<br/>
+      
+<br/>
+      //printf("rcvd %i\n",num_bytes_rcvd);
+<br/>
+      num_bytes_rcvd = recvfrom(sock,((u8*)&amp;in_com[0]),PACKET_HEADER_LEN,0,(struct sockaddr *)&amp;sa_incoming,&amp;sain_size);
+<br/>
+      printf("rcvd %i\n",num_bytes_rcvd);
+<br/>
+      if (num_bytes_rcvd == -1) //nothing received
+<br/>
+      {
+<br/>
+         counter++;
+<br/>
+      }
+<br/>
+      else if (num_bytes_rcvd &gt;= PACKET_HEADER_LEN)
+<br/>
+      {//paket received, at least the demanded length check for HEADER
+<br/>
+         for (i = 0; i &lt; PACKET_HEADER_LEN; i++)
+<br/>
+         {
+<br/>
+            if ( *(((u8*)&amp;(in_com[0]))+i) != *(((u8*)&amp;(in_com[0]))+i) ) return -1; //no legal header sent back
+<br/>
+         }
+<br/>
+         return num_bytes_sent;
+<br/>
+      }
+<br/>
+      
+<br/>
+   }
+<br/>
+   printf("TIMEOUT\n");
+<br/>
+   return -1;
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+exchanging the code above with :
+<br/>
+s16 sen_and_ack(...)
+<br/>
+{
+<br/>
+ return  sendto(......);
+<br/>
+}
+<br/>
+removing the wait for the answer results in working code (for more than 10 minutes).</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#76006 - qw3rty - Fri Mar 17, 2006 5:38 pm</h4>
+    <div class="postbody"><span class="postbody">Ok, I found the bug - it was a silly mistake by me.
+<br/>
+The problem was, that BOTH machines were in the sen_and_ack-routine, hence no one got the acknowledge packet.
+<br/>
+<br/>
+They got out of sync, when the PC thought it sent an acknowledge packet back, but it actually sent only an ARP-request (who is [IP of NDS]).
+<br/>
+<br/>
+I have to think a little more about my acknowledge routine.... hmmm... any tips ? ;)
+<br/>
+<br/>
+EDIT : setting an static ARP entry for the NDS (on PC : arp -s [IP-Adress] [MAC]) eliminated my problem in the LAN (the ARPs are automatically updated every 10 minutes !), but my routine still gets out of sync if a packet is lost.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

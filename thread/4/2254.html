@@ -1,0 +1,154 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>All globals are 32bits?! - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > All globals are 32bits?!</h2>
+<div id="posts">
+<div class="post">
+    <h4>#11808 - regularkid - Sun Oct 19, 2003 11:23 pm</h4>
+    <div class="postbody"><span class="postbody">So the compiler allocates 4 bytes (32 bits) for all global variables!! Anyone know why it does this? Is there a way to turn this off....maybe a compiler setting? I was hoping there was a way other than using a structure with all the variables inside it.
+<br/>
+<br/>
+On a side question: In the memory map, there are two sections for data in IWRAM: (.bss and .data). Why the need for two different sections? I can't see a difference between the data that goes in each one. Any ideas?
+<br/>
+<br/>
+Thanks!<br/>_________________<br/>- RegularKid</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#11809 - DekuTree64 - Sun Oct 19, 2003 11:39 pm</h4>
+    <div class="postbody"><span class="postbody">.bss is uninitialized data, so anything in there will just be zero-filled by the Crt0 when starting up. In the .data section, it stores all the initial values in ROM and copies them to IWRAM when starting up.
+<br/>
+As for variable sizes, I don't think there's any way of talking the compiler out of it. It does seem to work if you make an asm file and declare them yourself though, like
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+@vars.s
+<br/>
+.data
+<br/>
+.align 2
+<br/>
+.global var2bytes
+<br/>
+var1:
+<br/>
+.hword 0
+<br/>
+.global var1byte
+<br/>
+var1byte:
+<br/>
+.byte 0
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+And declare them as externs in your .c/.h files. Just be sure you keep things aligned to their own size, like don't put a single byte var and then a word right after it. I have only started to experiment with this since yesterday though, so only trust your own tests as to wether it's really ok.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#11810 - Burton Radons - Sun Oct 19, 2003 11:48 pm</h4>
+    <div class="postbody"><span class="postbody">.bss stands for "block started by symbol", but its meaning has nothing to do with its usage, which is a block which has no initialiser (interpreted as meaning "should be initialised to zero" nowadays).  Because there are no contents to it, there is no point to storing it in the file.  This was back in the bad old days when linkers had to be written such that they could swap in and out necessary memory manually because there wasn't enough to link a whole program otherwise; nowadays it's just a complication.
+<br/>
+<br/>
+It looks like this bug only shows up if the globals are uninitialised; just initialising them to a value appears to kick them into being linked properly.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#11811 - regularkid - Mon Oct 20, 2003 12:19 am</h4>
+    <div class="postbody"><span class="postbody">Thanks for the explanations!
+<br/>
+<br/>
+Hey, you're right, the bug only shows itself in the .bss section. So, if I iniitlaize all my variables that are less than 32bits, it should all be fixed.<br/>_________________<br/>- RegularKid</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#11812 - tepples - Mon Oct 20, 2003 1:52 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>DekuTree64 wrote:</b></span></td> </tr> <tr> <td class="quote">As for variable sizes, I don't think there's any way of talking the compiler out of it.</td> </tr></table><span class="postbody">
+<br/>
+I save space by putting global data into structs. For example: make a type <span style="font-weight: bold">struct Player</span> containing all the variables related to the player and an instance <span style="font-weight: bold">struct Player p;</span> thereof. Useful side effect: after this encapsulation, you can more easily handle multiple players.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Burton Radons wrote:</b></span></td> </tr> <tr> <td class="quote">It looks like this bug only shows up if the globals are uninitialised; just initialising them to a value appears to kick them into being linked properly.</td> </tr></table><span class="postbody">
+<br/>
+However, initializing your global variables will also make them take up space in the ROM.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#11819 - Burton Radons - Mon Oct 20, 2003 11:59 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote">However, initializing your global variables will also make them take up space in the ROM.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Which is more vital: ROM space or IWRAM?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#11822 - tepples - Mon Oct 20, 2003 3:21 pm</h4>
+    <div class="postbody"><span class="postbody">IWRAM, and that's why I use the struct method. The struct method also makes a few overlay tricks easier, further saving IWRAM.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#11836 - Gordon - Tue Oct 21, 2003 4:16 am</h4>
+    <div class="postbody"><span class="postbody">Where can I find out information of all section names such .bss, .data, ctor, ...stab, .custdata , .rodata ? 
+<br/>
+what is ctor stand for?
+<br/>
+what is .rodata stand for? ..
+<br/>
+thx</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#11839 - tepples - Tue Oct 21, 2003 5:10 am</h4>
+    <div class="postbody"><span class="postbody">Most common program sections:
+<br/>
+.text: program code
+<br/>
+.rodata: read-only data
+<br/>
+.data: pre-initialized data, copied to RAM
+<br/>
+.bss: uninitialized data
+<br/>
+<br/>
+C++ functions:
+<br/>
+ctor: short for C++ constructor
+<br/>
+dtor: short for C++ destructor<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#11840 - Gordon - Tue Oct 21, 2003 6:05 am</h4>
+    <div class="postbody"><span class="postbody">Where did you find out all the information?</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

@@ -1,0 +1,1338 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>oam - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > oam</h2>
+<div id="posts">
+<div class="post">
+    <h4>#59015 - ninogenio - Fri Oct 28, 2005 12:57 am</h4>
+    <div class="postbody"><span class="postbody">i was wondering if any one has a oam example or knows of a ds oam tut i used oam on the gba before but im not quite sure how the ds works with oam sprites also can oam sprites be done in 16 bit color. cheers for any help.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#59042 - Mollusk - Fri Oct 28, 2005 11:15 am</h4>
+    <div class="postbody"><span class="postbody">The OAM works the same as the gba OAM... but doubled, one for each screen.
+<br/>
+<br/>
+You can get some info here : <a class="postlink" href="http://www.drunkencoders.com/documents/DS/ndslib.htm#_Sprite_Data" target="_blank">http://www.drunkencoders.com/documents/DS/ndslib.htm#_Sprite_Data</a>
+<br/>
+or here <a class="postlink" href="http://neimod.com/dstek/" target="_blank">http://neimod.com/dstek/</a>
+<br/>
+<br/>
+You can also have 16 bit sprites, but from what I've tested, they must be 128 pixels large (even if you only use a 8x8 sprite), so that takes up a lot of memory, I guess... Check the first link for info on how to do a 16 bit sprite (I think it's putting the object mode to 3 (0 - normal, 1 - alpha, 2 - window, 3 - 16 bit, if I remember correctly)<br/>_________________<br/>PAlib official forum : <a class="postlink" href="http://www.palib.info" target="_blank">http://www.palib.info</a>
+<br/>
+PAlib official tutorials: <a class="postlink" href="http://www.palib.info/wiki" target="_blank">http://www.palib.info/wiki</a>
+<br/>
+Updates, help, code examples, tutorials, etc...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#59781 - ninogenio - Fri Nov 04, 2005 2:28 am</h4>
+    <div class="postbody"><span class="postbody">after quite a lengthy play with sprites tonight ive got this which im pretty sure is close but the grahpics get scrambled quite badly i realize the problem my spritewell line of sprites really are 126/7 18 by ten high now im trying to drop these into a 32 by 32 sprite and i dont know how to get it to move down a line when it hits the end of the eighteen pixels.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#include &lt;nds.h&gt;
+<br/>
+#include "fat_driver/gbamp_cf.c"  
+<br/>
+#include &lt;stdio.h&gt;
+<br/>
+#include &lt;stdlib.h&gt;
+<br/>
+#include &lt;string.h&gt;
+<br/>
+#include &lt;nds/arm9/console.h&gt;
+<br/>
+#include "tiles.h"
+<br/>
+<br/>
+<br/>
+#define NUM_SPRITES 128   
+<br/>
+<br/>
+sSpriteEntry OAMCopy[128];
+<br/>
+<br/>
+typedef struct 
+<br/>
+{
+<br/>
+   int x,y;
+<br/>
+   int dx, dy;
+<br/>
+   sSpriteEntry* oam;   
+<br/>
+   int gfxID;
+<br/>
+}Sprite;
+<br/>
+<br/>
+<br/>
+void MoveSprite(Sprite* sp) 
+<br/>
+{
+<br/>
+   sp-&gt;oam-&gt;attribute[1] &amp;= 0xFE00;
+<br/>
+   sp-&gt;oam-&gt;attribute[1] |= (sp-&gt;x &amp; 0x01FF);
+<br/>
+ 
+<br/>
+   sp-&gt;oam-&gt;attribute[0] &amp;= 0xFF00;
+<br/>
+   sp-&gt;oam-&gt;attribute[0] |= (sp-&gt;y &amp; 0x00FF);
+<br/>
+} 
+<br/>
+<br/>
+<br/>
+void initOAM(void)
+<br/>
+{
+<br/>
+   int i;
+<br/>
+<br/>
+   for(i = 0; i &lt; 128; i++) 
+<br/>
+        {
+<br/>
+      OAMCopy[i].attribute[0] = ATTR0_DISABLED;
+<br/>
+   }   
+<br/>
+}
+<br/>
+<br/>
+void updateOAM(void) 
+<br/>
+{
+<br/>
+   unsigned int i;
+<br/>
+   
+<br/>
+   for(i = 0; i &lt; 128 * sizeof(sSpriteEntry) / 4 ; i++)
+<br/>
+   {
+<br/>
+      ((uint32*)OAM)[i] = ((uint32*)OAMCopy)[i];
+<br/>
+   }
+<br/>
+}
+<br/>
+<br/>
+void draw_map(u16);
+<br/>
+void levelloader(u16 level_no);
+<br/>
+void read_width_height(u16);
+<br/>
+<br/>
+<br/>
+u16 instr(char* ,char* ,u16);
+<br/>
+void readline(char* ,char** );
+<br/>
+void readfile(char* ,char** );
+<br/>
+char* mid(char* ,u16 ,u16 );
+<br/>
+u16 len(char*);
+<br/>
+void closefile(char*);
+<br/>
+<br/>
+u16* vram;
+<br/>
+<br/>
+typedef struct{
+<br/>
+     u16 height;
+<br/>
+     u16 width;
+<br/>
+     u16 tilewidth;
+<br/>
+     u16 tileheight;
+<br/>
+     u16 counter;
+<br/>
+}LEVEL;
+<br/>
+<br/>
+LEVEL levels[60];
+<br/>
+u16 map[50][50];
+<br/>
+u16 anim[50][50];
+<br/>
+<br/>
+u16 background[256*192];
+<br/>
+u16 obj_number;
+<br/>
+<br/>
+Sprite sprites[NUM_SPRITES];
+<br/>
+<br/>
+int main(){
+<br/>
+<br/>
+        
+<br/>
+<br/>
+        powerON(POWER_ALL);
+<br/>
+<br/>
+   irqInit();
+<br/>
+   irqSet(IRQ_VBLANK,0);
+<br/>
+        WAIT_CR=0xe800;
+<br/>
+        vramSetMainBanks(   VRAM_A_MAIN_SPRITE,        //A and B maped consecutivly as sprite memory
+<br/>
+                        VRAM_B_MAIN_SPRITE,        //this gives us 256KB which is the max
+<br/>
+                        VRAM_C_MAIN_BG_0x6000000,  //map C to background memory
+<br/>
+                        VRAM_D_LCD                 //not using D
+<br/>
+                        ); 
+<br/>
+   
+<br/>
+        //set the video mode
+<br/>
+        videoSetMode(  MODE_0_2D | 
+<br/>
+                       DISPLAY_SPR_ACTIVE |    //turn on sprites
+<br/>
+                       DISPLAY_BG0_ACTIVE |    //turn on background 0
+<br/>
+                       DISPLAY_SPR_1D |        //this is used when in tile mode
+<br/>
+                       DISPLAY_SPR_1D_BMP      //and this in bitmap mode
+<br/>
+                     );
+<br/>
+        
+<br/>
+        initOAM();
+<br/>
+        for (int x=0; x&lt;126*10 ; x++)
+<br/>
+                 SPRITE_GFX[x]=tiles[x]|BIT(15);
+<br/>
+        levelloader(1);
+<br/>
+        draw_map(1);
+<br/>
+<br/>
+        while(1) 
+<br/>
+        {
+<br/>
+                swiWaitForVBlank();
+<br/>
+                updateOAM();    
+<br/>
+        }
+<br/>
+<br/>
+   return(0);
+<br/>
+}
+<br/>
+<br/>
+void levelloader(u16 level_no)
+<br/>
+{
+<br/>
+            read_width_height(level_no);
+<br/>
+            char* filein;
+<br/>
+            char fname[128];
+<br/>
+            u16 x=0;
+<br/>
+            u16 point_index_t_or_f=0;
+<br/>
+            sprintf(fname, "/BREAK_OUT_MANIA/levels/level%d.txt", level_no);
+<br/>
+            readfile(fname,&amp;filein);
+<br/>
+<br/>
+            char* point_index;
+<br/>
+            char* maps;
+<br/>
+            readline(filein,&amp;maps);
+<br/>
+            free(maps);
+<br/>
+            readline(filein,&amp;maps);
+<br/>
+            free(maps);
+<br/>
+            for(int yx=0 ; yx&lt;levels[level_no].height ; yx++)
+<br/>
+            {
+<br/>
+                    readline(filein,&amp;maps);
+<br/>
+                    x=0;
+<br/>
+<br/>
+                    for(int ix=0 ; ix&lt;levels[level_no].width ; ix++)
+<br/>
+                    {
+<br/>
+                            point_index=mid(maps,x,instr(maps,",",x));
+<br/>
+<br/>
+                            if (len(point_index)&gt;1) point_index_t_or_f=1;
+<br/>
+                            else point_index_t_or_f=0;
+<br/>
+<br/>
+                            if (point_index_t_or_f)
+<br/>
+                            {
+<br/>
+                                  map[ix][yx]=atol(mid(maps,x,1));
+<br/>
+                                  anim[ix][yx]=atol(mid(point_index,2,3));
+<br/>
+                                  x=x+3+1;
+<br/>
+                            }
+<br/>
+                            else
+<br/>
+                            {
+<br/>
+                                  map[ix][yx]=0;
+<br/>
+                                  x=x+1+1;
+<br/>
+                            }
+<br/>
+                    }
+<br/>
+                    free(maps);
+<br/>
+             }
+<br/>
+             closefile(filein);
+<br/>
+<br/>
+             levels[level_no].counter=0;
+<br/>
+             for (int yx=1 ; yx&lt;levels[level_no].height ; yx++)
+<br/>
+             {
+<br/>
+                     for (int ix=1 ; ix&lt;levels[level_no].width ; ix++)
+<br/>
+                     {
+<br/>
+                              if (anim[ix][yx]&gt;0) levels[level_no].counter=levels[level_no].counter+1;
+<br/>
+                     }
+<br/>
+             }
+<br/>
+}
+<br/>
+<br/>
+<br/>
+<br/>
+void draw_map(u16 level_no)
+<br/>
+{
+<br/>
+        obj_number=0;
+<br/>
+        for (int yx=0 ; yx&lt;levels[level_no].height ; yx++)
+<br/>
+        {
+<br/>
+                 for (int xx=0 ; xx&lt;levels[level_no].width;xx++)
+<br/>
+                 {
+<br/>
+                          if (anim[xx][yx]&gt;0)
+<br/>
+                          {
+<br/>
+                              //random place and speed
+<br/>
+                         sprites[obj_number].x = xx*levels[level_no].tileheight;
+<br/>
+                         sprites[obj_number].y = yx*levels[level_no].tilewidth;
+<br/>
+   
+<br/>
+                         sprites[obj_number].oam = &amp;OAMCopy[obj_number];
+<br/>
+                         sprites[obj_number].gfxID = anim[xx][yx];
+<br/>
+   
+<br/>
+                         //set up our sprites OAM entry attributes
+<br/>
+                         sprites[obj_number].oam-&gt;attribute[0] = ATTR0_BMP;  
+<br/>
+                         sprites[obj_number].oam-&gt;attribute[1] = ATTR1_SIZE_32;
+<br/>
+                         sprites[obj_number].oam-&gt;attribute[2] = ATTR2_ALPHA(1)|sprites[obj_number].gfxID;
+<br/>
+<br/>
+                              MoveSprite(&amp;sprites[obj_number]);
+<br/>
+                              obj_number++;                               
+<br/>
+<br/>
+                          }
+<br/>
+                 }
+<br/>
+        }
+<br/>
+}
+<br/>
+<br/>
+<br/>
+void read_width_height(u16 level_no)
+<br/>
+{
+<br/>
+         u16 position;
+<br/>
+         char* filein;
+<br/>
+         char* line;
+<br/>
+<br/>
+         char fname[128];
+<br/>
+         sprintf(fname, "/BREAK_OUT_MANIA/levels/level%d.txt", level_no);
+<br/>
+         readfile(fname,&amp;filein);
+<br/>
+<br/>
+         readline(filein,&amp;line);
+<br/>
+         position=instr(line,",",0);
+<br/>
+         
+<br/>
+         levels[level_no].tilewidth=atol(mid(line,0,position));
+<br/>
+         levels[level_no].tileheight=atol(mid(line,position+1,len(line)));
+<br/>
+         free(line);
+<br/>
+<br/>
+         readline(filein,&amp;line);
+<br/>
+<br/>
+         position=instr(line,",",0);
+<br/>
+<br/>
+         levels[level_no].width=atol(mid(line,0,position));
+<br/>
+         levels[level_no].height=atol(mid(line,position+1,len(line)));
+<br/>
+         free(line);
+<br/>
+         closefile(filein);
+<br/>
+}
+<br/>
+<br/>
+<br/>
+<br/>
+<br/>
+u16 instr(char* name,char* seek_char,u16 startpos)
+<br/>
+{
+<br/>
+    char *start = name+startpos;
+<br/>
+    return (u16) (strstr(start, seek_char)-start);
+<br/>
+}
+<br/>
+<br/>
+u16 start_pos;
+<br/>
+u16 end_pos;
+<br/>
+void readline(char* filehandle,char** buffer)
+<br/>
+{
+<br/>
+        start_pos=end_pos;
+<br/>
+        u16 temp_instr_point=instr(filehandle,"\n",start_pos);
+<br/>
+        if (temp_instr_point) 
+<br/>
+        {
+<br/>
+                  end_pos=end_pos+temp_instr_point;
+<br/>
+                  filehandle[end_pos]='\0';
+<br/>
+                  
+<br/>
+                 *buffer=(char*) malloc (end_pos-start_pos+1);
+<br/>
+                  strncpy(*buffer, filehandle+start_pos, temp_instr_point+1);
+<br/>
+                  end_pos++;
+<br/>
+         }
+<br/>
+}
+<br/>
+<br/>
+void readfile(char* filename,char** filein)
+<br/>
+{
+<br/>
+        FAT_InitFiles();
+<br/>
+        int handle = FAT_fopen(filename, "r");  
+<br/>
+        int size=FAT_GetFileSize(); 
+<br/>
+        *filein = (char*) malloc (size+1);
+<br/>
+        for (int x=0 ; x&lt;size ;x++)
+<br/>
+        {
+<br/>
+            (*filein)[x]=FAT_fgetc(handle);
+<br/>
+        }
+<br/>
+        FAT_fclose(handle);
+<br/>
+} 
+<br/>
+<br/>
+void closefile(char* filename)
+<br/>
+{
+<br/>
+     
+<br/>
+        free(filename);
+<br/>
+        end_pos=0;
+<br/>
+        start_pos=0;
+<br/>
+}
+<br/>
+<br/>
+char tmp[200];
+<br/>
+char* mid(char *src, u16 pos, u16 siz)
+<br/>
+{
+<br/>
+        strncpy(tmp, src+pos, siz);
+<br/>
+        tmp[siz]='\0';
+<br/>
+        return tmp;
+<br/>
+}
+<br/>
+<br/>
+u16 len(char* stri)
+<br/>
+{
+<br/>
+       return strlen(stri);
+<br/>
+}
+<br/>
+<br/>
+void draw_text(char* dtext,u16 tst,u16 ist)
+<br/>
+{
+<br/>
+         for (int xst=0 ; xst&lt;len(dtext) ; xst++)
+<br/>
+                  draw_anim_image(vram , text , tst+(xst*8) , ist , 8 , 8 , (u16)dtext[xst]-32 , 632);
+<br/>
+} </td> </tr></table><span class="postbody">
+<br/>
+<br/>
+if you guys could help that would be really great as ive been trying to get this working for quite a while and i think im pretty close.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#59789 - Joat - Fri Nov 04, 2005 3:23 am</h4>
+    <div class="postbody"><span class="postbody">There isn't any way to make a 32x32 sprite render only 18x10 pixels without padding that data out to 32x32 (although there is a 32x16 size, which will waste less space).  If you want to stretch 18x10 out to 32x32, you can do that, although using rot/scale hardware won't look as good as doing it beforehand in your art package.
+<br/>
+<br/>
+I'm not certain if this is what you're trying to do however.  If not, please clarify.<br/>_________________<br/>Joat
+<br/>
+<a href="http://www.bottledlight.com" target="_blank">http://www.bottledlight.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#59821 - chishm - Fri Nov 04, 2005 9:28 am</h4>
+    <div class="postbody"><span class="postbody">A bit off topic, but that include:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>ninogenio wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#include "fat_driver/gbamp_cf.c" </td> </tr></table><span class="postbody"></span></td> </tr></table><span class="postbody"> really should be including the header. This will cause all manner of problems otherwise.
+<br/>
+That is, use:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#include "fat_driver/gbamp_cf.h" </td> </tr></table><span class="postbody">
+<br/>
+You just have to make sure you include the fat_driver directory in the list of source directories.<br/>_________________<br/><a class="postlink" href="http://chishm.drunkencoders.com" target="_blank">http://chishm.drunkencoders.com</a>
+<br/>
+<a class="postlink" href="http://dldi.drunkencoders.com" target="_blank">http://dldi.drunkencoders.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#59843 - ninogenio - Fri Nov 04, 2005 2:35 pm</h4>
+    <div class="postbody"><span class="postbody">yes thank chrism i do it the correct way in my full game this was just a little test proggy i can enlarge the sprites to 32x16 thats no problem but can i then use the hardware to scale the sprite down to 18*10 and how might i modify the above code to correctly set 32x16 sprites.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#59867 - ninogenio - Fri Nov 04, 2005 8:42 pm</h4>
+    <div class="postbody"><span class="postbody">ive now drawn my sprites 32x32x7 in paint and it still isnt working the 32x32 sprite it shows is all scrambled.also how do i get to diffrent tiles in sprite_gfx just say i wanted to assign sprite 2 the second tile in sprite_gfx.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#include &lt;nds.h&gt;
+<br/>
+#include "fat_driver/gbamp_cf.c"  
+<br/>
+#include &lt;stdio.h&gt;
+<br/>
+#include &lt;stdlib.h&gt;
+<br/>
+#include &lt;string.h&gt;
+<br/>
+#include "jpeg_lib/gba-jpeg.h"
+<br/>
+#include "jpeg_lib/gba-jpeg-decode.c"
+<br/>
+#include &lt;nds/arm9/console.h&gt;
+<br/>
+#include "tiles.h"
+<br/>
+#include "text.h"
+<br/>
+#include "bat.h"
+<br/>
+<br/>
+#define NUM_SPRITES 128   
+<br/>
+<br/>
+sSpriteEntry OAMCopy[128];
+<br/>
+<br/>
+typedef struct 
+<br/>
+{
+<br/>
+   int x,y;
+<br/>
+   int dx, dy;
+<br/>
+   sSpriteEntry* oam;   
+<br/>
+   int gfxID;
+<br/>
+}Sprite;
+<br/>
+<br/>
+<br/>
+void MoveSprite(Sprite* sp) 
+<br/>
+{
+<br/>
+   sp-&gt;oam-&gt;attribute[1] &amp;= 0xFE00;
+<br/>
+   sp-&gt;oam-&gt;attribute[1] |= (sp-&gt;x &amp; 0x01FF);
+<br/>
+ 
+<br/>
+   sp-&gt;oam-&gt;attribute[0] &amp;= 0xFF00;
+<br/>
+   sp-&gt;oam-&gt;attribute[0] |= (sp-&gt;y &amp; 0x00FF);
+<br/>
+} 
+<br/>
+<br/>
+<br/>
+void initOAM(void)
+<br/>
+{
+<br/>
+   int i;
+<br/>
+<br/>
+   for(i = 0; i &lt; 128; i++) 
+<br/>
+        {
+<br/>
+      OAMCopy[i].attribute[0] = ATTR0_DISABLED;
+<br/>
+   }   
+<br/>
+}
+<br/>
+<br/>
+void updateOAM(void) 
+<br/>
+{
+<br/>
+   unsigned int i;
+<br/>
+   
+<br/>
+   for(i = 0; i &lt; 128 * sizeof(sSpriteEntry) / 4 ; i++)
+<br/>
+   {
+<br/>
+      ((uint32*)OAM)[i] = ((uint32*)OAMCopy)[i];
+<br/>
+   }
+<br/>
+}
+<br/>
+<br/>
+void grab_a_graphic(char* filename,u16* buffer,u16 width,u16 height);
+<br/>
+void drawgraphic(u16* buffer,u16* image,u16 width,u16 height,u16 x_pos,u16 y_pos);
+<br/>
+void draw_map(u16);
+<br/>
+void levelloader(u16 level_no);
+<br/>
+void read_width_height(u16);
+<br/>
+void draw_anim_image(u16* buffer,u16* image,u16 width,u16 height,u16 tilewidth,u16 tileheight,u16 frame_no,u16 obj_width);
+<br/>
+void draw_text(char* dtext,u16 tst,u16 ist);
+<br/>
+<br/>
+u16 instr(char* ,char* ,u16);
+<br/>
+void readline(char* ,char** );
+<br/>
+void readfile(char* ,char** );
+<br/>
+char* mid(char* ,u16 ,u16 );
+<br/>
+u16 len(char*);
+<br/>
+void closefile(char*);
+<br/>
+<br/>
+u16* vram;
+<br/>
+<br/>
+typedef struct{
+<br/>
+     u16 height;
+<br/>
+     u16 width;
+<br/>
+     u16 tilewidth;
+<br/>
+     u16 tileheight;
+<br/>
+     u16 counter;
+<br/>
+}LEVEL;
+<br/>
+<br/>
+LEVEL levels[60];
+<br/>
+u16 map[50][50];
+<br/>
+u16 anim[50][50];
+<br/>
+<br/>
+u16 background[256*192];
+<br/>
+u16 obj_number;
+<br/>
+<br/>
+Sprite sprites[NUM_SPRITES];
+<br/>
+<br/>
+int main(){
+<br/>
+<br/>
+        
+<br/>
+<br/>
+        powerON(POWER_ALL);
+<br/>
+<br/>
+   irqInit();
+<br/>
+   irqSet(IRQ_VBLANK,0);
+<br/>
+        WAIT_CR=0xe800;
+<br/>
+        vramSetMainBanks(   VRAM_A_MAIN_SPRITE,        //A and B maped consecutivly as sprite memory
+<br/>
+                        VRAM_B_MAIN_SPRITE,        //this gives us 256KB which is the max
+<br/>
+                        VRAM_C_MAIN_BG_0x6000000,  //map C to background memory
+<br/>
+                        VRAM_D_LCD                 //not using D
+<br/>
+                        ); 
+<br/>
+   
+<br/>
+        //set the video mode
+<br/>
+        videoSetMode(  MODE_0_2D | 
+<br/>
+                       DISPLAY_SPR_ACTIVE |    //turn on sprites
+<br/>
+                       DISPLAY_BG0_ACTIVE |    //turn on background 0
+<br/>
+                       DISPLAY_SPR_1D |        //this is used when in tile mode
+<br/>
+                       DISPLAY_SPR_1D_BMP      //and this in bitmap mode
+<br/>
+                     );
+<br/>
+        //videoSetModeSub(MODE_0_2D|DISPLAY_SPR_ACTIVE|DISPLAY_BG0_ACTIVE|DISPLAY_SPR_1D|DISPLAY_SPR_1D_BMP);
+<br/>
+         //vramSetMainBanks(VRAM_A_LCD, VRAM_B_LCD, VRAM_C_SUB_BG, VRAM_D_SUB_SPRITE);
+<br/>
+      
+<br/>
+        //vram=VRAM_A;
+<br/>
+<br/>
+        initOAM();
+<br/>
+        for (int x=0; x&lt;224*32 ; x++)
+<br/>
+                 SPRITE_GFX[x]=tiles[x]|BIT(15);
+<br/>
+        levelloader(1);
+<br/>
+        draw_map(1);
+<br/>
+<br/>
+        
+<br/>
+        
+<br/>
+<br/>
+        //draw_text("NINO IS THE GREATEST!!",10,10);
+<br/>
+        while(1) 
+<br/>
+        {
+<br/>
+                swiWaitForVBlank();
+<br/>
+                updateOAM();    
+<br/>
+        }
+<br/>
+<br/>
+   return(0);
+<br/>
+}
+<br/>
+<br/>
+void grab_a_graphic(char* filename , u16* buffer , u16 width , u16 height)
+<br/>
+{
+<br/>
+        FAT_InitFiles();
+<br/>
+        int handle = FAT_fopen(filename, "r");  
+<br/>
+        int size=FAT_GetFileSize();
+<br/>
+        char* text = (char*) malloc (size+1); 
+<br/>
+        
+<br/>
+        while (!FAT_feof(handle))
+<br/>
+        {
+<br/>
+               FAT_fread((void*)text, size, 1, handle); 
+<br/>
+               
+<br/>
+        }
+<br/>
+        FAT_fclose(handle);
+<br/>
+<br/>
+        //now decompress image and drop it in an array
+<br/>
+        WAIT_CR &amp;= ~0x80;
+<br/>
+        JPEG_DecompressImage((const unsigned char*)text , buffer , width , height);
+<br/>
+        WAIT_CR |= 0x80;
+<br/>
+        free(text);
+<br/>
+}
+<br/>
+<br/>
+void drawgraphic(u16* buffer,u16* image,u16 width,u16 height,u16 x_pos,u16 y_pos)
+<br/>
+{
+<br/>
+       buffer += y_pos * SCREEN_WIDTH + x_pos;
+<br/>
+       for(int i = 0; i &lt; height; ++i) 
+<br/>
+       {
+<br/>
+               u16* line = buffer + (SCREEN_WIDTH * i);
+<br/>
+               u16* color= image + (width * i);
+<br/>
+               for(int j = 0; j &lt; width; ++j) 
+<br/>
+               {
+<br/>
+                      *line++ = (*color++)|BIT(15);
+<br/>
+               }
+<br/>
+       }
+<br/>
+}
+<br/>
+<br/>
+<br/>
+void draw_anim_image(u16* buffer,u16* image,u16 width,u16 height,u16 tilewidth,u16 tileheight,u16 frame_no,u16 obj_width)
+<br/>
+{
+<br/>
+       buffer += height * SCREEN_WIDTH + width;
+<br/>
+       image += tilewidth*frame_no;
+<br/>
+       for(int i = 0; i &lt; tileheight; ++i) 
+<br/>
+       {
+<br/>
+               u16* line = buffer + (SCREEN_WIDTH * i);
+<br/>
+               u16* color= image + (obj_width * i);
+<br/>
+               for(int j = 0; j &lt; tilewidth; ++j) 
+<br/>
+               {
+<br/>
+                      *line++ = (*color++)|BIT(15);
+<br/>
+               }
+<br/>
+       }
+<br/>
+}
+<br/>
+<br/>
+<br/>
+void levelloader(u16 level_no)
+<br/>
+{
+<br/>
+            read_width_height(level_no);
+<br/>
+            char* filein;
+<br/>
+            char fname[128];
+<br/>
+            u16 x=0;
+<br/>
+            u16 point_index_t_or_f=0;
+<br/>
+            sprintf(fname, "/BREAK_OUT_MANIA/levels/level%d.txt", level_no);
+<br/>
+            readfile(fname,&amp;filein);
+<br/>
+<br/>
+            char* point_index;
+<br/>
+            char* maps;
+<br/>
+            readline(filein,&amp;maps);
+<br/>
+            free(maps);
+<br/>
+            readline(filein,&amp;maps);
+<br/>
+            free(maps);
+<br/>
+            for(int yx=0 ; yx&lt;levels[level_no].height ; yx++)
+<br/>
+            {
+<br/>
+                    readline(filein,&amp;maps);
+<br/>
+                    x=0;
+<br/>
+<br/>
+                    for(int ix=0 ; ix&lt;levels[level_no].width ; ix++)
+<br/>
+                    {
+<br/>
+                            point_index=mid(maps,x,instr(maps,",",x));
+<br/>
+<br/>
+                            if (len(point_index)&gt;1) point_index_t_or_f=1;
+<br/>
+                            else point_index_t_or_f=0;
+<br/>
+<br/>
+                            if (point_index_t_or_f)
+<br/>
+                            {
+<br/>
+                                  map[ix][yx]=atol(mid(maps,x,1));
+<br/>
+                                  anim[ix][yx]=atol(mid(point_index,2,3));
+<br/>
+                                  x=x+3+1;
+<br/>
+                            }
+<br/>
+                            else
+<br/>
+                            {
+<br/>
+                                  map[ix][yx]=0;
+<br/>
+                                  x=x+1+1;
+<br/>
+                            }
+<br/>
+                    }
+<br/>
+                    free(maps);
+<br/>
+             }
+<br/>
+             closefile(filein);
+<br/>
+<br/>
+             levels[level_no].counter=0;
+<br/>
+             for (int yx=1 ; yx&lt;levels[level_no].height ; yx++)
+<br/>
+             {
+<br/>
+                     for (int ix=1 ; ix&lt;levels[level_no].width ; ix++)
+<br/>
+                     {
+<br/>
+                              if (anim[ix][yx]&gt;0) levels[level_no].counter=levels[level_no].counter+1;
+<br/>
+                     }
+<br/>
+             }
+<br/>
+}
+<br/>
+<br/>
+<br/>
+<br/>
+void draw_map(u16 level_no)
+<br/>
+{
+<br/>
+        obj_number=0;
+<br/>
+        for (int yx=0 ; yx&lt;1/*levels[level_no].height*/ ; yx++)
+<br/>
+        {
+<br/>
+                 for (int xx=0 ; xx&lt;1/*levels[level_no].width*/;xx++)
+<br/>
+                 {
+<br/>
+                          if (anim[xx][yx]&gt;0)
+<br/>
+                          {
+<br/>
+                              //random place and speed
+<br/>
+                         sprites[obj_number].x = xx*levels[level_no].tileheight;
+<br/>
+                         sprites[obj_number].y = yx*levels[level_no].tilewidth;
+<br/>
+   
+<br/>
+                         sprites[obj_number].oam = &amp;OAMCopy[obj_number];
+<br/>
+                         sprites[obj_number].gfxID = 0;//anim[xx][yx];
+<br/>
+   
+<br/>
+                         //set up our sprites OAM entry attributes
+<br/>
+                         sprites[obj_number].oam-&gt;attribute[0] = ATTR0_BMP;  
+<br/>
+                         sprites[obj_number].oam-&gt;attribute[1] = ATTR1_SIZE_32;
+<br/>
+                         sprites[obj_number].oam-&gt;attribute[2] = ATTR2_ALPHA(1)|sprites[obj_number].gfxID;
+<br/>
+<br/>
+                              MoveSprite(&amp;sprites[obj_number]);
+<br/>
+                              obj_number++;                               
+<br/>
+<br/>
+                          }
+<br/>
+                 }
+<br/>
+        }
+<br/>
+}
+<br/>
+<br/>
+<br/>
+void read_width_height(u16 level_no)
+<br/>
+{
+<br/>
+         u16 position;
+<br/>
+         char* filein;
+<br/>
+         char* line;
+<br/>
+<br/>
+         char fname[128];
+<br/>
+         sprintf(fname, "/BREAK_OUT_MANIA/levels/level%d.txt", level_no);
+<br/>
+         readfile(fname,&amp;filein);
+<br/>
+<br/>
+         readline(filein,&amp;line);
+<br/>
+         position=instr(line,",",0);
+<br/>
+         
+<br/>
+         levels[level_no].tilewidth=atol(mid(line,0,position));
+<br/>
+         levels[level_no].tileheight=atol(mid(line,position+1,len(line)));
+<br/>
+         free(line);
+<br/>
+<br/>
+         readline(filein,&amp;line);
+<br/>
+<br/>
+         position=instr(line,",",0);
+<br/>
+<br/>
+         levels[level_no].width=atol(mid(line,0,position));
+<br/>
+         levels[level_no].height=atol(mid(line,position+1,len(line)));
+<br/>
+         free(line);
+<br/>
+         closefile(filein);
+<br/>
+}
+<br/>
+<br/>
+<br/>
+<br/>
+<br/>
+u16 instr(char* name,char* seek_char,u16 startpos)
+<br/>
+{
+<br/>
+    char *start = name+startpos;
+<br/>
+    return (u16) (strstr(start, seek_char)-start);
+<br/>
+}
+<br/>
+<br/>
+u16 start_pos;
+<br/>
+u16 end_pos;
+<br/>
+void readline(char* filehandle,char** buffer)
+<br/>
+{
+<br/>
+        start_pos=end_pos;
+<br/>
+        u16 temp_instr_point=instr(filehandle,"\n",start_pos);
+<br/>
+        if (temp_instr_point) 
+<br/>
+        {
+<br/>
+                  end_pos=end_pos+temp_instr_point;
+<br/>
+                  filehandle[end_pos]='\0';
+<br/>
+                  
+<br/>
+                 *buffer=(char*) malloc (end_pos-start_pos+1);
+<br/>
+                  strncpy(*buffer, filehandle+start_pos, temp_instr_point+1);
+<br/>
+                  end_pos++;
+<br/>
+         }
+<br/>
+}
+<br/>
+<br/>
+void readfile(char* filename,char** filein)
+<br/>
+{
+<br/>
+        FAT_InitFiles();
+<br/>
+        int handle = FAT_fopen(filename, "r");  
+<br/>
+        int size=FAT_GetFileSize(); 
+<br/>
+        *filein = (char*) malloc (size+1);
+<br/>
+        for (int x=0 ; x&lt;size ;x++)
+<br/>
+        {
+<br/>
+            (*filein)[x]=FAT_fgetc(handle);
+<br/>
+        }
+<br/>
+        FAT_fclose(handle);
+<br/>
+} 
+<br/>
+<br/>
+void closefile(char* filename)
+<br/>
+{
+<br/>
+     
+<br/>
+        free(filename);
+<br/>
+        end_pos=0;
+<br/>
+        start_pos=0;
+<br/>
+}
+<br/>
+<br/>
+char tmp[200];
+<br/>
+char* mid(char *src, u16 pos, u16 siz)
+<br/>
+{
+<br/>
+        strncpy(tmp, src+pos, siz);
+<br/>
+        tmp[siz]='\0';
+<br/>
+        return tmp;
+<br/>
+}
+<br/>
+<br/>
+u16 len(char* stri)
+<br/>
+{
+<br/>
+       return strlen(stri);
+<br/>
+}
+<br/>
+<br/>
+void draw_text(char* dtext,u16 tst,u16 ist)
+<br/>
+{
+<br/>
+         for (int xst=0 ; xst&lt;len(dtext) ; xst++)
+<br/>
+                  draw_anim_image(vram , text , tst+(xst*8) , ist , 8 , 8 , (u16)dtext[xst]-32 , 632);
+<br/>
+}</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#59915 - ninogenio - Sat Nov 05, 2005 1:56 pm</h4>
+    <div class="postbody"><span class="postbody">thanks very much guys :(</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#60001 - LOst? - Sun Nov 06, 2005 5:26 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>ninogenio wrote:</b></span></td> </tr> <tr> <td class="quote">thanks very much guys :(</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I suggest you test your graphics data directly from the ROM, and if it is not scrambled, then you know where to locate the problem.
+<br/>
+<br/>
+Normally if graphics are scrambled:
+<br/>
+1) You try to write to the VRAM using bytes instead of words. Simply use a (u16*) pointer to the const u8 graphics.
+<br/>
+<br/>
+2) You have choosen a tile base bank that is being overwritten by the map base, or something else.
+<br/>
+<br/>
+3) You have put the sprite settings to 16 colors when you use 256 color graphics, or reverse.
+<br/>
+<br/>
+<br/>
+If you have all these things working, then it is problably your fat reading code, or your graphics are corrupted from the beginning.<br/>_________________<br/><span style="font-style: italic">Exceptions are fun</span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#60043 - ninogenio - Sun Nov 06, 2005 5:50 pm</h4>
+    <div class="postbody"><span class="postbody">the graphics arent corrupted there in 16bit bmp format and i put them in spritegfx as a 1d array.im pretty sure my problem is coming from here.
+<br/>
+<br/>
+sprites[obj_number].gfxID = anim[xx][yx];
+<br/>
+<br/>
+as what i do is say i want my sprite to have the second graphic in sprite gfx i would do this but i dont think it looks right.
+<br/>
+<br/>
+sprites[obj_number].gfxID = 2;</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

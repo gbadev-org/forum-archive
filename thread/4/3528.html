@@ -1,0 +1,123 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>help please with background positioning and rotation - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > help please with background positioning and rotation</h2>
+<div id="posts">
+<div class="post">
+    <h4>#21834 - immortalninjak - Mon Jun 07, 2004 10:51 am</h4>
+    <div class="postbody"><span class="postbody">Hey all,
+<br/>
+My problem is I cant get a background to rotate about a point.
+<br/>
+Here is what I am tring to do. In mode 1 i have backgound 2 as a 256x256 rotational background. It is a picture of a rolled up scroll to the right of the screen. What I am tring to do is get it to rotate around the centre of the scroll, so it looks like its spinning.
+<br/>
+I am using the RotateBackground from Pern/junkie:
+<br/>
+<br/>
+void RotateBackground(Bg* bg, s32 angle,s32 center_x, s32 center_y, FIXED zoom)
+<br/>
+{
+<br/>
+<br/>
+	center_y = (center_y * zoom)&gt;&gt;8;
+<br/>
+	center_x = (center_x * zoom)&gt;&gt;8;
+<br/>
+<br/>
+                bg-&gt;DX = ((bg-&gt;x_scroll&lt;&lt;8)-center_y*(s32)SIN[angle]-center_x*(s32)COS[angle]);
+<br/>
+	bg-&gt;DY = ((bg-&gt;y_scroll&lt;&lt;8)-center_y*(s32)COS[angle]+center_x*(s32)SIN[angle]);
+<br/>
+<br/>
+	bg-&gt;PA = ((s32)COS[angle]*zoom)&gt;&gt;8;  //cos&amp;sin are LUTs that are .8 fixed numbers
+<br/>
+	bg-&gt;PB = ((s32)SIN[angle]*zoom)&gt;&gt;8;  //zoom is also fixed
+<br/>
+	bg-&gt;PC = (-(s32)SIN[angle]*zoom)&gt;&gt;8;
+<br/>
+	bg-&gt;PD = ((s32)COS[angle]*zoom)&gt;&gt;8;
+<br/>
+}
+<br/>
+<br/>
+The tutorials didnt really explain how this works and I dont really understand it. 
+<br/>
+The problem I'm having is that when I use this method it shifts the background, ie when I use RotateBackground(&amp;bg2scroll, 0, 10, 10, zoom); it shifts the background 10 to the left and 10 down.
+<br/>
+The point I want to rotate about is (188,72)
+<br/>
+Any help on this matter would be greatly appreciated thank you.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#21835 - f(DarkAngel) - Mon Jun 07, 2004 12:48 pm</h4>
+    <div class="postbody"><span class="postbody">Cearn's tutorials explain them <span style="font-style: italic">correctly</span>.
+<br/>
+<br/>
+<a href="http://user.chem.tue.nl/jakvijn/tonc/affine.htm" target="_blank">http://user.chem.tue.nl/jakvijn/tonc/affine.htm</a>
+<br/>
+<a href="http://user.chem.tue.nl/jakvijn/tonc/affbg.htm" target="_blank">http://user.chem.tue.nl/jakvijn/tonc/affbg.htm</a><br/>_________________<br/>death scream...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#21862 - immortalninjak - Tue Jun 08, 2004 9:54 am</h4>
+    <div class="postbody"><span class="postbody">thanks for the links,
+<br/>
+Had a brief look and not easy to follow (for me at least) so it might be a while before I get it to work (sigh)
+<br/>
+Or I can just give up on the flashy looks for now...
+<br/>
+thanks anyways</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#21966 - Cearn - Thu Jun 10, 2004 8:43 am</h4>
+    <div class="postbody"><span class="postbody">The thing about rotation is that it always rotates around the origin. To rotate around an arbitrary point <span style="font-weight: bold">r</span>, you have to translate the map to the origin, do the rotation and translate back. As the GBA relies on <span style="font-style: italic">one</span> displacement vector <span style="font-weight: bold">dx</span> and one affine transformation matrix <span style="font-weight: bold">P</span>, you have to correct for the rotated coordinate system yourself. 
+<br/>
+<br/>
+Off the top of my head, try
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+// Note: rx and ry are .8 fixeds now
+<br/>
+void RotateBackground(Bg* bg, s32 alpha, FIXED rx, FIXED ry, FIXED zoom) 
+<br/>
+{
+<br/>
+    // construct P
+<br/>
+    bg-&gt;PA = (COS[angle]*zoom)&gt;&gt;8; 
+<br/>
+    bg-&gt;PB = (SIN[angle]*zoom)&gt;&gt;8;
+<br/>
+    bg-&gt;PC = -bg-&gt;PB; 
+<br/>
+    bg-&gt;PD = bg-&gt;PA;
+<br/>
+<br/>
+    // construct displacement (= r - P? r)
+<br/>
+    bg-&gt;DX= rx - ( (bg-&gt;PA*rx + bg-&gt;PC*ry)&gt;&gt;8 );
+<br/>
+    bg-&gt;DY= ry - ( (bg-&gt;PC*rx + bg-&gt;PD*ry)&gt;&gt;8 );
+<br/>
+} 
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+This is basically <a class="postlink" href="http://user.chem.tue.nl/jakvijn/tonc/affbg.htm#dx_P" target="_blank">eq 4</a>, with <span style="font-weight: bold">p0 = q0 = r</span>. I may have messed up with the signs of <span style="font-weight: bold">r</span>, but this should work.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

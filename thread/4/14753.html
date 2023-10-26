@@ -1,0 +1,391 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>problems calling ARM from Thumb - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > problems calling ARM from Thumb</h2>
+<div id="posts">
+<div class="post">
+    <h4>#147976 - bpoint - Mon Dec 31, 2007 12:04 pm</h4>
+    <div class="postbody"><span class="postbody">Happy New Year everyone!  (well, almost ;) )
+<br/>
+<br/>
+I'm having a bit of a problem getting ARM/Thumb interworking working properly with devkitARM r21.
+<br/>
+<br/>
+I can currently compile and execute both ARM and Thumb code (my interrupt handler is compiled as ARM and is located in iwram).  I can also call Thumb code from ARM, and return back properly to ARM, but I *cannot* call ARM code from Thumb.  The interworking glue being generated is using an invalid address.
+<br/>
+<br/>
+To show what's going on, here's a small dissassembly of the actual code (compiled in debug mode, no optimizations enabled):
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">080345F0: F012    bl       
+<br/>
+080345F2: FF72    bl      ___ZN7CFSound13DeviceGBABase6updateEv_from_thumb
+<br/>
+<br/>
+080474D8: 4778    bx      pc
+<br/>
+080474DA: 46C0    mov     r8, r8
+<br/>
+080474DC: EABEE6C7    b       0x07001000
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+And so the CPU jumps into OAM memory, and everything goes downhill from there.  The area of code where the interwork glue is located seems to be correct, as there are other functions where the offsets are perfectly valid.
+<br/>
+<br/>
+Looking at the map file, the actual address of the update function which should be called is half-way correct:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code"> .iwram         0x03001000      0x194 c:/CF/lib/gba\libDebug-CFSound.a(gbaBase.arm.o)
+<br/>
+                0x03001000                CFSound::DeviceGBABase::update()
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Why 0x0700 is being used instead of 0x0300 is what I don't understand.
+<br/>
+<br/>
+Just to make sure I've done everything right:
+<br/>
+1) ARM code is compiled with -marm -mthumb-interworking
+<br/>
+2) Thumb code is compiled with -mthumb -mthumb-interworking
+<br/>
+3) The update() function has __attribute__(section (".iwram"), long_call) specified, and is being compiled as ARM
+<br/>
+4) The function calling the update() function is just normal Thumb code
+<br/>
+<br/>
+Is there something I've missed?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#148014 - Dwedit - Mon Dec 31, 2007 6:31 pm</h4>
+    <div class="postbody"><span class="postbody">I've also experienced this problem.  To work around it, I just created stub routines in the same memory area, then manually created long jumps in ASM (with ldr pc,=xxxx), but that's a very very hackish solution.
+<br/>
+<br/>
+The impression I get is that the linker is broken.  It throws out the highest bits of the address, then fails to raise a warning or link error indicating that it has done such.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#148040 - bpoint - Tue Jan 01, 2008 7:15 am</h4>
+    <div class="postbody"><span class="postbody">This is not good.  I'm even experiencing this problem calling Thumb code from ARM code as well.  I'm glad I'm not the only one who's having this problem though.  :)
+<br/>
+<br/>
+After a bit of testing, it doesn't look like the problem is the linker -- it's actually the compiler.  The compiler is ignoring the long_call attribute on a function, and generating PC relative branches to the interworking glue code.  When crt0 copies this code into iwram, the addresses are no longer valid.  Sadly, compiling the entire source file with -mlong_calls doesn't help either.
+<br/>
+<br/>
+This is a pretty serious bug, as there's no real good workaround.  I could either avoid interworking code entirely (completely use either ARM or Thumb in the entire application), or simple not relocate code to another section, but neither one of these is an acceptable solution.
+<br/>
+<br/>
+Is there some way to instruct gcc that the calls to the generated interworking glue should have the long_call attribute?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#148052 - tepples - Tue Jan 01, 2008 3:05 pm</h4>
+    <div class="postbody"><span class="postbody">For GCC-specific problems, if you have a SourceForge.net account, you will likely get a quicker response if you ask on the <a class="postlink" href="http://sourceforge.net/mail/?group_id=114505" target="_blank">devkitpro-arm-users</a> mailing list.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#148264 - wintermute - Fri Jan 04, 2008 12:40 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>bpoint wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+After a bit of testing, it doesn't look like the problem is the linker -- it's actually the compiler.  The compiler is ignoring the long_call attribute on a function, and generating PC relative branches to the interworking glue code.  When crt0 copies this code into iwram, the addresses are no longer valid.  Sadly, compiling the entire source file with -mlong_calls doesn't help either.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+That would suggest to me that you're trying to mix iwram &amp; rom/ewram code in the same source file. Unfortunately gcc assumes that all functions within the same TU can be reached with a relative branch so you need to separate the code.
+<br/>
+<br/>
+If that doesn't help any then try to put together a small testcase which shows  the problem &amp; I'll have a look.<br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#148273 - Dwedit - Fri Jan 04, 2008 3:48 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>wintermute wrote:</b></span></td> </tr> <tr> <td class="quote">Unfortunately gcc assumes that all functions within the same TU can be reached with a relative branch so you need to separate the code.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+GCC's failure to replace short jumps with long jumps is a bug.  How do I go about reporting this bug without getting brushed off?<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#148279 - bpoint - Fri Jan 04, 2008 8:40 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>wintermute wrote:</b></span></td> </tr> <tr> <td class="quote">That would suggest to me that you're trying to mix iwram &amp; rom/ewram code in the same source file. Unfortunately gcc assumes that all functions within the same TU can be reached with a relative branch so you need to separate the code.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I'm not.  What I am trying to do is call a function from a class that is located in iwram to a function in a derived class located in ROM.  They are both in separate source files, and both functions have the long_call attribute specified.
+<br/>
+<br/>
+I've found if I build with -mlong-calls for both ARM and Thumb, the code actually builds properly -- actually, the call from ARM no longer tries to jump to the interworking code, but just does an ldr/bx and gets the job done.  However, this changes pretty much everything to a long call and I really don't like increasing the compiled code size when it doesn't need to be.
+<br/>
+<br/>
+I will see if I can put together a test case, though.  Shouldn't be too hard...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#148487 - bpoint - Sun Jan 06, 2008 10:24 am</h4>
+    <div class="postbody"><span class="postbody">Sorry for the late reply -- finally getting settled down after the New Year break.
+<br/>
+<br/>
+Anyway, I've finally put together a stripped-down test case which shows the interworking glue jumping to an invalid address (OAM) when it should be jumping into iwram.  Below are the files:
+<br/>
+<br/>
+<span style="text-decoration: underline">base.h</span></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">class Base
+<br/>
+{
+<br/>
+public:
+<br/>
+   Base();
+<br/>
+   
+<br/>
+   void   doit();
+<br/>
+<br/>
+private:
+<br/>
+   int      x;
+<br/>
+};</td> </tr></table><span class="postbody">
+<br/>
+<span style="text-decoration: underline">base.cpp</span></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#include "base.h"
+<br/>
+<br/>
+Base::Base() : x(0)
+<br/>
+{
+<br/>
+}
+<br/>
+<br/>
+void __attribute__ ((long_call)) Base::doit()
+<br/>
+{
+<br/>
+   x = 5;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<span style="text-decoration: underline">derived.h</span></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#include "base.h"
+<br/>
+<br/>
+class Derived : public Base
+<br/>
+{
+<br/>
+public:
+<br/>
+   Derived();
+<br/>
+<br/>
+   void   func();
+<br/>
+};
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<span style="text-decoration: underline">derived.cpp</span></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#include "derived.h"
+<br/>
+<br/>
+Derived::Derived() : Base()
+<br/>
+{
+<br/>
+}
+<br/>
+<br/>
+void __attribute__ ((section (".iwram"), long_call)) Derived::func()
+<br/>
+{
+<br/>
+   doit();
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<span style="text-decoration: underline">main.cpp</span></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#include "derived.h"
+<br/>
+<br/>
+int main()
+<br/>
+{
+<br/>
+   Derived d;
+<br/>
+<br/>
+   d.func();
+<br/>
+   return 0;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<span style="text-decoration: underline">build.bat</span></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">c:\Devel\devkitARM\bin\arm-eabi-gcc -DGBA -mcpu=arm7tdmi -mtune=arm7tdmi -ffunction-sections -fdata-sections -fno-exceptions -fno-rtti -fno-threadsafe-statics -mthumb -mthumb-interwork -g -O0 -c -o base.o base.cpp
+<br/>
+c:\Devel\devkitARM\bin\arm-eabi-gcc -DGBA -mcpu=arm7tdmi -mtune=arm7tdmi -ffunction-sections -fdata-sections -fno-exceptions -fno-rtti -fno-threadsafe-statics -marm -mthumb-interwork -g -O0 -c -o derived.o derived.cpp
+<br/>
+c:\Devel\devkitARM\bin\arm-eabi-gcc -DGBA -mcpu=arm7tdmi -mtune=arm7tdmi -ffunction-sections -fdata-sections -fno-exceptions -fno-rtti -fno-threadsafe-statics -mthumb -mthumb-interwork -g -O0 -c -o main.o main.cpp
+<br/>
+c:\Devel\devkitARM\bin\arm-eabi-gcc -Wl,-Map,out.map -Wl,-gc-sections -specs=gba.specs base.o derived.o main.o -o out.elf
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+The disassembly of main() is pretty much straightforward:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">(3):    int main()
+<br/>
+0800044C: B580    push    {r7, lr}
+<br/>
+0800044E: B082    add     sp, #-0x008
+<br/>
+08000450: AF00    add     r7, sp, #0x000
+<br/>
+(4):    {
+<br/>
+(5):        Derived d;
+<br/>
+08000452: 1D3B    add     r3, r7, #0x4
+<br/>
+08000454: 1C18    add     r0, r3, #0x0
+<br/>
+08000456: F000    bl       
+<br/>
+08000458: F811    bl      ___ZN7DerivedC1Ev_from_thumb
+<br/>
+(6):    
+<br/>
+(7):        d.func();
+<br/>
+0800045A: 1D3B    add     r3, r7, #0x4
+<br/>
+0800045C: 1C18    add     r0, r3, #0x0
+<br/>
+0800045E: F000    bl       
+<br/>
+08000460: F811    bl      ___ZN7Derived4funcEv_from_thumb
+<br/>
+(8):        return 0;
+<br/>
+08000462: 2300    mov     r3, #0x00
+<br/>
+(9):    }
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Now when main() calls d.func(), things start to get interesting:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">___ZN7Derived4funcEv_from_thumb:
+<br/>
+08000484: 4778    bx      pc
+<br/>
+<br/>
+___ZN7Derived4funcEv_change_to_arm:
+<br/>
+08000488: EABFFEDC    b       0x07000000
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+...and the CPU goes off into OAM memory instead of iwram.  Looking at the generated map file shows that Derived::func() has been properly placed into iwram, however:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code"> .iwram         0x03000000       0x38 derived.o
+<br/>
+                0x03000000                Derived::func()
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+So, any ideas on what might I be doing wrong here?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#148500 - Cearn - Sun Jan 06, 2008 3:55 pm</h4>
+    <div class="postbody"><span class="postbody">Each source file is a separate entity.  As far as main.cpp is concerned, Derived looks like this:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#include "base.h"
+<br/>
+<br/>
+class Derived : public Base
+<br/>
+{
+<br/>
+public:
+<br/>
+   Derived();
+<br/>
+<br/>
+   void   func();
+<br/>
+};
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+In other words, it doesn't know it's supposed to do a long call. So it doesn't. Adding the <span style="font-style: italic">__attribute__</span> stuff to the declarations in the class definitions will fix this.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#148556 - bpoint - Mon Jan 07, 2008 4:39 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Cearn wrote:</b></span></td> </tr> <tr> <td class="quote">Adding the <span style="font-style: italic">__attribute__</span> stuff to the declarations in the class definitions will fix this.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I'll admit, I didn't consider this to be the problem, but it was.
+<br/>
+<br/>
+When I went back to my original code and added the long_call attribute to the definitions in the header file, gcc started to give me compilation errors because I was trying to cast a function with the long_call attribute as a parameter to a function pointer without the attribute.  After fixing the underlying code, everything works properly now.  Also, it seems the section attribute isn't necessary in the header file -- just the long_call.
+<br/>
+<br/>
+&lt;rant&gt;It would have been nice if gcc had given me some kind of compilation error to begin with saying that the function declaration and definition didn't match in the first place.&lt;/rant&gt;
+<br/>
+<br/>
+Anyway, thanks for all the help everyone!  I'm glad I finally got this problem sorted out.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#148568 - bpoint - Mon Jan 07, 2008 7:26 am</h4>
+    <div class="postbody"><span class="postbody"><span style="color: #888888"><span style="font-size: 9px; line-height: normal">One other interesting thing I came across, in case if anyone else runs into this problem.  It seems gcc only allows one __attribute__ tag per function definition.  If you need to specify multiple attributes, they must be separated with a comma.  In other words, this doesn't work:</span></span>
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void __attribute__ ((section (".iwram"))) __attribute__ ((long_call)) func()
+<br/>
+{
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<span style="color: #888888"><span style="font-size: 9px; line-height: normal">...while this does:</span></span>
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void __attribute__ ((section (".iwram"), long_call)) func()
+<br/>
+{
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<span style="color: #888888"><span style="font-size: 9px; line-height: normal">I was trying to use preprocessor macros to seprarate iwram section declarations and long_call attributes, and separately combining them didn't work.  gcc simply ignores the second attribute definition, and does not give any kind of warning or error.</span></span>
+<br/>
+<br/>
+Edit: Sorry, I should have tested a bit more before posting.  The above is actually not true -- you can use multiple __attribute__ tags on a function definition.  And there isn't any BBCode for strikeout text!  :)</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

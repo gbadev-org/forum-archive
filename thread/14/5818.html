@@ -1,0 +1,349 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>really simple example - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Beginners > really simple example</h2>
+<div id="posts">
+<div class="post">
+    <h4>#43636 - funkaster - Wed May 25, 2005 7:25 am</h4>
+    <div class="postbody"><span class="postbody">I'm trying to test the installation of devkitARM (compiled from CVS on a G4 running debian sarge, installed on /extra), so this is the most simple example I could find:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#include &lt;gba_base.h&gt;
+<br/>
+#include &lt;gba_video.h&gt;
+<br/>
+<br/>
+int main()
+<br/>
+{
+<br/>
+    unsigned char x, y;
+<br/>
+<br/>
+    SetMode (MODE_3 | BG2_ENABLE);
+<br/>
+    for (x=0; x &lt; 240; x++)
+<br/>
+        for (y=0; y &lt; 160; y++)
+<br/>
+            ((u16 *)VRAM)[x+y*240] = RGB5(31,0,0);
+<br/>
+    while (1) ;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+it was referencing a "gba.h" that I couldn't find in the devkitARM package, so I changed them to the gba_* headers of libgba.
+<br/>
+Next, I made a makefile, following the suggestions on the FAQ and other tutorials:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+CC= arm-elf-gcc
+<br/>
+LIBS= -L$(DEVKITARM)/arm-elf/lib -L/extra/libgba/lib/libgba.a
+<br/>
+INCS= -I/extra/libgba/include
+<br/>
+BIN= GBATest.gba
+<br/>
+CFLAGS= $(INCS) -specs=gba.specs -mthumb -mthumb-interwork
+<br/>
+<br/>
+all: $(BIN)
+<br/>
+<br/>
+$(BIN): first.o
+<br/>
+    $(CC) first.o -o $(BIN) $(LIBS)
+<br/>
+<br/>
+first.o: first.c
+<br/>
+    $(CC) -c first.c $(CFLAGS)
+<br/>
+<br/>
+clean:
+<br/>
+    rm *.gba *.o
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+when I try to compile my simple proyect, the compiler screams this:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+Warning: /extra/devkitARM/lib/gcc/arm-elf/3.4.4/libgcc.a(_udivsi3.o) does not support interworking, whereas GBATest.gba does
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+and when I try the GBATest.gba on the emulator, I only get a white screen... can anyone point me to a good makefile for linux using the latest devkitARM?... thanks!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#43642 - Cearn - Wed May 25, 2005 9:09 am</h4>
+    <div class="postbody"><span class="postbody">The interworking thing can probably be fixed by adding -mthumb-interwork to your linker flags as well. That might work, or maybe not because there are other flaws as well
+<br/>
+<br/>
+First of all, building a GBA file has three stages, not two: compilation (.c -&gt;.o), linking (.o -&gt; .elf) and conversion/translation (.elf -&gt; .gba) (anyone have a better name for this?). An ELF file still has a lot of extra data that the GBA doesn't understand, so it has to be converted into a pure binary file by arm-elf-objcopy. Some compilers do accept ELF files, but it's better to add the conversion step too, because hardware will not. Oh, and just because you've named the output of the linker .gba doesn't make it so; it's still and ELF file.
+<br/>
+<br/>
+For a more complete make file, you might try this:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+# === Project details (add your own stuff here) ===
+<br/>
+PROJ    := foo
+<br/>
+<br/>
+INCLUDE  := 
+<br/>
+LIBPATHS := 
+<br/>
+<br/>
+LIBS    := 
+<br/>
+COBJS   := $(PROJ).o 
+<br/>
+SOBJS   := 
+<br/>
+OBJS    := $(COBJS) $(SOBJS)
+<br/>
+<br/>
+# --- boot type ---
+<br/>
+MB = 0
+<br/>
+ifeq ($(MB),1)
+<br/>
+EXT     := mb.gba
+<br/>
+SPECS   := -specs=gba_mb.specs
+<br/>
+else
+<br/>
+EXT     := gba
+<br/>
+SPECS   := -specs=gba.specs
+<br/>
+endif
+<br/>
+<br/>
+# --- Compiling ---
+<br/>
+CROSS:= arm-elf-
+<br/>
+AS= $(CROSS)as
+<br/>
+CC= $(CROSS)gcc
+<br/>
+LD= $(CROSS)gcc
+<br/>
+OBJCOPY= $(CROSS)objcopy
+<br/>
+<br/>
+MODEL   := -mthumb-interwork -mthumb
+<br/>
+CBASE   := $(INCLUDE) -O2 -Wall -mthumb-interwork
+<br/>
+<br/>
+ASFLAGS := -mthumb-interwork
+<br/>
+CFLAGS  := $(CBASE) -mthumb
+<br/>
+LDFLAGS := $(SPECS) $(MODEL) $(LIBPATHS) $(LIBS)  -Wl,-Map,$(PROJ).map
+<br/>
+<br/>
+# === Building steps ===
+<br/>
+build: $(PROJ).$(EXT)
+<br/>
+<br/>
+# --- convert to binary ---
+<br/>
+$(PROJ).$(EXT) : $(PROJ).elf
+<br/>
+   @$(OBJCOPY) -v -O binary $&lt; $@
+<br/>
+   -@gbafix $@
+<br/>
+<br/>
+# --- link ---
+<br/>
+$(PROJ).elf : $(OBJS)
+<br/>
+   $(LD) $(OBJS) $(LDFLAGS) -o $@
+<br/>
+<br/>
+# --- compile ---
+<br/>
+$(COBJS) : %.o : %.c
+<br/>
+   $(CC) $(CFLAGS) -c $&lt; -o $@
+<br/>
+<br/>
+# === Clean ===
+<br/>
+.PHONY : clean
+<br/>
+clean : 
+<br/>
+   @rm -fv $(OBJS)
+<br/>
+   @rm -fv $(PROJ).$(EXT) 
+<br/>
+   @rm -fv $(PROJ).elf
+<br/>
+<br/>
+#EOF
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Add your own stuff to the project details, set MB depending on ROM or multiboot files and it should work fine (unless I missed something in copying)
+<br/>
+<br/>
+Furthermore, I would suggest not having a space between SetMode and its first parentheses. SetMode is a macro and I remember someone having problems with this in the past. OTOH, it seems to work just fine now, so maybe it was just a problem with earlier toolchains.
+<br/>
+Secondly, as I've mentioned <a class="postlink" href="http://forum.gbadev.org/viewtopic.php?t=5751" target="_blank">before</a>, do <span style="font-style: italic">not</span> use anything else except ints (signed or unsigned) as local variables, especially loop variables. I'd even suggest switching the order of the for-loops since C matrices are row-based and you might want to keep the fastest moving index on the inside. These things aren't fatal or anything, but will help you in the long run.
+<br/>
+<br/>
+What still puzzles me is the exact error you've been having: _udivsi3.o has to do with integer division. What integer division?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#43658 - tepples - Wed May 25, 2005 2:13 pm</h4>
+    <div class="postbody"><span class="postbody">I think you need to specify 
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">LDFLAGS := -mthumb -mthumb-interwork</td> </tr></table><span class="postbody"><br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#43701 - funkaster - Wed May 25, 2005 8:49 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Cearn wrote:</b></span></td> </tr> <tr> <td class="quote">The interworking thing can probably be fixed by adding -mthumb-interwork to your linker flags as well. That might work, or maybe not because there are other flaws as well</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Well, I modified my makefile taking yours as a start point, but now the linker says:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+arm-elf-ld: unrecognised emulation mode: thumb-interwork
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+and this was the way the linker executed:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+arm-elf-ld first.o -specs=gba.specs -mthumb -mthumb-interwork -L/extra/devkitARM/arm-elf-lib -L/extra/libgba/lib/libgba.a -o GBATest.elf
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+:-S</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#43742 - tepples - Thu May 26, 2005 3:36 am</h4>
+    <div class="postbody"><span class="postbody">I think the -mthumb -mthumb-interwork works when using arm-elf-gcc (not arm-elf-ld) as the linker.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#43745 - funkaster - Thu May 26, 2005 5:59 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote">I think the -mthumb -mthumb-interwork works when using arm-elf-gcc (not arm-elf-ld) as the linker.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Well, I replaced ld with gcc as the linker, and now this is the output:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+rolando@baka:~/sandbox/prueba$ make
+<br/>
+arm-elf-gcc -I/extra/libgba/include -O2 -Wall -specs=gba.specs -mthumb -mthumb-interwork -c first.c -o first.o
+<br/>
+arm-elf-gcc first.o -specs=gba.specs -mthumb -mthumb-interwork -L/extra/devkitARM/arm-elf/lib -L/extra/libgba/lib/libgba.a -o GBATest.elf
+<br/>
+/extra/devkitARM/lib/gcc/arm-elf/3.4.4/../../../../arm-elf/bin/ld: Warning: /extra/devkitARM/lib/gcc/arm-elf/3.4.4/thumb/libgcc.a(_call_via_rX.o) does not support interworking, whereas GBATest.elf does
+<br/>
+/extra/devkitARM/lib/gcc/arm-elf/3.4.4/../../../../arm-elf/bin/ld: Warning: /extra/devkitARM/lib/gcc/arm-elf/3.4.4/thumb/crtend.o does not support interworking, whereas GBATest.elf does
+<br/>
+/extra/devkitARM/lib/gcc/arm-elf/3.4.4/../../../../arm-elf/bin/ld: Warning: /extra/devkitARM/lib/gcc/arm-elf/3.4.4/thumb/crtn.o does not support interworking, whereas GBATest.elf does
+<br/>
+/extra/devkitARM/lib/gcc/arm-elf/3.4.4/../../../../arm-elf/lib/gba_crt0.o(.init+0x210): In function `$t':
+<br/>
+: undefined reference to `fake_heap_end'
+<br/>
+collect2: ld returned 1 exit status
+<br/>
+make: *** [GBATest.elf] Error 1
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+the same error (the unkown symbol `fake_heap_end') appears when I try to compile the examples (from cvs)...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#43751 - funkaster - Thu May 26, 2005 7:00 am</h4>
+    <div class="postbody"><span class="postbody">I figured out the problem: the build of devkitARM is WRONG... :-(
+<br/>
+I build it from cvs on a dual 3Ghz Xeon and it worked ok :-(
+<br/>
+<br/>
+the installed version on my G4 is missing about 200 files...  I'll try to install it again...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#43803 - funkaster - Thu May 26, 2005 9:58 pm</h4>
+    <div class="postbody"><span class="postbody">Ok, I got the problem... the compiler and liker are working ok now. I tested with my really simple example.
+<br/>
+I'll post the linux-powerpc binaries of devkitARM on my site soon... (and also the linux-powerpc binaries of VisualBoyAdvance)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#43820 - wintermute - Fri May 27, 2005 1:02 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>funkaster wrote:</b></span></td> </tr> <tr> <td class="quote">Ok, I got the problem... the compiler and liker are working ok now. I tested with my really simple example.
+<br/>
+I'll post the linux-powerpc binaries of devkitARM on my site soon... (and also the linux-powerpc binaries of VisualBoyAdvance)</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+please submit them to me &amp; save your bandwidth, I'd be happy to host them on the SF project :)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#43837 - funkaster - Fri May 27, 2005 6:14 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>wintermute wrote:</b></span></td> </tr> <tr> <td class="quote">please submit them to me &amp; save your bandwidth, I'd be happy to host them on the SF project :)</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+check your private messages</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

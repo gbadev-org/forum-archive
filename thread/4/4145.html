@@ -1,0 +1,178 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>DMA Question - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > DMA Question</h2>
+<div id="posts">
+<div class="post">
+    <h4>#26942 - ScottLininger - Wed Sep 29, 2004 10:27 pm</h4>
+    <div class="postbody"><span class="postbody">Does anyone know what happens if you change the DMA registers "mid transfer"? Is this even possible?
+<br/>
+<br/>
+I mean, if you start a DMA copy, does the processor halt all other work until that DMA is done? If you have two transfers one after the other, is it possible that the second transfer will screw up the first one?
+<br/>
+<br/>
+-Scott</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#26943 - poslundc - Wed Sep 29, 2004 10:40 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>ScottLininger wrote:</b></span></td> </tr> <tr> <td class="quote">Does anyone know what happens if you change the DMA registers "mid transfer"? Is this even possible?</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+The DMA halts the CPU while it is active, so no, it's not possible.
+<br/>
+<br/>
+The only thing that can preempt a DMA transfer is another, higher-priority DMA transfer, and since the DMA halts the CPU the only thing that can cause a higher-priority DMA transfer to occur is an interrupt (such as an empty sound buffer or HBlank trigger).
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">If you have two transfers one after the other, is it possible that the second transfer will screw up the first one?</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Two DMA transfers cannot execute in parallel, but because of the timings of memory accesses it is a good idea to set DMAXCNT to 0 in between consecutive transfers (if you are using the same DMA channel for both of them). eg.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">REG_DMA3SAD = src1;
+<br/>
+REG_DMA3DAD = dst1;
+<br/>
+REG_DMA3CNT = DMA_ENABLE | wordcount1;
+<br/>
+REG_DMA3CNT = 0;
+<br/>
+REG_DMA3SAD = src2;
+<br/>
+REG_DMA3DAD = dst2;
+<br/>
+REG_DMA3CNT = DMA_ENABLE | wordcount2;</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+And always, <span style="font-style: italic">always</span> make sure that the registers are declared as volatile (usually vu32) in your header file.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#26944 - sajiimori - Wed Sep 29, 2004 10:43 pm</h4>
+    <div class="postbody"><span class="postbody">Some people have noticed a delay of a couple cycles before DMA starts and locks the bus (thus hanging the CPU), but I haven't noticed that yet.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#26945 - poslundc - Wed Sep 29, 2004 11:08 pm</h4>
+    <div class="postbody"><span class="postbody">I'm not sure <span style="font-style: italic">exactly</span> what it is; all I know for sure is that when I tried doing consecutive DMAs or DMAs in a loop it would always fail on hardware until I started "shutting off" the DMA in between transfers.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#26946 - DekuTree64 - Wed Sep 29, 2004 11:29 pm</h4>
+    <div class="postbody"><span class="postbody">Hmm, I wonder what would happen if you used a higher priority DMA to change the DMA registers in the middle of a transfer. Say, right after HBlank, do this:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+REG_DM0SAD = src2;
+<br/>
+REG_DM0DAD = &amp;REG_DM3CNT;
+<br/>
+REG_DM0CNT = 1 | DMA_ENABLE | DMA_MODE_HBL;
+<br/>
+<br/>
+REG_DM3SAD = src;
+<br/>
+REG_DM3DAD = dest;
+<br/>
+REG_DM3CNT = count | DMA_ENABLE;
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Where count is big enough that DMA3 will still be running during the next HBlank.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#26948 - sajiimori - Thu Sep 30, 2004 12:09 am</h4>
+    <div class="postbody"><span class="postbody">Deku, crunch time is getting to you. ;)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#26955 - ScottLininger - Thu Sep 30, 2004 4:35 am</h4>
+    <div class="postbody"><span class="postbody">Dan,
+<br/>
+<br/>
+You rock.
+<br/>
+<br/>
+The problem I was having had nothing to do with how and when I was initiating the DMA. It was the fact that my header file didn't have them declared as volatile. Man, that one was driving me crazy.
+<br/>
+<br/>
+Is "make sure DMA registers are volatiles" on Tepple's tutorial suggestion list? I'm pretty sure I got my broken gba.h from one of the tutorials out there...
+<br/>
+<br/>
+Thanks!
+<br/>
+<br/>
+Scott</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#26956 - sajiimori - Thu Sep 30, 2004 4:48 am</h4>
+    <div class="postbody"><span class="postbody">The same goes for all registers.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#26964 - tepples - Thu Sep 30, 2004 12:57 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>in 'Testing your code' in the Beginners' FAQ, I wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+<span style="font-weight: bold">Q: My program works when compiled without optimizations (-O0), but when compiled with optimizations (-O, -O2, -O3), it won't do anything. How do I fix this?</span>
+<br/>
+<br/>
+Most likely: You forgot to declare your registers as volatile.
+<br/>
+<br/>
+</td> </tr></table><span class="postbody"><br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#26966 - poslundc - Thu Sep 30, 2004 1:52 pm</h4>
+    <div class="postbody"><span class="postbody">The volatile keyword indicates to the compiler that the variable/register's state is not related exclusively to the executing code, but is tied to external factors (such as hardware functionality). Without the keyword, GCC's optimization features may shuffle commands around or ignore them entirely if it believes they don't affect the flow or logic of the program. To an optimizing compiler:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">a = 5;
+<br/>
+b = 2;
+<br/>
+a = 7;</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+... the first line isn't important and doesn't <span style="font-style: italic">do</span> anything, but needless to say when you're dealing with memory-mapped hardware registers like the DMA controls it is crucial to preserve both the ordering and the execution of every statement.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#26974 - ampz - Thu Sep 30, 2004 5:04 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sajiimori wrote:</b></span></td> </tr> <tr> <td class="quote">Some people have noticed a delay of a couple cycles before DMA starts and locks the bus (thus hanging the CPU), but I haven't noticed that yet.</td> </tr></table><span class="postbody">
+<br/>
+Perhaps it is emptying the CPU pipeline before locking the bus?</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

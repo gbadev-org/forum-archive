@@ -1,0 +1,1170 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>makefile, how do I add .S-files & link correctly?(slvd) - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Beginners > makefile, how do I add .S-files & link correctly?(slvd)</h2>
+<div id="posts">
+<div class="post">
+    <h4>#107379 - Ant6n - Sun Oct 29, 2006 3:57 am</h4>
+    <div class="postbody"><span class="postbody">Hi,
+<br/>
+<br/>
+I recently switched from the managed make system of vham to eclipse. I used the eclipse tutorial that floats around here in the forum somewhere. they gave an example makefile, so i basicly just copy pasted my source file names. I dont know much about makefiles, so i dont know how i can add my .S files
+<br/>
+I tried this:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+# --- Project details ---
+<br/>
+PROJ    := lib
+<br/>
+EXT     := gba
+<br/>
+<br/>
+CFILES  := main.c lib_time.c lib_frame.c lib_math.c lib_interrupt.c lib_memory.c lib_sprite.c lib_stile.c rock.c ship.c shipdata.c
+<br/>
+SFILES  := lib_asmirqhandler.S lib_asmagbprint.S
+<br/>
+   
+<br/>
+COBJS   := $(CFILES:.c=.o)
+<br/>
+SOBJS   := $(SFILES:.S=.o)
+<br/>
+OBJS    := $(COBJS) $(SOBJS)
+<br/>
+<br/>
+#--- Tool settings ---
+<br/>
+# for devkitARM r19+ use PREFIX := arm-eabi
+<br/>
+PREFIX := arm-eabi-
+<br/>
+AS      := $(PREFIX)as
+<br/>
+CC      := $(PREFIX)gcc
+<br/>
+LD      := $(PREFIX)gcc
+<br/>
+OBJCOPY := $(PREFIX)objcopy
+<br/>
+<br/>
+<br/>
+MODEL   := -mthumb-interwork -mthumb
+<br/>
+SPECS   := -specs=gba.specs         # comment out for DKA
+<br/>
+<br/>
+ASFLAGS := -mthumb-interwork
+<br/>
+CFLAGS  := -I./ $(MODEL) -O2 -Wall
+<br/>
+LDFLAGS := $(SPECS) $(MODEL)
+<br/>
+<br/>
+#--- Build steps ---
+<br/>
+build : $(PROJ).$(EXT)
+<br/>
+<br/>
+$(PROJ).$(EXT) : $(PROJ).elf
+<br/>
+   @$(OBJCOPY) -v -O binary $&lt; $@
+<br/>
+   -@gbafix $@
+<br/>
+<br/>
+$(PROJ).elf : $(OBJS)
+<br/>
+   @$(LD) $(OBJS) $(LDFLAGS) -o $@
+<br/>
+<br/>
+$(COBJS) : %.o : %.c
+<br/>
+   $(CC) $(CFLAGS) -g -c $&lt; -o $@
+<br/>
+<br/>
+$(SOBJS) : %.o : %.S
+<br/>
+   $(AS) $(ASLAGS) -g -c $&lt; -o $@
+<br/>
+<br/>
+<br/>
+# --- Clean ---
+<br/>
+.PHONY : clean
+<br/>
+clean :
+<br/>
+   @rm -fv $(COBJS)
+<br/>
+   @rm -fv $(SOBJS)
+<br/>
+   @rm -fv $(PROJ).$(EXT)
+<br/>
+   @rm -fv $(PROJ).elf    
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+earlier this at least compiled, but the asm files seemed not to link. the debugger showed the pc run jump around and then settle in an infite loop when calling agbprint.
+<br/>
+i fiddled around with it, and now it doesnt even compile anymore, giving the error message:
+<br/>
+"make -k build 
+<br/>
+make: *** No rule to make target `lib_asmirqhandler.S', needed by `lib_asmirqhandler.o'.
+<br/>
+make: *** No rule to make target `lib_asmagbprint.S', needed by `lib_asmagbprint.o'.
+<br/>
+make: Target `build' not remade because of errors."
+<br/>
+<br/>
+can anybody please point out what i am doing wrong here. Its porbably something obvious for people who use make and asm files.
+<br/>
+Thank you very much
+<br/>
+<br/>
+Anton</span><span class="gensmall"><br/><br/>Last edited by Ant6n on Wed Nov 01, 2006 4:05 pm; edited 4 times in total</span></div>    
+</div>
+<div class="post">
+    <h4>#107383 - gladius - Sun Oct 29, 2006 6:23 am</h4>
+    <div class="postbody"><span class="postbody">You can add this rule to a normal makefile:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+%.o : %.S
+<br/>
+   @echo $(notdir $&lt;)
+<br/>
+   @$(CC) -MM $(CFLAGS) -o $*.d $&lt;
+<br/>
+   @$(CC)  $(ASFLAGS) -c $&lt; -o$@
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#107391 - Ant6n - Sun Oct 29, 2006 9:13 am</h4>
+    <div class="postbody"><span class="postbody">Thank you for the tip, gladious.
+<br/>
+ok, the whole thing compiles alright, but when i run the rom i still get a white screen. I have a program that first thing of all simply calls agbprint in lib_asmagbprint.S. The debugger dissassembly runs this:
+<br/>
+<br/>
+<br/>
+0x0800028a &lt;main+2&gt;:   ldr   r0, [pc, #248]	(0x8000384 &lt;main+252&gt;)
+<br/>
+0x0800028c &lt;main+4&gt;:   bl    0x80021cc &lt;__agbprint_from_thumb&gt;
+<br/>
+<br/>
+0x080021cc &lt;__agbprint_from_thumb&gt;:   bx  pc
+<br/>
+0x080021ce &lt;__agbprint_from_thumb+2&gt;: nop (mov r8, r8)
+<br/>
+<br/>
+0x080021d0 &lt;__agbprint_change_to_arm&gt;:   b 0x7000120
+<br/>
+<br/>
+0x07000120 andeq       r0, r0, r0
+<br/>
+<br/>
+0x080000c0 &lt;rom_header_end&gt;:   b 0x80000e0 &lt;start_vector&gt;
+<br/>
+<br/>
+0x080000e0 &lt;start_vector&gt;:    mov       r0, #67108864	; 0x4000000
+<br/>
+0x080000e4 &lt;start_vector+4&gt;:  str       r0, [r0, #520]
+<br/>
+0x080000e8 &lt;start_vector+8&gt;:  mov       r0, #18	; 0x12
+<br/>
+0x080000ec &lt;start_vector+12&gt;: msr       CPSR_fc, r0
+<br/>
+0x080000f0 &lt;start_vector+16&gt;: ldr       sp, [pc, #180]	; 0x80001ac &lt;CIDExit+2&gt;
+<br/>
+0x080000f4 &lt;start_vector+20&gt;: mov       r0, #31	; 0x1f
+<br/>
+0x080000f8 &lt;start_vector+24&gt;: msr       CPSR_fc, r0
+<br/>
+0x080000fc &lt;start_vector+28&gt;: ldr       sp, [pc, #172]	; 0x80001b0 &lt;CIDExit+6&gt;
+<br/>
+0x08000100 &lt;start_vector+32&gt;: add       r0, pc, #1	; 0x1
+<br/>
+0x08000104 &lt;start_vector+36&gt;: bx        r0
+<br/>
+0x08000108 &lt;start_vector+40&gt;: cmpeq     r0, r10, lsr #16
+<br/>
+0x0800010c &lt;start_vector+44&gt;: ldrmibt   sp, [r8], -r11, lsl #4
+<br/>
+0x08000110 &lt;start_vector+48&gt;: movwle    r0, #53568	; 0xd140
+<br/>
+0x08000114 &lt;start_vector+52&gt;: ldreq     r2, [r2], -r2, lsl #4
+<br/>
+0x08000118 &lt;start_vector+56&gt;: bne       0x66d2dbc
+<br/>
+0x0800011c &lt;start_vector+60&gt;: addeqs    r1, r1, r6, lsl r12
+<br/>
+0x08000120 &lt;start_vector+64&gt;: undefined instruction 0xf83bf000
+<br/>
+0x08000124 &lt;start_vector+68&gt;: cmpcs     r0, r0, lsr r7
+<br/>
+<br/>
+0x08000128 &lt;DoEWRAMClear+2&gt;: biceq     r0, r8, r9, lsl #6
+<br/>
+0x0800012c &lt;DoEWRAMClear+6&gt;: undefined instruction 0xf82bf000
+<br/>
+<br/>
+0x08000184 &lt;CEW0Skip+20&gt;: andcs pc, r3, #847872	; 0xcf000
+<br/>
+<br/>
+x08000188 &lt;ClearMem+2&gt;: orrmis r1, r1, #8978432	; 0x890000
+<br/>
+0x0800018c &lt;ClearMem+6&gt;: andcs  sp, r0, #3	; 0x3
+<br/>
+<br/>
+0x08000190 &lt;ClrLoop&gt;:   stmccdb   r4, {r2, lr, pc}
+<br/>
+0x08000194 &lt;ClrLoop+4&gt;: undefined
+<br/>
+<br/>
+<br/>
+the program loops within the last two instructions. 
+<br/>
+I suspect there is something wrong right in the beginning when going from thumb c code to arm asm code...
+<br/>
+...Does anybody have any idea what i am doing wrong? i am completely puzzled at this; still would like to use .S files
+<br/>
+<br/>
+Thank you
+<br/>
+<br/>
+Anton</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#107439 - gmiller - Sun Oct 29, 2006 6:48 pm</h4>
+    <div class="postbody"><span class="postbody">Looking at the original make file you were trying for thumb mode instructions and based on the the instruction debugging your are in ARM mode (THUMB instructions are 16 but so each one would be +2 from the other, ARM mode instructions are 32 bits so each one would be +4 from the other).  In your original CFLAGS have the -mthumb-interwork which will allow both instruction to work together ARM code to call THUMB and vice versa.  Can't see enough information that yells at me here but someone else might be better idea.  I use VHAM with devkitPRO so this is "my" makefile: (this my current template, only requires adding stuff to LIB for additional libraries, and using slightly modified make files from the devkitARM)
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+# Clear the implicit built in rules
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+.SUFFIXES:
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+ifeq ($(strip $(DEVKITARM)),)
+<br/>
+$(error "Please set DEVKITARM in your environment. export DEVKITARM=&lt;path to&gt;devkitARM)
+<br/>
+endif
+<br/>
+<br/>
+-include $(DEVKITARM)/gba_rules
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+# TARGET is the name of the output, if this ends with _mb a multiboot image is generated
+<br/>
+# BUILD is the directory where object files &amp; intermediate files will be placed
+<br/>
+# SOURCES is a list of directories containing source code
+<br/>
+# DATA is a list of directories containing data files
+<br/>
+# INCLUDES is a list of directories containing header files
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+# HAM Stuff no longer used ....
+<br/>
+#
+<br/>
+#PROGNAME =unused
+<br/>
+#OFILES+= unused
+<br/>
+#ADD_LIBS+= unused   
+<br/>
+<br/>
+# .................
+<br/>
+#
+<br/>
+<br/>
+TARGET      :=   $(shell basename $(CURDIR))
+<br/>
+BUILD      :=   build
+<br/>
+SOURCES      :=   source
+<br/>
+DATA      :=   
+<br/>
+INCLUDES   :=   $(DEVKITARM)
+<br/>
+GDB_DIRS   =    $cdir:$cwd:$(ADD_GDB_SOURCE_DIRS)
+<br/>
+<br/>
+ifeq ($(MAKECMDGOALS),gdb)
+<br/>
+DEBUG_SET   :=   gdb
+<br/>
+endif
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+# options for code generation
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+#ARCH   :=   -mthumb -mthumb-interwork
+<br/>
+ARCH   :=
+<br/>
+<br/>
+ifneq ($(DEBUG_SET),gdb)
+<br/>
+THIS_BUILD   :=   "Release Build"
+<br/>
+CFLAGS   :=   -Wall -O3 -save-temps \
+<br/>
+         -mcpu=arm7tdmi -mtune=arm7tdmi\
+<br/>
+          -fomit-frame-pointer\
+<br/>
+         -ffast-math \
+<br/>
+         $(ARCH)
+<br/>
+ASFLAGS   :=   $(ARCH)
+<br/>
+else
+<br/>
+THIS_BUILD   :=   "Debug Build"
+<br/>
+CFLAGS   :=   -g -Wall -O0 -save-temps \
+<br/>
+         -mcpu=arm7tdmi -mtune=arm7tdmi\
+<br/>
+         -ffast-math \
+<br/>
+         $(ARCH)
+<br/>
+ASFLAGS   :=   $(ARCH) -g
+<br/>
+endif
+<br/>
+CFLAGS   +=   $(INCLUDE)
+<br/>
+<br/>
+<br/>
+<br/>
+ifneq ($(DEBUG_SET),gdb)
+<br/>
+LDFLAGS   =   $(ARCH) -Wl,-Map,$(notdir $@).map
+<br/>
+else
+<br/>
+LDFLAGS   =   -g $(ARCH) -Wl,-Map,$(notdir $@).map
+<br/>
+endif
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+# path to tools - this can be deleted if you set the path to the toolchain in windows
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+export PATH      :=   $(DEVKITARM)/bin:$(DEVKITPRO)/msys/bin:$(PATH)
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+# any extra libraries we wish to link with the project
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+LIBS   :=
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+# list of directories containing libraries, this must be the top level containing
+<br/>
+# include and lib
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+LIBDIRS   :=   $(LIBGBA)
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+# no real need to edit anything past this point unless you need to add additional
+<br/>
+# rules for different file extensions
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+ifneq ($(BUILD),$(notdir $(CURDIR)))
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+<br/>
+export OUTPUT   :=   $(CURDIR)/$(TARGET)
+<br/>
+export VPATH   :=   $(foreach dir,$(SOURCES),$(CURDIR)/$(dir)) \
+<br/>
+               $(foreach dir,$(DATA),$(CURDIR)/$(dir))
+<br/>
+<br/>
+export DEPSDIR   :=   $(CURDIR)/$(BUILD)
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+# automatically build a list of object files for our project
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+CFILES      :=   $(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.c)))
+<br/>
+CPPFILES   :=   $(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.cpp)))
+<br/>
+SFILES      :=   $(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.s)))
+<br/>
+BINFILES   :=   $(foreach dir,$(DATA),$(notdir $(wildcard $(dir)/*.*)))
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+# use CXX for linking C++ projects, CC for standard C
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+ifeq ($(strip $(CPPFILES)),)
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+   export LD   :=   $(CC)
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+else
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+   export LD   :=   $(CXX)
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+endif
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+<br/>
+export OFILES   := $(addsuffix .o,$(BINFILES)) $(CPPFILES:.cpp=.o) $(CFILES:.c=.o) $(SFILES:.s=.o)
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+# build a list of include paths
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+export INCLUDE   :=   $(foreach dir,$(INCLUDES),-I$(dir)/include) \
+<br/>
+               $(foreach dir,$(LIBDIRS),-I$(dir)/include) \
+<br/>
+               $(foreach dir,$(CURDIR), -I$(dir)/include) \
+<br/>
+               -I$(CURDIR)
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+# build a list of library paths
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+export LIBPATHS   :=   $(foreach dir,$(LIBDIRS),-L$(dir)/lib)
+<br/>
+<br/>
+.PHONY: $(BUILD) clean
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+$(BUILD):
+<br/>
+   @[ -d $@ ] || mkdir -p $@
+<br/>
+   make "DEBUG_SET=$(DEBUG_SET)" --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile
+<br/>
+<br/>
+all   : buildtype $(BUILD)
+<br/>
+<br/>
+buildtype:
+<br/>
+   @echo "Build type: " $(THIS_BUILD)
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+clean:
+<br/>
+   @echo clean ...
+<br/>
+   rm -fr $(BUILD) $(TARGET).elf $(TARGET).gba
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+vbawin:   clean all
+<br/>
+   $(DEVKITPRO)/tools/win32/vbawin.exe $(TARGET).gba
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+runvbawin:
+<br/>
+   $(DEVKITPRO)/tools/win32/vbawin.exe $(TARGET).gba
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+vba:   clean all
+<br/>
+   $(DEVKITPRO)/tools/win32/vbaSDL/vba.exe -3 $(TARGET).gba
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+runvba:
+<br/>
+   $(DEVKITPRO)/tools/win32/vbaSDL/vba.exe -3 $(TARGET).gba
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+startsdl:
+<br/>
+   $(DEVKITPRO)/tools/win32/vbaSDL/vba.exe -3 -Gtcp:44444 &amp;
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+makeini:
+<br/>
+   echo "File $(TARGET).elf" &gt; insight.ini
+<br/>
+   echo "target remote 127.0.0.1:44444" &gt;&gt;insight.ini
+<br/>
+   echo "load $(TARGET).elf" &gt;&gt;insight.ini
+<br/>
+   echo "b main" &gt;&gt;insight.ini
+<br/>
+   echo "directory $(GDB_DIRS)"&gt;&gt;insight.ini
+<br/>
+   echo "c" &gt;&gt;insight.ini
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+startinsight:
+<br/>
+   $(DEVKITPRO)/insight-6.4.50/bin/arm-elf-insight.exe --command=insight.ini $(TARGET).elf
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+gdb:   clean
+<br/>
+   @make "DEBUG_SET=$(DEBUG_SET)" all 
+<br/>
+   make startsdl makeini startinsight
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+rungdb: startsdl makeini startinsight
+<br/>
+<br/>
+testinsight: makeini startinsight
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+else
+<br/>
+<br/>
+DEPENDS   :=   $(OFILES:.o=.d)
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+# main targets
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+$(OUTPUT).gba   :   $(OUTPUT).elf
+<br/>
+<br/>
+$(OUTPUT).elf   :   $(OFILES)
+<br/>
+<br/>
+%.o   :   %.pcx
+<br/>
+   echo $(notdir $&lt;)
+<br/>
+   $(bin2o)
+<br/>
+<br/>
+-include $(DEPENDS)
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+endif
+<br/>
+#--------------------------------------------------------------------------------
+<br/>
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+gba_rules
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+ifeq ($(strip $(DEVKITPRO)),)
+<br/>
+$(error "Please set DEVKITPRO in your environment. export DEVKITPRO=&lt;path to&gt;devkitPro)
+<br/>
+endif
+<br/>
+<br/>
+include $(DEVKITARM)/base_rules
+<br/>
+<br/>
+LIBGBA   :=   $(DEVKITPRO)/libgba
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+%.gba: %.elf
+<br/>
+   @$(OBJCOPY) -O binary $&lt; $@
+<br/>
+   @echo built ... $(notdir $@)
+<br/>
+   gbafix $@
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+%_mb.elf:
+<br/>
+   @echo linking multiboot
+<br/>
+   $(LD) -specs=gba_mb.specs $(LDFLAGS) $(OFILES) $(LIBPATHS) $(LIBS) -o $@
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+%.elf:
+<br/>
+   @echo linking cartridge
+<br/>
+   $(LD)  $(LDFLAGS) -specs=gba.specs $(OFILES) $(LIBPATHS) $(LIBS) -o $@
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+base_rules
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+# path to tools - this can be deleted if you set the path in windows
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+export PATH      :=   $(DEVKITARM)/bin:$(PATH)
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+# the prefix on the compiler executables
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+PREFIX      :=   arm-eabi-
+<br/>
+<br/>
+export CC   :=   $(PREFIX)gcc
+<br/>
+export CXX   :=   $(PREFIX)g++
+<br/>
+export AS   :=   $(PREFIX)as
+<br/>
+export AR   :=   $(PREFIX)ar
+<br/>
+export OBJCOPY   :=   $(PREFIX)objcopy
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+%.a:
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+   @echo $(notdir $@)
+<br/>
+   @echo "'Lib' Rule"
+<br/>
+   @rm -f $@
+<br/>
+   $(AR) -rc $@ $^
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+%.iwram.o: %.iwram.cpp
+<br/>
+   @echo $(notdir $&lt;)
+<br/>
+   @echo "'CPP' ARM IWRAM Rule"
+<br/>
+   $(CXX) -MMD -MP -MF $(DEPSDIR)/$*.d -marm -mthumb-interwork $(CXXFLAGS) -c $&lt; -o $@
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+%.arm.o: %.arm.cpp
+<br/>
+   @echo $(notdir $&lt;)
+<br/>
+   @echo "'CPP' ARM Rule"
+<br/>
+   $(CXX) -MMD -MP -MF $(DEPSDIR)/$*.d -marm -mthumb-interwork $(CXXFLAGS) -c $&lt; -o $@
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+%.iwram.o: %.iwram.c
+<br/>
+   @echo $(notdir $&lt;)
+<br/>
+   @echo "'C' ARM IWRAM Rule"
+<br/>
+   $(CC) -MMD -MP -MF $(DEPSDIR)/$*.d -marm -mthumb-interwork $(CFLAGS) -c $&lt; -o $@
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+%.arm.o: %.arm.c
+<br/>
+   @echo $(notdir $&lt;)
+<br/>
+   @echo "'C' ARM Rule"
+<br/>
+   $(CC) -MMD -MP -MF $(DEPSDIR)/$*.d -marm -mthumb-interwork $(CFLAGS) -c $&lt; -o $@
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+%.itcm.o: %.itcm.cpp
+<br/>
+   @echo $(notdir $&lt;)
+<br/>
+   @echo "'CPP' ARM ITCM Rule"
+<br/>
+   $(CXX) -MMD -MP -MF $(DEPSDIR)/$*.d -marm -mthumb-interwork $(CXXFLAGS) -c $&lt; -o $@
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+%.itcm.o: %.itcm.c
+<br/>
+   @echo $(notdir $&lt;)
+<br/>
+   @echo "'C' ARM ITCM Rule"
+<br/>
+   $(CC) -MMD -MP -MF $(DEPSDIR)/$*.d -marm -mthumb-interwork $(CFLAGS) -c $&lt; -o $@
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+%.o: %.cpp
+<br/>
+   @echo $(notdir $&lt;)
+<br/>
+   @echo "'CPP' THUMB Rule"
+<br/>
+   $(CXX) -MMD -MP -MF $(DEPSDIR)/$*.d -mthumb -mthumb-interwork $(CXXFLAGS) -c $&lt; -o $@
+<br/>
+   
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+%.o: %.c
+<br/>
+   @echo $(notdir $&lt;)
+<br/>
+   @echo "'C' THUMB Rule"
+<br/>
+   $(CC) -MMD -MP -MF $(DEPSDIR)/$*.d -mthumb -mthumb-interwork $(CFLAGS) -c $&lt; -o $@
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+%.iwram.o: %.iwram.s
+<br/>
+   @echo $(notdir $&lt;)
+<br/>
+   @echo "'ASM' ARM IWRAM Rule"
+<br/>
+   $(CC) -MMD -MP -MF $(DEPSDIR)/$*.d -x assembler-with-cpp -marm -mthumb-interwork $(ASFLAGS) -c $&lt; -o $@
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+%.arm.o: %.arm.s
+<br/>
+   @echo $(notdir $&lt;)
+<br/>
+   @echo "'ASM' ARM Rule"
+<br/>
+   $(CC) -MMD -MP -MF $(DEPSDIR)/$*.d -x assembler-with-cpp -marm -mthumb-interwork $(ASFLAGS) -c $&lt; -o $@
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+%.iwram.o: %.iwram.S
+<br/>
+   @echo $(notdir $&lt;)
+<br/>
+   @echo "'ASM' ARM IWRAM Rule"
+<br/>
+   $(CC) -MMD -MP -MF $(DEPSDIR)/$*.d -x assembler-with-cpp -marm -mthumb-interwork $(ASFLAGS) -c $&lt; -o $@
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+%.arm.o: %.arm.S
+<br/>
+   @echo $(notdir $&lt;)
+<br/>
+   @echo "'ASM' ARM Rule"
+<br/>
+   $(CC) -MMD -MP -MF $(DEPSDIR)/$*.d -x assembler-with-cpp -marm -mthumb-interwork $(ASFLAGS) -c $&lt; -o $@
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+%.o: %.s
+<br/>
+   @echo $(notdir $&lt;)
+<br/>
+   @echo "'ASM' THUMB Rule"
+<br/>
+   $(CC) -MMD -MP -MF $(DEPSDIR)/$*.d -x assembler-with-cpp -mthumb -mthumb-interwork $(ASFLAGS) -c $&lt; -o $@
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+%.o: %.S
+<br/>
+   @echo $(notdir $&lt;)
+<br/>
+   @echo "'ASM' THUMB Rule"
+<br/>
+   $(CC) -MMD -MP -MF $(DEPSDIR)/$*.d -x assembler-with-cpp -mthumb -mthumb-interwork $(ASFLAGS) -c $&lt; -o $@
+<br/>
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+# canned command sequence for binary data
+<br/>
+#---------------------------------------------------------------------------------
+<br/>
+define bin2o
+<br/>
+   bin2s $&lt; | $(AS) $(ARCH) -o $(@)
+<br/>
+   echo "extern const u8" `(echo $(&lt;F) | sed -e 's/^\([0-9]\)/_\1/' | tr . _)`"_end[];" &gt; `(echo $(&lt;F) | tr . _)`.h
+<br/>
+   echo "extern const u8" `(echo $(&lt;F) | sed -e 's/^\([0-9]\)/_\1/' | tr . _)`"[];" &gt;&gt; `(echo $(&lt;F) | tr . _)`.h
+<br/>
+   echo "extern const u32" `(echo $(&lt;F) | sed -e 's/^\([0-9]\)/_\1/' | tr . _)`_size";" &gt;&gt; `(echo $(&lt;F) | tr . _)`.h
+<br/>
+endef
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#107459 - gmiller - Sun Oct 29, 2006 8:46 pm</h4>
+    <div class="postbody"><span class="postbody">Just an added comment on project structure that the projects that I use these projects assume.
+<br/>
+<br/>
+all files to be compiled are in the "source" folder in the project, as soon as you put a file there is will be compiled and linked.  Any file that does not have ".arm." , ".iwram." or ".itcm." at the end of the file name prior to the extention will be compiled in THUMB mode and the files with these will be compiled in ARM mode.  Since your GBA interrupt function needs to be in ARM code to staart out with I put my interrupt handler in "intr.arm.c" so that the code generated will be in ARM mode.  Most of this was already in the makefile and I just added "echo" commands to help me confirm the rule I was using.  
+<br/>
+<br/>
+the header files are in the include folder or the project folder.
+<br/>
+<br/>
+the object files will be created in the build folder along with the generated aassembly files (-save-temps) so I can examine what the compiler did.
+<br/>
+<br/>
+I am sure I have missed something but these have worked for all of the stuff I have done so far.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#107497 - Ant6n - Mon Oct 30, 2006 7:27 am</h4>
+    <div class="postbody"><span class="postbody">Your way of working with makefiles is quite interesting. I should look into that further. Especially the naming conventions that relate to linking options (iwram, arm), the possibility to have different options when debugging (-o0) and the use of multiple directories.
+<br/>
+....But you dont seem to have different options for .S files than I do, so I really wonder whats going wrong. I compiled my code in vham again and it works. I could write everything using inline assembler, but that seems messy to me - esp., because i dont know what happens if one compiles a c file in thumb mode that has arm inline asm.
+<br/>
+<br/>
+anton</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#107514 - gmiller - Mon Oct 30, 2006 1:03 pm</h4>
+    <div class="postbody"><span class="postbody">The default option for the compilers is THUMB mode and it also appears that way for the assembler.  Mixing the code in the same assembly file has not worked for me even with what I thought was the appropriate assembly directives.  If the code is "somehow" in the wrong mode then the instructions executed will not be those you specify because the number of bytes for an instruction will be wrong.  Calling THUMB mode from ARM or calling ARM from THUMB is doable.  With the compiler use the -mthumb-interwork to have the mode switch back and forth.  If it works in VHAM then maybe the order of your command line options is different.  I have found at times that the order matters but I have no specific rules that I know of.  I have found that the -marm or -mthunb needs to be early on the command line for things to work the way I wanted.  This is not something I found in a document just through experimentation so there could be some other issues here.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#107670 - Ant6n - Wed Nov 01, 2006 1:30 am</h4>
+    <div class="postbody"><span class="postbody">This sounds really odd. I poked around in the forum a little, and it seems that you had probs with the devkitpro options before.
+<br/>
+<br/>
+I tried to consult TONC, but his tutorial (http://user.chem.tue.nl/jakvijn/tonc/toncmake.htm) is officially out of date since 2004. the devkitpro website doesnt seem to have any documentation, nor does the software package itself (only examples). All people who seem to have a clue on how this works seem to have moved to NDS development..
+<br/>
+<br/>
+Can anybody direct me to a recent tutorial or documentation regarding the interworking arm and thumb options that would enable me to generate projects that uses both arm and thumb in both asm and c - with a recent version of devkitarm??
+<br/>
+<br/>
+thank you very much
+<br/>
+<br/>
+Anton</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#107679 - tepples - Wed Nov 01, 2006 3:24 am</h4>
+    <div class="postbody"><span class="postbody"><a class="postlink" href="http://www.pineight.com/tod/" target="_blank">LOCKJAW: The Overdose</a> (TOD) has ARM assembly, Thumb assembly, ARM C, Thumb C, and x86 C, all in one project. Unlike previous versions, TOD M4 is compiled with devkitARM r19b. You might want to inspect its makefile.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#107698 - Ant6n - Wed Nov 01, 2006 7:04 am</h4>
+    <div class="postbody"><span class="postbody">thank you for the hint (quite a cool game you made there ;0). i further played around with the makefiles \quite some time again, and came up with this
+<br/>
+<br/>
+MODEL   := -mthumb-interwork -marm
+<br/>
+SPECS   := -specs=gba.specs
+<br/>
+<br/>
+ASFLAGS := -mthumb-interwork -Wall
+<br/>
+CFLAGS  := -I./ $(MODEL) -O2 -mthumb -Wall
+<br/>
+LDFLAGS := $(SPECS) $(MODEL)
+<br/>
+<br/>
+but i define the function that made vba crash - the agbprint - as 
+<br/>
+<br/>
+/* agbprint */
+<br/>
+extern void agbprint(char *s) __attribute__ ((section (".iwram"), long_call));
+<br/>
+<br/>
+The odd thing is that main.c is thumb, and agbprint is arm, and the debugger manages to reach that agbprint and switch to arm, but when jumping back it doesnt seem to switch back to thumb again.
+<br/>
+I am tempted to compile everything in arm for now.
+<br/>
+Is this a feature, or something that can be fixed?
+<br/>
+<br/>
+Anton
+<br/>
+<br/>
+here the agbprint function
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">   .SECTION    .iwram,"ax",%progbits
+<br/>
+    .ALIGN
+<br/>
+    .ARM
+<br/>
+    .GLOBAL     agbprint
+<br/>
+<br/>
+agbprint:
+<br/>
+    swi 0xff0000   @ r0 is the argument, and its already there
+<br/>
+    mov pc, lr      @ branch return
+<br/>
+<br/>
+    .ALIGN
+<br/>
+    .POOL</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#107702 - Cearn - Wed Nov 01, 2006 9:27 am</h4>
+    <div class="postbody"><span class="postbody">Use 'bx lr' instead of 'mov pc, lr'. mov can't switch states. Or you could do the whole thing in thumb code:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">@ void agbprint(const char *string);
+<br/>
+    .text
+<br/>
+    .align
+<br/>
+    .thumb_func
+<br/>
+    .global agbprint
+<br/>
+agbprint:
+<br/>
+    swi     0xFF
+<br/>
+    bx      lr
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+EDIT:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Ant6n wrote:</b></span></td> </tr> <tr> <td class="quote">I tried to consult TONC, but his tutorial (http://user.chem.tue.nl/jakvijn/tonc/toncmake.htm) is officially out of date since 2004. </td> </tr></table><span class="postbody"> That should have read 200<span style="font-weight: bold">6</span>0428, not 20040428. ^_^;;</span><span class="gensmall"><br/><br/>Last edited by Cearn on Wed Nov 01, 2006 10:29 am; edited 1 time in total</span></div>    
+</div>
+<div class="post">
+    <h4>#107703 - wintermute - Wed Nov 01, 2006 9:36 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+   .SECTION    .iwram,"ax",%progbits
+<br/>
+    .ALIGN
+<br/>
+    .ARM
+<br/>
+    .GLOBAL     agbprint
+<br/>
+    .arm_func
+<br/>
+agbprint:
+<br/>
+    swi 0xff0000   @ r0 is the argument, and its already there
+<br/>
+    bx lr      @ return and switch mode if necessary
+<br/>
+<br/>
+    .ALIGN
+<br/>
+    .POOL
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+does this function need to be in either ARM or in iwram? Seems a bit wasteful to me really.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+static inline void agbprint( const char *string) {
+<br/>
+   #if   defined   ( __thumb__ )
+<br/>
+      __asm ("mov r0,%0\n\tSWI   0xff\n" ::  "=r"(string) : "r1", "r2", "r3");
+<br/>
+   #else
+<br/>
+      __asm ("mov r0,%0\n\tSWI   0xff&lt;&lt;16\n" :: "=r"(string) : "r1", "r2", "r3");
+<br/>
+   #endif
+<br/>
+}
+<br/>
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Off the top of my head and not tested but you should get the idea. I'd need to go check the inline assembly syntax to be absolutely certain as well.
+<br/>
+<br/>
+The mov r0,%0 moves the parameter to r0 which may seem a little wasteful but gcc can use any spare registers it likes for inline functions - the optimiser should remove unnecessary code if it's already in r0.
+<br/>
+<br/>
+You can also do it the way Cearn suggests - he's posted while I was editing this :P<br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#107720 - gmiller - Wed Nov 01, 2006 3:41 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Ant6n wrote:</b></span></td> </tr> <tr> <td class="quote">This sounds really odd. I poked around in the forum a little, and it seems that you had probs with the devkitpro options before.
+<br/>
+<br/>
+I tried to consult TONC, but his tutorial (http://user.chem.tue.nl/jakvijn/tonc/toncmake.htm) is officially out of date since 2004. the devkitpro website doesnt seem to have any documentation, nor does the software package itself (only examples). All people who seem to have a clue on how this works seem to have moved to NDS development..
+<br/>
+<br/>
+Can anybody direct me to a recent tutorial or documentation regarding the interworking arm and thumb options that would enable me to generate projects that uses both arm and thumb in both asm and c - with a recent version of devkitarm??
+<br/>
+<br/>
+thank you very much
+<br/>
+<br/>
+Anton</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Yep, I did have problems when mixing ARM and THUMB if I forced the ARM code into IWRAM.  The issue there was needing to do "long calls" because of the offsets between the code.  It is still something I want to automate in my make files.  One of the issues with creating a global CFLAGS value is that when mixing code models it does not apply to every file.  
+<br/>
+<br/>
+I am considering adding things like "long-calls" to files that have ".iwram.c(pp)" at the end in my standard make files.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#107722 - Ant6n - Wed Nov 01, 2006 3:53 pm</h4>
+    <div class="postbody"><span class="postbody">So from here i see i have to keep in mind
+<br/>
+- to use bx for jump return so that it works with interwork
+<br/>
+- the subtleties of long calls
+<br/>
+<br/>
+I have been looking for something to enable me to write inline assembler macros that support both arm and thumb (mostly for fixed point math, but also stuff like agbprint).
+<br/>
+<br/>
+so thank you all
+<br/>
+<br/>
+Anton</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

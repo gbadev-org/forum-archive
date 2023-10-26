@@ -1,0 +1,241 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>double buffering - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Graphics > double buffering</h2>
+<div id="posts">
+<div class="post">
+    <h4>#38835 - christosterone - Fri Apr 01, 2005 5:54 am</h4>
+    <div class="postbody"><span class="postbody">im a total noob to this; i just got the compliler.
+<br/>
+<br/>
+my game keeps flickering;
+<br/>
+<br/>
+heres the code:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#include "gba.h"
+<br/>
+#include "screenmodes.h"
+<br/>
+#include "keypad.h"
+<br/>
+<br/>
+u16* theVideoBuffer = (u16*)VideoBuffer;
+<br/>
+u16* theBackBuffer = (u16*)BackBuffer;
+<br/>
+#define RGB(r,g,b) (r+(g&lt;&lt;5)+(b&lt;&lt;10))    //Macro to build a color from its parts
+<br/>
+<br/>
+int x = 50;
+<br/>
+int y = 50;
+<br/>
+<br/>
+int canMove()
+<br/>
+{
+<br/>
+   int returnval=0;
+<br/>
+   if( x&gt;=0 &amp;&amp; x&lt;240 &amp;&amp; y&gt;=0 &amp;&amp; y&lt;160 )
+<br/>
+      returnval=1;
+<br/>
+   return returnval;
+<br/>
+}
+<br/>
+<br/>
+void clrscreen()
+<br/>
+{
+<br/>
+    for( int i=0; i&lt;(160*240); i++ )
+<br/>
+    {
+<br/>
+        theVideoBuffer[ i ] = RGB( 256, 0, 0 );
+<br/>
+    }
+<br/>
+}
+<br/>
+<br/>
+void WaitForVsync()
+<br/>
+{
+<br/>
+   while((volatile u16)REG_VCOUNT != 160){}
+<br/>
+}
+<br/>
+<br/>
+void flip()
+<br/>
+{
+<br/>
+  if (REG_DISPCNT &amp; BACKBUFFER)
+<br/>
+  {
+<br/>
+    REG_DISPCNT &amp;= ~BACKBUFFER;
+<br/>
+    theVideoBuffer = theBackBuffer;
+<br/>
+  }
+<br/>
+  else
+<br/>
+  {
+<br/>
+    REG_DISPCNT |= BACKBUFFER;
+<br/>
+    theVideoBuffer = theBackBuffer;
+<br/>
+  }
+<br/>
+}
+<br/>
+<br/>
+void repaint()
+<br/>
+{
+<br/>
+    clrscreen();
+<br/>
+    WaitForVsync();
+<br/>
+    theBackBuffer[ x + (y * 240) ] = RGB( 31, 31, 31 );
+<br/>
+    flip();
+<br/>
+}
+<br/>
+<br/>
+int main()
+<br/>
+{
+<br/>
+   SetMode( SCREENMODE3 | BG2ENABLE );    //Set screen mode
+<br/>
+    repaint();
+<br/>
+<br/>
+   while(1)
+<br/>
+   {
+<br/>
+      if( KEY_DOWN(KEYUP) )
+<br/>
+      {
+<br/>
+         y--;
+<br/>
+         if( canMove()==0 )
+<br/>
+            y++;
+<br/>
+            repaint();
+<br/>
+      }
+<br/>
+      else if( KEY_DOWN(KEYDOWN) )
+<br/>
+      {
+<br/>
+         y++;
+<br/>
+         if( canMove()==0 )
+<br/>
+            y--;
+<br/>
+            repaint();
+<br/>
+      }
+<br/>
+      else if( KEY_DOWN(KEYRIGHT) )
+<br/>
+      {
+<br/>
+         x++;
+<br/>
+         if( canMove()==0 )
+<br/>
+            x--;
+<br/>
+            repaint();
+<br/>
+      }
+<br/>
+      else if( KEY_DOWN(KEYLEFT) )
+<br/>
+      {
+<br/>
+         x--;
+<br/>
+         if( canMove()==0 )
+<br/>
+            x++;
+<br/>
+            repaint();
+<br/>
+      }
+<br/>
+   }
+<br/>
+<br/>
+ return 0;
+<br/>
+}</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#38836 - DekuTree64 - Fri Apr 01, 2005 6:22 am</h4>
+    <div class="postbody"><span class="postbody">Looks like you're expecting the flip operation to swap the actual memory, when it actually only swaps what area of memory is visible.
+<br/>
+<br/>
+What you need to do is, in flip(), swap the 'theVideoBuffer' and 'theBackBuffer' pointers as well, to change where your code writes to.
+<br/>
+<br/>
+When the BACKBUFFER bit in DISPCNT is 0, you see the address 0x6000000 on the screen. When the bit is 1, you see address 0x600A000. I'm guessing that VideoBuffer from your headers points to 0x6000000, and BackBuffer to 0x600A000. Those names are a little misleading, since neither of them is really the front or back buffer all the time.
+<br/>
+<br/>
+So, if the BACKBUFFER bit is 0, you need to point your theBackBuffer variable to 0x600A000, so you're drawing on the hidden one. If BACKBUFFER is 1, theBackBuffer should point to 0x6000000, which will then be hidden.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#39085 - Cearn - Mon Apr 04, 2005 11:19 am</h4>
+    <div class="postbody"><span class="postbody">There is <span style="font-weight: bold">no</span> backbuffer in mode 3. If you really need a backbuffer, you could try modes 4 or 5, or create your own backbuffer <span style="font-weight: bold">in ewram</span>. If you simply define a global array for it, you'll wipe out the whole on GBA's internal memory.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+u16 theBackBuffer[240*160] __attribute__((section(".ewram")));
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Of course, if you do use something like this, you'll have to copy it yourself and I should point out that a normal loop like the one you have for clrscreen actually takes a few frames. <a class="postlink" href="http://forum.gbadev.org/viewtopic.php?t=5140" target="_blank">This thread</a> may be of some help too. Modes 3-5 are nice because they are similar to what you may be used to on a PC, but for actual GBA game programming they may not be the best choice, are you sure you need the bitmap modes?</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

@@ -1,0 +1,282 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Strange compile bug using blgt? - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>ASM > Strange compile bug using blgt?</h2>
+<div id="posts">
+<div class="post">
+    <h4>#167525 - headspin - Tue Mar 17, 2009 1:22 pm</h4>
+    <div class="postbody"><span class="postbody">I've stumbled upon a strange bug that I can't figure out. I have a "C" file that contains a function that I call from an asm file.
+<br/>
+<br/>
+I needed to jump to this function if a value is greater than another. So I use the blgt opcode but it jumps to the wrong address. If I change the blgt to a bl it wont crash. Very strange. So for a comparison I placed the two instructions next to each other like so.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">blgt resetFileStream
+<br/>
+bl resetFileStream</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+And when I compile it looks like this
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">CB00436E   blgt   20125A0h
+<br/>
+FAFFFF7B   blx   20015D8h</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+WTF? Why the different addresses?<br/>_________________<br/><a class="postlink" href="http://headsoft.com.au/index.php?category=warhawk" target="_blank">Warhawk DS</a> | <a class="postlink" href="http://headsoft.com.au/index.php?category=mmll" target="_blank">Manic Miner: The Lost Levels</a> | <a class="postlink" href="http://headsoft.com.au/index.php?category=tdg" target="_blank">The Detective Game</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#167536 - Miked0801 - Tue Mar 17, 2009 5:40 pm</h4>
+    <div class="postbody"><span class="postbody">blx allows swapping to arm/thumb.  Are you trying to call an arm routine from thumb or visa versa?  
+<br/>
+<br/>
+&lt;Pulls out ARM reference&gt;
+<br/>
+<br/>
+Interesting.  BL doesn't exist as an ARM instruction, only BLX.  Therefore the conversion.  Also, there are 2 versions of BLX, one that takes a 24-bit signed immediate value, but doesn't allow conditional execution and a second version that allows condition execution but requires a register to hold the destination with the low bit of the address selecting arm or thumb swap.
+<br/>
+<br/>
+There is also bx which allows acts like the 2nd version of blx (register holding address.)
+<br/>
+<br/>
+Now in Thumb land, blgt and blxgt do exist and work like you think.  Perhaps you are in ARM assembly and are forcing the compiler to make a thumb op-code?  
+<br/>
+<br/>
+Just some thoughts.  Either way, load your destination into a register and it should work either way.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#167538 - headspin - Tue Mar 17, 2009 6:03 pm</h4>
+    <div class="postbody"><span class="postbody">Placing the blgt in thumb I get "Error: Thumb does not support conditional execution".
+<br/>
+<br/>
+The .s file is arm but the c file is aparently thumb. Is this some sort of optimization the compiler does? Is there a compiler directive in c to force it to compile as arm?
+<br/>
+<br/>
+Can you please give an example of "load your destination into a register and it should work either way."? Not sure what you mean by that.<br/>_________________<br/><a class="postlink" href="http://headsoft.com.au/index.php?category=warhawk" target="_blank">Warhawk DS</a> | <a class="postlink" href="http://headsoft.com.au/index.php?category=mmll" target="_blank">Manic Miner: The Lost Levels</a> | <a class="postlink" href="http://headsoft.com.au/index.php?category=tdg" target="_blank">The Detective Game</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#167539 - Mighty Max - Tue Mar 17, 2009 6:05 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Miked0801 wrote:</b></span></td> </tr> <tr> <td class="quote">BL doesn't exist as an ARM instruction</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+It does, it's B with bit l set.
+<br/>
+<br/>
+The Quick Reference lists it as available on all versions.
+<br/>
+<a href="http://www.simplemachines.it/doc/QRC0001H_rvct_v2.1_arm.pdf" target="_blank">http://www.simplemachines.it/doc/QRC0001H_rvct_v2.1_arm.pdf</a><br/>_________________<br/><a class="postlink" href="http://mightymax.org/gbamp_multiboot.html" target="_blank">GBAMP Multiboot</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#167544 - Miked0801 - Tue Mar 17, 2009 9:40 pm</h4>
+    <div class="postbody"><span class="postbody">Yep, just found B,BL on the same page with each other instead of next to BLX where I would expect it.  My bad.
+<br/>
+<br/>
+But if you are calling thumb to arm and back, you need the blx versions of the opcode.  Just load a register with the address and blxgt (or blgtx, not sure which) instead.
+<br/>
+<br/>
+And yes, you can tell the compiler to compile ARM code with a command line switch.  We also have a pragma/section command to do it within a source file.  Yours probably does as well which would allow branching without exchange.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#167545 - Mighty Max - Tue Mar 17, 2009 10:41 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Miked0801 wrote:</b></span></td> </tr> <tr> <td class="quote"> blxgt (or blgtx, not sure which) instead.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+This is the source of the problem. There is no condition code available to blx. (The condition part of the BLX is allways 0xF iirc)
+<br/>
+It needs to BLcc to a BX<br/>_________________<br/><a class="postlink" href="http://mightymax.org/gbamp_multiboot.html" target="_blank">GBAMP Multiboot</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#167552 - headspin - Wed Mar 18, 2009 4:51 am</h4>
+    <div class="postbody"><span class="postbody">Yep I get "Error: selected processor does not support `blxgt resetFileStream'"
+<br/>
+<br/>
+So I still don't understand why bl from arm to thumb works but blgt doesn't. Really frusting the hell out of me.
+<br/>
+<br/>
+Can someone please give an example of the pragma/section I need to place in the C file to make it arm?<br/>_________________<br/><a class="postlink" href="http://headsoft.com.au/index.php?category=warhawk" target="_blank">Warhawk DS</a> | <a class="postlink" href="http://headsoft.com.au/index.php?category=mmll" target="_blank">Manic Miner: The Lost Levels</a> | <a class="postlink" href="http://headsoft.com.au/index.php?category=tdg" target="_blank">The Detective Game</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#167555 - Cearn - Wed Mar 18, 2009 10:55 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>headspin wrote:</b></span></td> </tr> <tr> <td class="quote">So I still don't understand why bl from arm to thumb works but blgt doesn't. Really frusting the hell out of me.</td> </tr></table><span class="postbody">Actually, BL doesn't work either. What you write in assembly isn't <span style="font-style: italic">quite</span> identical to the eventual binary. For example, a LDR R0,=255 is turned into a simple MOV because the assembler recognizes it's allowed and faster. And a cross-code BL is turned into a BLX by the linker because BL can't do a cross-code branch but BX and BLX can. This is how interworking is implemented.
+<br/>
+<br/>
+A BL is converted into a BLX; but a BLGT can't be changed into a BLXGT because, as you've seen, BLX doesn't allow conditionals.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>headspin wrote:</b></span></td> </tr> <tr> <td class="quote">Can someone please give an example of the pragma/section I need to place in the C file to make it arm?</td> </tr></table><span class="postbody">To compile as ARM, give it an .arm.c extension; the template makefiles will take care of the rest. The magic compiler option is -marm (instead of -mthumb), possibly augmented by -mlong-calls -mthumb-interworking .</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#167565 - Miked0801 - Wed Mar 18, 2009 6:24 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+    ldr     r0,functionAddressHere
+<br/>
+    blxgt  r0
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Compiles and runs in ARM.  You need to add 1 to the address if it is a jump to thumb code.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#167569 - Mighty Max - Wed Mar 18, 2009 6:41 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Miked0801 wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+    ldr     r0,functionAddressHere
+<br/>
+    blxgt  r0
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Compiles and runs in ARM.  
+<br/>
+</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Can you check the actual produced opcodes?
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+You need to add 1 to the address if it is a jump to thumb code.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+functionAddresssHere will allready have that bit set (if retrieved from label). Manually adding 1 will produce severe problems. You can orr bit0 instead of increasing if you want it to work with both, the thumb corrected and pure address.<br/>_________________<br/><a class="postlink" href="http://mightymax.org/gbamp_multiboot.html" target="_blank">GBAMP Multiboot</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#167570 - Miked0801 - Wed Mar 18, 2009 6:56 pm</h4>
+    <div class="postbody"><span class="postbody">C Code to test
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#include &lt;nitro/code32.h&gt;
+<br/>
+asm void foo()
+<br/>
+{
+<br/>
+   ldr   r0,=foo2
+<br/>
+   blxgt r0
+<br/>
+}
+<br/>
+#include &lt;nitro/code16.h&gt;
+<br/>
+int foo2()
+<br/>
+{
+<br/>
+   int i = 0;
+<br/>
+   i++;
+<br/>
+<br/>
+   return i;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Assembler output:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+foo:
+<br/>
+0xe59f0000    ldr r0,[pc]
+<br/>
+0xc12fff30    blxgt r0
+<br/>
+0x02066341    &lt;DATA&gt; 0x02066341
+<br/>
+<br/>
+foo2:
+<br/>
+opcodes...
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+And you are right, the label was already had the low bit set without need of manual intervention.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#167572 - Mighty Max - Wed Mar 18, 2009 7:12 pm</h4>
+    <div class="postbody"><span class="postbody">Ah yes ok, only that blx &lt;address&gt; was unconditioned, not the blx &lt;reg&gt;
+<br/>
+Wrong thing remembered by me.<br/>_________________<br/><a class="postlink" href="http://mightymax.org/gbamp_multiboot.html" target="_blank">GBAMP Multiboot</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#167596 - headspin - Thu Mar 19, 2009 4:18 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Miked0801 wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+    ldr     r0,functionAddressHere
+<br/>
+    blxgt  r0
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Compiles and runs in ARM.  You need to add 1 to the address if it is a jump to thumb code.</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I tried that and get "Error: selected processor does not support `blxgt r0'". At the top of the file I have defined .arm so it should be compiled as arm.
+<br/>
+<br/>
+Also I tried adding .arm.c to the end of the "C" file but now I seem to have alignment issues. I tried adding "#pragma align 4" to the top of the file but I get "warning: ignoring #pragma align".
+<br/>
+<br/>
+I can't seem to crack this one!<br/>_________________<br/><a class="postlink" href="http://headsoft.com.au/index.php?category=warhawk" target="_blank">Warhawk DS</a> | <a class="postlink" href="http://headsoft.com.au/index.php?category=mmll" target="_blank">Manic Miner: The Lost Levels</a> | <a class="postlink" href="http://headsoft.com.au/index.php?category=tdg" target="_blank">The Detective Game</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#167598 - Mighty Max - Thu Mar 19, 2009 5:31 pm</h4>
+    <div class="postbody"><span class="postbody">its only available on v5 Architecture (and up), so not on the arm7 if you are trying it there (arm7 is v4)<br/>_________________<br/><a class="postlink" href="http://mightymax.org/gbamp_multiboot.html" target="_blank">GBAMP Multiboot</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#167599 - headspin - Thu Mar 19, 2009 5:33 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Mighty Max wrote:</b></span></td> </tr> <tr> <td class="quote">its only available on v5 Architecture (and up), so not on the arm7 if you are trying it there (arm7 is v4)</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I'm compiling this on the arm9 (in my makefile I have "-march=armv5te -mtune=arm946e-s" CFLAGS)<br/>_________________<br/><a class="postlink" href="http://headsoft.com.au/index.php?category=warhawk" target="_blank">Warhawk DS</a> | <a class="postlink" href="http://headsoft.com.au/index.php?category=mmll" target="_blank">Manic Miner: The Lost Levels</a> | <a class="postlink" href="http://headsoft.com.au/index.php?category=tdg" target="_blank">The Detective Game</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#167607 - Cearn - Thu Mar 19, 2009 8:03 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>headspin wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+Also I tried adding .arm.c to the end of the "C" file but now I seem to have alignment issues. I tried adding "#pragma align 4" to the top of the file but I get "warning: ignoring #pragma align".</td> </tr></table><span class="postbody">
+<br/>
+AFAIK, pragmas are rather compiler specific. For GCC, the compiler magic for alignment is done with attributes, specifically __attribute__((align(n) )). Or __attribute__((aligned(n) )), I always forget which. Fortunately there should be a macro for it as well: try adding ALIGN(4) after the definition.
+<br/>
+<br/>
+What is causing the alignment error anyway?
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>headspin wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Mighty Max wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+its only available on v5 Architecture (and up), so not on the arm7 if you are trying it there (arm7 is v4)</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I'm compiling this on the arm9 (in my makefile I have "-march=armv5te -mtune=arm946e-s" CFLAGS)</span></td> </tr></table><span class="postbody">What about ASFLAGS? Since this is assembly, that's where you should be looking.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

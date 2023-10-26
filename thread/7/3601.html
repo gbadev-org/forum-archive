@@ -1,0 +1,308 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Strange cast issue - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>C/C++ > Strange cast issue</h2>
+<div id="posts">
+<div class="post">
+    <h4>#22505 - sgeos - Wed Jun 23, 2004 4:21 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#define VRAM      ((u16*)0x6000000)   // BG Tile VRAM, Tilemaps, Bitmaps
+<br/>
+#define TILE16_SIZE   0x20   // 16 color tile
+<br/>
+#define SBB_SIZE   0x800   // Screen Base Block Size
+<br/>
+#define CBB_SIZE   0x4000   // Character Base Block Size
+<br/>
+<br/>
+/***   This Function does not work without a cast
+<br/>
+ */
+<br/>
+void load_tiles(const void *source, u32 length, int block, int start_tile)
+<br/>
+{
+<br/>
+   u16 dma_count = length / 4;
+<br/>
+   void *destination = (void *)
+<br/>
+      ((int)VRAM + block * CBB_SIZE + start_tile * TILE16_SIZE);  // Works
+<br/>
+//      (VRAM + block * CBB_SIZE + start_tile * TILE16_SIZE);  // Fails
+<br/>
+<br/>
+   if (dma_count &lt; 1)
+<br/>
+      dma_count = 1;
+<br/>
+   dma_copy(3, source, destination, dma_count, 32 /* bit */);
+<br/>
+}
+<br/>
+<br/>
+/***   This Function *does work* without a cast
+<br/>
+ */
+<br/>
+void load_tilemap(const void *source, u32 length, int block, int start_char)
+<br/>
+{
+<br/>
+   // FIXME: start_char * map_cell_size
+<br/>
+   u16 dma_count = length / 4;
+<br/>
+   void *destination = (void *)
+<br/>
+      (VRAM + block * SBB_SIZE + start_char * TILE16_SIZE);
+<br/>
+<br/>
+   if (dma_count &lt; 1)
+<br/>
+      dma_count = 1;
+<br/>
+   dma_copy(3, source, destination, dma_count, 32 /* bit */);
+<br/>
+}</td> </tr></table><span class="postbody">It strikes me as odd that the first function doesn't work without a cast, while the second one does.
+<br/>
+<br/>
+-Brendan</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#22506 - tepples - Wed Jun 23, 2004 4:42 am</h4>
+    <div class="postbody"><span class="postbody">In C, adding an int to a pointer will add the int <span style="font-style: italic">times the size of what the pointer points to</span> to the pointer. You can get rid of the cast if you express CBB_SIZE and TILE16_SIZE in u16s rather than in bytes, that is, as 0x2000 and 0x10.
+<br/>
+<br/>
+Or you can use one of my macros to compute tile addresses:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">/* compute the address of a pattern table aka CHR base block */
+<br/>
+#define PATRAM(x) ((u32 *)(0x06000000 | ((x) &lt;&lt; 14)))
+<br/>
+/* compute the address of a 4-bit tile in VRAM */
+<br/>
+#define PATRAM4(x, c) ((u32 *)(0x06000000 | (((x) &lt;&lt; 14) + ((c) &lt;&lt; 5)) ))
+<br/>
+/* compute the address of an 8-bit tile in VRAM */
+<br/>
+#define PATRAM8(x, c) ((u32 *)(0x06000000 | (((x) &lt;&lt; 14) + ((c) &lt;&lt; 6)) ))
+<br/>
+/* compute the address of a tile in sprite cel VRAM */
+<br/>
+#define SPR_VRAM(x) ((u32 *)(0x06010000 | ((x) &lt;&lt; 5)))
+<br/>
+<br/>
+typedef u16 NAMETABLE[32][32];
+<br/>
+/* compute the address of a nametable aka screen base block; example: MAP[31] */
+<br/>
+#define MAP ((NAMETABLE *)0x06000000)
+<br/>
+<br/>
+</td> </tr></table><span class="postbody"><br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#22507 - sgeos - Wed Jun 23, 2004 5:32 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote">In C, adding an int to a pointer will add the int <span style="font-style: italic">times the size of what the pointer points</span>...</td> </tr></table><span class="postbody">Right.  I forgot about that.  The second function was actually broken, but looked fine because I passed zeros to it.  Thanks!
+<br/>
+<br/>
+-Brendan</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#22508 - jma - Wed Jun 23, 2004 5:54 am</h4>
+    <div class="postbody"><span class="postbody">You can get around it, of course, by just casting your pointer as a (char*).
+<br/>
+<br/>
+Jeff<br/>_________________<br/><a href="mailto:massung@gmail.com">massung@gmail.com</a>
+<br/>
+<a href="http://www.retrobyte.org" target="_blank">http://www.retrobyte.org</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#22511 - sgeos - Wed Jun 23, 2004 6:49 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>jma wrote:</b></span></td> </tr> <tr> <td class="quote">You can get around it, of course, by just casting your pointer as a (char*).</td> </tr></table><span class="postbody">I could set the void pointer to VRAM and then add to it.  That will probably be a little clearer.
+<br/>
+<br/>
+-Brendan</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#22528 - sajiimori - Wed Jun 23, 2004 6:21 pm</h4>
+    <div class="postbody"><span class="postbody">No, you can't add to a void*.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#22534 - Miked0801 - Wed Jun 23, 2004 9:21 pm</h4>
+    <div class="postbody"><span class="postbody">Right, only non-void types have a size associated with them.  How big is a void pointer?  You should avoid void pointers as much as possible anways as they by pass the weak type cast checking C already uses.  The stuff that's still there is there for a reason!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#22540 - sgeos - Thu Jun 24, 2004 12:37 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sajiimori wrote:</b></span></td> </tr> <tr> <td class="quote">No, you can't add to a void*.</td> </tr></table><span class="postbody">I did.  It works.  I am fairly sure that a void pointer and a pointer to char are functionally the same, or at least very close.  I'd have to post to comp.lang.c or read the standard to be sure.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Miked0801 wrote:</b></span></td> </tr> <tr> <td class="quote">Right, only non-void types have a size associated with them. How big is a void pointer?</td> </tr></table><span class="postbody">The pointer, or the value it pointes to?  One is guarnateed to be able to cast any non-void pointer to a void-pointer and back again without loss of information.  There no is such guarnatee when dealing when casting between other types of pointers.  All pointers on the GBA are going to be 32-bits.  A void pointer points to an arbitrary memory address.  On the GBA that is going to be an 8-bit unit of data.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Miked0801 wrote:</b></span></td> </tr> <tr> <td class="quote">You should avoid void pointers as much as possible anways as they by pass the weak type cast checking C already uses. The stuff that's still there is there for a reason!</td> </tr></table><span class="postbody">I agree.  Uning void pointers recklessly and for no reason is not a good idea.  Only when one needs a pointer to an <span style="font-weight: bold">arbitrary memory address</span>, should a void pointer be used.
+<br/>
+<br/>
+My DMA function accepts void pointers, as I believe it should.  You are right in that the functions that use DMA should not use void pointers unless they have a reason to do so.  In that case, which of these is easer to read and understand?
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void *destination = (void *)VRAM;
+<br/>
+destination += block * CBB_SIZE + start_tile * TILE16_SIZE;
+<br/>
+<br/>
+u32 *destination = PATRAM4(block, start_tile);</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+<span style="font-style: italic">Activate <span style="font-weight: bold">Super Parse Mode</span> here.</span>  If I need to have a function return a function pointer to a function with the same parameter types and return types, I return a void pointer.  <span style="font-style: italic">/Super Parse Mode.</span>  I believe that this problem can also be solved by typedef'ing the function pointer, although I have never tried that.
+<br/>
+<br/>
+C is a language that lets the programmer do whatever he wants to do if he knows what he is doing.  C also allows a programmer to do whatever he thinks he wants to do if he does not know what he is doing.  If you know what you are doing, you do what it takes to shut off the warnings.
+<br/>
+<br/>
+A void pointer could be used as a single data spot for ISRs to get "parameters".  The interrupt <span style="font-weight: bold">setup</span> routine sets the pointer, loads the ISR(s) and then enables interrupts.  The ISR takes the void pointer and casts it to a useful type.
+<br/>
+<br/>
+-Brendan</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#22542 - sgeos - Thu Jun 24, 2004 12:48 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">/* compute the address of a 4-bit tile in VRAM */
+<br/>
+#define PATRAM4(x, c) ((u32 *)(0x06000000 | (((x) &lt;&lt; 14) + ((c) &lt;&lt; 5)) ))
+<br/>
+/* compute the address of an 8-bit tile in VRAM */
+<br/>
+#define PATRAM8(x, c) ((u32 *)(0x06000000 | (((x) &lt;&lt; 14) + ((c) &lt;&lt; 6)) ))</td> </tr></table><span class="postbody"></span></td> </tr></table><span class="postbody">It took me a while to figure out <span style="font-style: italic">exactly what</span> is 4 and 8 bits.  (The number of bits used to represent a pixel.)  I suggest noting that those are 16 color and 256 color tile entries.
+<br/>
+<br/>
+-Brendan</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#22562 - sajiimori - Thu Jun 24, 2004 6:18 am</h4>
+    <div class="postbody"><span class="postbody">I just discovered that arithmetic on void pointers is a GCC extension.  ANSI C disallows it, as does GCC when compiling as C++.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+One is guarnateed to be able to cast any non-void pointer to a void-pointer and back again without loss of information. There no is such guarnatee when dealing when casting between other types of pointers.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Yes there is, unless you're referring to casting overloads in C++.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+All pointers on the GBA are going to be 32-bits. A void pointer points to an arbitrary memory address. On the GBA that is going to be an 8-bit unit of data.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Even GCC (with all its extensions) disagrees with you here.  Void pointers point to data of no particular size.  If you don't believe me, try dereferencing one -- GCC refuses to return data of no particular size.  Unfortunately, this is inconsistent with the arithmetic extension which treats void pointers like char pointers.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+Only when one needs a pointer to an arbitrary memory address, should a void pointer be used. 
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+All pointers can point to arbitrary memory addresses.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+Activate Super Parse Mode here. If I need to have a function return a function pointer to a function with the same parameter types and return types, I return a void pointer. /Super Parse Mode. I believe that this problem can also be solved by typedef'ing the function pointer, although I have never tried that.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+You neither need to return a void pointer or typedef the function type.  You can return a pointer of any function type at will, by casting if necessary.  However, the syntax is hairy.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+If you know what you are doing, you do what it takes to shut off the warnings.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Do you mean fixing the things that caused warnings, or disabling warnings in the compiler?  I can agree with the former, but not the latter.  Warnings are very helpful, especially when you're trying to write something portable (because other compilers might not be so generous).</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#22564 - sgeos - Thu Jun 24, 2004 10:08 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sajiimori wrote:</b></span></td> </tr> <tr> <td class="quote">I just discovered that arithmetic on void pointers is a GCC extension.  ANSI C disallows it, as does GCC when compiling as C++.</td> </tr></table><span class="postbody">Fair enough.  gcc gives me a "warning: wrong type argument to increment".
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Yes there is, unless you're referring to casting overloads in C++.</td> </tr></table><span class="postbody">I was specifically talking about C.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sajiimori wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">A void pointer points to an arbitrary memory address. On the GBA that is going to be an 8-bit unit of data.</td> </tr></table><span class="postbody">Even GCC (with all its extensions) disagrees with you here.  Void pointers point to data of no particular size.  If you don't believe me, try dereferencing one -- GCC refuses to return data of no particular size.  Unfortunately, this is inconsistent with the arithmetic extension which treats void pointers like char pointers.</span></td> </tr></table><span class="postbody">You are right.  A void pointer contains an arbitrary memory address.  Without a way of interperting that address, the data is of no particular size.  You may find this interesting:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#include &lt;stdio.h&gt;
+<br/>
+<br/>
+int main(void)
+<br/>
+{
+<br/>
+        char *hello = "Hello";
+<br/>
+        void *world = "World";
+<br/>
+<br/>
+        printf("%s %s!\n", hello, world);
+<br/>
+        return 0;
+<br/>
+}
+<br/>
+<br/>
+$ gcc -Wall -ansi -pedantic -o vptest vptest.c
+<br/>
+vptest.c: In function `main':
+<br/>
+vptest.c:8: warning: char format, void arg (arg 3)
+<br/>
+<br/>
+$ ./vptest.exe
+<br/>
+Hello World!
+<br/>
+<br/>
+$</td> </tr></table><span class="postbody">I'm assuming that world is implicitly cast to a pointer to char.  The initialization does not issue a warning.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Only when one needs a pointer to an arbitrary memory address, should a void pointer be used. 
+<br/>
+</td> </tr></table><span class="postbody">All pointers can point to arbitrary memory addresses.</span></td> </tr></table><span class="postbody">Fair enough.  A void pointer should be used only when one does not know or care what the pointer points to?  (At least in "this" body of code.)
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">You neither need to return a void pointer or typedef the function type.  You can return a pointer of any function type at will, by casting if necessary.  However, the syntax is hairy.
+<br/>
+</td> </tr></table><span class="postbody">Please provide an example.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">If you know what you are doing, you do what it takes to shut off the warnings.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Do you mean fixing the things that caused warnings, or disabling warnings in the compiler?  I can agree with the former, but not the latter.  Warnings are very helpful, especially when you're trying to write something portable (because other compilers might not be so generous).</span></td> </tr></table><span class="postbody">The former.  The latter only requires knowing a little about your compiler.
+<br/>
+<br/>
+-Brendan</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

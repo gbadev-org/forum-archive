@@ -1,0 +1,244 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>replace the polling of the vblank with a halt function - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > replace the polling of the vblank with a halt function</h2>
+<div id="posts">
+<div class="post">
+    <h4>#16553 - NeoGeo - Thu Feb 19, 2004 2:52 pm</h4>
+    <div class="postbody"><span class="postbody">I want to replace the polling of the vblank with a halt function to save some power(batteries)..
+<br/>
+and I need detailed instructions on how to do this..can anyone please help me with this information?
+<br/>
+<br/>
+Thanks in advance :)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#16559 - jma - Thu Feb 19, 2004 5:19 pm</h4>
+    <div class="postbody"><span class="postbody">Calling SWI 2 will halt the GBA until an interrupt fires. If you want to use this instead of a VBLANK, you need to use a VBLANK interrupt. Keep in mind, though, that any interrupt will un-halt the GBA, so you'll need to check and see if the interrupt was a VBLANK. If it wasn't HALT again...
+<br/>
+<br/>
+Jeff
+<br/>
+<br/>
+<span style="font-style: italic">Edit: also, how hard is it to look just two posts down? <a href="http://forum.gbadev.org/viewtopic.php?t=2872" target="_blank">http://forum.gbadev.org/viewtopic.php?t=2872</a></span><br/>_________________<br/><a href="mailto:massung@gmail.com">massung@gmail.com</a>
+<br/>
+<a href="http://www.retrobyte.org" target="_blank">http://www.retrobyte.org</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#16563 - DekuTree64 - Thu Feb 19, 2004 6:46 pm</h4>
+    <div class="postbody"><span class="postbody">SWI 0x5 is specitically designed for this. Actually it's just a special case of SWI 4, which lets you pick and choose the interrupt(s) to wait for. 5 sets to wait for VBlank for you, and then does the same thing. Be sure to write your REG_IF to 0x3007ff8 as well as writing it back to REG_IF like normal or it will never return.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#16564 - poslundc - Thu Feb 19, 2004 6:59 pm</h4>
+    <div class="postbody"><span class="postbody">Does this mean that in addition to un-halting the CPU, we can expect the interrupt to also launch the code at 0x03007FFC? (Which is when we would then be expected to write the clear-bit back to both REG_IF and 0x03007FF8?)
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#16566 - DekuTree64 - Thu Feb 19, 2004 7:44 pm</h4>
+    <div class="postbody"><span class="postbody">Yeah, interrupts keep executing like normal. Otherwise your HBlank functions would quit running mid-frame whenever you called VSync.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#16571 - Lord Graga - Thu Feb 19, 2004 9:46 pm</h4>
+    <div class="postbody"><span class="postbody">In your InitInterrupts:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">REG_IE = BIT00;</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+For WaitForVSync there's two ways to do it. If you DO NOT use any other interrupts, then just do the SWI call. Else use this code:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void WaitForVSync(void)
+<br/>
+{
+<br/>
+   while(*((volatile unsigned short*)0x04000004) &amp; (1&lt;&lt;0)) __asm{ swi 0x020000};
+<br/>
+   while(!((*((volatile unsigned short*)0x04000004) &amp; (1&lt;&lt;0)))) __asm{ swi 0x020000};
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I think the ASM call is wrong for GCC.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#16805 - KevinW - Wed Feb 25, 2004 5:55 am</h4>
+    <div class="postbody"><span class="postbody">I assume (as in most cases) you need to do this simply to know when to do a page-flip?
+<br/>
+I.E. You?ve just drawn on page0 of the screen while displaying page1 and you are ready to show page0?
+<br/>
+It also applies to tile modes as well where you are waiting for the vblank period to safely do some title/screen operations.
+<br/>
+<br/>
+The most efficient setup in this scenario is to use an interrupt routine to switch the page over for you.
+<br/>
+If you just directly halt() then you are wasting up to 1/60th?ish cycles you could have used someplace else!  
+<br/>
+Your basically clamping your game loop down to this speed as well.
+<br/>
+<br/>
+And chances are if you are doing any advanced (meaning ?advanced?) game you will need interrupt features anyhow for sound, timer(s), etc.
+<br/>
+<br/>
+Think of it in terms of your game loop..
+<br/>
+<br/>
+In my setup I have an interrupt routine to do amongst other things handle the incoming vblank interrupt.
+<br/>
+I have a routine ?PageFlip()? which turns on the vblank IRQ enable bits and sets a ?vblank queue flag?.
+<br/>
+This basically triggers the vblank routine to flip to the next page automatically. Resets the flag, and then turns off the vbank IRQ bits automatically.
+<br/>
+This way after I?m done drawing my page I ?trigger? the page flip and go off and do AI or something else before I start drawing the next page.
+<br/>
+<br/>
+Unless you are doing something really tricky (like scaling down the screen and moving the virtual screen space around) you only get ?double buffering?, it would be nice to have ?triple buffering? then you could draw on a third page while you are waiting for the 2nd one to flip.
+<br/>
+<br/>
+Now it?s possible if your loops come back to where you are ready to draw again and the page hasn?t flipped yet (less then 1/60th of a second passed) you have to check our ?vblank queue flag? first and wait for it to clear.   I use a ?Wait4PageFlip()? function to just sit in a loop till the flag is cleared, but perhaps even more efficient is a judicial use of the Halt() here.  Just make sure you don?t turn off the vlank IRQ bit then so the halt will work, our vbank handler will just examine the ?vblank queue flag? alone.
+<br/>
+<br/>
+A game loop using an triggered interrupt solution.
+<br/>
+<br/>
+1.	Draw on (page ^ 1).
+<br/>
+2.	Trigger page flip for (page ^ 1)
+<br/>
+3.	Go handle inputs, AI, game logic, etc.
+<br/>
+4.	Hang in a loop until trigger flag is clear
+<br/>
+5.	back to #1 again.
+<br/>
+<br/>
+Back on our hardware interrupt handler for vbank on the sideline you simply have:
+<br/>
+<br/>
+1.	If ?vblank queue flag? set then (page = page ^ 1).
+<br/>
+2.	Clear vblank IRQ flags.
+<br/>
+3.	back to handle other interrupts..</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#16806 - poslundc - Wed Feb 25, 2004 6:04 am</h4>
+    <div class="postbody"><span class="postbody">Kevin,
+<br/>
+<br/>
+1. The whole point of using any variation of the CPU-halt technique is to conserve battery power. Hanging in a loop instead of halting the CPU defeats this purpose.
+<br/>
+<br/>
+2. Why would you assume that Mode 4 or 5 was being used? Game loops for any mode are almost always based on VBlank timing.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#16807 - KevinW - Wed Feb 25, 2004 6:52 am</h4>
+    <div class="postbody"><span class="postbody">Dan, please don't waste anyone?s time (in particular mine) with "noise" like your post.
+<br/>
+Your points, or rebuttal, as you like to write them are very subjective.
+<br/>
+<br/>
+??
+<br/>
+1. The whole point of using any variation of the CPU-halt technique is to conserve battery power. Hanging in a loop instead of halting the CPU defeats this purpose. 
+<br/>
+<br/>
+2. Why would you assume that Mode 4 or 5 was being used? Game loops for any mode are almost always based on VBlank timing. 
+<br/>
+<br/>
+Dan. 
+<br/>
+?
+<br/>
+<br/>
+I see he was talking about ?battery power?.    Maybe a bit off topic, the reason I took the time to post this was that I see people do it this way all the time because it is the ?known? and common way of syncing to the screen.   I see it in demos and in some source code all the time (for the GBA).  
+<br/>
+It?s the old way people would sync on the PC since the PC lacked a reliable vblank IRQ.   People came up with tricks such as syncing an internal timer to the vblank.   And now with the advancements this is all done transparently for you in DirectX.
+<br/>
+<br/>
+The irrefutable fact is that using the ?wait for vblank? method CAN cause your program to wait up to almost 1/60th of a second.  In particular if your game loop does or occasionally takes longer then 1/60th of a second to execute.
+<br/>
+The ?old? method works fine if your game loop can consistently be under 1/60th of a second.  I?m talking beyond your ?How to program a computer game in 24 hours? type book.
+<br/>
+<br/>
+Not everyone is doing traditional tile based games on the GBA.
+<br/>
+Some are doing software based 2D/3D rendering, video codec?s, etc., that would be hampered from the wait till vblank type syncing.
+<br/>
+<br/>
+-Kevin</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#16823 - poslundc - Wed Feb 25, 2004 4:23 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Dan, please don't waste anyone?s time (in particular mine) with "noise" like your post.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Please don't attack my posts with childish insults. If you disagree with anything I say then I welcome your reply, but if your intent is to sling mud the moment someone disagrees with you then we have a problem, because I am very conscientious about every post I make and I'm not about to change my posting habits because I am walking on eggshells around you.
+<br/>
+<br/>
+In short, if you find my posts to be <span style="font-style: italic">a waste of everyone's time (in particular yours)</span>, then don't respond to them.
+<br/>
+<br/>
+That said, the post that I was responding to seemed to be in such broad terms (I still have no idea how you managed to stray from a question of how to do a simple SWI routine into a spiel about <span style="font-style: italic">page-flipping</span> of all things) that some clarification was in order. Your response to my post has given no such clarification, but instead gone into another totally unrelated spiel.
+<br/>
+<br/>
+Of course waiting for VBlank can make your program wait for almost 1/60th of a second. Why do you think he was asking how to halt the CPU and conserve battery power in the meantime?
+<br/>
+<br/>
+Of course it works if the game loop is consistently under 1/60th of a second. Do you think he would be asking how to halt the CPU if his game loop took longer than that?
+<br/>
+<br/>
+Of course not everyone is using the tile-based modes. But what relevance is the mode he's using to anything in the thread in the first place?
+<br/>
+<br/>
+Sorry if these questions seem like "noise" to you, but you aren't the only one trying to sift your way through noisy posts.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#16828 - Miked0801 - Wed Feb 25, 2004 6:08 pm</h4>
+    <div class="postbody"><span class="postbody">My turn.  KevinW, hi!  I'm going to try real hard not to insult you now.
+<br/>
+<br/>
+You can use the interrupt halt routine to clamp your game to any recipricol amount (1/60, 1/30, 1/20, 1/15...)  All you need to do is count vblanks elapsed and sleep again if enough time hasn't occured.  Assuming this is done only for a page-flip routine is, well, naive at least.  Nothing in the original post(s) state anything about page-flipping timings.  He just wants to halt between gameloops.  My interpretation (and Dan's) is that he's trying to clamp his gameloop to a constant game speed and wants to save battery life in the process.  This is exactly what the SWI call is for.  GBA wake ups, checks vblanks elapsed, goes back to sleep if not time yet.  Saves batteries and makes the game run at a constant speed.
+<br/>
+<br/>
+If you want to give an example of your "advanced" knowledge of page-flipping, start a new post and welcome input - don't go insulting someone for no reason.  
+<br/>
+<br/>
+See, I managed to make a whole post without flaming, but boy it was hard ;)</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

@@ -1,0 +1,203 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>mode switching - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > mode switching</h2>
+<div id="posts">
+<div class="post">
+    <h4>#176695 - GLaDOS - Thu Sep 15, 2011 5:16 am</h4>
+    <div class="postbody"><span class="postbody">Most of my game is in mode 0, but I want to use mode 3 for the victory screen. However, I can't get mode switching to work. No matter what I do, I get random garbage unless the game starts in mode 3 and never switches away. If I start in mode 0 and later switch to mode 3, it refuses to display anything.
+<br/>
+<br/>
+Is this a problem with the emulator (VBA-M)? Is there some caveat to mode switching? What am I doing wrong?
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#include "GBA/mylib.h"
+<br/>
+#include "GBA/bgmanager.h"
+<br/>
+#include "GBA/spritemanager.h"
+<br/>
+#include "physics.h"
+<br/>
+#include "input.h"
+<br/>
+<br/>
+#include "GBA/dma.h"
+<br/>
+#include "GBA/victory.h"
+<br/>
+<br/>
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+<br/>
+void setVictoryScreen()
+<br/>
+{
+<br/>
+    REG_DISPCNT = Mode(3) | BG2_ENABLE;
+<br/>
+<br/>
+    DMA[3].src = VICTORY;
+<br/>
+    DMA[3].dst = (vu16*)(0x06000000); //Will actually overwrite 96kb worth of memory, not just 1 block
+<br/>
+    DMA[3].cnt = VICTORY_SIZE/2 | DMA_ON | DMA_NOW | DMA_32 | DMA_SOURCE_INCREMENT | DMA_DESTINATION_INCREMENT;
+<br/>
+<br/>
+    REG_DISPCNT = Mode(3) | BG2_ENABLE;
+<br/>
+}
+<br/>
+<br/>
+int main()
+<br/>
+{
+<br/>
+    //REG_DISPCNT = Mode(3) | BG2_ENABLE;
+<br/>
+    //REG_DISPCNT = Mode(0) | BG0_ENABLE | SPRITES_ENABLE | SPRITE_INDEXING_1D | WIN0_ENABLE;
+<br/>
+    REG_DISPCNT = Mode(0) | BG0_ENABLE | SPRITES_ENABLE | SPRITE_INDEXING_1D;
+<br/>
+    //REG_DISPCNT = Mode(1) | BG0_ENABLE | BG1_ENABLE | SPRITES_ENABLE | SPRITE_INDEXING_1D;
+<br/>
+<br/>
+    //Set Background Control Register
+<br/>
+    BG_Init();
+<br/>
+    LoadSpriteTiles();
+<br/>
+    HideSprites(0);   //Must be called since initially, uninitialized sprites are visible
+<br/>
+<br/>
+    newGame();
+<br/>
+<br/>
+    //Start game loop
+<br/>
+    //while (!victory())
+<br/>
+    while (false)
+<br/>
+    {
+<br/>
+        update(pollLR(), pollUD(), pollA(), pressedZ(), pressedX(), pollUp());
+<br/>
+        if (pressedEnter()) {restartLevel();}
+<br/>
+        if (pressedEsc()) {newGame();}
+<br/>
+<br/>
+        while(SCANLINECOUNTER &gt;= 160);
+<br/>
+        while(SCANLINECOUNTER &lt; 160);
+<br/>
+        draw();
+<br/>
+    }
+<br/>
+<br/>
+    while(SCANLINECOUNTER &gt;= 160);
+<br/>
+    while(SCANLINECOUNTER &lt; 160);
+<br/>
+    setVictoryScreen();
+<br/>
+    while (1) {}
+<br/>
+}
+<br/>
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176696 - Dwedit - Thu Sep 15, 2011 5:37 am</h4>
+    <div class="postbody"><span class="postbody">Are you doing any other writes to DISPCNT through DMA or interrupts?
+<br/>
+<br/>
+<br/>
+Edit: Use the "MODE_0" or "MODE_3" macro, I have no idea what the "Mode()" macro is.  The Mode() macro doesn't even exist in Libgba.
+<br/>
+MODE_0 and MODE_3 are defined as 0 and 3.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"><br/><br/>Last edited by Dwedit on Thu Sep 15, 2011 5:41 am; edited 1 time in total</span></div>    
+</div>
+<div class="post">
+    <h4>#176697 - GLaDOS - Thu Sep 15, 2011 5:40 am</h4>
+    <div class="postbody"><span class="postbody">Those are the only writes to DISPCNT and I don't have any interrupts at all. I suppose I could have messed up somewhere and accidently written over the control registers with a DMA but I doubt it.
+<br/>
+<br/>
+Also, Mode(x) is this
+<br/>
+inline u16 Mode(u16 mode) {return mode;}
+<br/>
+<br/>
+<br/>
+Edit: Nevermind I figured out the problem. For some reason, REG_DISPCNT is not declared volatile in the set of definitions I was using. Anyway, it's working now.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176698 - ant512 - Thu Sep 15, 2011 9:05 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>GLaDOS wrote:</b></span></td> </tr> <tr> <td class="quote">Also, Mode(x) is this
+<br/>
+inline u16 Mode(u16 mode) {return mode;}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Interesting - the function doesn't do anything, and as it's inlined it'll just disappear and leave the parameter on its own.  Is that a way to have the code self-document the magic numbers for mode without using defines?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176699 - GLaDOS - Thu Sep 15, 2011 1:43 pm</h4>
+    <div class="postbody"><span class="postbody">Yes. I figured it has the advantage over a plain macro in that it forces the correct type.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176700 - ant512 - Thu Sep 15, 2011 2:23 pm</h4>
+    <div class="postbody"><span class="postbody">Neat trick!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176703 - Dwedit - Thu Sep 15, 2011 5:24 pm</h4>
+    <div class="postbody"><span class="postbody">You need to declare inline methods as "static", otherwise the compiler will also export a full copy into the object code.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176704 - ant512 - Thu Sep 15, 2011 6:27 pm</h4>
+    <div class="postbody"><span class="postbody">Edit: Never mind, brain not working.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176707 - Miked0801 - Thu Sep 15, 2011 10:22 pm</h4>
+    <div class="postbody"><span class="postbody">Keep in mind that mode changes take a few scanlines to complete.  If you are not in VBlank or have the screen in a state where it won't show, you will get visual artifacting.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176709 - GLaDOS - Thu Sep 15, 2011 10:50 pm</h4>
+    <div class="postbody"><span class="postbody">I'm surprised you're allowed to change it outside of vblank at all. I would have figured that the hardware locked it or something.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176710 - DiscoStew - Fri Sep 16, 2011 5:01 am</h4>
+    <div class="postbody"><span class="postbody">I remember having done something like this a long time ago when I began making a BG library, where I could switch modes outside of the VBlank without garbage/artifacts showing up. I'd have to go digging through all my old CD backups to find the actual code, but if I remember how it did it, I did this...
+<br/>
+<br/>
+I had every available layer active from the get-go, but setting all layers not in actual use to have both their character and screen base blocks set to 0 (meaning the beginning of VRAM), and reserving a certain amount of VRAM at the beginning to be completely zeroed out (I think about 2KB as that is the minimum of a 256x256 map). Essentially, the layers would be in use, but since all the data being used is set to 0, it would result in tiles filled with index 0 (being the transparent pixel), and the map of the layer using the first tile, which would be transparent already. 
+<br/>
+<br/>
+If I find my code, I'll post it. It might have been only for non-bitmap modes, but I'm not sure.<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#176715 - Miked0801 - Fri Sep 16, 2011 5:53 pm</h4>
+    <div class="postbody"><span class="postbody">We did this for Digimon Racing.  The ground was done as a Mode7 (mode1 or 2) while we had the sky done in Mode 0 for more chars.  The interface between the two was covered up with sprites or made a color that would not show corruption.
+<br/>
+<br/>
+I honestly don't remember if we shipped this way or swapped to something else though, because we also had to support interruptable multiplayer communication via the propriatary RFU unit.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

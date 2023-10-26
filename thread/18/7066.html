@@ -1,0 +1,163 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Writing SRAM failed - 0x80 or 0x8080 ? - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Writing SRAM failed - 0x80 or 0x8080 ?</h2>
+<div id="posts">
+<div class="post">
+    <h4>#56109 - Didou - Thu Oct 06, 2005 7:09 am</h4>
+    <div class="postbody"><span class="postbody">Hi,
+<br/>
+<br/>
+I'm currently trying to add scores saving in ReboNDS. But I've tried tons of things, what I get is either no save or a frozen DS...
+<br/>
+However I tried to follow examples...
+<br/>
+<br/>
+First of all, amongst threads, Wiki and tutos, it appeard that some advised to write WAIT_CR with the mask <span style="font-weight: bold">0x8080</span> and some others with only <span style="font-weight: bold">0x80</span>. So which one is the right one ?
+<br/>
+<br/>
+Following the code that freeze my DS when it is reached...
+<br/>
+Any idea ? I must miss something... While debuging it appeared that the crashing code is exactly the bytes copy in the SRAM, not the WAIT_CR modifications.
+<br/>
+<br/>
+I also tried using 0x80 as masks. In this case, the DS is not frozen, but no save is done...
+<br/>
+<br/>
+Thank's
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">static void bytes_memcpy (char* dest, char *src, int size)
+<br/>
+{ while (size--) *dest++ = *src++ ; }
+<br/>
+<br/>
+<br/>
+void save_scores ()
+<br/>
+{
+<br/>
+  u16 i ;
+<br/>
+<br/>
+  tmp_data.magic_tag = MAGICNUMBER ;
+<br/>
+  /* Scores. */
+<br/>
+  for (i = 0; i &lt; sizeof (struct highscores); i++)
+<br/>
+    ((u8*) &amp;tmp_data.highscores)[i] = ((u8*) &amp;global_highscores)[i] ;
+<br/>
+  WAIT_CR &amp;= ~0x80 ;
+<br/>
+  /* It is now safe to write GBA Cartridge memory */
+<br/>
+  bytes_memcpy ((char*) SRAM, (char*) &amp;tmp_data, sizeof (struct save_data)) ;
+<br/>
+  WAIT_CR |= 0x80 ;
+<br/>
+}</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#56113 - FluBBa - Thu Oct 06, 2005 9:04 am</h4>
+    <div class="postbody"><span class="postbody">What is SRAM declared as?<br/>_________________<br/>I probably suck, my not is a programmer.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#56117 - Didou - Thu Oct 06, 2005 10:04 am</h4>
+    <div class="postbody"><span class="postbody">Hi,
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">What is SRAM declared as?</td> </tr></table><span class="postbody">
+<br/>
+It comes from the NDSLib's define. I didn't check it value, but I hope it to be 0x0A000000.
+<br/>
+<br/>
+  -- Didou</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#56208 - cory1492 - Fri Oct 07, 2005 3:36 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#define SRAM          ((uint8*)0x0A000000)</td> </tr></table><span class="postbody"> (from ndslib source)
+<br/>
+<br/>
+I have been using this to write/read SRAM with ETool:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void writeSram(int offset, char const* src, int size) 
+<br/>
+{
+<br/>
+    WAIT_CR &amp;= ~0x0880;
+<br/>
+    char* dest = (char*)SRAM;
+<br/>
+    if(offset&gt;0){while(offset--){*dest++;}}
+<br/>
+    int x = 0;
+<br/>
+    while(size--)
+<br/>
+    {*dest++ = (uint8)(src[x]); x++;}
+<br/>
+}
+<br/>
+<br/>
+void readSram(int offset, char* dest, int size)
+<br/>
+{
+<br/>
+    WAIT_CR &amp;= ~0x0880;
+<br/>
+    char const* src = (char const*)SRAM;
+<br/>
+    if(offset&gt;0){while(offset--){*src++;}}
+<br/>
+    int x = 0;
+<br/>
+    while(size--)
+<br/>
+    {*dest++ = (uint8)(src[x]); x++;}
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+A little bloated but I found it reliable... the CR that I am setting here gives access to both SRAM and the DS card. Never really looked into <span style="font-style: italic">un</span>setting the wait cr though...
+<br/>
+<br/>
+0x80 should give access to gba cart only (as in doublec's tutorial)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#59397 - Didou - Tue Nov 01, 2005 2:38 pm</h4>
+    <div class="postbody"><span class="postbody">Hi,
+<br/>
+<br/>
+Please, don't laugh :)))
+<br/>
+<br/>
+A few days ago, I updated ReboNDS and told that highscores were working thank's to the R17. Then later I corrected because in fact they looked not working... I thought I mistook...
+<br/>
+<br/>
+I tried again today ... then it works once, twice and not anymore. I mean that my scores got saved a short time, then nothing...
+<br/>
+<br/>
+You know what ... my RAM-battery was depleted :)))) I tried on my old FlashAdvance, and it works finally fine with the good old ~=0x0880 !
+<br/>
+<br/>
+Thank you to all of you who helped me !
+<br/>
+<br/>
+  -- Didou</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

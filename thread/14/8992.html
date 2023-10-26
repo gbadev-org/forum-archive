@@ -1,0 +1,301 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Affine rotation around a centrepoint - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Beginners > Affine rotation around a centrepoint</h2>
+<div id="posts">
+<div class="post">
+    <h4>#76483 - Ultima2876 - Wed Mar 22, 2006 2:01 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void affinec(int affine_no, int angle, int scalex, int scaley, s16 *x, s16 *y, s16 xcentre, s16 ycentre)
+<br/>
+   {
+<br/>
+      signed int tempx = 0;            //variable declerations
+<br/>
+      signed int tempy = 0;
+<br/>
+      signed int rotx = 0;
+<br/>
+      signed int roty = 0;
+<br/>
+      s16 pa = 0;
+<br/>
+      s16 pb = 0;
+<br/>
+      s16 pc = 0;
+<br/>
+      s16 pd = 0;
+<br/>
+      
+<br/>
+      affine(affine_no, angle, scalex, scaley);         //this fills the affine matrix with correct values - it is pre-tested and fills them correctly
+<br/>
+      
+<br/>
+      pa = sprites[(affine_no &lt;&lt; 2)].attribute3;         //set pa, pb, pc, pd (just to make the code below clearer)
+<br/>
+      pb = sprites[(affine_no &lt;&lt; 2) + 1].attribute3;
+<br/>
+      pc = sprites[(affine_no &lt;&lt; 2) + 2].attribute3;
+<br/>
+      pd = sprites[(affine_no &lt;&lt; 2) + 3].attribute3;
+<br/>
+      
+<br/>
+      relative_x = *x - xcentre;      //the main bit
+<br/>
+      relative_y = *y - ycentre;
+<br/>
+       
+<br/>
+      rotx = ((pa * relative_x) &gt;&gt; 8) + ((pb * relative_y) &gt;&gt; 8);
+<br/>
+      roty = ((pc * relative_x) &gt;&gt; 8) + ((pd * relative_y) &gt;&gt; 8);
+<br/>
+      
+<br/>
+      *x = rotx + xcentre;
+<br/>
+      *y = roty + ycentre;
+<br/>
+   }</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+That's the code I'm using for this. My aim to have a sprite rotating around a given centrepoint. I saw code very similar to mine in another topic, and with a very similar problem - however, I have combed through the words in that topic for hours now looking for something I've missed.
+<br/>
+<br/>
+The problem is, the sprite simply flies around the screen, flashing everywhere. After hours and hours of fiddling, I've decided that I can't find my mistake, and hopefully someone here will be able to help..
+<br/>
+<br/>
+The affine function fills the affine matrices, and I use it a lot. It works perfectly - so that's not the problem. I've also tested various things - it seems that if I take away the *x and *y from the setting of relative_x/y I can get it to rotate correctly around centrepoint 0, 0 (that is, screen co-ordinate) - and it treats the xcentre and ycentre as if they were he sprite's co-ordinates... but I want to be able to specify the centrepoint!
+<br/>
+<br/>
+Thanks in advance =P</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#76547 - Cearn - Wed Mar 22, 2006 5:19 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Ultima2876 wrote:</b></span></td> </tr> <tr> <td class="quote">.. and it treats the xcentre and ycentre as if they were he sprite's co-ordinates. ...</td> </tr></table><span class="postbody">
+<br/>
+That's because the way you're using it now, xcenter and ycentre are screen <span style="font-style: italic">and</span> sprite coordinates. Or something like that, depending on what you mean by sprite coordinates. :P
+<br/>
+<br/>
+In any case, you're missing a number of important pieces of information in this function, and not properly defining the ones that you do have. Most importantly, you have two spaces, screen and 'texture' (VRAM) space. In both of these, you have the origins for the actual affine transformation, and the desired affine transformation origins. That's four points, and you have two.
+<br/>
+Define:
+<br/>
+<span style="font-weight: bold">P</span> : the affine matrix
+<br/>
+<span style="font-weight: bold">cp</span>=(cpx,cpy) : actual affine origin in texture space (sprite center)
+<br/>
+<span style="font-weight: bold">cq</span>=(cqx,cqy) : actual affine origin in screen space (sprite center on screen)
+<br/>
+<span style="font-weight: bold">p0</span>=(px0,py0) : desired affine origin in texture space
+<br/>
+<span style="font-weight: bold">q0</span>=(qx0,qy0) : desired affine origin in screen space
+<br/>
+<span style="font-weight: bold">s</span>=(w,h) : sprite size
+<br/>
+<span style="font-style: italic">m</span> : scale parameter (= isDoubleSize ? 1 : ?)
+<br/>
+<span style="font-weight: bold">x</span>=(x,y) : correct sprite coordinates in screen space. 
+<br/>
+<br/>
+By definition, 
+<br/>
+<span style="font-weight: bold">cq</span> = <span style="font-weight: bold">x</span> + <span style="font-style: italic">m</span>*<span style="font-weight: bold">s</span>
+<br/>
+<span style="font-weight: bold">cp</span> = <span style="font-weight: bold">s</span>/2
+<br/>
+<br/>
+Using these definitions, it is possible to derive that
+<br/>
+<span style="font-weight: bold">x</span> = (<span style="font-weight: bold">q0</span> - <span style="font-style: italic">m</span>*<span style="font-weight: bold">s</span>) + <span style="font-weight: bold">P</span>^-1 * (<span style="font-weight: bold">s</span>/2-<span style="font-weight: bold">p0</span>)
+<br/>
+What you are currently using is
+<br/>
+<span style="font-weight: bold">x</span> = <span style="font-weight: bold">xcentre</span> + <span style="font-weight: bold">P</span>*(<span style="font-weight: bold">x</span> - <span style="font-weight: bold">xcentre</span>)
+<br/>
+That is, no accounting for the actual affine origins, and using <span style="font-weight: bold">P</span> instead of its inverse. And you have to use its inverse because you're correcting for transformation in screen-space, not texture space like you would do for affine backgrounds. 
+<br/>
+<br/>
+At this point it's merely a matter of writing it down in code. But because of the matrix inversion, sprite size and double-size flag status involved, I'm leaving this up to you :P
+<br/>
+<br/>
+Oh, and be careful where you leave your fixed point!
+<br/>
+<br/>
+<span style="font-size: 9px; line-height: normal">ETA: fixed the size correction in texture space.</span></span><span class="gensmall"><br/><br/>Last edited by Cearn on Wed Mar 22, 2006 11:17 pm; edited 1 time in total</span></div>    
+</div>
+<div class="post">
+    <h4>#76573 - Ultima2876 - Wed Mar 22, 2006 9:45 pm</h4>
+    <div class="postbody"><span class="postbody">Would this be something like:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">      *x = (((*x + xcentre) - ((doublesize * width) &gt;&gt; 8)) + (((pa * (width - xcentre)) + (pb * (height - ycentre)))) &gt;&gt; 8);
+<br/>
+      *y = (((*y + ycentre) - ((doublesize * height) &gt;&gt; 8)) + (((pc * (width - xcentre)) + (pd * (height - ycentre)))) &gt;&gt; 8);</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+After obviously doing some 1/pa 1/pb etc...
+<br/>
+<br/>
+Or am I still not getting it? :P
+<br/>
+<br/>
+EDIT: almost forgot - doublesize is either 256 (1) or 128 (1/2) -- that's what the &gt;&gt; 8 after the first part is about ( (doublesize * width) &gt;&gt; 8 ) =P</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#76579 - Cearn - Wed Mar 22, 2006 11:14 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Ultima2876 wrote:</b></span></td> </tr> <tr> <td class="quote">Would this be something like:
+<br/>
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">      *x = (((*x + xcentre) - ((doublesize * width) &gt;&gt; 8)) + (((pa * (width - xcentre)) + (pb * (height - ycentre)))) &gt;&gt; 8);
+<br/>
+      *y = (((*y + ycentre) - ((doublesize * height) &gt;&gt; 8)) + (((pc * (width - xcentre)) + (pd * (height - ycentre)))) &gt;&gt; 8);</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+After obviously doing some 1/pa 1/pb etc...
+<br/>
+<br/>
+Or am I still not getting it? :P
+<br/>
+<br/>
+EDIT: almost forgot - doublesize is either 256 (1) or 128 (1/2) -- that's what the &gt;&gt; 8 after the first part is about ( (doublesize * width) &gt;&gt; 8 ) =P</span></td> </tr></table><span class="postbody">
+<br/>
+Uhmmmmm ... 
+<br/>
+*squints at the forest of parentheses*
+<br/>
+Well, I think you're getting there, but I don't think it's quite right yet.
+<br/>
+<br/>
+I take it that
+<br/>
+- pa, pb, pc, pd here form the <span style="font-style: italic">proper</span> inverse of <span style="font-weight: bold">P</span>? This is more than just doing pa=1/pa; you need to do the full rotation-scale inversion if you are planning on using both.
+<br/>
+- every variable here is .8 fixed points. including width, height, x, y, etc. I'm asking because this is so easy to miss.
+<br/>
+- width and height are the .8 fixed point version of the OAM-given sizes, not whatever you're using for the bounding box, or whatever.
+<br/>
+<br/>
+I'm still curious about what the input (x,y) and (xcentre, ycentre) are. As far as I can see, (xcenter, ycentre) are the <span style="font-weight: bold">p0</span> in my equation. That is, the rotation point in texture space. But there is no direct equivalent of <span style="font-weight: bold">q0</span> yet. I think that's what the input (x, y) are supposed to be, but you're still adding (xcentre, ycentre) to those, which you probably shouldn't. Other than that, it just might work.
+<br/>
+<br/>
+Oh, and remember you don't <span style="font-style: italic">have</span> to do everything in fixed point. The BIOS call BgAffineSet, for example, uses a .8 fixed point texture/(map) origin, but standard integers for the screen point. You could use normal integers for  (x,y) and (w,h). The double-size correction can be done via a simple rightshift as well, rather than a multiplication + rightshift. The compiler will do this for you anyway, but doing it yourself cleans up the code a bit.
+<br/>
+<br/>
+Oh and, uhm, I think I've noticed a little mistake in my formula. It should be <span style="font-weight: bold">P</span>^-1 *(<span style="font-weight: bold">s</span>/2-<span style="font-weight: bold">p0</span>). I forgot the half. Sorry about that, I'll fix it as soon as I'm done with this post.
+<br/>
+<br/>
+Personally, I was thinking of something like this, but you'll have to see how well it works for you.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+// pseudo code
+<br/>
+// oe : OAM_ENTRY to work on
+<br/>
+// px0, py0 : desired texture org; input; .8 fixed
+<br/>
+// qx0, qy0 : desired screen org;  input; .0 fixed
+<br/>
+<br/>
+int w, h;      // width, height of OAMoe; .0 fixed
+<br/>
+int dx, dy;      // screen offset q0 - ms ; .0 fixed
+<br/>
+int ax, ay;      // 'anchor' a = p0-s/2
+<br/>
+int aa, ab, ac, ad; // A = P^-1 ; .8 fixed
+<br/>
+<br/>
+// Get w, h and m from OAM_ENTRY (example)
+<br/>
+w= oam_size_lut[oe-&gt;attr0&gt;&gt;ATTR0_SHAPE_SHIFT][oe-&gt;attr1&gt;&gt;ATTR1_SIZE_SHIFT][0];
+<br/>
+h= oam_size_lut[oe-&gt;attr0&gt;&gt;ATTR0_SHAPE_SHIFT][oe-&gt;attr1&gt;&gt;ATTR1_SIZE_SHIFT][1];
+<br/>
+int m= (oe-&gt;attr0 &amp; ATTR0_DOUBLE_SIZE) ? 0 : 1)
+<br/>
+<br/>
+// calculate base offsets
+<br/>
+dx= qx0 - (w&gt;&gt;m);   dy= qy0 - (h&gt;&gt;m);   // .0
+<br/>
+ax= px0 - (w&lt;&lt;7);   ay= py0 - (h&lt;&lt;7);   // .8
+<br/>
+<br/>
+{ Get A somehow }
+<br/>
+<br/>
+// correct for transformed anchor offset (.8*.8 -&gt; .0)
+<br/>
+dx -= (aa*ax + ab*ay)&gt;&gt;16;
+<br/>
+dy -= (ac*ax + ad*ay)&gt;&gt;16;
+<br/>
+<br/>
+oam_set_pos(oe, dx, dy);
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#76589 - tepples - Thu Mar 23, 2006 12:18 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Cearn wrote:</b></span></td> </tr> <tr> <td class="quote">- pa, pb, pc, pd here form the <span style="font-style: italic">proper</span> inverse of <span style="font-weight: bold">P</span>? This is more than just doing pa=1/pa; you need to do the full rotation-scale inversion if you are planning on using both.</td> </tr></table><span class="postbody">
+<br/>
+Which isn't hard. You compute one matrix with theta and scale; you compute the other with 65536/scale and -theta.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#76669 - Cearn - Thu Mar 23, 2006 9:55 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Cearn wrote:</b></span></td> </tr> <tr> <td class="quote">- pa, pb, pc, pd here form the <span style="font-style: italic">proper</span> inverse of <span style="font-weight: bold">P</span>? This is more than just doing pa=1/pa; you need to do the full rotation-scale inversion if you are planning on using both.</td> </tr></table><span class="postbody">
+<br/>
+Which isn't hard. You compute one matrix with theta and scale; you compute the other with 65536/scale and -theta.</span></td> </tr></table><span class="postbody">
+<br/>
+True.
+<br/>
+<span style="font-style: italic">Unless</span> scale_x and scale_y can be different. If they're not the same, you have a structurally different matrix. Compare <a class="postlink" href="http://user.chem.tue.nl/jakvijn/tonc/affine.htm#eq-ars-good" target="_blank">this</a> to <a class="postlink" href="http://user.chem.tue.nl/jakvijn/tonc/affine.htm#eq-prs-good" target="_blank">this</a>. It's more than just reversing the angle and using the reciprocal of the scales. Not very different, but enough so that you can't use the standard affine function to get there.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#76893 - Ultima2876 - Sat Mar 25, 2006 11:02 pm</h4>
+    <div class="postbody"><span class="postbody">Almost there!
+<br/>
+<br/>
+You guys have been an enormous help... there's just one tiny, tiny problem.
+<br/>
+<br/>
+If xcentre and ycentre are defined as <span style="font-weight: bold">p0</span>, and are .8 fixed values equal to 0x0100, 0x0300, or 0x0500 (or any negative equivalent), the sprite disappears (I assume by being put offscreen) at certain angles (seems to be about 180-270 and 0-90 degrees, but not exactly those ranges). Any ideas what might cause this?
+<br/>
+<br/>
+Of course, this won't be much of a problem, but it'd be nice to get it sorted.
+<br/>
+<br/>
+Anyway, thanks so much, you've been awesome =P</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#76898 - Cearn - Sat Mar 25, 2006 11:22 pm</h4>
+    <div class="postbody"><span class="postbody">My first guess would be a signed/unsigned short gone bad somewhere. Might be worth checking those again. Or overflow maybe, though the values in the whole thing should be relatively small. And it's only, odd pixels that go wrong? 0x0200, 0x0400, etc are alright? 
+<br/>
+<br/>
+Consider tracing the temporary values and the oam entries to see what's really going on. That should give a good clue. For more, we might have to see more code or the binary in question to play with.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

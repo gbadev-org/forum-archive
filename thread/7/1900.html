@@ -1,0 +1,222 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Why aren't my timers working? - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>C/C++ > Why aren't my timers working?</h2>
+<div id="posts">
+<div class="post">
+    <h4>#9710 - Domovoi - Thu Aug 14, 2003 5:32 pm</h4>
+    <div class="postbody"><span class="postbody">Hmmm... I'm trying to use a count-up timer to scroll a background one pixel every second. The way I figured is setting timer 0 to the F/256 prescaler, and setting timer 1 to countup. That should make timer 1 increment almost every second, right?
+<br/>
+<br/>
+It's not going well... I get the feeling I can't zero these timers, or something. Here's what I'm doing:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+  REG_TM1CNT_H = 0x80 | 0x4;   // Set timer 1 to 'start' and 'countup'
+<br/>
+  REG_TM0CNT_H = 0x2 | 0x80;  // Set timer 0 to prescale val. F/256 and 'start'.
+<br/>
+   
+<br/>
+  REG_TM0CNT_L = REG_TM1CNT_L = 0;  // Zero both timers to be sure..
+<br/>
+  while (true)  // Start the main loop...
+<br/>
+  {
+<br/>
+    if (REG_TM1CNT_L)  // If a second has passed, this timer non-zero
+<br/>
+    {
+<br/>
+      REG_TM1CNT_H = 0;  // Stop the countup-timer...
+<br/>
+      curPos = MoveBG(curPos + REG_TM1CNT_L);  // move the background by the amount of seconds passed (usually 1)
+<br/>
+<br/>
+      REG_TM1CNT_L = 0;  // Set the timer back to zero
+<br/>
+      REG_TM1CNT_H = TMR_START | TMR_COUNTUP;  // Start the timer again.
+<br/>
+    }
+<br/>
+  }
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+<br/>
+This should be working, for all I can figure out. However, the background immediately starts scrolling at tremendous speed. I guess REG_TM1CNT_L, for some reason, is never 0, so that it scrolls -every- iteration. But why? It should work like a charm, according to all the docs... What am I missing?
+<br/>
+<br/>
+Here's my #defines for the timer registers, just to be sure:
+<br/>
+<br/>
+#define REG_TM0CNT_L     *(volatile unsigned short*)0x4000100
+<br/>
+#define REG_TM0CNT_H     *(unsigned short*)0x4000102
+<br/>
+#define REG_TM1CNT_L     *(volatile unsigned short*)0x4000104
+<br/>
+#define REG_TM1CNT_H     *(unsigned short*)0x4000106
+<br/>
+#define REG_TM2CNT_L     *(volatile unsigned short*)0x4000108
+<br/>
+#define REG_TM2CNT_H     *(unsigned short*)0x400010A
+<br/>
+#define REG_TM3CNT_L     *(volatile unsigned short*)0x400010C
+<br/>
+#define REG_TM3CNT_H     *(unsigned short*)0x400010E
+<br/>
+<br/>
+Anyone got an idea?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#9716 - DekuTree64 - Thu Aug 14, 2003 7:30 pm</h4>
+    <div class="postbody"><span class="postbody">I think you need to set the TMxCNT_L regs before you enable the timers. 
+<br/>
+But if you read <a href="http://forum.gbadev.org/viewtopic.php?t=1818" target="_blank">http://forum.gbadev.org/viewtopic.php?t=1818</a> you'll find that pretty much everyone agrees that a VBlank based timer is better. If you have like a sound function or anything that always gets called in a VBlank interrupt, just increment a frame counter variable in that, and you'll be sure to catch every frame. If you don't have any VBlank interrupt happening, just increment the variable after each VSync() in your code, assuming your program flow is like do stuff, VSync, do VBlank stuff, repeat.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#9718 - Domovoi - Fri Aug 15, 2003 12:02 am</h4>
+    <div class="postbody"><span class="postbody">Hmmm... interesting. So, let me see if I get this correctly... The time between two VBlanks is -always- the same, right? No matter how CPU intensive your code is? So in one iteration of my main program loop, the screen might've been drawn a couple of times? 
+<br/>
+<br/>
+So, let's say that, in theory, the time between two VBlanks is one millisecond (in theory, to keep it simple). I write an interrupt so that it increments a variable on every VBblank. Then in my loop, when it comes time to scroll backgrounds or do animations, I check that variable. If it says, say, 3, I know that the screen has been drawn 3 times since the last iteration, and that we are now  3 * 1 millisecond = 3 milliseconds further. Then I set the variable to zero, and the whole thing can start over again.
+<br/>
+<br/>
+Is that about correct? If not, what is the idea? If so, how much time -is- there, exactly, between VBlanks?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#9719 - Aizz - Fri Aug 15, 2003 2:07 am</h4>
+    <div class="postbody"><span class="postbody">Quotation from AGB Manual:
+<br/>
+  V interval frequency 59.727 Hz   16.743 ms 
+<br/>
+  So VBlank occurs almost every 17ms, 35 times/sec.
+<br/>
+<br/>
+  My opinion:
+<br/>
+  Do the scroll or animation in VBlank interrupt service function, not in your main loop. In another words, if you use VBlankIntr() function for your interrupt service function, then use a global(/static) variable to count the VBlank times, and when the global(/static) var reaches the exact number you want, do your scroll/animation code segment.
+<br/>
+  It looks like this:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+UCHAR g_VBlankCount=0;  // Global var for counting VBlank
+<br/>
+void VBlankIntr(void)  // VBlank interrupt service function
+<br/>
+{
+<br/>
+    g_VBlankCount++;
+<br/>
+    if (g_VBlankCOunt==10)  // Help yourself to change the num "10"
+<br/>
+    {
+<br/>
+         // Scroll/Animation code goes here...
+<br/>
+        g_VBlankCount=0;      // Reset the counting
+<br/>
+    }
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+===========
+<br/>
+Hope me make it clear and pardon me for my poor English...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#9721 - DekuTree64 - Fri Aug 15, 2003 4:20 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Aizz wrote:</b></span></td> </tr> <tr> <td class="quote">Quotation from AGB Manual:
+<br/>
+  V interval frequency 59.727 Hz   16.743 ms 
+<br/>
+  So VBlank occurs almost every 17ms, 35 times/sec.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Probably just a mistake, but that would be about 60 times per second, not 35.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+  My opinion:
+<br/>
+  Do the scroll or animation in VBlank interrupt service function, not in your main loop. In another words, if you use VBlankIntr() function for your interrupt service function, then use a global(/static) variable to count the VBlank times, and when the global(/static) var reaches the exact number you want, do your scroll/animation code segment.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+This would be a handy way for the particular situation, but just for future reference, generally you shouldn't run your whole game from an interrupt. Interrupts use their own stack, which is small (64 bytes, I think). You can switch it over to the normal user mode stack with a little ASM if you really need to though. Actually I think there's an option to do that automatically in Jeff's Crt0.S. But if you have your main game loop in the interrupt function, another VBlank might happen before you're done with the current frame, so then it would start working on the new frame, and chances are that one would take about as long as the last, aso it starts on yet another, and you end up with a mess. 
+<br/>
+You could disable the VBlank interrupt and reenable it at the end of the frame processing though, but it's generally better to just process a frame, wait for VSync, and then copy in anything that will be visible on the screen before it starts drawing again.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#9728 - Domovoi - Fri Aug 15, 2003 1:04 pm</h4>
+    <div class="postbody"><span class="postbody">Hmmm... On waiting for the Vsync... For some reason, that makes tearing worse, for me.
+<br/>
+<br/>
+My code is basically like this: The input updates variables holding positions, I wait for vsync, and scroll to those positions, copying tile data when necessary.
+<br/>
+<br/>
+The thing is, when wait for vsync, the whole thing scrolls slower than when I don't. Also, visible tearing still occurs, and more noticable because scrolling goes slower.
+<br/>
+<br/>
+What could be going wrong there? Could it be that my scrolling function actually takes longer than the vblank period to finish, so that it's still copying when the screen is already drawing again?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#9731 - tepples - Fri Aug 15, 2003 2:39 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Domovoi wrote:</b></span></td> </tr> <tr> <td class="quote">Could it be that my scrolling function actually takes longer than the vblank period to finish, so that it's still copying when the screen is already drawing again?</td> </tr></table><span class="postbody">
+<br/>
+Possibly, if you're not using a tile mode.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#9768 - Aizz - Sun Aug 17, 2003 3:15 am</h4>
+    <div class="postbody"><span class="postbody">Thanks DekuTree64 for pointing out my fault, it's almost 60times/sec really, and sorry all.
+<br/>
+<br/>
+Use VBlankIntr to set BGXXOFS or copy OAM buffer using DMA, it should be enough, I think.
+<br/>
+<br/>
+=========== 
+<br/>
+Pardon me for my poor English...</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

@@ -1,0 +1,972 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Help! 3DS loader[SOLVED for now] - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Help! 3DS loader[SOLVED for now]</h2>
+<div id="posts">
+<div class="post">
+    <h4>#137587 - yellowstar - Mon Aug 13, 2007 7:42 pm</h4>
+    <div class="postbody"><span class="postbody">I am trying to write a 3DS loader.
+<br/>
+<br/>
+But it won't work.
+<br/>
+<br/>
+I am doing an tutorial,
+<br/>
+which this is based on.
+<br/>
+<br/>
+Here's my problem:
+<br/>
+<br/>
+My loader isn't detecting the EDIT3DS chunk.(This chunk contains
+<br/>
+sub-chunks which contains the actual model data.)
+<br/>
+<br/>
+Like that tutorial,(at the point I am at)
+<br/>
+it only sends output to a text file,
+<br/>
+not data structures.
+<br/>
+<br/>
+Here's the output from it:(from the text file it writes to)
+<br/>
+(Updated. Now it isn't detecting all of the chunks.
+<br/>
+It started doing this since I fixed the SkipChunk function.)
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+ChunkID: 0x 4d4d Length: 693
+<br/>
+ChunkID: 0x 0002 Length: 10
+<br/>
+ChunkID: 0x 0000 Length: 671038
+<br/>
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Here's how I am doing it:(source code)
+<br/>
+<br/>
+Here's the important code:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+//See the below piece of code(the whole thing) for
+<br/>
+//the structures.
+<br/>
+void ReadChunk(FILE *f, ChunkHeader *header)
+<br/>
+{
+<br/>
+     
+<br/>
+     unsigned short ID = 0;
+<br/>
+     unsigned int  bytesRead = 0;
+<br/>
+     unsigned int bChunkLength = 0;
+<br/>
+     
+<br/>
+     bytesRead = fread(&amp;ID,2,1,f);
+<br/>
+     
+<br/>
+     bytesRead += fread(&amp;bChunkLength,4,1,f);
+<br/>
+     
+<br/>
+     header-&gt;ChunkID = ID;
+<br/>
+     header-&gt;Length = bChunkLength;
+<br/>
+     header-&gt;bytesRead = bytesRead;
+<br/>
+     
+<br/>
+}
+<br/>
+<br/>
+void SkipChunk(FILE *f, ChunkHeader *header)
+<br/>
+{
+<br/>
+     //Updated. Was wrong. Since
+<br/>
+//I updated this it won't detect all the chunks.
+<br/>
+     fseek(f, ((long)header-&gt;Length - (long)header-&gt;bytesRead), SEEK_CUR);
+<br/>
+     
+<br/>
+}
+<br/>
+<br/>
+void ReadEDIT3DS(FILE *f, ChunkHeader *header)
+<br/>
+{
+<br/>
+     fprintf(debug,"\n");
+<br/>
+     
+<br/>
+     fprintf(debug,"EDIT3DS Chunk\n");
+<br/>
+     
+<br/>
+     while(header-&gt;bytesRead &lt; header-&gt;Length)
+<br/>
+     {
+<br/>
+     ChunkHeader temp;
+<br/>
+     ReadChunk(f, &amp;temp);
+<br/>
+     DisplayChunkInfo(&amp;temp);
+<br/>
+     
+<br/>
+                             switch(temp.ChunkID)
+<br/>
+                             {
+<br/>
+     
+<br/>
+                             case NAMED_OBJECT:
+<br/>
+                                  ReadNAMED_OBJECT(f,&amp;temp);
+<br/>
+                                  break;
+<br/>
+                                  
+<br/>
+                             default:
+<br/>
+                                  SkipChunk(f,&amp;temp);
+<br/>
+                             }
+<br/>
+     
+<br/>
+     header-&gt;bytesRead+= temp.Length;
+<br/>
+     }
+<br/>
+}
+<br/>
+<br/>
+//The code below is the while loop which reads in the 3DS file.
+<br/>
+<br/>
+     while(chunk.header.bytesRead &lt; chunk.header.Length)
+<br/>
+     {
+<br/>
+     
+<br/>
+     ChunkHeader temp;
+<br/>
+     
+<br/>
+     ReadChunk(f,&amp;temp);
+<br/>
+     DisplayChunkInfo(&amp;temp);
+<br/>
+     
+<br/>
+     unsigned int bytesRead = 0;
+<br/>
+     
+<br/>
+              switch(temp.ChunkID)
+<br/>
+              {
+<br/>
+              
+<br/>
+              case EDIT3DS:
+<br/>
+                   ReadEDIT3DS(f,&amp;temp);
+<br/>
+                   bytesRead = temp.Length;
+<br/>
+                   break;
+<br/>
+                   
+<br/>
+              default:
+<br/>
+                      SkipChunk(f,&amp;temp);
+<br/>
+                      bytesRead = temp.Length;
+<br/>
+                      break;
+<br/>
+              
+<br/>
+              }
+<br/>
+              
+<br/>
+              chunk.header.bytesRead += bytesRead;
+<br/>
+     
+<br/>
+     }
+<br/>
+     
+<br/>
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+This is the whole thing,
+<br/>
+with some parts removed:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#include &lt;stdio.h&gt;
+<br/>
+#include &lt;string.h&gt;
+<br/>
+<br/>
+#include "3DSloaderChunkDefs.h"
+<br/>
+<br/>
+bool Load3DS(char *filename);
+<br/>
+bool Load3DS(char *filename, unsigned char *ErrorCode);
+<br/>
+<br/>
+struct ChunkHeader
+<br/>
+{
+<br/>
+       unsigned short ChunkID;
+<br/>
+       unsigned int Length;
+<br/>
+       
+<br/>
+       unsigned int bytesRead;//NOT a real field in an 3DS Chunk header.
+<br/>
+       //This keeps track of how many bytes were read from this chunk.
+<br/>
+};
+<br/>
+<br/>
+struct Chunk
+<br/>
+{
+<br/>
+       ChunkHeader header;
+<br/>
+       unsigned char *data;
+<br/>
+};
+<br/>
+<br/>
+FILE *debug = fopen("Debug.txt","w");
+<br/>
+<br/>
+unsigned int GetFileLength(FILE *file)
+<br/>
+{
+<br/>
+        int l_iSavPos, l_iEnd;
+<br/>
+    
+<br/>
+            l_iSavPos = ftell(file);
+<br/>
+        fseek(file, 0, SEEK_END);
+<br/>
+        l_iEnd = ftell(file);
+<br/>
+        fseek(file, l_iSavPos, SEEK_SET);
+<br/>
+    
+<br/>
+            return (unsigned int)l_iEnd;
+<br/>
+}
+<br/>
+<br/>
+void DisplayChunkInfo(ChunkHeader *ptr)
+<br/>
+{
+<br/>
+     fprintf(debug,"ChunkID: 0x %04x Length: %u\n",ptr-&gt;ChunkID,ptr-&gt;Length);
+<br/>
+}
+<br/>
+<br/>
+void ReadChunk(FILE *f, ChunkHeader *header)
+<br/>
+{
+<br/>
+     
+<br/>
+     unsigned short ID = 0;
+<br/>
+     unsigned int  bytesRead = 0;
+<br/>
+     unsigned int bChunkLength = 0;
+<br/>
+     
+<br/>
+     bytesRead = fread(&amp;ID,2,1,f);
+<br/>
+     
+<br/>
+     bytesRead += fread(&amp;bChunkLength,4,1,f);
+<br/>
+     
+<br/>
+     header-&gt;ChunkID = ID;
+<br/>
+     header-&gt;Length = bChunkLength;
+<br/>
+     header-&gt;bytesRead = bytesRead;
+<br/>
+     
+<br/>
+}
+<br/>
+<br/>
+void SkipChunk(FILE *f, ChunkHeader *header)
+<br/>
+{
+<br/>
+     
+<br/>
+     fseek(f, ((long)header-&gt;Length - (long)header-&gt;bytesRead), SEEK_CUR);
+<br/>
+     
+<br/>
+}
+<br/>
+<br/>
+void ReadEDIT3DS(FILE *f, ChunkHeader *header)
+<br/>
+{
+<br/>
+     fprintf(debug,"\n");
+<br/>
+     
+<br/>
+     fprintf(debug,"EDIT3DS Chunk\n");
+<br/>
+     
+<br/>
+     while(header-&gt;bytesRead &lt; header-&gt;Length)
+<br/>
+     {
+<br/>
+     ChunkHeader temp;
+<br/>
+     ReadChunk(f, &amp;temp);
+<br/>
+     DisplayChunkInfo(&amp;temp);
+<br/>
+     
+<br/>
+                             switch(temp.ChunkID)
+<br/>
+                             {
+<br/>
+     
+<br/>
+                             case NAMED_OBJECT:
+<br/>
+                                  ReadNAMED_OBJECT(f,&amp;temp);
+<br/>
+                                  break;
+<br/>
+                                  
+<br/>
+                             default:
+<br/>
+                                  SkipChunk(f,&amp;temp);
+<br/>
+                             }
+<br/>
+     
+<br/>
+     header-&gt;bytesRead+= temp.Length;
+<br/>
+     }
+<br/>
+}
+<br/>
+bool Load3DS(char *filename)
+<br/>
+{
+<br/>
+     Load3DS(filename,NULL);
+<br/>
+}
+<br/>
+<br/>
+bool Load3DS(char *filename, unsigned char *ErrorCode)
+<br/>
+     
+<br/>
+     FILE *f = fopen(filename,"rb");
+<br/>
+     
+<br/>
+     Chunk chunk;
+<br/>
+     
+<br/>
+     unsigned int FileSize;
+<br/>
+     
+<br/>
+     bool do_errors = false;
+<br/>
+         if(ErrorCode!=NULL)
+<br/>
+         do_errors = true;
+<br/>
+            if(ErrorCode==NULL)
+<br/>
+            do_errors = false;
+<br/>
+     
+<br/>
+     if(do_errors)
+<br/>
+     {
+<br/>
+     *ErrorCode = 0;//For success.
+<br/>
+     }
+<br/>
+      
+<br/>
+     if(f==NULL)
+<br/>
+     {
+<br/>
+        if(do_errors)
+<br/>
+        *ErrorCode = 1;//Failed to open 3DS file.
+<br/>
+        
+<br/>
+        fprintf(debug,"ERROR: Failed to open 3DS file!\n\n");
+<br/>
+     
+<br/>
+     return 0;
+<br/>
+     }
+<br/>
+     
+<br/>
+     memset(&amp;chunk,0,sizeof(Chunk));
+<br/>
+     
+<br/>
+     FileSize = GetFileLength(f);
+<br/>
+     
+<br/>
+     ReadChunk(f,&amp;chunk.header);
+<br/>
+     
+<br/>
+     DisplayChunkInfo(&amp;chunk.header);
+<br/>
+     
+<br/>
+     if(chunk.header.ChunkID != PRIMARY ||
+<br/>
+     chunk.header.Length != FileSize)
+<br/>
+     {
+<br/>
+                         
+<br/>
+                         fprintf(debug,"ERROR: Bad 3DS file!\n\n");
+<br/>
+                         
+<br/>
+                         fclose(debug);
+<br/>
+                         fclose(f);
+<br/>
+                         
+<br/>
+                         if(do_errors)
+<br/>
+                         *ErrorCode = 2;//Bad 3DS file!
+<br/>
+                         
+<br/>
+                         return 0;
+<br/>
+                         
+<br/>
+     }
+<br/>
+     
+<br/>
+     while(chunk.header.bytesRead &lt; chunk.header.Length)
+<br/>
+     {
+<br/>
+     
+<br/>
+     ChunkHeader temp;
+<br/>
+     
+<br/>
+     ReadChunk(f,&amp;temp);
+<br/>
+     DisplayChunkInfo(&amp;temp);
+<br/>
+     
+<br/>
+     unsigned int bytesRead = 0;
+<br/>
+     
+<br/>
+              switch(temp.ChunkID)
+<br/>
+              {
+<br/>
+              
+<br/>
+              case EDIT3DS:
+<br/>
+                   ReadEDIT3DS(f,&amp;temp);
+<br/>
+                   bytesRead = temp.Length;
+<br/>
+                   break;
+<br/>
+                   
+<br/>
+              default:
+<br/>
+                      SkipChunk(f,&amp;temp);
+<br/>
+                      bytesRead = temp.Length;
+<br/>
+                      break;
+<br/>
+              
+<br/>
+              }
+<br/>
+              
+<br/>
+              chunk.header.bytesRead += bytesRead;
+<br/>
+     
+<br/>
+     }
+<br/>
+     
+<br/>
+     
+<br/>
+     
+<br/>
+     fclose(debug);
+<br/>
+     fclose(f);
+<br/>
+     
+<br/>
+     return 1;
+<br/>
+     
+<br/>
+}
+<br/>
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"><br/><br/>Last edited by yellowstar on Sat Sep 01, 2007 2:37 am; edited 4 times in total</span></div>    
+</div>
+<div class="post">
+    <h4>#137597 - yellowstar - Mon Aug 13, 2007 9:17 pm</h4>
+    <div class="postbody"><span class="postbody">I have another question.
+<br/>
+<br/>
+Is there a Google SketchUp plugin SDK,
+<br/>
+for the free version?
+<br/>
+<br/>
+If so,
+<br/>
+would somebody post a link to a download link?
+<br/>
+<br/>
+<span style="font-weight: bold">EDIT:</span>
+<br/>
+I don't need it now,
+<br/>
+but I would like to know this.
+<br/>
+<br/>
+I have found a Blender <a class="postlink" href="http://jmsoler.free.fr/didacticiel/blender/tutor/py_import_kml-kmz_en.htm" target="_blank">plugin</a>
+<br/>
+which can import Google Earth files.(Which Google SketchUp
+<br/>
+can export to.)
+<br/>
+<br/>
+Now that I can import models(After being converted to Google Earth)
+<br/>
+from Google SketchUp, into Blender,
+<br/>
+I can now convert them to 3ds, obj and md2,
+<br/>
+and others.(Any format Blender can export to,
+<br/>
+and others via plugins)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#137607 - dantheman - Mon Aug 13, 2007 11:10 pm</h4>
+    <div class="postbody"><span class="postbody">The MD2 loader by payk found at <a href="http://payk.drunkencoders.com/" target="_blank">http://payk.drunkencoders.com/</a> might be of interest to you.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#137730 - yellowstar - Wed Aug 15, 2007 2:53 am</h4>
+    <div class="postbody"><span class="postbody">I have tried to compile and run the example which
+<br/>
+came with that MD2 loader.
+<br/>
+<br/>
+But, when I try to compile it,
+<br/>
+I get compile errors.
+<br/>
+<br/>
+I tried to fix them.
+<br/>
+It compiles fine,
+<br/>
+but it won't display anything
+<br/>
+<br/>
+Here's the errors I recieved,
+<br/>
+and what I did to try to fix them.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+c:/ConsoleStuff/Simple_MD2/source/main.cpp: In function 'int main()':
+<br/>
+c:/ConsoleStuff/Simple_MD2/source/main.cpp:69: error: 'glInit' was not declared in this scope
+<br/>
+c:/devkitPro/libnds/include/nds/arm9/videoGL.inl:17: error: too many arguments to function 'void glClearColor(uint8, uint8, uint8)'
+<br/>
+c:/ConsoleStuff/Simple_MD2/source/main.cpp:74: error: at this point in file
+<br/>
+c:/ConsoleStuff/Simple_MD2/source/main.cpp:75: error: 'glClearPolyID' was not declared in this scope
+<br/>
+c:/devkitPro/libnds/include/nds/arm9/videoGL.inl:112: error: too many arguments
+<br/>
+to function 'void glFlush()'
+<br/>
+c:/ConsoleStuff/Simple_MD2/source/main.cpp:158: error: at this point in file
+<br/>
+make[1]: *** [main.o] Error 1
+<br/>
+MAKE: *** [build] Error 2
+<br/>
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I also got a warning:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+c:/ConsoleStuff/Simple_MD2/include/MD2Load.cpp: In function 'void LoadMode
+<br/>
+lTexture(char*, int*, int*, int, int*)':
+<br/>
+c:/ConsoleStuff/Simple_MD2/include/MD2Load.cpp:175: warning: 'buffer8' may
+<br/>
+ be used uninitialized in this function
+<br/>
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+glInit:
+<br/>
+Since this was not declared,
+<br/>
+I tried commenting it out.
+<br/>
+<br/>
+glClearColor:
+<br/>
+This function call has a fourth paramenter,
+<br/>
+which seems to be the alpha.
+<br/>
+But the compiler says that's to many parameters,
+<br/>
+so I removed the last parameter.(fourth parameter)
+<br/>
+<br/>
+glClearPolyID:
+<br/>
+Since this was not declared,
+<br/>
+I commented it out.
+<br/>
+<br/>
+glFlush:
+<br/>
+This call has 1 parameter,
+<br/>
+with value 0.
+<br/>
+Since that is too many,
+<br/>
+I removed that parameter.
+<br/>
+<br/>
+buffer8:
+<br/>
+I tried setting it to NULL.(where it is declared)
+<br/>
+When I do that, the above result happens.(only an black screen)
+<br/>
+But when I let this var be,
+<br/>
+I get a light-blue bar.(something similar to it)(its width is the screen width, and height is about 16 pixels, I'am not sure.)(This is the top screen)
+<br/>
+<br/>
+<br/>
+<br/>
+Any other MD2 loaders?
+<br/>
+<span style="font-weight: bold">EDIT:</span>
+<br/>
+Also, does anybody know of any MD2 tutorials?</span><span class="gensmall"><br/><br/>Last edited by yellowstar on Thu Aug 16, 2007 4:47 pm; edited 1 time in total</span></div>    
+</div>
+<div class="post">
+    <h4>#137774 - kalus - Wed Aug 15, 2007 5:29 pm</h4>
+    <div class="postbody"><span class="postbody">I converted a tutorial I found on some wiki to work on DS, used it for my DSLB game, but the example is broken at mo, will try and fix for you.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#137807 - yellowstar - Wed Aug 15, 2007 9:32 pm</h4>
+    <div class="postbody"><span class="postbody">I found a problem in the SkipChunk function.
+<br/>
+I have fixed it, but now it dosen't detect
+<br/>
+all of the chunks.
+<br/>
+<br/>
+See my first post for details.
+<br/>
+<br/>
+<span style="font-weight: bold">EDIT:</span>
+<br/>
+I have edited my above post,
+<br/>
+with the following question:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>yellowstar wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+Also, does anybody know of any MD2 tutorials?
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#138030 - Rajveer - Sat Aug 18, 2007 8:50 pm</h4>
+    <div class="postbody"><span class="postbody">Not sure about an MD2 loader, but know of a great OBJ loader of which I'm using a modified version, if you don't want to use animation:
+<br/>
+<br/>
+<a href="http://www.gamedev.net/community/forums/topic.asp?topic_id=312335" target="_blank">http://www.gamedev.net/community/forums/topic.asp?topic_id=312335</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#138104 - yellowstar - Sun Aug 19, 2007 9:53 pm</h4>
+    <div class="postbody"><span class="postbody">I have written an MD2 loader,
+<br/>
+based on an tutorial.
+<br/>
+But lighting won't work like it is supposed
+<br/>
+to when I won't want lighting.
+<br/>
+<br/>
+I just need to edit it some.
+<br/>
+Then I can add it to my game.
+<br/>
+<br/>
+<br/>
+<br/>
+Does anybody know of any free modelers/converters
+<br/>
+which have importer/exporter support for plugins,
+<br/>
+via an SDK?
+<br/>
+<br/>
+I know about Milkshape 3D,
+<br/>
+but that is shareware.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#138119 - kusma - Mon Aug 20, 2007 12:55 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>yellowstar wrote:</b></span></td> </tr> <tr> <td class="quote">Does anybody know of any free modelers/converters
+<br/>
+which have importer/exporter support for plugins,
+<br/>
+via an SDK?
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<a class="postlink" href="http://www.blender.org/" target="_blank">Blender</a> sounds like what you're looking for. Another option (and much more artist-friendly) is to use <a class="postlink" href="http://www.collada.org/mediawiki/index.php/Main_Page" target="_blank">COLLADA</a> as an interchange-format - that way your graphics artists can use whatever modeler they prefer.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#138175 - yellowstar - Mon Aug 20, 2007 7:51 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>kusma wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+<a class="postlink" href="http://www.blender.org/" target="_blank">Blender</a> sounds like what you're looking for.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I have Blender.
+<br/>
+But the only way to write a importer/exporter
+<br/>
+plugin in Blender,
+<br/>
+is via the Python scripting language,
+<br/>
+not an SDK.
+<br/>
+<br/>
+There is an SDK,
+<br/>
+but it is only for generating textures.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#138176 - kusma - Mon Aug 20, 2007 7:55 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>yellowstar wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+I have Blender.
+<br/>
+But the only way to write a importer/exporter
+<br/>
+plugin in Blender,
+<br/>
+is via the Python scripting language,
+<br/>
+not an SDK.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Why do you need an SDK? Python is a really powerful and easy language, so it makes sense to write tools in that.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#138177 - yellowstar - Mon Aug 20, 2007 8:09 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>kusma wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+Why do you need an SDK? Python is a really powerful and easy language, so it makes sense to write tools in that.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I'am reluctant to learn an new scripting language,
+<br/>
+just to write importer/exporter plugins...
+<br/>
+<br/>
+I guess I'll have to,
+<br/>
+so I can write importer/exporter plugins.
+<br/>
+And it seems that most modelers/converters
+<br/>
+use a scripting language, not a SDK.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#138179 - kusma - Mon Aug 20, 2007 8:19 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>yellowstar wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+I'am reluctant to learn an new scripting language,
+<br/>
+just to write importer/exporter plugins...
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+The beauty of Python is that it's such an effective an versatile language, so you can use it for much more than just exporters. I use it for most of my mini-tools myself.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#138347 - calcprogrammer1 - Thu Aug 23, 2007 4:48 am</h4>
+    <div class="postbody"><span class="postbody">This might be a bit off topic, but I tried to open the test.md2 file from the MD2 library in Blender, but when I booted Blender and clicked the File menu, the screen messed up, the whole Blender window seemed to distort itself so that it was at an angle, and the menu didn't work.  What's wrong with Blender?<br/>_________________<br/>DS Firmware 1, Datel Games n' Music card / Chism's FW hacked GBA MP v2 CF
+<br/>
+<br/>
+There's no place like 127.0.0.1.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#139054 - yellowstar - Sat Sep 01, 2007 2:36 am</h4>
+    <div class="postbody"><span class="postbody">I have finally got it to work!
+<br/>
+<br/>
+Apparently,
+<br/>
+my SkipChunk function was skipping into the next chunk's data,
+<br/>
+which caused problems.
+<br/>
+<br/>
+So, the reason it wasn't working,
+<br/>
+was because my SkipChunk function was broken.
+<br/>
+<br/>
+<br/>
+Now I just need to finish my 3DS loader, and the tutorial.
+<br/>
+<br/>
+<br/>
+I have finished learning Python.
+<br/>
+Now I just need to figure out how to get the Mesh data in Blender.
+<br/>
+<br/>
+As for converting 3D Models to my own formats,
+<br/>
+once I finish this 3DS loader,(or maybe other formats)
+<br/>
+maybe I could write a program which
+<br/>
+loads a 3DS file,(or maybe a differen't format)
+<br/>
+then exports to my own format.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

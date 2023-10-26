@@ -1,0 +1,369 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Comms Protocol - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Comms Protocol</h2>
+<div id="posts">
+<div class="post">
+    <h4>#152742 - iprice - Thu Mar 20, 2008 9:10 am</h4>
+    <div class="postbody"><span class="postbody">I am trying to communicate for in gaem multiplayer... is there a specific format to the messages for the hardware to recieve..... mac addresses at bit 10 etc?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#152855 - iprice - Fri Mar 21, 2008 7:55 pm</h4>
+    <div class="postbody"><span class="postbody">anyone else messing with WMB_Host?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#152954 - iprice - Sun Mar 23, 2008 10:24 am</h4>
+    <div class="postbody"><span class="postbody">No-one replys to my problems :(
+<br/>
+<br/>
+I prepare the message:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">   comms_data[10] = my_mac[0];
+<br/>
+   comms_data[16] = my_mac[0];
+<br/>
+   comms_data[24] = GAME_ID_CODE;
+<br/>
+   comms_data[25] = MESSAGE_GAME_HOST;
+<br/>
+   SendFrame(comms_data, 28);
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I send the info
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void SendFrame(unsigned char *data, int len)
+<br/>
+{
+<br/>
+   int i;
+<br/>
+   int cf;
+<br/>
+   
+<br/>
+   cf = tx_base;
+<br/>
+   for(i=0;i&lt;12;i++) {
+<br/>
+      tx_queue[cf][i] = 0;
+<br/>
+   }
+<br/>
+<br/>
+   tx_queue[cf][8] = 0x14; // Trans rate... a=1 14=2mbit
+<br/>
+   
+<br/>
+   // Data Size
+<br/>
+   tx_queue[cf][10]   = (len+4)&amp;0xFF;
+<br/>
+   tx_queue[cf][11]   = ((len+4)&amp;0xFF00)&gt;&gt;8;
+<br/>
+<br/>
+   for(i=0;i&lt;len;i++) {
+<br/>
+      tx_queue[cf][i+12] = data[i];
+<br/>
+   }
+<br/>
+<br/>
+   tx_sizes[cf] = len+16;
+<br/>
+   tx_base++;
+<br/>
+   tx_count++;
+<br/>
+<br/>
+   if(tx_base == 64) tx_base = 0;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I check for a reply in a timer
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void MY_IRQ(void)
+<br/>
+{
+<br/>
+   if(REG_IF &amp; IRQ_VBLANK)
+<br/>
+   {
+<br/>
+      VBLANK_INTR_WAIT_FLAGS |= IRQ_VBLANK;
+<br/>
+      REG_IF |= IRQ_VBLANK;
+<br/>
+      vblank_happened = 1;
+<br/>
+      ReceiveUserData(); //check for reply here
+<br/>
+   } 
+<br/>
+   if (REG_IF &amp; IRQ_TIMER2)
+<br/>
+   {
+<br/>
+      REG_IF |= IRQ_TIMER2;
+<br/>
+      Timer_Beacons();
+<br/>
+   }
+<br/>
+   REG_IF = REG_IF;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+For these simple messages, do I have to ACK? Do I have to include rsa? Does the hardware have to check anything or is it all software? Anyone?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#152991 - yellowstar - Sun Mar 23, 2008 10:23 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>iprice wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+I prepare the message:
+<br/>
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">   comms_data[10] = my_mac[0];//memcpy(&amp;comms_data[10],mymac);
+<br/>
+   comms_data[16] = my_mac[0];//memcpy(&amp;comms_data[16],tomac);
+<br/>
+   comms_data[24] = GAME_ID_CODE;
+<br/>
+   comms_data[25] = MESSAGE_GAME_HOST;
+<br/>
+   SendFrame(comms_data, 28);
+<br/>
+//Replace the orginal code next to the comments with the code in comments
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I send the info
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void SendFrame(unsigned char *data, int len)
+<br/>
+{
+<br/>
+   int i;
+<br/>
+   int cf;
+<br/>
+   
+<br/>
+   cf = tx_base;
+<br/>
+   for(i=0;i&lt;12;i++) {
+<br/>
+      tx_queue[cf][i] = 0;
+<br/>
+   }
+<br/>
+<br/>
+   tx_queue[cf][8] = 0x14; // Trans rate... a=1 14=2mbit
+<br/>
+   
+<br/>
+   // Data Size
+<br/>
+   tx_queue[cf][10]   = (len+4)&amp;0xFF;
+<br/>
+   tx_queue[cf][11]   = ((len+4)&amp;0xFF00)&gt;&gt;8;
+<br/>
+<br/>
+   for(i=0;i&lt;len;i++) {
+<br/>
+      tx_queue[cf][i+12] = data[i];
+<br/>
+   }
+<br/>
+<br/>
+   tx_sizes[cf] = len+16;
+<br/>
+   tx_base++;
+<br/>
+   tx_count++;
+<br/>
+<br/>
+   if(tx_base == 64) tx_base = 0;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I check for a reply in a timer
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void MY_IRQ(void)
+<br/>
+{
+<br/>
+   if(REG_IF &amp; IRQ_VBLANK)
+<br/>
+   {
+<br/>
+      VBLANK_INTR_WAIT_FLAGS |= IRQ_VBLANK;
+<br/>
+      REG_IF |= IRQ_VBLANK;
+<br/>
+      vblank_happened = 1;
+<br/>
+      ReceiveUserData(); //check for reply here
+<br/>
+   } 
+<br/>
+   if (REG_IF &amp; IRQ_TIMER2)
+<br/>
+   {
+<br/>
+      REG_IF |= IRQ_TIMER2;
+<br/>
+      Timer_Beacons();
+<br/>
+   }
+<br/>
+   REG_IF = REG_IF;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+For these simple messages, do I have to ACK? Do I have to include rsa? Does the hardware have to check anything or is it all software? Anyone?</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+You should replace the code at the top with the code in comments
+<br/>
+You shouldn't need to ACK, that's for if you want to make sure the packets arrive. And implementing this would be difficult, so best not deal with it.(liblobby does ACK however)
+<br/>
+I've heard that it's bad to use TCP/IP in multiplayer games,(big slowdown)
+<br/>
+and TCP/IP would be similar to what you would be implementing, so avoid it.(I have even looked at packet captures of DS Wifi games, and they don't ACK for the actual gameplay)
+<br/>
+<br/>
+I noticed TimerBeacons was in there... Fix that so it only sends out WMB beacons when searching for players, not when the actual gameplay started. No, you don't need RSA, that's only during the WMB transfer.
+<br/>
+For what your doing, it mainly software, not hardware, that's the problem in your case.
+<br/>
+<br/>
+What exactly is the problem? You should post the ReceiveUserData function, or at least part of it.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#152995 - iprice - Sun Mar 23, 2008 11:49 pm</h4>
+    <div class="postbody"><span class="postbody">Thanks for the reply... but when I am offering host and waiting for a client, I don't know the send to mac.
+<br/>
+<br/>
+WMB_HOST uses the same mac, mymac....
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">copy_mac(&amp;assocres[10], &amp;mymac[0]);
+<br/>
+copy_mac(&amp;assocres[16], &amp;mymac[0]);
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#153000 - yellowstar - Mon Mar 24, 2008 2:20 am</h4>
+    <div class="postbody"><span class="postbody">In the original WMB_Host, on Line 567, there's this:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+copy_mac(&amp;authres[4], &amp;fh-&gt;mac2[0]);
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Copy authres to a global var called player_mac or something similar, and use that during gameplay.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#153017 - wintermute - Mon Mar 24, 2008 5:56 am</h4>
+    <div class="postbody"><span class="postbody">You're probably better off not wasting your time with this, sgstair has time to look at the new dswifi he was promising and liblobby is a bit on the broken side.<br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#153039 - iprice - Mon Mar 24, 2008 2:24 pm</h4>
+    <div class="postbody"><span class="postbody">I am trying to get download play and 2 cart play up and running for a game I have.... I can get either in-game comms OR download comms.... I am trying to use WMB_Host download comms and adapt them for in-game comms....</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#153059 - wintermute - Mon Mar 24, 2008 5:29 pm</h4>
+    <div class="postbody"><span class="postbody">I realise that. What I said still applies.
+<br/>
+<br/>
+The next couple of toolchain and library updates will break liblobby beyond repair. There's not really a lot we can do about it, most of the design is basically just a horrible hack.<br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#153128 - iprice - Tue Mar 25, 2008 12:55 pm</h4>
+    <div class="postbody"><span class="postbody">I am trying to write my own comms, based on liblobby idea using WMB_Host.... hopefully new updates will not stop my code.....
+<br/>
+<br/>
+I have all the code in the right place but something is still wrong with the messages I am sending, even with the correct MAC.
+<br/>
+<br/>
+Has anyone got some spare time to have a look at my code?
+<br/>
+<br/>
+Cheers</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#153287 - yellowstar - Thu Mar 27, 2008 7:20 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>iprice wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+I have all the code in the right place but something is still wrong with the messages I am sending, even with the correct MAC.
+<br/>
+<br/>
+Has anyone got some spare time to have a look at my code?
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+So, the packets you're sending, on the receiving end, they're not what they should be?(What supposed to be in the packet, from the sender, it isn't the same on the receiving end?)
+<br/>
+It might by a corruption problem.  liblobby takes care of this, but WMB_Host, does not, at least not by default.
+<br/>
+You'd need to place a checksum before the actual packet data. You'd calculate this before sending the packet, and place it as said before.
+<br/>
+Then on the receiving end, you'd calculate the checksum of the packet data, then compare the result of that checksum, and the checksum stored in the packet, from the sender. If they're the same, all is well, and the only problem could be some bug in your sending/receiving code. But, if not, it's corrupted, and you simply ignore that packet.(Trying to resend it would get into the complicated TCPIP stuff)
+<br/>
+(Even when a packet does get corrupted, even when your code is fine, it's not you're fault - it's just how wireless, and every communication system is.)
+<br/>
+As for calculating the checksum, try CRC32. But, you'll need to Google/search about this - I don't know the arthrogram for this.(But, you probably could grab the code for the checksum calc for the WMB_Host beacons. :-) )
+<br/>
+<br/>
+As for looking at you're code... Well, my homebrew card is broken, so I can't run your program to see what's wrong.(On second thought, I couldn't even try it even if my card was working, since this is a homebrew Download Play game, and I only have DSes with original, NoFlashMe firmwares...)
+<br/>
+<br/>
+Well, I have lots of spare time since my card is busted, so, go ahead and send the code.(You can either post here, or PM me, it's up to you)</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

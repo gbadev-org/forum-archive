@@ -1,0 +1,161 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Two issues I need help with - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Two issues I need help with</h2>
+<div id="posts">
+<div class="post">
+    <h4>#166837 - Lazy1 - Thu Feb 19, 2009 10:37 pm</h4>
+    <div class="postbody"><span class="postbody">Issue 1: Sound trouble
+<br/>
+The new sound system has caused a few problems with sound playback in wolf3d.
+<br/>
+Sounds that should play quickly like the sub machinegun play once and nothing else will play until that sound finishes.
+<br/>
+I also cannot reserve channels on the arm7 for music playback, there are times where sound playback corrupts one of the music channels and makes it just play static.
+<br/>
+<br/>
+Issue 2: It's stuck... somewhere
+<br/>
+A very rare issue happens every now and then where the game will freeze for some time. Because wolf3d is fairly large I can't go dropping printfs everywhere and hope to catch where it is.
+<br/>
+Desmume can debug but so far it hangs randomly making it useless for this and I lost my no$gba debug key. (I asked the author for help but got no response)
+<br/>
+<br/>
+Any ideas on how to solve these would be greatly appreciated since they are the ones mainly holding me back now.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#166838 - a128 - Thu Feb 19, 2009 10:51 pm</h4>
+    <div class="postbody"><span class="postbody">why not use the defaultExceptionHandler() ?
+<br/>
+<br/>
+look at the PC and look at the .map file.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#166839 - Lazy1 - Thu Feb 19, 2009 10:57 pm</h4>
+    <div class="postbody"><span class="postbody">I do install the default exception handler, it's not crashing but getting caught in a loop somewhere.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#166851 - elhobbs - Fri Feb 20, 2009 4:48 pm</h4>
+    <div class="postbody"><span class="postbody">does wolf3d malloc a huge block of ram on startup like other id games? if so may need to re-evalute how big of a chunk your are letting it grab as the newer releases of libnds tend to get a little bigger each time. I think wifi and fat need a little bit of free memory as I believe they both use malloc/free internally.
+<br/>
+<br/>
+you might also try writing an alternating char on a text console, for instance in the upper left corner, during a vblank/hblank/timer interrupt. that could at least tell you if the arm9 is completely frozen vs in an infinite loop somewhere.
+<br/>
+<br/>
+aside from that... good luck with those print statements ;)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#166852 - Lazy1 - Fri Feb 20, 2009 4:55 pm</h4>
+    <div class="postbody"><span class="postbody">As far as I know it doesn't, but I have seen the game unfreeze after being locked for a few seconds.
+<br/>
+Maybe it's the timing code, it's been a while since I wrote it so maybe it's time to take another look.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#include &lt;nds.h&gt;
+<br/>
+#include "../wl_def.h"
+<br/>
+#include "../misc.h"
+<br/>
+<br/>
+static long g_timerBaseMS = 0;
+<br/>
+static long g_lastTime = 0;
+<br/>
+static long g_timeCount = 0;
+<br/>
+<br/>
+extern unsigned long totalVBlanks;
+<br/>
+<br/>
+unsigned long getMS( void ) {
+<br/>
+   return g_timerBaseMS + TIMER1_DATA;
+<br/>
+}
+<br/>
+<br/>
+void timer1Overflow( void ) {
+<br/>
+   g_timerBaseMS+= 65536;
+<br/>
+}
+<br/>
+<br/>
+void init_TimeCount( void ) {
+<br/>
+   irqSet( IRQ_TIMER1, timer1Overflow );
+<br/>
+   irqEnable( IRQ_TIMER1 );
+<br/>
+<br/>
+   TIMER0_DATA = 32768;
+<br/>
+   TIMER0_CR = TIMER_DIV_1 | TIMER_ENABLE;
+<br/>
+<br/>
+   TIMER1_DATA = 0;
+<br/>
+   TIMER1_CR = TIMER_ENABLE | TIMER_CASCADE | TIMER_IRQ_REQ;
+<br/>
+}
+<br/>
+<br/>
+void set_TimeCount( unsigned long time ) {
+<br/>
+   g_lastTime = getMS( );
+<br/>
+   g_timeCount = time;
+<br/>
+}
+<br/>
+<br/>
+unsigned long get_TimeCount( void ) {
+<br/>
+   long timeDifference = getMS( ) - ( g_lastTime );
+<br/>
+<br/>
+   return ( ( timeDifference * TickBase ) + ( g_timeCount * TickBase ) ) / 1000;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#169454 - Synthetic - Sun Jul 12, 2009 1:39 am</h4>
+    <div class="postbody"><span class="postbody">Lazy, I've been having the exact same problem with the freezing.
+<br/>
+<br/>
+Did you ever figure out what was happening?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#169456 - Lazy1 - Sun Jul 12, 2009 3:42 am</h4>
+    <div class="postbody"><span class="postbody">Not really, ended up rewriting the port and the problem never came back.
+<br/>
+The timing is closer to what it should be.
+<br/>
+<br/>
+What exactly are you having trouble with?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#169487 - Synthetic - Fri Jul 17, 2009 4:58 am</h4>
+    <div class="postbody"><span class="postbody">Figured it out.  It ended up being a lack of precision that accumulated until I stepped out of memory bounds.  Very frustrating to track down.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

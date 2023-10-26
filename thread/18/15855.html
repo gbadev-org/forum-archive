@@ -1,0 +1,135 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>flushing and dma vs just copying memory - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > flushing and dma vs just copying memory</h2>
+<div id="posts">
+<div class="post">
+    <h4>#160790 - gauauu - Tue Jul 22, 2008 4:02 pm</h4>
+    <div class="postbody"><span class="postbody">Does anyone have experience or suggestions about whether it's "better" to flush the cache and use dma copies, or just to copy the memory directly?
+<br/>
+<br/>
+I'm dynamically generating a tile map in memory, then at vblank, want to copy it to vram.  I currently just copy the memory manually, but didn't know if there was a reason that flushing and using dma might be better.  (is it faster to flush and then use dma as opposed to copying the memory myself from the cache version?)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#160792 - eKid - Tue Jul 22, 2008 4:28 pm</h4>
+    <div class="postbody"><span class="postbody">Hm... It probably depends on how large the data is.
+<br/>
+A small chunk of data would perhaps be faster if the CPU copied it (if most of it is in the cache).
+<br/>
+For larger chunks it would probably be better to use DMA. 
+<br/>
+<br/>
+If you're using the CPU to copy it, make sure you're using the LDMIA/STMIA instructions to speed things up!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#160795 - thoduv - Tue Jul 22, 2008 4:55 pm</h4>
+    <div class="postbody"><span class="postbody">With your copy code in ITCM, and your data to copy completely in the cache, it's likely to be way faster to copy it with ldmia/stmia.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#160799 - ingramb - Tue Jul 22, 2008 6:29 pm</h4>
+    <div class="postbody"><span class="postbody">The DS cache is read allocate, so writes don't bring data into the cache (I think this is how it works).  So if you're writing tilemap data to main memory, it probably isn't getting in the cache anyway.  It might be best to invalidate the cache, then write your tilemap data to an uncached address (just to be safe), and then dma to vram.
+<br/>
+<br/>
+Or for more speed, maybe generate your tilemap data in temporaty vram (something allocated to the cpu), and then dma from temp vram into tile vram.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#160807 - elhobbs - Tue Jul 22, 2008 9:37 pm</h4>
+    <div class="postbody"><span class="postbody">here is a different thread where this has already been discussed.
+<br/>
+<a class="postlink" href="http://forum.gbadev.org/viewtopic.php?t=13242&amp;start=15" target="_blank">http://forum.gbadev.org/viewtopic.php?t=13242&amp;start=15</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#160810 - thoduv - Tue Jul 22, 2008 10:36 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>ingramb wrote:</b></span></td> </tr> <tr> <td class="quote">writes don't bring data into the cache (I think this is how it works)</td> </tr></table><span class="postbody">
+<br/>
+If it worked that way, "flushing" cache would be useless, be cause the cache would ever be less up-to-date than actual memory...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#160813 - simonjhall - Tue Jul 22, 2008 11:00 pm</h4>
+    <div class="postbody"><span class="postbody">It's a read-allocate cache; works like this:
+<br/>
+<br/>
+- if the cache doesn't contain information for location X and a write is done to it, the write will be done directly to main memory and no information will be written into the cache (no copy, nothing).
+<br/>
+- if the cache doesn't contain info for X and a read is done, that data is read into the cache and then brought onto the cpu. A copy now exists in the cache
+<br/>
+- if a write is does to location X but it does exist in the cache already then that cache entry is updated. Assuming it's not in write-through mode (ie it's in write-back mode), main memory will not be updated. If it IS in write-through mode both the cache and main memory will be updated.
+<br/>
+<br/>
+Spent half an hour reading all about this on the tube home from work today :-D<br/>_________________<br/><span style="font-weight: bold"><a class="postlink" href="https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&amp;business=simonjhall%40gmail%2ecom&amp;no_shipping=2&amp;no_note=1&amp;tax=0&amp;currency_code=GBP&amp;lc=GB&amp;bn=PP%2dDonationsBF&amp;charset=UTF%2d8" target="_blank">Big thanks to everyone who donated for Quake2</a></span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#160818 - eKid - Wed Jul 23, 2008 12:49 am</h4>
+    <div class="postbody"><span class="postbody">I think you just need to empty the write buffer (small 8 word buffer) (enabled on mainram) before a dma copy.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#160823 - sajiimori - Wed Jul 23, 2008 1:59 am</h4>
+    <div class="postbody"><span class="postbody">When the DMA <span style="font-weight: bold">source</span> is main RAM, you need to <span style="font-weight: bold">store</span> that region (to commit pending writes).
+<br/>
+<br/>
+When the DMA <span style="font-weight: bold">destination</span> is main RAM, you need to <span style="font-weight: bold">flush or invalidate</span> that region (to prevent writebacks from overwriting your data).  Invalidating is an optimization of flushing in this case, and should only be done in the 32-byte aligned portion of the region.  Unaligned ends need to be <span style="font-weight: bold">flushed</span>.
+<br/>
+<br/>
+When main RAM is the source and <span style="font-weight: bold">not</span> the destination of a DMA, <span style="font-weight: bold">store all</span> is almost always the best.  Writebacks have to happen eventually anyway, so it potentially costs almost nothing (depending on whether you tend to write to cached regions multiple times, which I don't).
+<br/>
+<br/>
+My general advice is to only use DMA if you can get away with using "store all", and to use the CPU otherwise.  <span style="font-weight: bold">Range operations are linear time</span> on the size of the range, and flushing (or invalidation) can cause extra cache misses.
+<br/>
+<br/>
+Ultimately, you need to time it under real-world conditions.  There are too many factors to theorize about.
+<br/>
+<br/>
+Edit: The write buffer is automatically emptied when starting a DMA -- no programmer intervention is required.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#160825 - Dwedit - Wed Jul 23, 2008 2:34 am</h4>
+    <div class="postbody"><span class="postbody">The write buffer is only emptied on DMA transfers if you are calling libnds's functions instead of directly poking the DMA control registers.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#160858 - Miked0801 - Wed Jul 23, 2008 6:47 pm</h4>
+    <div class="postbody"><span class="postbody">For data I knew that didn't need to be flushed before xfer to VRAM, DMA was faster.  If I am forced to flush, ldmia/stmia pairs were faster. YMMV.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#160878 - sajiimori - Wed Jul 23, 2008 11:13 pm</h4>
+    <div class="postbody"><span class="postbody">No Dwedit, writing to the DMA registers automatically causes the write buffer to be flushed, because the IO register range is uncached*, and using the CPU to write to an uncached region automatically flushes the write buffer.
+<br/>
+<br/>
+Don't confuse the write buffer with the data or instruction caches -- they are different.  Programmers basically never have to think about the write buffer.
+<br/>
+<br/>
+<span style="font-style: italic">* This assumes you haven't messed with your protection unit and decided to cache your IO region, which would be weird.</span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#160884 - Dwedit - Wed Jul 23, 2008 11:41 pm</h4>
+    <div class="postbody"><span class="postbody">Wait.. There's a write buffer?  Never heard of it.  I thought you were talking about the data cache.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#160889 - sajiimori - Thu Jul 24, 2008 12:58 am</h4>
+    <div class="postbody"><span class="postbody">Yeah, I've never had to do anything special for it, but it's interesting to know about anyway.  =)
+<br/>
+<br/>
+Anyway, I agree with MikeD that flushing sucks, and if you have to flush, then just use the CPU.  StoreAll is the most I'm usually willing to do for the sake of setting up a DMA.
+<br/>
+<br/>
+StoreAll is great for doing DMAs from main RAM to VRAM, for instance.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#160894 - gauauu - Thu Jul 24, 2008 4:11 am</h4>
+    <div class="postbody"><span class="postbody">Ha...I just now also discovered that dmaCopyWords(dest, src, length) specifies length in bytes, not in words.  That sure explains why some things aren't getting copied correctly.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

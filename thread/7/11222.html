@@ -1,0 +1,243 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Pointer to member function problem - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>C/C++ > Pointer to member function problem</h2>
+<div id="posts">
+<div class="post">
+    <h4>#103379 - Mucca - Thu Sep 21, 2006 2:00 pm</h4>
+    <div class="postbody"><span class="postbody">Having taken a look recently at more powerful languages such as Haskell and OCaml, I began to yearn for such generic programming capabilities in C++, and decided to see what I could muster up with templates. So anyway, I have a situation where I need to iterate across an array of numbers, locate an object based on that number, and call a member function passing the located object as a parameter. Seeing as I would probably need roughly the same functionality in a number of classes, I decided to try to factor the code into a templatized static function, taking a template class, the array of numbers, and, crucially a pointer to a member function of the templatized class. Basically what I was trying to achieve was a c++ version of Haskell's map function, albeit with limitations on the function parameter.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+class EntityFactory{
+<br/>
+         ..
+<br/>
+<br/>
+   // Map a member function of an object of class TYPE taking an Entity* parameter to all
+<br/>
+   // entity ids in list. Level is used to find entities
+<br/>
+   template&lt;class TYPE&gt; 
+<br/>
+   static void 
+<br/>
+   MapMethodToEntityIDList            (   TYPE * caller,
+<br/>
+                                 void (TYPE::*Method)(Entity*) method,
+<br/>
+                                 const ID* idList,
+<br/>
+                                 Level* level )
+<br/>
+   {
+<br/>
+      for( int i=0; i&lt;refList-&gt;numItems; i++ )
+<br/>
+      {
+<br/>
+         Entity* e = level-&gt;FindEntity( idList[i] );
+<br/>
+         caller-&gt;*method(e);
+<br/>
+      }
+<br/>
+   }
+<br/>
+<br/>
+};
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I subsequently tried to call the method 
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+<br/>
+SyncEntity::Init()
+<br/>
+{
+<br/>
+    /// Call AddObject for each id in list
+<br/>
+    EntityFactory::MapMethodToEntityIDList&lt;SyncEntity&gt;( this, SyncEntity::*AddObject, this-&gt;idList, this-&gt;level );
+<br/>
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Sadly, as you may have guessed by now, it failed to compile, complaining about an error before the comma in the line containing the member function parameter to MapMethodToEntityIDList.
+<br/>
+<br/>
+Anyway, Im using, and am stuck using, gcc 2.9.5, and I was just wondering if the problem lies with my compiler, or with my syntax, or with the idea itself? Are pointers to member functions supported at all? Or are they just a myth? Of course I could make it a pointer to a static function, pass my object, cast, and call my member function, but that just doesnt look very nice. Obviously this is a trivial example, its every bit as easy to write the loop everywhere its needed, but its definitely a useful technique, especially if more complicated processing of the idList is required.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#103406 - poslundc - Thu Sep 21, 2006 5:08 pm</h4>
+    <div class="postbody"><span class="postbody">You can do pointers-to-members, but I couldn't say if they are bug-free in GCC 2.
+<br/>
+<br/>
+<a class="postlink" href="http://www.newty.de/fpt/index.html" target="_blank">Pretty much the best guide to function pointers around.</a>
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#103411 - Mucca - Thu Sep 21, 2006 5:44 pm</h4>
+    <div class="postbody"><span class="postbody">A nice tutorial, but it doesnt even mention the member pointer operators, ::* , .*, and -&gt;*. Its solution for such circumstances is to have a static caller function, and pass a pointer to that, which, as I mentioned previously is less elegant, and frankly not worth the hassle. 
+<br/>
+<br/>
+Hmm, if I write the function as such: 
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+MapMethodToEntityIDList            (   TYPE * caller,
+<br/>
+                                 void (TYPE::*Method)(Entity*),
+<br/>
+                                 IDList* idList,
+<br/>
+                                 Level* level )
+<br/>
+   {
+<br/>
+      
+<br/>
+      for( int i=0; i&lt;idList-&gt;numItems; i++ )
+<br/>
+      {
+<br/>
+         Entity* e = level-&gt;FindEntity( idList[i] );
+<br/>
+         caller-&gt;*(TYPE::*Method)(e);
+<br/>
+      }
+<br/>
+   }
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+ie, not naming the member function pointer parameter, the compiler accepts it, but reports a parse error before * in the line where I call the member function, which I consider progress :), esp. as thats the last real line in the function
+<br/>
+<br/>
+Reading in The C++ Programming Language, Stroustrap presents this technique, albeit not combined with templates. He does however show a nice call-by-name technique using member-function pointers, and surprisingly says that even the address of virtual member functions can be taken. Cool.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#103413 - tepples - Thu Sep 21, 2006 6:08 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Mucca wrote:</b></span></td> </tr> <tr> <td class="quote">Its solution for such circumstances is to have a static caller function, and pass a pointer to that, which, as I mentioned previously is less elegant, and frankly not worth the hassle.</td> </tr></table><span class="postbody">
+<br/>
+It is worth it if you're trying to interface a library in the C language with C++ classes.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#103416 - sajiimori - Thu Sep 21, 2006 7:46 pm</h4>
+    <div class="postbody"><span class="postbody">Check out boost::bind.  In fact, check out Boost in general.  You may find that many of these problems are already solved.
+<br/>
+<br/>
+Edit: Quick example.  I didn't name the function "map" because map returns the new list and has no side-effects.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">template&lt;class List, class Function&gt;
+<br/>
+void for_each(List* list, const Function&amp; f)
+<br/>
+{
+<br/>
+  for(List::iterator it = list-&gt;begin(); it != list-&gt;end(); ++it)
+<br/>
+    f(&amp;*it);
+<br/>
+}
+<br/>
+<br/>
+void set_to_product(int* dest, int rv)
+<br/>
+{
+<br/>
+  *num = *num * rv;
+<br/>
+}
+<br/>
+<br/>
+void print_num(int i)
+<br/>
+{
+<br/>
+  std::cout &lt;&lt; i &lt;&lt; ' ';
+<br/>
+}
+<br/>
+<br/>
+void test()
+<br/>
+{
+<br/>
+  std::vector&lt;int&gt; v;
+<br/>
+<br/>
+  v.push_back(5);
+<br/>
+  v.push_back(12);
+<br/>
+<br/>
+  int multiply_by = 2;
+<br/>
+  for_each(&amp;v, boost::bind(set_to_product, _1, multiply_by));
+<br/>
+<br/>
+  // Outputs "10 24 ".
+<br/>
+  for_each(&amp;v, print_num);
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+With boost::lambda, the two for_each calls can be:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">  for_each(&amp;v, *_1 = *_1 * _2);
+<br/>
+  for_each(&amp;v, cout &lt;&lt; _1 &lt;&lt; ' ');
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#103431 - Mucca - Thu Sep 21, 2006 10:52 pm</h4>
+    <div class="postbody"><span class="postbody">Boost is indeed very interesting, it seems to bring much of the power of other higher level languages to C++, and if I were developing for PC I would definitely use it (although for a PC I might just use another language). Unfortunately I forsee major difficulties getting the libraries to compile for, let alone run on GBA. I dont use the STL, I fear what it would do to my poor little heap, and boost I imagine is even more aggressive.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#103440 - sajiimori - Fri Sep 22, 2006 12:03 am</h4>
+    <div class="postbody"><span class="postbody">GCC has no trouble with Boost, so if you're using GCC, then Boost will compile.
+<br/>
+<br/>
+The bind class doesn't do dynamic allocation.  If you're concerned about what a particular utility does, the best thing to do is read the source or connect a debugger to it -- no point in being afraid of the dark just because you're wearing sunglasses indoors.  ;)
+<br/>
+<br/>
+Edit: Just noticed you're using a pretty old version of GCC.  I don't know how well it'll get along with Boost.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

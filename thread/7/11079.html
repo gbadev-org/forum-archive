@@ -1,0 +1,192 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Compile and link -some- files, and then link more later - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>C/C++ > Compile and link -some- files, and then link more later</h2>
+<div id="posts">
+<div class="post">
+    <h4>#101759 - MrD - Thu Sep 07, 2006 10:52 pm</h4>
+    <div class="postbody"><span class="postbody">Say I've got a project consisting of a dozen .c files, which my makefile determines should be compiled into .o files and then linked together and cook ed for 45 until golden brown.
+<br/>
+<br/>
+Is there a way to link all of the .o files except one into a single file, which can then be linked to a version of the missing .o and objcopy'd into the final rom?
+<br/>
+<br/>
+For example, hypothetical project:
+<br/>
+gbamain.c,
+<br/>
+levelgfx.c,
+<br/>
+enemygfx.c,
+<br/>
+enemybehaviour.c,
+<br/>
+levelmap.c, and all of the necessary headers.
+<br/>
+<br/>
+Can I compile and link gbamain.o, levelgfx.o enemygfx.o and enemybehaviour.o into a single file, and then link that with levelmap.o and complete the rom preparation process?<br/>_________________<br/>Not active on this forum. For Lemmings DS help see its website.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#101762 - gmiller - Thu Sep 07, 2006 11:16 pm</h4>
+    <div class="postbody"><span class="postbody">If your makefile dependencies are correct the only thing that will compile are the files that have been changed.  I also add the makefile to the dependencies so if the makefile is modified all the code is recompiled.
+<br/>
+<br/>
+Using your example here is the makefile I would use (of course I might make a syntax error but the idea will be there:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+<br/>
+#define a rule for creating .o's from .c's
+<br/>
+%.o: %.c
+<br/>
+   @echo $(notdir $&lt;)
+<br/>
+   @echo "'C' THUMB Rule"
+<br/>
+   $(CC) -MMD -MP -MF -mthumb -mthumb-interword $(CFLAGS) -c $&lt; -o $@
+<br/>
+<br/>
+OFILES = gbamain.o levelgfx.o enemygfx.o enemybehavior.o levelmap.o
+<br/>
+<br/>
+game.elf :  makefile $(OFILES)
+<br/>
+                 $(LD)  $(LDFLAGS) -specs=gba.specs $(OFILES) $(LIBPATHS) $(LIBS) -o $@
+<br/>
+<br/>
+gbamain.o : gbamain.c (all of the header files you care about)
+<br/>
+<br/>
+levelgfx.o : levelgfx.c (same with headers you care about)
+<br/>
+<br/>
+enemygfx.o : enemygfx.c (headers)
+<br/>
+<br/>
+enemybehavior.o : enemybehavior.c (headers)
+<br/>
+<br/>
+levelmap.o : levelmap.o (headers)
+<br/>
+<br/>
+clean :
+<br/>
+          rm -rf $(OFILES)
+<br/>
+<br/>
+makefile : clean
+<br/>
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+If the makefile is newer than the elf all of object files will be removed.  If any of the source files are newer than their source or header files that source file will be re-compiled.  If you want to override the rule for a source file  then put the same line as the rule after the dependency rule and make the changes you need.  Remember that the lines that are indented are indented with a TAB not spaces.  Hope this helps.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#101763 - tepples - Thu Sep 07, 2006 11:23 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>MrD wrote:</b></span></td> </tr> <tr> <td class="quote">Say I've got a project consisting of a dozen .c files, which my makefile determines should be compiled into .o files and then linked together and cook ed for 45 until golden brown.
+<br/>
+<br/>
+Is there a way to link all of the .o files except one into a single file</td> </tr></table><span class="postbody">
+<br/>
+Yes, by turning them into a library using <span style="font-weight: bold">ar</span>, the same tool used to build libnds7.a and libnds9.a:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">E:\&gt;arm-eabi-ar
+<br/>
+Usage: arm-eabi-ar [emulation options] [-]{dmpqrstx}[abcfilNoPsSuvV] [member-name] [count] archive-file file...
+<br/>
+       arm-eabi-ar -M [&lt;mri-script]
+<br/>
+ commands:
+<br/>
+  d            - delete file(s) from the archive
+<br/>
+  m[ab]        - move file(s) in the archive
+<br/>
+  p            - print file(s) found in the archive
+<br/>
+  q[f]         - quick append file(s) to the archive
+<br/>
+  r[ab][f][u]  - replace existing or insert new file(s) into the archive
+<br/>
+  t            - display contents of archive
+<br/>
+  x[o]         - extract file(s) from the archive
+<br/>
+ command specific modifiers:
+<br/>
+  [a]          - put file(s) after [member-name]
+<br/>
+  [b]          - put file(s) before [member-name] (same as [i])
+<br/>
+  [N]          - use instance [count] of name
+<br/>
+  [f]          - truncate inserted file names
+<br/>
+  [P]          - use full path names when matching
+<br/>
+  [o]          - preserve original dates
+<br/>
+  [u]          - only replace files that are newer than current archive contents
+<br/>
+<br/>
+ generic modifiers:
+<br/>
+  [c]          - do not warn if the library had to be created
+<br/>
+  [s]          - create an archive index (cf. ranlib)
+<br/>
+  [S]          - do not build a symbol table
+<br/>
+  [v]          - be verbose
+<br/>
+  [V]          - display the version number
+<br/>
+  @&lt;file&gt;      - read options from &lt;file&gt;
+<br/>
+ emulation options:
+<br/>
+  No emulation specific options
+<br/>
+arm-eabi-ar: supported targets: elf32-littlearm elf32-bigarm elf32-little elf32-big srec symbolsrec tekhex binary ihex</td> </tr></table><span class="postbody">
+<br/>
+For more info, <a class="postlink" href="http://www.gnu.org/software/binutils/manual/html_chapter/binutils_1.html#SEC1" target="_blank">man ar</a>.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#101766 - gmiller - Thu Sep 07, 2006 11:40 pm</h4>
+    <div class="postbody"><span class="postbody">Yes ... an 'archive' file will put them together in one file.  If you put your main in there you might have to force the link step to use it because no one calls main.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#101782 - sajiimori - Fri Sep 08, 2006 12:30 am</h4>
+    <div class="postbody"><span class="postbody">Using <span style="font-weight: bold">ar</span> still requires a full link at the end, which works fine, but there's also a "partial link" option which is nice if your link step is getting slow and you're only modifying a small part of the project at a time.
+<br/>
+<br/>
+(A full link of a debug build can approach 2 minutes near the end of my projects.  Ouch!)
+<br/>
+<br/>
+The <span style="font-weight: bold">ld</span> option of interest is <span style="font-weight: bold">-i</span>, for "incremental link".</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

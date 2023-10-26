@@ -1,0 +1,253 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>No Translation [Solved] - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > No Translation [Solved]</h2>
+<div id="posts">
+<div class="post">
+    <h4>#124841 - relpats_eht - Mon Apr 09, 2007 3:03 am</h4>
+    <div class="postbody"><span class="postbody">I have been attempting to make the switch from software to hardware matrices on my model loader and have come across a bit of a problem: the resulting image seems to be ignoring all premultiplication translation.
+<br/>
+<br/>
+Previously, I had been transforming each vertex through the matrix of its corresponding joint in software, which, simplified, was something like this:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">Vector newVertex(curVert-&gt;location);
+<br/>
+newVertex.Transform(matrix-&gt;GetMatrix());
+<br/>
+F32* vert = newVertex.GetVector();
+<br/>
+<br/>
+glTranslate3f32(vert[0].v, vert[1].v, vert[2].v);
+<br/>
+glVertex3v16(0, 0, 0);
+<br/>
+glTranslate3f32(-vert[0].v, -vert[1].v, -vert[2].v);</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+The above worked just fine, but I am trying to move past that as it doesn't work well for normals and is slower than using hardware. Therefore, I now have code that looks like this:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">Matrix* matrix = &amp;joint[curVert-&gt;boneId]-&gt;final;
+<br/>
+F32* m = matrix-&gt;GetMatrix();
+<br/>
+m4x4 glM;
+<br/>
+<br/>
+glM.m[0]=m[0].v; glM.m[1]=m[1].v; glM.m[2]=m[2].v; glM.m[3]=m[3].v;
+<br/>
+glM.m[4]=m[4].v; glM.m[5]=m[5].v; glM.m[6]=m[6].v; glM.m[7]=m[7].v;
+<br/>
+glM.m[8]=m[8].v; glM.m[9]=m[9].v; glM.m[10]=m[10].v; glM.m[11]=m[11].v;
+<br/>
+glM.m[12]=m[12].v; glM.m[13]=m[13].v; glM.m[14]=m[14].v; glM.m[15]=m[15].v;
+<br/>
+<br/>
+glPushMatrix();
+<br/>
+glMultMatrix4x4(&amp;glM);
+<br/>
+<br/>
+glTranslate3f32(curVert-&gt;location[0].v, curVert-&gt;location[1].v, curVert-&gt;location[2].v);
+<br/>
+glVertex3v16(0, 0, 0);
+<br/>
+glTranslate3f32(-curVert-&gt;location[0].v, -curVert-&gt;location[1].v, -curVert-&gt;location[2].v);
+<br/>
+<br/>
+glPopMatrix(1);</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+But the result is incorrect. It seems that any translation, but not rotation, done before the call to glMultMatrix is lost in the final result. I do not know if and to what extent the final model is deformed, as I cannot see the whole thing without translation.
+<br/>
+<br/>
+Thus, I ask, could anyone point out just what I am doing wrong? I think my matrices are stored in the same manner and those on the DS (translation on the bottom row) and I seem to be currently unable to figure this out.
+<br/>
+<br/>
+** Yes, I know this code is horrible and inefficient. Step one is making things work, step two is aesthetics and optimization.<br/>_________________<br/>- relpats_eht</span><span class="gensmall"><br/><br/>Last edited by relpats_eht on Wed Apr 11, 2007 2:43 am; edited 1 time in total</span></div>    
+</div>
+<div class="post">
+    <h4>#124884 - gabebear - Mon Apr 09, 2007 5:17 pm</h4>
+    <div class="postbody"><span class="postbody">What Matrix Mode are you in? Be warned that glGetFixed() will change the matrix mode behind your back, so reset your mode whenever you call that function.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#124900 - relpats_eht - Mon Apr 09, 2007 8:50 pm</h4>
+    <div class="postbody"><span class="postbody">I am in model view mode, which I do call again after every glGetFixed statement.<br/>_________________<br/>- relpats_eht</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#124998 - relpats_eht - Tue Apr 10, 2007 8:17 pm</h4>
+    <div class="postbody"><span class="postbody">I most likely is a good idea to give a bit more information on the subject. 
+<br/>
+I have confirmed via adjusting the matrix multiplication by adding to the Z translational field (14) that the model is being drawn completely correctly, although always at the position 0, 0, 0.
+<br/>
+<br/>
+Anyway, here is the complete set of graphical code that is called each frame. What am I doing wrong that is causing all translation to be lost while rotation preserved?
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">glReset();
+<br/>
+GFX_CLEAR_COLOR = BIT(16) | RGB15(0, 0, 0); // Bit 16 is the alpha bit.
+<br/>
+<br/>
+glMatrixMode(GL_PROJECTION);
+<br/>
+glLoadIdentity();
+<br/>
+gluPerspectivef32(50, F32(F32(inttof32(256))/F32(inttof32(192))).v, floattof32(0.1f), inttof32(100)); // 50 = 35 degrees
+<br/>
+<br/>
+glLight(0, RGB15(16,16,16), 0, 1023, 0); // 1023 ~= -1 in v10
+<br/>
+glLight(1, RGB15(24,24,24), 1023, 0, 0);
+<br/>
+<br/>
+glMatrixMode(GL_MODELVIEW);
+<br/>
+<br/>
+glPolyFmt(POLY_ALPHA(31) | POLY_CULL_NONE | POLY_FORMAT_LIGHT0 | POLY_FORMAT_LIGHT1 | POLY_TOON_SHADING);
+<br/>
+<br/>
+glTranslatef(x, y, z);
+<br/>
+glRotatef(xrot, 1.0f, 0.0f, 0.0f);
+<br/>
+glRotatef(yrot, 0.0f, 1.0f, 0.0f);
+<br/>
+glRotatef(zrot, 0.0f, 0.0f, 1.0f);
+<br/>
+<br/>
+int8 matIndex;
+<br/>
+for(int m=0; m&lt;numMeshes; m++){
+<br/>
+   Mesh* curMesh = mesh[m];
+<br/>
+<br/>
+   matIndex = curMesh-&gt;materialIndex;
+<br/>
+   if(matIndex &gt;= 0){
+<br/>
+      glMaterialf(GL_AMBIENT, material[matIndex]-&gt;ambient);
+<br/>
+      glMaterialf(GL_DIFFUSE, material[matIndex]-&gt;diffuse);
+<br/>
+      glMaterialf(GL_SPECULAR, material[matIndex]-&gt;specular);
+<br/>
+      glMaterialf(GL_EMISSION, material[matIndex]-&gt;emissive);
+<br/>
+<br/>
+      if(material[matIndex]-&gt;texture.GetID() &gt; 0){
+<br/>
+         glMatrixMode(GL_TEXTURE);
+<br/>
+         glLoadIdentity();
+<br/>
+         glMatrixMode(GL_MODELVIEW);
+<br/>
+<br/>
+         glEnable(GL_TEXTURE_2D);
+<br/>
+         glBindTexture(GL_TEXTURE_2D, id);
+<br/>
+      }else{
+<br/>
+         glDisable(GL_TEXTURE_2D);
+<br/>
+         glBindTexture(GL_TEXTURE_2D, 0);
+<br/>
+      }
+<br/>
+   }else{
+<br/>
+      glDisable(GL_TEXTURE_2D);
+<br/>
+      glBindTexture(GL_TEXTURE_2D, 0);
+<br/>
+   }
+<br/>
+<br/>
+   glBegin(GL_TRIANGLES);
+<br/>
+      for(int t=0; t&lt;curMesh-&gt;numTriangles; t++){
+<br/>
+         Triangle* curTri = &amp;curMesh-&gt;triangle[t];
+<br/>
+<br/>
+         for(int v=0; v&lt;3; v++){
+<br/>
+            Vertex* curVert = &amp;curMesh-&gt;vertex[curTri-&gt;vertexIndex[v]];
+<br/>
+<br/>
+            glTexCoord1i(curVert-&gt;tex);
+<br/>
+            Matrix* matrix = &amp;joint[curVert-&gt;boneId]-&gt;final;
+<br/>
+            F32* m = matrix-&gt;GetMatrix();
+<br/>
+            m4x4 glM;
+<br/>
+<br/>
+            glM.m[0]=m[0].v; glM.m[1]=m[1].v; glM.m[2]=m[2].v; glM.m[3]=m[3].v;
+<br/>
+            glM.m[4]=m[4].v; glM.m[5]=m[5].v; glM.m[6]=m[6].v; glM.m[7]=m[7].v;
+<br/>
+            glM.m[8]=m[8].v; glM.m[9]=m[9].v; glM.m[10]=m[10].v; glM.m[11]=m[11].v;
+<br/>
+            glM.m[12]=m[12].v; glM.m[13]=m[13].v; glM.m[14]=m[14].v; glM.m[15]=m[15].v;
+<br/>
+<br/>
+            glPushMatrix();
+<br/>
+            glMultMatrix4x4(&amp;glM);
+<br/>
+<br/>
+            glNormal(NORMAL_PACK(curTri-&gt;normal[v][0].Fix().v, curTri-&gt;normal[v][1].Fix().v, curTri-&gt;normal[v][2].Fix().v));
+<br/>
+<br/>
+            glTranslate3f32(curVert-&gt;location[0].v, curVert-&gt;location[1].v, curVert-&gt;location[2].v);
+<br/>
+            glVertex3v16(0, 0, 0);
+<br/>
+<br/>
+            glPopMatrix(1);
+<br/>
+         }
+<br/>
+      }
+<br/>
+   glEnd();
+<br/>
+}
+<br/>
+<br/>
+glFlush();
+<br/>
+swiWaitForVBlank();</td> </tr></table><span class="postbody"><br/>_________________<br/>- relpats_eht</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#125062 - relpats_eht - Wed Apr 11, 2007 2:42 am</h4>
+    <div class="postbody"><span class="postbody">Never mind, I have found the problem. For reasons I am still unsure or, the final element of the my matrices were being set to 1, rather than 4096. All now works as expected.<br/>_________________<br/>- relpats_eht</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#125063 - HyperHacker - Wed Apr 11, 2007 2:49 am</h4>
+    <div class="postbody"><span class="postbody">That sounds like a bug in converting to/from fixed-point.<br/>_________________<br/>I'm a PSP hacker now, but I still &lt;3 DS.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#125065 - relpats_eht - Wed Apr 11, 2007 3:01 am</h4>
+    <div class="postbody"><span class="postbody">Actually, it was a bug in assuming I converted to/from fixed point. I simply forgot how my classes worked, it has been so long since I have worked with the DS.<br/>_________________<br/>- relpats_eht</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

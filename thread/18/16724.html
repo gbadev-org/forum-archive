@@ -1,0 +1,116 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>How to allocate arrays into ARM7 IWRAM and/or ARM9 DTCM - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > How to allocate arrays into ARM7 IWRAM and/or ARM9 DTCM</h2>
+<div id="posts">
+<div class="post">
+    <h4>#169097 - sverx - Thu Jun 18, 2009 4:43 pm</h4>
+    <div class="postbody"><span class="postbody">Hi there :)
+<br/>
+I've been searching in the forum, I've also read some FAQ but it's still unclear to me.
+<br/>
+<br/>
+Say I want to allocate an array of, say, 128 chars into ARM9 DTCM or into ARM7 IWRAM. What would you do? Is there already a DTCM_malloc() or similar? I don't think so... then, do you think it's possible to make a simple one? (I mean with basic functionality, don't really want to make a heap manager...)
+<br/>
+<br/>
+Suggestions welcome :)
+<br/>
+Thanks! :)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#169098 - elhobbs - Thu Jun 18, 2009 5:13 pm</h4>
+    <div class="postbody"><span class="postbody">not there is not a dtcm malloc function. you can declare it statically in your source code by adding DTCM_DATA to the declaration. or you code use the stack (local variable) for small amounts of data - I say small because the stack is only 16k on the ds and it is easy to overflow if you are not carefull.
+<br/>
+<br/>
+I think malloc on the arm7 will come from iwram by default, but I could be wrong. I do not think that memory is accessible by the arm9 though.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#169099 - a128 - Thu Jun 18, 2009 7:19 pm</h4>
+    <div class="postbody"><span class="postbody">malloc() on ARM7 gets memory from iwram?!
+<br/>
+<br/>
+I do not know...any thoughts?<br/>_________________<br/>"Hey! It compiles! Ship it!"</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#169100 - elhobbs - Thu Jun 18, 2009 8:15 pm</h4>
+    <div class="postbody"><span class="postbody">this is from <a class="postlink" href="http://nocash.emubase.de/gbatek.htm#dsmemorymaps" target="_blank">gbatek</a>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Shared-RAM
+<br/>
+Even though Shared WRAM begins at 3000000h, programs are commonly using mirrors at 37F8000h (both ARM9 and ARM7). At the ARM7-side, this allows to use 32K Shared WRAM and 64K ARM7-WRAM as a continous 96K RAM block.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+gbatek calls it wram but the libnds link scripts call it iwram. this is how the default arm7 is setup with libnds. there is a separate heap for the arm7 that does allocate from wram.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#169101 - zeruda - Thu Jun 18, 2009 9:43 pm</h4>
+    <div class="postbody"><span class="postbody">Arm9 DTCM and the stack are the same thing.
+<br/>
+If you did:
+<br/>
+DTCM_DATA char CharArray[128];
+<br/>
+<br/>
+That would put the array into DTCM of 128 bytes permanently. It would reduce the stack so it is 16K - 128 bytes for the rest of the program.
+<br/>
+<br/>
+You could just do:
+<br/>
+char CharArray[128];
+<br/>
+<br/>
+as a local variable, again it would take 128 bytes off the stack but in this case would clear at the end of the function available for the rest of the program.
+<br/>
+<br/>
+If you need a dynamic array, declare an array of the biggest size you would would need say CharArray[256] and have a size variable. Yes it would mean wasted space if it is smaller, but if the array <span style="font-style: italic">can </span>max out, that would mean that space is unusable anyway.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#169102 - eKid - Fri Jun 19, 2009 1:15 am</h4>
+    <div class="postbody"><span class="postbody">ARM7 doesn't have malloc.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#169103 - sverx - Fri Jun 19, 2009 9:22 am</h4>
+    <div class="postbody"><span class="postbody">Thanks for the answers :)
+<br/>
+<br/>
+So -for the ARM9- now it's quite clear: normal malloc() allocates in Main <span style="font-style: italic">'slow'</span> RAM, stack is in the DTCM, and so are local variables, and there's also a way to allocate global variables into DTCM (*) using that DTCM_DATA 'keyword' before the definition, as
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>zeruda wrote:</b></span></td> </tr> <tr> <td class="quote">DTCM_DATA char CharArray[128];</td> </tr></table><span class="postbody">
+<br/>
+<span style="font-size: 9px; line-height: normal">(*) thus actually reducing the stack size</span>
+<br/>
+<br/>
+For the ARM7 I still need some help. I've read that code, data and stack of the ARM7 executable use IWRAM (both the 'private' 64KB bank and the 2x16KB shared banks that are mapped to the ARM7 by libnds).
+<br/>
+This means that both global and local variables are inside that memory, so you don't even need to use any keyword before the definition, like we should do in the ARM9 code.
+<br/>
+<br/>
+Good...  I just miss info about the heap... <span style="font-weight: bold">eKid</span> suggests ARM7 can't malloc() at all, <span style="font-weight: bold">elhobbs</span> suggests there's a heap and it's in IWRAM too... and I, personally, have never tried to malloc() from ARM7 but I was thiking it would allocate memory in the Main <span style="font-style: italic">'slow'</span> RAM too, but now I guess I was wrong...
+<br/>
+<br/>
+Any other idea? :)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#169105 - elhobbs - Fri Jun 19, 2009 2:09 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>eKid wrote:</b></span></td> </tr> <tr> <td class="quote">ARM7 doesn't have malloc.</td> </tr></table><span class="postbody">the arm7 does in fact have malloc. arm7 and arm9 have spearate heaps though. since the arm7 is allocating from iwram the address returned is not accessible from the arm9. iwram is mapped to the arm7 under libnds. while it is possible to switch the iwram from arm7 to arm9 access it is not feasible when using libnds.
+<br/>
+<br/>
+the memory returned by malloc from arm9 can be accessed on the arm7 (malloc has to be called on the arm9 and the return value can then be passed to the arm7 - one possibility is through fifo). only one processor can access main ram at a time so the arm7 accessing main ram can really slow down whole the system.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

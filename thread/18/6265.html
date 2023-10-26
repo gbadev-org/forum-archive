@@ -1,0 +1,177 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Detecting DS mode - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Detecting DS mode</h2>
+<div id="posts">
+<div class="post">
+    <h4>#47591 - chishm - Mon Jul 11, 2005 5:00 am</h4>
+    <div class="postbody"><span class="postbody">I am working on a small assembly boot loader that should run in either DS or GBA mode. However, I am not sure on the best way to detect DS mode. How would I go about detecting if the DS is running in DS mode in the least amount of code possible, preferably using just one memory read and a compare? This will be done from the ARM7
+<br/>
+Are there any memory addresses that contain one definite value in DS mode and another definite value in GBA mode?
+<br/>
+Also, on a related topic, what happens if I try to use GBA IWRAM, ie memory starting at 0x0300:0000?
+<br/>
+Thanks in advance for any replies.
+<br/>
+<br/>
+EDIT: Solved, see below.</span><span class="gensmall"><br/><br/>Last edited by chishm on Thu Jul 21, 2005 8:29 am; edited 1 time in total</span></div>    
+</div>
+<div class="post">
+    <h4>#47593 - doublec - Mon Jul 11, 2005 5:22 am</h4>
+    <div class="postbody"><span class="postbody">Does this help? From <a href="http://www.bottledlight.com/ds/index.php/Main/GBAMode" target="_blank">http://www.bottledlight.com/ds/index.php/Main/GBAMode</a>
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">The GBA mode BIOS is virtually identical (1 bit differs in an unused region at the end), and can be dumped in the same fashion. You *can* detect if you are running on a DS from a GBA flash cart.
+<br/>
+<br/>
+Code Snippet:
+<br/>
+<br/>
+<br/>
+uint32 getChecksum(void) { 
+<br/>
+  // Figure out what we're running on 
+<br/>
+  uint32 result; 
+<br/>
+  asm volatile("swi 0x0D\n" 
+<br/>
+               "mov r0, %0\n" 
+<br/>
+               : "=r"(result) : : "r1", "r2", "r3" 
+<br/>
+      ); 
+<br/>
+  return result; 
+<br/>
+} 
+<br/>
+<br/>
+... 
+<br/>
+<br/>
+    value = getChecksum(); 
+<br/>
+    if (value == 0xBAAE1880) 
+<br/>
+      drawString(0, 19, "Nintendo DS detected"); 
+<br/>
+    else if (value == 0xBAAE187F) 
+<br/>
+      drawString(0, 19, "Nintendo GBA detected"); 
+<br/>
+    else 
+<br/>
+      drawString(0, 19, "Emulator detected"); </td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#47594 - Dwedit - Mon Jul 11, 2005 5:25 am</h4>
+    <div class="postbody"><span class="postbody">No.  That detects a Nintendo DS gba, not DS mode.
+<br/>
+The simplest way I can immediatly think of is two writes to RAM to test if they are mirrored or not, but that would take at least 6 instructions.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#47595 - tepples - Mon Jul 11, 2005 5:27 am</h4>
+    <div class="postbody"><span class="postbody">To distinguish a Nintendo DS in DS mode (e.g. *Me) from a GBA or a Nintendo DS in GBA mode:
+<br/>
+<br/>
+#define EWRAM ((char *)0x02000000)
+<br/>
+#define VCOUNT (*(volatile u16 *)0x04000008)
+<br/>
+#define XKEYS (*(volatile u16 *)0x04000136)
+<br/>
+#define ROM (*(u8 *)0x08000000)
+<br/>
+#define ROM2 (*(u8 *)0x0A000000)
+<br/>
+<br/>
+DS mode: EWRAM repeats at 4 MiB.
+<br/>
+GBA mode: EWRAM repeats at 0.25 MiB.
+<br/>
+<br/>
+DS mode: ROM2 points to Game Pak SRAM or flash.
+<br/>
+GBA mode: ROM2 points to the same data as ROM with different wait state settings.
+<br/>
+<br/>
+DS mode: If you spin on VCOUNT for 16.7 ms, it goes up to 262.
+<br/>
+GBA mode: If you spin on VCOUNT for 16.7 ms, it goes to 227 then to 0.
+<br/>
+<br/>
+DS mode: <a class="postlink" href="http://www.bottledlight.com/ds/index.php/Misc/KeyInput" target="_blank">XKEYS</a> will have at least some bits set.
+<br/>
+GBA mode: Nope.
+<br/>
+<br/>
+DS mode: Lots of other I/O registers are available. Consult the NDSTech Wiki.
+<br/>
+GBA mode: They're hidden.
+<br/>
+<br/>
+DS mode: Palette memory and OAM repeat on 2 KB intervals (1 KB for the main screen and 1 KB for the sub screen).
+<br/>
+GBA mode: Palette memory and OAM repeat on 1 KB intervals.
+<br/>
+<br/>
+Also try the SP register. Where does that point by default?<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#47607 - chishm - Mon Jul 11, 2005 10:02 am</h4>
+    <div class="postbody"><span class="postbody">Thanks Tepples. I think that ROM2 is probably the best way to go, as the GBAMP doesn't have any game save memory. I was thinking about using XKEYS, but then realised there is the (very remote) chance that someone will push both X and Y and touch the touch screen. At least one byte in ROM2 will have a definite, differing value depending on the mode (I should hope).
+<br/>
+<br/>
+Also, back to the other question, what happens to the addresses used by GBA IWRAM in DS mode? It would be nice if I could use IWRAM in both modes with accesses to the same address, but from what I have been reading it doesn't look likely. Unfortunately the DS docs that I have read (the Wiki and DSTek) don't mention this. I can't test this myself, so if someone is able to, that would be great. Thanks.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#47639 - Dwedit - Mon Jul 11, 2005 5:33 pm</h4>
+    <div class="postbody"><span class="postbody">Wouldn't XKEYS be zero only if X,Y,and touchscreen are pressed, AND the system is closed?<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#47658 - chishm - Tue Jul 12, 2005 12:38 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Dwedit wrote:</b></span></td> </tr> <tr> <td class="quote">Wouldn't XKEYS be zero only if X,Y,and touchscreen are pressed, AND the system is closed?</td> </tr></table><span class="postbody">
+<br/>
+According to DSTek, the screen status bit is 0 when the screens are open.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">Bit   Name            Expl.
+<br/>
+0   Button X        0=pressed, 1=released
+<br/>
+1   Button Y        0=pressed, 1=released
+<br/>
+6   Touchpad        0=pressed, 1=released
+<br/>
+7   Screens status     0=Screens open, 1=folded </td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#47659 - Dwedit - Tue Jul 12, 2005 12:52 am</h4>
+    <div class="postbody"><span class="postbody">Ah... backwards and unintuitive.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#48625 - chishm - Thu Jul 21, 2005 8:31 am</h4>
+    <div class="postbody"><span class="postbody">I have tried the XKEYS method, and so far it has worked. Although I have tried various combinations of X, Y, touch and hinge, I still can't make it fail. Keep in mind that this is done at startup, so it may not work after a certain delay.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

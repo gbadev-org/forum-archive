@@ -1,0 +1,254 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Tiles issue - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > Tiles issue</h2>
+<div id="posts">
+<div class="post">
+    <h4>#6950 - einhaender - Thu Jun 05, 2003 1:33 am</h4>
+    <div class="postbody"><span class="postbody">Iam having some weird problem here. What I do is loading a very large tileset of 538 tiles 8x8 each. I load it to CharBaseBlock 0 and ScreenBaseBlock 28 on Background 0. Checking the ROM in Visual Boy after that, I see that some additional junk is loaded to 0x600C0000 which is CharBaseBlock 4? I really wonder why the hell these weird tiles get loaded to that address.
+<br/>
+My code is rather simple, considering iam using mostly functions from tutorials.
+<br/>
+<br/>
+bg0.number = 0;                     
+<br/>
+bg0.charBaseBlock = 0;                
+<br/>
+bg0.screenBaseBlock = 21;             
+<br/>
+bg0.colorMode = BG_COLOR_256;        
+<br/>
+bg0.size = TEXTBG_SIZE_256x256;      
+<br/>
+bg0.mosaic = 0;                      
+<br/>
+bg0.x_scroll = 0;					
+<br/>
+bg0.y_scroll = 0;
+<br/>
+bg0.delayCount = 0;
+<br/>
+<br/>
+EnableBackground(&amp;bg0);
+<br/>
+<br/>
+LoadBGPalette((u16*)bg_Palette); 
+<br/>
+LoadTileData(bg0.charBaseBlock, (u16*)bg_Character, 64, 538);
+<br/>
+// iam not even loading a map
+<br/>
+<br/>
+<br/>
+void LoadTileData(u16 CBB, u16* tiles, int tileWidth, int tileHeight) 
+<br/>
+{ 
+<br/>
+	int x; 
+<br/>
+	u16* tempBlock = (u16*)CharBaseBlock(CBB); 
+<br/>
+	for(x = 0; x &lt; tileWidth*tileHeight/2 ; x++) {
+<br/>
+		tempBlock[x] = tiles[x]; 
+<br/>
+	}
+<br/>
+}
+<br/>
+<br/>
+Data created by bmp2map looks like:
+<br/>
+const u8 bg_Character[8*8*538] = {
+<br/>
+  / *  0  */
+<br/>
+  0x00 ,0x00 ,0x00 ,0x06 ....
+<br/>
+}
+<br/>
+<br/>
+and the Palette:
+<br/>
+const u16 bg_Palette[256] = {
+<br/>
+   0x0440 ,0x0000 ...
+<br/>
+}</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#6951 - DekuTree64 - Thu Jun 05, 2003 1:59 am</h4>
+    <div class="postbody"><span class="postbody">That's probably your screen data. Tiles and screen blocks use the same area of VRAM (the first 64K), so i's up to you to make sure they don't overwrite eachother. Which also means any area used for screen data could also be tile data, so the emulator displays it as if it were.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#6963 - einhaender - Thu Jun 05, 2003 12:35 pm</h4>
+    <div class="postbody"><span class="postbody">So youre saying its not a bug after all, that these weird tiles are shown there when checking tile mapping in memory with the emulator?
+<br/>
+By Screen data you mean Map data right? However I havent loaded any Map data yet, in the above code I only load a Palette, which goes into a completely different memory bank, and then my my tile data which is supposed to go into CharBaseBlock0.
+<br/>
+After that, see screenshot of what I have in CharBaseBlock3 and I have no idea how it got there. Maybe the way I iterate over the 
+<br/>
+u8 Array [8*8*538] is wrong.
+<br/>
+<a href="http://people.freenet.de/glair/tilebug.jpg">[Images not permitted - Click here to view it]</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#6967 - niltsair - Thu Jun 05, 2003 2:42 pm</h4>
+    <div class="postbody"><span class="postbody">You should iterate 8*8*538/2 times.
+<br/>
+<br/>
+You have 538 8x8pixels tiles, 8bits per pixels. 
+<br/>
+<br/>
+But when you write it to memory, you're using a 16bits pointer instead of a 8bits (because vid mem can only be accessed in 16/32bits) This means that you write 2 pixels at a time. Thus reducing the number of pixels to write, by 2.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#6968 - einhaender - Thu Jun 05, 2003 2:57 pm</h4>
+    <div class="postbody"><span class="postbody">I think I do that, so see the call:
+<br/>
+<br/>
+LoadTileData(bg0.charBaseBlock, (u16*)bg_Character, 64, 538); 
+<br/>
+<br/>
+And inside the function:
+<br/>
+<br/>
+void LoadTileData(u16 CBB, u16* tiles, int tileWidth, int tileHeight) { 
+<br/>
+  int x; 
+<br/>
+  u16* tempBlock = (u16*)CharBaseBlock(CBB); 
+<br/>
+  for(x = 0; x &lt; tileWidth*tileHeight/2 ; x++) { 
+<br/>
+     .........
+<br/>
+<br/>
+My Tile Data schouldnt be too large for 16kb CharBaseBlock right?
+<br/>
+I have 538 tiles on a Text Background with 2 Bytes per Tile correct?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#6969 - DekuTree64 - Thu Jun 05, 2003 3:13 pm</h4>
+    <div class="postbody"><span class="postbody">Hmm, that's definately strange then (also, I reread your code and noticed that line saying you didn't load a map. Sorry I missed that before), and I don't see any problems anywhere, so my usual solution would be to try stuff until you find out when it's happening. First, try commenting out the LoadTileData line and see if it's in your loading, or somewhere else entirely.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#6971 - niltsair - Thu Jun 05, 2003 4:05 pm</h4>
+    <div class="postbody"><span class="postbody">First, you have to understand that characters block aren't independant entity,  it's only a start address. So if you run out of space in say block 2, then the data will continue to block 3. You can access data of block 2 from block 0, etc... It's really just a way to tell a background that the Tile 0 start at X.
+<br/>
+<br/>
+There's 4 character's blocks that can hold :
+<br/>
+-256 Tiles of 256colors 
+<br/>
+-512 Tiles of 16colors</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#6975 - einhaender - Thu Jun 05, 2003 5:39 pm</h4>
+    <div class="postbody"><span class="postbody">This only applies for Rotation Backgrounds however right? With Text Backgrounds i should able to load up to 1024 Tiles with 256 Colors, otherwise my for-loop loading 538 Tiles would be over the limit.
+<br/>
+Correct me if Iam wrong. Also can someone tell me exactly how to calculate how many kbytes my 538 tiles 256 colors will have, and which impact the Background Type (Text/Rot) will have on that value.
+<br/>
+Thanks in advance</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#6976 - niltsair - Thu Jun 05, 2003 5:55 pm</h4>
+    <div class="postbody"><span class="postbody">No, this apply to all background.
+<br/>
+<br/>
+Rotation background doesn't change Tiles storing, only the Map sizes, and Tile color mode.
+<br/>
+<br/>
+you'll be able to load up to 1024 tiles, if your start a Char Baseblock 0. Of course, you wouldn't be able to use 1024, since each map stored in video memory takes at least 32Tiles space.
+<br/>
+<br/>
+In 256colors, 8x8 Tiles takes : 8x8x1 Bytes =&gt; 64Bytes
+<br/>
+In 16 colors, 8x8 Tiles takes : 8x8x(1/2) Bytes =&gt; 32Bytes
+<br/>
+<br/>
+Picking a backround type over another won't change anything about tiles storing. The only thing you'll have to check, is the color mode used (16/256).</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#6977 - einhaender - Thu Jun 05, 2003 6:02 pm</h4>
+    <div class="postbody"><span class="postbody">Ah now I get it. If I start at CharBaseBlock 0 with loading 538 Tiles i will be using VRAM location of other CharBaseBlocks too, that is the entire CharBaseBlock 1 and the Beginning of CharbaseBlock 2.
+<br/>
+Now again lets say I did this. If then with Background 1 my function that loads tiles into vram assumes that Background 1 TileData should start at CharBaseBlock 1, I will overwrite the existing data which has previously been loaded with the 538 tiles? Correct</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#6978 - niltsair - Thu Jun 05, 2003 6:35 pm</h4>
+    <div class="postbody"><span class="postbody">Correct.
+<br/>
+<br/>
+Like i said, Character block have one purpose, when you're using a Map, its entries are based in tiles number 0-1024. So if you decided to load your tiles in memory, starting at Char Block 2, then by setting the backgroudn to use Char Block 2, the tiles there are understood to start at 0 by this background. 
+<br/>
+<br/>
+Am i making any sens? 
+<br/>
+<br/>
+Ok, let's suppose we have 3 blocks of 5 tiles:
+<br/>
+<br/>
+Here's the index of each Tile...
+<br/>
+1st column, you told a background to use CharBlock 0. 
+<br/>
+2sd column, you told a background to use CharBlock 1.
+<br/>
+3rd column, you told a background to use CharBlock 2.
+<br/>
+<span style="font-weight: bold">Block --0--</span>
+<br/>
+0    
+<br/>
+1
+<br/>
+2
+<br/>
+3
+<br/>
+4
+<br/>
+<span style="font-weight: bold">Block --1--</span>
+<br/>
+5___0
+<br/>
+6___1
+<br/>
+7___2
+<br/>
+8___3
+<br/>
+9___4
+<br/>
+<span style="font-weight: bold">Block --2--</span>
+<br/>
+10__5___0
+<br/>
+11__6___1
+<br/>
+12__7___2
+<br/>
+13__8___3
+<br/>
+14__9___4
+<br/>
+<br/>
+That's all for Map purpose, so that you can load your tiles at say Char Block 1 and don't have to adjust every value in your map to start at 256 instead of 0.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

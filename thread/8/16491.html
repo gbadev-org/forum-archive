@@ -1,0 +1,665 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Looking for some optimization tips (ima-adpcm) - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>ASM > Looking for some optimization tips (ima-adpcm)</h2>
+<div id="posts">
+<div class="post">
+    <h4>#167050 - DiscoStew - Fri Feb 27, 2009 8:23 pm</h4>
+    <div class="postbody"><span class="postbody">After eKid released his ms-adpcm decoder using assembly for fast stream decoding, I wanted to improve my own ima-adpcm decoding by using assembly as well. With his permission, I used the general template from his decoder, made some changes to some structures, and made the decoding code from scratch in assembly, which took some time to do because of my inexperience with dealing with assembly upfront. It all works, but because of my inexperience, I have no idea if there is any room for improving it. So, in order for me to learn, I've posted the decoding core below, and maybe some of you could teach me the ropes.
+<br/>
+<br/>
+The interface mimics eKid's own ms-adpcm decoder, but the input data pointer is for my own structure, also listed below. If there are any question as to why I'm doing X and Y, just ask me.
+<br/>
+<br/>
+NOTE: For those currently using my C/C++ implemented ima-adpcm decoder, do not switch to using this, because the structuring is different. When improvements are made (if any can be) and code is organized, I will release it.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+typedef struct t_IMA_Adpcm_Data {
+<br/>
+<br/>
+   int curSamps;
+<br/>
+   int data1, step1, samp1;
+<br/>
+   int data2, step2, samp2;
+<br/>
+} IMA_Adpcm_Data;</td> </tr></table><span class="postbody">
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+.global decode_stereo_ima_adpcm
+<br/>
+<br/>
+.text
+<br/>
+.arm
+<br/>
+.align
+<br/>
+<br/>
+#define cur      r0
+<br/>
+#define da1      r4
+<br/>
+#define st1      r5
+<br/>
+#define sa1      r6
+<br/>
+#define da2      r7
+<br/>
+#define st2      r8
+<br/>
+#define sa2      r9
+<br/>
+<br/>
+#define   ta      r10
+<br/>
+#define   tb      r11
+<br/>
+#define tc      r12
+<br/>
+<br/>
+#define istab   r14
+<br/>
+<br/>
+#define src      r1
+<br/>
+#define dest   r2
+<br/>
+#define iter   r3
+<br/>
+<br/>
+<br/>
+/*   
+<br/>
+   SampXCode = Stream_CurSamples &amp; 0xF;
+<br/>
+   Stream_CurSamples &gt;&gt;= 4;
+<br/>
+   Diff = (((( SampXCode &amp; 0x7 ) &lt;&lt; 1 ) + 1 ) * STREAM_StepTab[ Stream_StepIndex ]) &gt;&gt; 3;
+<br/>
+   Stream_StepIndex += STREAM_IndexTab[ SampXCode ];
+<br/>
+   Stream_LastSample += ( SampXCode &amp; 0x8 ? -Diff : Diff );
+<br/>
+   
+<br/>
+   if( Stream_StepIndex &gt; 88 )         Stream_StepIndex = 88;
+<br/>
+   if( Stream_StepIndex &lt; 0 )      Stream_StepIndex = 0;
+<br/>
+   if( Stream_LastSample &gt; 32767 )      Stream_LastSample = 32767;
+<br/>
+   if( Stream_LastSample &lt;= -32768 )   Stream_LastSample = -32768;
+<br/>
+   *target++ = Stream_LastSample;
+<br/>
+   
+<br/>
+ */
+<br/>
+<br/>
+/*************************************************************
+<br/>
+ *                                                           *
+<br/>
+ * decode_stereo_ima_adpcm( data, source, target, iterations ) *
+<br/>
+ *                                                           *
+<br/>
+ *************************************************************/
+<br/>
+<br/>
+decode_stereo_ima_adpcm:
+<br/>
+<br/>
+   push   {r0,r4-r11,lr}
+<br/>
+   ldmia   r0, {cur,da1,st1,sa1,da2,st2,sa2}
+<br/>
+   adr      istab, Index_Step_Table
+<br/>
+<br/>
+.examine_cur:
+<br/>
+   cmp   cur, #0
+<br/>
+   beq   .reloadwords
+<br/>
+.decode_word_loop:
+<br/>
+<br/>
+/*************** Left channel *********************/
+<br/>
+<br/>
+   ldr      tc, [istab, st1, lsl#2]                  // tc = Step_Index_Table[ Step_Index1 ]
+<br/>
+<br/>
+   and      ta, da1, #15                        // ta = CurSamples1 &amp; 0xF
+<br/>
+   lsr      da1, da1, #4                        // CurSamples1 &gt;&gt;= 4
+<br/>
+   and      tb, ta, #7                           // tb = ta &amp; 0x7
+<br/>
+   cmp      ta, #8                              // Is ta &gt;= 8 (ExamineA)
+<br/>
+   
+<br/>
+   add      ta, #1                              // ta += 1
+<br/>
+   ldr      ta, [istab, -ta, lsl#2]                  // ta = StepIndex_Table[ -ta ]
+<br/>
+   add      st1, ta                              // Step_Index1 += ta
+<br/>
+   
+<br/>
+   lsl      tb, #1                              // Diff = ((( tb &lt;&lt; 1 ) + 1) * tc) &gt;&gt; 3
+<br/>
+   add      tb, #1
+<br/>
+   smulbb   ta, tb, tc
+<br/>
+   asr      ta, #3
+<br/>
+   
+<br/>
+   subge   sa1, ta                              // Samp1 -= ta if ExamineA is true
+<br/>
+   addlt   sa1, ta                              // Samp1 += ta if ExamineA is false
+<br/>
+   
+<br/>
+/*************** Right channel ********************/
+<br/>
+<br/>
+   ldr      tc, [istab, st2, lsl#2]                  // tc = Step_Index_Table[ Step_Index2 ]
+<br/>
+<br/>
+   and      ta, da2, #15                        // ta = CurSamples2 &amp; 0xF
+<br/>
+   lsr      da2, da2, #4                        // CurSamples2 &gt;&gt;= 4
+<br/>
+   and      tb, ta, #7                           // tb = ta &amp; 0x7
+<br/>
+   cmp      ta, #8                              // Is ta &gt;= 8 (ExamineB)
+<br/>
+   
+<br/>
+   add      ta, #1                              // ta += 1
+<br/>
+   ldr      ta, [istab, -ta, lsl#2]                  // ta = StepIndex_Table[ -ta ]
+<br/>
+   add      st2, ta                              // Step_Index2 += ta
+<br/>
+<br/>
+   lsl      tb, #1                              // Diff = ((( tb &lt;&lt; 1 ) + 1) * tc) &gt;&gt; 3
+<br/>
+   add      tb, #1
+<br/>
+   smulbb   ta, tb, tc
+<br/>
+   asr      ta, #3
+<br/>
+<br/>
+   subge   sa2, ta                              // Samp2 -= ta if ExamineB is true
+<br/>
+   addlt   sa2, ta                              // Samp2 += ta if ExamineB is false
+<br/>
+   
+<br/>
+<br/>
+/************* Clamp Step Indexes *******************/
+<br/>
+<br/>
+   cmp      st1, #89
+<br/>
+   cmplt   st2, #89
+<br/>
+   bge      .satihi
+<br/>
+1:
+<br/>
+   cmp      st1, #0
+<br/>
+   cmpge   st2, #0
+<br/>
+   blt      .satilo
+<br/>
+<br/>
+/**************** Clamp Samples *********************/
+<br/>
+<br/>
+2:
+<br/>
+   cmp      sa1, #32768
+<br/>
+   cmplt   sa2, #32768
+<br/>
+   bge      .sathi
+<br/>
+3:
+<br/>
+   cmp      sa1, #-32768
+<br/>
+   cmpge   sa2, #-32768
+<br/>
+   blt      .satlo
+<br/>
+<br/>
+/*************** Write Samples *********************/
+<br/>
+<br/>
+4:   
+<br/>
+   strh   sa1, [dest], #2
+<br/>
+   strh   sa2, [dest], #2
+<br/>
+      
+<br/>
+   sub      cur, #1
+<br/>
+   subs   iter, #1
+<br/>
+   bne      .examine_cur
+<br/>
+   
+<br/>
+   pop      {ta}
+<br/>
+   stmia   ta, {cur,da1,st1,sa1,da2,st2,sa2}
+<br/>
+<br/>
+   pop      {r4-r11,pc}
+<br/>
+<br/>
+.reloadwords:
+<br/>
+   mov      cur, #8
+<br/>
+   ldr      da1, [src], #4
+<br/>
+   ldr      da2, [src], #4
+<br/>
+   b      .decode_word_loop
+<br/>
+<br/>
+.satihi:
+<br/>
+   cmp      st1, #89
+<br/>
+   ldrge   st1, [istab, #-68]
+<br/>
+   cmp      st2, #89
+<br/>
+   ldrge   st2, [istab, #-68]
+<br/>
+   b      1b
+<br/>
+<br/>
+.satilo:
+<br/>
+   cmp      st1, #0
+<br/>
+   ldrlt   st1, [istab, #-72]
+<br/>
+   cmp      st2, #0
+<br/>
+   ldrlt   st2, [istab, #-72]
+<br/>
+   b      2b
+<br/>
+   
+<br/>
+.sathi:
+<br/>
+   cmp      sa1, #32768
+<br/>
+   ldrge   sa1, [istab, #352]
+<br/>
+   cmp      sa2, #32768
+<br/>
+   ldrge   sa2, [istab, #352]
+<br/>
+   b      3b
+<br/>
+<br/>
+.satlo:
+<br/>
+   cmp      sa1, #-32768
+<br/>
+   ldrlt   sa1, [istab, #356]
+<br/>
+   cmp      sa2, #-32768
+<br/>
+   ldrlt   sa2, [istab, #356]
+<br/>
+   b      4b
+<br/>
+<br/>
+.word   0
+<br/>
+.word   88
+<br/>
+.word   8, 6, 4, 2, -1, -1, -1, -1
+<br/>
+.word   8, 6, 4, 2, -1, -1, -1, -1
+<br/>
+Index_Step_Table:
+<br/>
+.word   7, 8, 9, 10, 11, 12, 13, 14
+<br/>
+.word   16, 17, 19, 21, 23, 25, 28, 31
+<br/>
+.word   34, 37, 41, 45, 50, 55, 60, 66
+<br/>
+.word   73, 80, 88, 97, 107, 118, 130, 143
+<br/>
+.word   157, 173, 190, 209, 230, 253, 279, 307
+<br/>
+.word   337, 371, 408, 449, 494, 544, 598, 658
+<br/>
+.word   724, 796, 876, 963, 1060, 1166, 1282, 1411
+<br/>
+.word   1552, 1707, 1878, 2066, 2272, 2499, 2749, 3024
+<br/>
+.word   3327, 3660, 4026, 4428, 4871, 5358, 5894, 6484
+<br/>
+.word   7132, 7845, 8630, 9493, 10442, 11487, 12635, 13899
+<br/>
+.word   15289, 16818, 18500, 20350, 22385, 24623, 27086, 29794
+<br/>
+.word   32767
+<br/>
+.word   -32768
+<br/>
+</td> </tr></table><span class="postbody"><br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#167055 - eKid - Sat Feb 28, 2009 12:10 am</h4>
+    <div class="postbody"><span class="postbody">Coolness :)
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>DiscoStew wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">   ldr      ta, [istab, -ta, lsl#2]                  // ta = StepIndex_Table[ -ta ]
+<br/>
+   add      st1, ta                              // Step_Index1 += ta
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">   smulbb   ta, tb, tc
+<br/>
+   asr      ta, #3
+<br/>
+</td> </tr></table><span class="postbody"></span></td> </tr></table><span class="postbody">
+<br/>
+LDR and SMULxy (and some others) have an 'interlock' cycle if you use the target register right after the instruction. If you rearrange the instructions below to fit between the load/multiply and the use you can save a cycle here and there.
+<br/>
+<br/>
+(example)
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">   ldr      ta, [istab, -ta, lsl#2]                  // ta = StepIndex_Table[ -ta ]
+<br/>
+   lsl      tb, #1                              // Diff = ((( tb &lt;&lt; 1 ) + 1) * tc) &gt;&gt; 3 (avoid interlock)
+<br/>
+   add      st1, ta                              // Step_Index1 += ta
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#167070 - Miked0801 - Sat Feb 28, 2009 5:32 am</h4>
+    <div class="postbody"><span class="postbody">When I see this
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+if( Stream_StepIndex &gt; 88 )         Stream_StepIndex = 88; 
+<br/>
+   if( Stream_StepIndex &lt; 0 )      Stream_StepIndex = 0; 
+<br/>
+   if( Stream_LastSample &gt; 32767 )      Stream_LastSample = 32767; 
+<br/>
+   if( Stream_LastSample &lt;= -32768 )   Stream_LastSample = -32768; 
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+it reminds me of the ARM9 saturation math functions (used for clamping).  I'm at home so I don't have the exact op-codes in front of me, but they would probably be very useful for those types of operations.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#167072 - Ruben - Sat Feb 28, 2009 6:02 am</h4>
+    <div class="postbody"><span class="postbody">I'm not really sure, since I don't code for the DS yet.. but couldn't this be optimized...
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">   asr      ta, #3
+<br/>
+   subge   sa1, ta                              // Samp1 -= ta if ExamineA is true
+<br/>
+   addlt   sa1, ta                              // Samp1 += ta if ExamineA is false 
+<br/>
+<br/>
+; To this...
+<br/>
+<br/>
+   subge   sa1, ta, asr #3
+<br/>
+   addlt   sa1, ta, asr #3
+<br/>
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#167073 - Dwedit - Sat Feb 28, 2009 6:11 am</h4>
+    <div class="postbody"><span class="postbody">Thanks for telling me about the saturating arithmetic instructions on the ARM9, never would have noticed them otherwise.
+<br/>
+<br/>
+Looks like the relevant instruction is SSAT or USAT.
+<br/>
+SSAT r0, #16, r1 would take R1, force it to be between -32768 and 32767, then store the result in r0.
+<br/>
+USAT r0, #31, r1 take r1, force it to be between 0 and 2^31, etc...
+<br/>
+<br/>
+I could see USAT as being used by C compilers to turn a bitwise operator into a "logical" operator which needs to return a 1 or zero.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#167074 - DiscoStew - Sat Feb 28, 2009 6:45 am</h4>
+    <div class="postbody"><span class="postbody">Documentation I have says that SSAT and USAT are for the ARMv6 and above. But, isn't the ARM9's architecture the ARMv5TE? Guess it doesn't hurt to at least see if it compiles.
+<br/>
+<br/>
+EDIT:
+<br/>
+<br/>
+Nope, doesn't compile.<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#167080 - eKid - Sat Feb 28, 2009 12:29 pm</h4>
+    <div class="postbody"><span class="postbody">I sure could use some saturation instructions. :/</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#167094 - DiscoStew - Sat Feb 28, 2009 8:28 pm</h4>
+    <div class="postbody"><span class="postbody">The only saturation instructions I could see that worked on the ARM9 were QADD and QSUB, both of which saturate to signed 32bit integers, but I gave it a shot anyways, having shifted my initial samples from 16bit to 32bit, and just working with them like that. While I got it working, I didn't really see any change to processing time. Then again, I was still working with tables set at 16bit, requiring me to make a few shifts each loop, so if I convert those up to 32bit, I can remove those shifts, and should get some speed. I'll give that a try.
+<br/>
+<br/>
+EDIT:
+<br/>
+<br/>
+Got QADD and QSUB working "correctly", but now instead of using smul, I ended up using just mul, which is an extra cycle in similar situations if I'm correct. :(
+<br/>
+<br/>
+Maybe I can fix that.<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#167103 - DiscoStew - Sun Mar 01, 2009 7:12 am</h4>
+    <div class="postbody"><span class="postbody">Well, with all the suggestions given, and with the use of QADD and QSUB, my routines are roughly twice as fast as current c++ counterparts, both mono and stereo. I'm happy with it for the moment.
+<br/>
+<br/>
+If those weren't the saturation instructions you were thinking of Miked0801, then I'd like to know about the ones you were talking about. Would be nice not to shift samples and decoding to 32bit just to make use of the current ones.<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#167108 - Miked0801 - Sun Mar 01, 2009 4:49 pm</h4>
+    <div class="postbody"><span class="postbody">Nope, I believe those were the ones.  I'll double check on Monday when I'm back in the office and have my trusty ARM ARM manual in hand.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#175095 - sverx - Wed Sep 08, 2010 3:00 pm</h4>
+    <div class="postbody"><span class="postbody">I know this is a quite old topic, but I was curious to know if there were news... it all started because I was searching info on the net about ARM9 and I found <a class="postlink" href="http://infocenter.arm.com/help/topic/com.arm.doc.qrc0001l/QRC0001_UAL.pdf" target="_blank">this document</a> which -to my weak knowledge- seems related to ARM9.
+<br/>
+<br/>
+The fact is that -if I understand correctly what's in the doc- there should be a <span style="font-weight: bold">QADD16</span> instruction that should be able to perform <span style="font-weight: bold">two</span> <span style="font-style: italic">saturated</span> addictions on 16 bits operands in the same moment.
+<br/>
+<br/>
+Am I wrong? Where I can find good documents about ARM9, then?
+<br/>
+<br/>
+Thanks :D</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#175096 - Ruben - Wed Sep 08, 2010 3:09 pm</h4>
+    <div class="postbody"><span class="postbody">Saturated addictions, aye? ;D
+<br/>
+<br/>
+Joking aside:
+<br/>
+If I'm reading it correctly, the the halfword extensions to ADD are only available to the ARM6 architecture (IIRC, the ARM9 is of the ARM5E arch), and QADD16 doesn't exist.
+<br/>
+<br/>
+EDIT:
+<br/>
+And quick note about clamping:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">@ old code
+<br/>
+cmp   r0, #0 @ if(r0 &lt; 0)
+<br/>
+movlt r0, #0 @ r0 = 0
+<br/>
+<br/>
+@ new code
+<br/>
+bic r0, r0, r0, asr #31 @ clear everything if top bit [neg] is set</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+And as for clamping to the sample range [if you have enough registers]:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">@ before loop
+<br/>
+ldr ip, =0x7FFF @ positive limit
+<br/>
+<br/>
+@ during loop
+<br/>
+@ old code
+<br/>
+cmp   r0, #-32768
+<br/>
+movlt r0, #-32768
+<br/>
+cmp   r0, #32767
+<br/>
+movgt r0, #32767
+<br/>
+<br/>
+@ new code
+<br/>
+@ not totally safe, but usually is enough
+<br/>
+teq   r0, r0, lsl #16 @ signs differ?
+<br/>
+submi r0, ip, r0, asr #31 @ yes - clamp</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#175097 - sverx - Wed Sep 08, 2010 3:28 pm</h4>
+    <div class="postbody"><span class="postbody">Wow, you were too fast, I just came here to post I realized these instructions comes from version 6...
+<br/>
+<br/>
+(is it <span style="font-style: italic">saturating</span> addictions)?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#175098 - Ruben - Wed Sep 08, 2010 3:53 pm</h4>
+    <div class="postbody"><span class="postbody">It's "additions", not "addictions" ;D</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#175101 - wintermute - Thu Sep 09, 2010 2:05 am</h4>
+    <div class="postbody"><span class="postbody">The DS ARM9 is an ARM946E-S which does have QADD/QSUB instructions. See <a href="http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.set.arm9/index.html" target="_blank">http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.set.arm9/index.html</a>
+<br/>
+<br/>
+The Parallel QADD8/16 instructions aren't available though. <a href="http://www.keil.com/support/man/docs/armasm/armasm_cjafgdih.htm" target="_blank">http://www.keil.com/support/man/docs/armasm/armasm_cjafgdih.htm</a><br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#175103 - sverx - Thu Sep 09, 2010 2:30 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Ruben wrote:</b></span></td> </tr> <tr> <td class="quote">It's "additions", not "addictions" ;D</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+LOL! Now I see... I wish I had studied English better when I was at school... now it's quite late ;)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#175104 - kusma - Thu Sep 09, 2010 3:54 pm</h4>
+    <div class="postbody"><span class="postbody">Since you're using QADD, this means you're doing this for the DS. Why not just use the hardware-support for ADPCM?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#175105 - wintermute - Thu Sep 09, 2010 4:30 pm</h4>
+    <div class="postbody"><span class="postbody">You can't use the hardware to stream ADPCM<br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#175106 - kusma - Thu Sep 09, 2010 4:37 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>wintermute wrote:</b></span></td> </tr> <tr> <td class="quote">You can't use the hardware to stream ADPCM</td> </tr></table><span class="postbody">
+<br/>
+Why not? How is streaming any different from just breaking things into chunks and playing them back to back?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#175107 - wintermute - Thu Sep 09, 2010 5:23 pm</h4>
+    <div class="postbody"><span class="postbody"><a href="http://forum.gbadev.org/viewtopic.php?p=165340#165340" target="_blank">http://forum.gbadev.org/viewtopic.php?p=165340#165340</a><br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#175109 - kusma - Thu Sep 09, 2010 6:11 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>wintermute wrote:</b></span></td> </tr> <tr> <td class="quote">http://forum.gbadev.org/viewtopic.php?p=165340#165340</td> </tr></table><span class="postbody">
+<br/>
+That's when trying to stream through a ring-buffer through looping. If you pre-chunk your data instead, and play back-to-back instead, it should work just fine.
+<br/>
+<br/>
+But in either case, I don't see the point to ASM-optimizing an ADPCM routine. I already did a pure C implementation that used about 3% of CPU time on a GBA (at 18khz mono). On the DS with the ARM9 (which is the target in this case), all that CPU time just diminish.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#175115 - wintermute - Thu Sep 09, 2010 9:55 pm</h4>
+    <div class="postbody"><span class="postbody">Pretty sure there were glitches attempting to play adpcm chunks back to back but feel free to prove me wrong :p<br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#175117 - DiscoStew - Fri Sep 10, 2010 1:07 am</h4>
+    <div class="postbody"><span class="postbody">One reason why my tests show a higher CPU % is partly because it's taking into account the time for copying chunks from a file in the filesystem into main RAM before any decoding is done. There is also the main RAM glitch when reading/writing data non-sequentially, but since I'm not at my home computer, I can't see if my code is affected by it. It's been a long time since I last touched this project.
+<br/>
+<br/>
+I did make a post in the Audio forums about possible ways of having the hardware do the decoding by altering the audio stream prior to encoding in a way to have the initial chunks have the same sample/step.<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

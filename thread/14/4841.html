@@ -1,0 +1,134 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Few HBlank related questions - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Beginners > Few HBlank related questions</h2>
+<div id="posts">
+<div class="post">
+    <h4>#34211 - identitycrisisuk - Sat Jan 15, 2005 6:11 pm</h4>
+    <div class="postbody"><span class="postbody">I made a new little demo last night (<a class="postlink" href="http://www.geocities.com/matthewgriffinx/download.html" target="_blank">click nuproj.zip</a>), I was quite impressed with it for a few hours work but there's some things that aren't quite right, which I think are because I don't fully understand what's going on when you allow HBlank interrupts. In that demo the top line always scrolls at the maximum speed, no matter what it should do given how far down the background is scrolled. Here's my interrupt enabling code:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">REG_IRQ_HANDLER = IrqHandler;
+<br/>
+REG_DISPSTAT = (1&lt;&lt;4);
+<br/>
+REG_IE = (1&lt;&lt;1);
+<br/>
+REG_IME = 1;</td> </tr></table><span class="postbody">
+<br/>
+And here's my IrqHandler function (in a separate file):
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void IrqHandler(void)
+<br/>
+{
+<br/>
+   int vpos = BGy+REG_VCOUNT;
+<br/>
+   if((vpos &lt; 32) || (vpos &gt;= 224))
+<br/>
+   {
+<br/>
+      REG_BG0HOFS = BGx;
+<br/>
+   }
+<br/>
+   else
+<br/>
+   {
+<br/>
+      if((vpos &lt; 64) || (vpos &gt;= 192))
+<br/>
+      {
+<br/>
+         REG_BG0HOFS = BGx&gt;&gt;1;
+<br/>
+      }
+<br/>
+      else
+<br/>
+      {
+<br/>
+         if((vpos &lt; 96) || (vpos &gt;= 160))
+<br/>
+         {
+<br/>
+            REG_BG0HOFS = BGx&gt;&gt;2;
+<br/>
+         }
+<br/>
+         else
+<br/>
+         {
+<br/>
+            REG_BG0HOFS = BGx&gt;&gt;3;
+<br/>
+         }
+<br/>
+      }
+<br/>
+   }
+<br/>
+   REG_IF = REG_IF;
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+BGy is how much scrolled down my background is so by adding REG_VCOUNT to it I should get the true position a horizontal line relates to and how much the scroll register should be set to to give the right paralax effect (which is chosen in the following if statements). I'm thinking my problem might be that REG_VCOUNT does not necessarily hold the number of the horizontal blank that you are on at that exact point and that on the first HBlank it's some big number left over from the last time round maybe? What's the 'official' or best way to find out exactly what horizontal line you are drawing when you come to a HBlank interrupt?
+<br/>
+<br/>
+I'm also getting funny little black artifacts when I run this on a GBA but not through VBA strangely enough. I don't know if that's because I'm doing too much work, the code's in C not ASM and it only really needs to change the horizontal scroll every 32 HBlanks (or thereabouts) not every single line.
+<br/>
+<br/>
+Off topic, I'd also like to know how best to scale one number to another using just ints. I've seen a few threads talking about getting a constant value in fixed point and then multiplying, how would I do that practically? I want to take the ships y position (between 0 and 159&lt;&lt;8) and scale it to a number between 0 and 96, which is the maximum I can scroll a 256x256 background before the top of it will appear at the bottom if you get me. At the moment I'm just dividing the screen position of the ship by 2, which avoids artefacts but is missing a bit of the bottom, I really need to multiply by 0.6 or some equivalent technique.<br/>_________________<br/></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">CanIKickIt(YES_YOU_CAN);</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#34217 - tepples - Sat Jan 15, 2005 6:29 pm</h4>
+    <div class="postbody"><span class="postbody">Writes to the scroll registers during hblank take effect on the line <span style="font-style: italic">after</span> the write. Always set up scanline 0 during vblank, and then start your hblank ISR updates or your hblank DMA at position 1.
+<br/>
+<br/>
+To multiply approximately by 0.6, use fixed-point arithmetic. Multiply by 154 and divide by 256.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#34218 - identitycrisisuk - Sat Jan 15, 2005 6:56 pm</h4>
+    <div class="postbody"><span class="postbody">Thanks for the fixed point thing, I get that - implemented nice and easily.
+<br/>
+<br/>
+So to do what I really want to do I'd either enable a VBlank interrupt and do what I want for line 0 there or just do it in my normal code loop after my wait for Vblank? And then in each HBlank interrupt, if I want to be really exact do I add one to whatever REG_VCOUNT is as that is the line I will be affecting?<br/>_________________<br/></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">CanIKickIt(YES_YOU_CAN);</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#34219 - tepples - Sat Jan 15, 2005 7:02 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>identitycrisisuk wrote:</b></span></td> </tr> <tr> <td class="quote">So to do what I really want to do I'd either enable a VBlank interrupt and do what I want for line 0 there or just do it in my normal code loop after my wait for Vblank?</td> </tr></table><span class="postbody">
+<br/>
+The latter might be simpler.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">And then in each HBlank interrupt, if I want to be really exact do I add one to whatever REG_VCOUNT is as that is the line I will be affecting?</td> </tr></table><span class="postbody">
+<br/>
+Yes. For example, if you're in Hblank after line 87, you want to set up the scroll registers for line 88.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

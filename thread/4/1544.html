@@ -1,0 +1,119 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>IntrWait and VBlankIntrWait BIOS functions - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > IntrWait and VBlankIntrWait BIOS functions</h2>
+<div id="posts">
+<div class="post">
+    <h4>#7860 - doragasu - Thu Jun 26, 2003 11:54 pm</h4>
+    <div class="postbody"><span class="postbody">I tried VBlankIntrWait BIOS function with this code:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#define VBlankIntrWait asm volatile("swi 0x50000")
+<br/>
+<br/>
+..................
+<br/>
+REG_IE = INT_VBLANK;
+<br/>
+REG_DISPSTAT |= STAT_VB_ENABLE;
+<br/>
+REG_IME = 1;
+<br/>
+.................
+<br/>
+while (1)
+<br/>
+{
+<br/>
+  VBlankIntrWait;
+<br/>
+  .................
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+But doesn't work, when I call SWI 5, the system hangs up and never wakes up. I know VBLANK int es correctly enabled, but this doesn't work.
+<br/>
+<br/>
+I tried to test IntrWait (SWI 4) with a similar program, but also didn't work for me.
+<br/>
+<br/>
+Despite this, all other BIOS functions I tried (including Halt function (SWI 2)) worked for me, dunno why SWI 4 and 5 didn't work.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7869 - tepples - Fri Jun 27, 2003 7:21 am</h4>
+    <div class="postbody"><span class="postbody">VblankIntrWait() calls IntrWait(). In order for IntrWait() to work properly, you have to have an ISR (interrupt service routine) installed first. An ISR <span style="font-style: italic">must</span> be compiled as ARM instructions and <span style="font-style: italic">should</span> have an entry point in IWRAM. If you don't install an ISR, or your ISR doesn't work, IntrWait() will hang the GBA.
+<br/>
+<br/>
+Look at tutorials to see how to write an ISR. I've read that the crt0 packaged with a future beta of DevKit Advance will have enough of an ISR installed by default to get IntrWait() working: acknowledge interrupts to the hardware and to the BIOS, and then return.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7876 - Quirky - Fri Jun 27, 2003 8:05 am</h4>
+    <div class="postbody"><span class="postbody">You have to let the bios know, in your interrupt service routine, that the vblank has occurred to tell the cpu to wake up. Something like this:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+void interruptProcess(void) {
+<br/>
+  // Disable interrupts 
+<br/>
+  REG_IME = 0x00;
+<br/>
+  u16 Int_Flag; 
+<br/>
+  // Read the interrupt flag
+<br/>
+  Int_Flag = REG_IF;
+<br/>
+  
+<br/>
+  if (Int_Flag == INT_VBLANK) {
+<br/>
+    // let the bios know that vblank occurred
+<br/>
+    (*(volatile u32*)0x03fffff8) = INT_VBLANK;  
+<br/>
+  }
+<br/>
+  // Enable interrupts
+<br/>
+  REG_IME = 0x1;
+<br/>
+  // Write back the interrupt flags  
+<br/>
+  REG_IF = Int_Flag;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+where you have previously set the interrupt address to point to this function. i.e. REG_INTERUPT = (u32)interruptProcess;</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

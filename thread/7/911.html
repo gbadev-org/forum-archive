@@ -1,0 +1,132 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>rom loader - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>C/C++ > rom loader</h2>
+<div id="posts">
+<div class="post">
+    <h4>#4551 - Mega386 - Thu Apr 03, 2003 7:07 am</h4>
+    <div class="postbody"><span class="postbody">ive been thinking it would be kindof cool to make an operating system for the gba but i cant seem to figure out how to execute another rom on the cartridge after one program has started running. if anyone has any clue on how to do this please help.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#4552 - tepples - Thu Apr 03, 2003 7:29 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Mega386 wrote:</b></span></td> </tr> <tr> <td class="quote">i cant seem to figure out how to execute another rom on the cartridge after one program has started running</td> </tr></table><span class="postbody">
+<br/>
+Somebody has already done this, and it's called <a class="postlink" href="http://sourceforge.net/projects/pogodist" target="_blank">PogoShell</a>.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#4607 - phonymike - Fri Apr 04, 2003 9:23 am</h4>
+    <div class="postbody"><span class="postbody">Below is code taken from <a class="postlink" href="http://www.gbadev.org/download.php?section=send&amp;filename=flgba172.zip" target="_blank">GBA Flinker 1.72</a> source. It is the code to "unlock" visoly carts. I found that my carts only need the WriteRepeat (0x987654, 0x5354, 1) to get unlocked, though older carts may need all of these writes.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void WriteRepeat (u32 addr, u16 data, u16 count){
+<br/>
+  u16 i;
+<br/>
+  for (i=0; i&lt;count; i++)
+<br/>
+   *(vu16 *)(0x8000000 + (addr &lt;&lt; 1)) = data;
+<br/>
+}
+<br/>
+<br/>
+void VisolyModePreamble (void){
+<br/>
+  WriteRepeat (0x987654, 0x5354, 1);
+<br/>
+  WriteRepeat (0x12345, 0x1234, 500);
+<br/>
+  WriteRepeat (0x7654, 0x5354, 1);
+<br/>
+  WriteRepeat (0x12345, 0x5354, 1);
+<br/>
+  WriteRepeat (0x12345, 0x5678, 500);
+<br/>
+  WriteRepeat (0x987654, 0x5354, 1);
+<br/>
+  WriteRepeat (0x12345, 0x5354, 1);
+<br/>
+  WriteRepeat (0x765400, 0x5678, 1);
+<br/>
+  WriteRepeat (0x13450, 0x1234, 1);
+<br/>
+  WriteRepeat (0x12345, 0xABCD, 500);
+<br/>
+  WriteRepeat (0x987654, 0x5354, 1);
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+After you execute that, you then need to write a value to a location in the visoly cart (0x96B592E) which is the (converted) address in the cart that you want to be mapped to 0x8000000. The code below will convert an address to the correct bits. The resolution of the cart is 32KB (0x8000) so you can't have any location smaller than 0x8000. So below, you can set ROM_ADDRESS to 0x8000 or 0x8008000 for the next bank (the 0x8000000 gets cut off in the conversion, so you can leave it off or leave it in.) The conversion code below works for carts up to 256Mb (32MB.)
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">*(u16*)0x96B592E = (((ROM_ADDRESS&gt;&gt;15) &amp; 0x7F)&lt;&lt;3) | (((ROM_ADDRESS&gt;&gt;15) &amp; 0x380)&gt;&gt;7);
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+or if you prefer assembly :)
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">   mov   r0,r0,lsr #15   ;chop off zeros
+<br/>
+   and   r1,r0,#0x7F   ;mask for &lt; 4MB
+<br/>
+   and   r0,r0,#0x380   ;mask for &gt;= 4MB
+<br/>
+<br/>
+   mov   r1,r1,lsl #3   ;align &lt; 4MB reg for visoly cart
+<br/>
+   mov   r0,r0,lsr #7   ;align &gt;= 4MB reg for visoly cart
+<br/>
+<br/>
+   orr   r0,r0,r1   ;combine the bits, r0 = visoly register value
+<br/>
+<br/>
+   ldr   r1,=0x96B592E   ;address where bank setting is written to
+<br/>
+   str   r0,[r1]      ;set the cartridge to specified rom address
+<br/>
+<br/>
+   mov   r0,#0x08   ;setting for swi 0 (clear all ram)
+<br/>
+   swi   0x1000      ;clear ram
+<br/>
+   swi   0
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+For more info on the visoly cart registers check out <a class="postlink" href="http://www.ziegler.desaign.de/GBA/gba_visoly.pdf" target="_blank">this</a> document. Also check out <a class="postlink" href="http://www.ziegler.desaign.de/GBA/gba.htm" target="_blank">this site</a> for more GBA hardware info.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#4698 - Mega386 - Mon Apr 07, 2003 7:06 am</h4>
+    <div class="postbody"><span class="postbody">Thanks alot phonymike.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#4727 - Malefactor - Mon Apr 07, 2003 11:52 pm</h4>
+    <div class="postbody"><span class="postbody">what kind of OS you thinkin about?<br/>_________________<br/><a class="postlink" href="http://lorrd.fearware.net" target="_blank"></a><a href="http://mysite.verizon.net/vzep3wth/sitebuildercontent/sitebuilderpictures/lorrdbanner.gif">[Images not permitted - Click here to view it]</a></span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

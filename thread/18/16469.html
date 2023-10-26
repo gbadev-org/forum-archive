@@ -1,0 +1,1562 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Display optimizations: 1bpp to 8bpp - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Display optimizations: 1bpp to 8bpp</h2>
+<div id="posts">
+<div class="post">
+    <h4>#166907 - Lazy1 - Mon Feb 23, 2009 10:07 pm</h4>
+    <div class="postbody"><span class="postbody">Once again looking at my code to display a 1bpp image on the DS I noticed that my timing before was way off and my current method takes around 14ms to convert a 512x342 image to 8bpp.
+<br/>
+<br/>
+I have made one small change to only draw a small window instead which is much faster but I feel there may be a more efficient way to do this.
+<br/>
+Also, I moved the conversion to the arm7 to leave the arm9 free for other things.
+<br/>
+<br/>
+Arm7 code:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+u32 FBConvTable[ 256 ];
+<br/>
+<br/>
+void V_Start( void ) {
+<br/>
+   u32 Value = 0;
+<br/>
+   int i = 0;
+<br/>
+   
+<br/>
+   for ( i = 0; i &lt; 256; i++ ) {
+<br/>
+      Value = 0;
+<br/>
+      
+<br/>
+      if ( ! ( i &amp; BIT( 0 ) ) ) Value |= ( 1 &lt;&lt; 24 );
+<br/>
+      if ( ! ( i &amp; BIT( 1 ) ) ) Value |= ( 1 &lt;&lt; 16 );
+<br/>
+      if ( ! ( i &amp; BIT( 2 ) ) ) Value |= ( 1 &lt;&lt; 8 );
+<br/>
+      if ( ! ( i &amp; BIT( 3 ) ) ) Value |= 1;
+<br/>
+      
+<br/>
+      FBConvTable[ i ] = Value;
+<br/>
+   }
+<br/>
+}
+<br/>
+<br/>
+void V_Draw( int Count, void* Userdata ) {
+<br/>
+   u32 Data[ 6 ];
+<br/>
+   u32* Gfx;
+<br/>
+   u8* Fb;
+<br/>
+   int Size;
+<br/>
+   int i;
+<br/>
+   int x;
+<br/>
+   int y;
+<br/>
+   int DrawWindow_Width;
+<br/>
+   int DrawWindow_Height;
+<br/>
+   
+<br/>
+   if ( Count ) {
+<br/>
+      fifoGetDatamsg( FIFO_USER_01, Count, ( u8* ) Data );
+<br/>
+      
+<br/>
+      Gfx = ( u32* ) Data[ 0 ];
+<br/>
+      Fb = ( u8* ) Data[ 1 ];
+<br/>
+      Size = ( int ) Data[ 2 ];
+<br/>
+      DrawWindow_Width = ( int ) Data[ 3 ];
+<br/>
+      DrawWindow_Height = ( int ) Data[ 4 ];
+<br/>
+      
+<br/>
+      for ( y = 0; y &lt; DrawWindow_Height; y++ ) {
+<br/>
+         for ( x = 0; x &lt; DrawWindow_Width; x+= 8 ) {
+<br/>
+            *Gfx++ = FBConvTable[ *Fb &gt;&gt; 4 ];
+<br/>
+            *Gfx++ = FBConvTable[ *Fb++ ];
+<br/>
+         }
+<br/>
+         
+<br/>
+         Gfx+= ( 512 - DrawWindow_Width ) / 4;
+<br/>
+         Fb+= ( 512 - DrawWindow_Width ) / 8;
+<br/>
+      }
+<br/>
+      
+<br/>
+      fifoSendDatamsg( FIFO_USER_01, 1, ( u8* ) Data );
+<br/>
+   }
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+It's very simple so far and I still have to add window scrolling in but I wanted to get other people's thoughts on improving the speed/efficiency before going farther.
+<br/>
+<br/>
+Unless no$gba is lying to me the arm7 takes around 190 hblanks to convert a 320x240 window, notify the arm9 and have the arm9 dma it to vram.
+<br/>
+I'm also not sure how good of an arrangement this is having the arm7 doing the drawing.
+<br/>
+<br/>
+Arm9 code:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+void V_Draw( void ) {
+<br/>
+   u32 Data[ 5 ];
+<br/>
+   int HStart = 0;
+<br/>
+   int HEnd = 0;
+<br/>
+   
+<br/>
+   Data[ 0 ] = ( u32 ) VBuffer;
+<br/>
+   Data[ 1 ] = ( u32 ) macfb_bin;
+<br/>
+   Data[ 2 ] = macfb_bin_size;
+<br/>
+   Data[ 3 ] = DrawWindow_Width;
+<br/>
+   Data[ 4 ] = DrawWindow_Height;
+<br/>
+   
+<br/>
+   HStart = HBlankCount;
+<br/>
+   
+<br/>
+   fifoSendDatamsg( FIFO_USER_01, sizeof( Data ), ( u8* ) Data );
+<br/>
+   
+<br/>
+   while ( ! _Arm7Complete );
+<br/>
+   
+<br/>
+   dmaCopyHalfWords( 3, VBuffer, bgGetGfxPtr( HW2D_bg2 ), ( 512 * 342 ) );
+<br/>
+   
+<br/>
+   HEnd = HBlankCount;
+<br/>
+   _Arm7Complete = 0;
+<br/>
+   
+<br/>
+   iprintf( "Arm7 draw took %d hblanks.\n", ( HEnd - HStart ) );
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#166910 - elhobbs - Mon Feb 23, 2009 10:41 pm</h4>
+    <div class="postbody"><span class="postbody">I am guessing that you intend to have the arm9 do some work while waiting for the arm7 to finish - the fast cpu waiting idle for the slow cpu do some work is definitely not going to help much ;) I would be surprised if any of the emulators properly emulate memory contention between the arm7 and arm9. still 14ms sounds like a lot to me...
+<br/>
+<br/>
+I have never tried it myself but you may want to take a look a decompressing a compressed native ds format (I am guessing here that you are using the 1bit image to save memory?) directly to vram instead of messing with the arm7.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#166911 - Dwedit - Mon Feb 23, 2009 10:49 pm</h4>
+    <div class="postbody"><span class="postbody">Faster algorithm to turn 1bpp into 8bpp (assuming color number #1)
+<br/>
+<br/>
+input is an array of bytes, output is an array of u32's
+<br/>
+<br/>
+a=input[x];
+<br/>
+x++;
+<br/>
+b=a&amp;0x0F;
+<br/>
+b|=b&lt;&lt;7;
+<br/>
+b|=b&lt;&lt;14;
+<br/>
+b&amp;=0x01010101;
+<br/>
+output[y]=b;
+<br/>
+y++;
+<br/>
+b=a&gt;&gt;4;
+<br/>
+b|=b&lt;&lt;7;
+<br/>
+b|=b&lt;&lt;14;
+<br/>
+b&amp;=0x01010101;
+<br/>
+output[y]=b;
+<br/>
+y++;
+<br/>
+<br/>
+Compile in ARM mode, probably into fast ram.
+<br/>
+<br/>
+EDIT: Gcc can't generate good ASM code for this, so here it is:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+   ldr r4,=0x01010101 @put this outside of the inner loop
+<br/>
+<br/>
+   ldrb r0,[r1],#1
+<br/>
+   and r2,r0,#0x0F
+<br/>
+   orr r2,r2,r2,lsl#7
+<br/>
+   orr r2,r2,r2,lsl#14
+<br/>
+   and r2,r2,r4
+<br/>
+   str r2,[r3],#4
+<br/>
+   mov r2,r0,lsr#4
+<br/>
+   orr r2,r2,r2,lsl#7
+<br/>
+   orr r2,r2,r2,lsl#14
+<br/>
+   and r2,r2,r4
+<br/>
+   str r2,[r3],#4
+<br/>
+</td> </tr></table><span class="postbody"><br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#166912 - Dwedit - Mon Feb 23, 2009 11:12 pm</h4>
+    <div class="postbody"><span class="postbody">ASM code again...
+<br/>
+<br/>
+This is for bit order where the LEAST significant bit is the first in a sequence of 8 bytes to output, which isn't the same as your code.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+@void conv_image(u32 *dest, u8 *src, int size);
+<br/>
+conv_image:
+<br/>
+    @r0 = dest, r1 = src, r2 = size
+<br/>
+    stmfd sp!,{r4,r5,r6}
+<br/>
+    ldr r6,=0x01010101
+<br/>
+0:
+<br/>
+    ldrb r3,[r1],#1
+<br/>
+    and r4,r3,#0x0F
+<br/>
+    orr r4,r4,r4,lsl#7
+<br/>
+    orr r4,r4,r4,lsl#14
+<br/>
+    and r4,r4,r6
+<br/>
+    mov r5,r3,lsr#4
+<br/>
+    orr r5,r5,r5,lsl#7
+<br/>
+    orr r5,r5,r5,lsl#14
+<br/>
+    and r5,r5,r6
+<br/>
+    stmia r0!,{r4,r5}
+<br/>
+    subs r2,r2,#1
+<br/>
+    bne 0b
+<br/>
+    ldmfd sp!,{r4,r5,r6}
+<br/>
+    bx lr
+<br/>
+</td> </tr></table><span class="postbody"><br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#166914 - Dwedit - Tue Feb 24, 2009 12:45 am</h4>
+    <div class="postbody"><span class="postbody">Now I made big and little endian bit order versions.
+<br/>
+_le outputs ones for each bit, starting with the least significant bit,
+<br/>
+_be outputs ones for each bit, starting with the most significant bit.  Looks like the BE version is even faster!
+<br/>
+I still haven't tested these yet, but I'm positive they'll work.
+<br/>
+<br/>
+Neglecting memory speed, it should process about 2272 pixels per scanline on the ARM9, so converting 320x240 should take about 34 scanlines.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+@void conv_image_le(u32 *dest, u8 *src, int size);
+<br/>
+conv_image_le:
+<br/>
+    @r0 = dest, r1 = src, r2 = size
+<br/>
+    stmfd sp!,{r4,r5,r6}
+<br/>
+    ldr r6,=0x01010101
+<br/>
+0:
+<br/>
+    ldrb r3,[r1],#1
+<br/>
+    and r4,r3,#0x0F
+<br/>
+    orr r4,r4,r4,lsl#7
+<br/>
+    orr r4,r4,r4,lsl#14
+<br/>
+    and r4,r4,r6
+<br/>
+    mov r5,r3,lsr#4
+<br/>
+    orr r5,r5,r5,lsl#7
+<br/>
+    orr r5,r5,r5,lsl#14
+<br/>
+    and r5,r5,r6
+<br/>
+    stmia r0!,{r4,r5}
+<br/>
+    subs r2,r2,#1
+<br/>
+    bne 0b
+<br/>
+    ldmfd sp!,{r4,r5,r6}
+<br/>
+    bx lr
+<br/>
+<br/>
+@void conv_image_be(u32 *dest, u8 *src, int size);
+<br/>
+conv_image_be:
+<br/>
+    @r0 = dest, r1 = src, r2 = size
+<br/>
+    stmfd sp!,{r4,r5,r6}
+<br/>
+    ldr r6,=0x01010101
+<br/>
+0:
+<br/>
+    ldrb r3,[r1],#1
+<br/>
+    mov r4,r3,lsl#24
+<br/>
+    orr r4,r4,r4,lsr#9
+<br/>
+    orr r4,r4,r4,lsr#18
+<br/>
+    and r5,r6,r4
+<br/>
+    and r4,r6,r4,lsr#4
+<br/>
+    stmia r0!,{r4,r5}
+<br/>
+    subs r2,r2,#1
+<br/>
+    bne 0b
+<br/>
+    ldmfd sp!,{r4,r5,r6}
+<br/>
+    bx lr
+<br/>
+</td> </tr></table><span class="postbody"><br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"><br/><br/>Last edited by Dwedit on Tue Feb 24, 2009 1:15 am; edited 2 times in total</span></div>    
+</div>
+<div class="post">
+    <h4>#166915 - Lazy1 - Tue Feb 24, 2009 1:12 am</h4>
+    <div class="postbody"><span class="postbody">conv_image_be Gives me 175 hblanks on hardware but unfortunately gives me a white screen.
+<br/>
+EDIT: That's for 512x342, sorry.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#166916 - Lazy1 - Tue Feb 24, 2009 2:12 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>elhobbs wrote:</b></span></td> </tr> <tr> <td class="quote">I am guessing that you intend to have the arm9 do some work while waiting for the arm7 to finish - the fast cpu waiting idle for the slow cpu do some work is definitely not going to help much ;) I would be surprised if any of the emulators properly emulate memory contention between the arm7 and arm9. still 14ms sounds like a lot to me...
+<br/>
+<br/>
+I have never tried it myself but you may want to take a look a decompressing a compressed native ds format (I am guessing here that you are using the 1bit image to save memory?) directly to vram instead of messing with the arm7.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Well, I'd like to redo a port of Mini vMac and really try to get the speed up.
+<br/>
+If I can get the arm7 to do all the drawing that will leave the arm9 free to emulate the 68k cpu.
+<br/>
+<br/>
+The code Dwedit posted looks promising, the first ones produces backwards output but were very fast. 
+<br/>
+Combining that with only drawing part of the screen should make it fast enough to be on the arm7 with room to spare.
+<br/>
+<br/>
+A long time ago tepples wrote a 1bpp software scaler which produces very nice output.
+<br/>
+Dropping that on the arm7 would not slow down emulation as much, at most some frames would be dropped depending on how fast the scaling is.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#166918 - Dwedit - Tue Feb 24, 2009 2:28 am</h4>
+    <div class="postbody"><span class="postbody">I just made a test program which used conv_image_be, and it worked perfectly.
+<br/>
+Make sure you didn't make any silly mistakes like getting the dest and src swapped, or specify the wrong size.  Size is in source bytes, not pixels.
+<br/>
+<br/>
+In my test program, I just gave the bit unpacker an address in VRAM as the destination.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#166919 - Lazy1 - Tue Feb 24, 2009 3:17 am</h4>
+    <div class="postbody"><span class="postbody">Ah right, got it.
+<br/>
+Thank you, it's a lot faster than what I had.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#166920 - Dwedit - Tue Feb 24, 2009 3:41 am</h4>
+    <div class="postbody"><span class="postbody">Unrolled version (nocash says it's 50% faster)
+<br/>
+Source address must be word aligned
+<br/>
+<br/>
+Nocash says the previous routine took 159,749 cycles for a 256x192 bitmap, the new version here takes 102,921 cycles for the same bitmap
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+conv_image_be_unrolled:
+<br/>
+    stmfd sp!,{r4-r10}
+<br/>
+    ldr r10,=0x01010101
+<br/>
+0:
+<br/>
+    ldr r9,[r1],#4
+<br/>
+    mov r3,r9,lsl#24
+<br/>
+    orr r3,r3,r3,lsr#9
+<br/>
+    orr r3,r3,r3,lsr#18
+<br/>
+    and r4,r10,r3
+<br/>
+    and r3,r10,r3,lsr#4
+<br/>
+    mov r5,r9,lsl#16
+<br/>
+    and r5,r5,#0xFF000000
+<br/>
+    orr r5,r5,r5,lsr#9
+<br/>
+    orr r5,r5,r5,lsr#18
+<br/>
+    and r6,r10,r5
+<br/>
+    and r5,r10,r5,lsr#4
+<br/>
+    mov r7,r9,lsl#8
+<br/>
+    and r7,r7,#0xFF000000
+<br/>
+    orr r7,r7,r7,lsr#9
+<br/>
+    orr r7,r7,r7,lsr#18
+<br/>
+    and r8,r10,r7
+<br/>
+    and r7,r10,r7,lsr#4
+<br/>
+    and r9,r9,#0xFF000000
+<br/>
+    orr r9,r9,r9,lsr#9
+<br/>
+    orr r9,r9,r9,lsr#18
+<br/>
+    and r12,r10,r9
+<br/>
+    and r9,r10,r9,lsr#4
+<br/>
+    stmia r0!,{r3-r9,r12}
+<br/>
+    subs r2,r2,#4
+<br/>
+    bgt 0b
+<br/>
+    ldmfd sp!,{r4-r10}
+<br/>
+    bx lr
+<br/>
+</td> </tr></table><span class="postbody"><br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#166922 - Lazy1 - Tue Feb 24, 2009 3:55 am</h4>
+    <div class="postbody"><span class="postbody">That is amazing!
+<br/>
+It works very well :D</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#166924 - Lazy1 - Tue Feb 24, 2009 5:13 am</h4>
+    <div class="postbody"><span class="postbody">Is there any reason this wouldn't work on the arm7? no$ just crashes with "the rom image has crashed" and gives no explanation.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#166927 - Miked0801 - Tue Feb 24, 2009 6:54 am</h4>
+    <div class="postbody"><span class="postbody">No Arm9 specific op-codes there.  No$ has bugs which cause it to flake occasionally.  Add some nops and such to other areas of your code to get different alignment and try again.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#166928 - Miked0801 - Tue Feb 24, 2009 6:57 am</h4>
+    <div class="postbody"><span class="postbody">BTW, Dwedit:  I think that can be made a bit faster yet.  I'll look at it further in the morning when I'm not so tired :)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#166929 - Dwedit - Tue Feb 24, 2009 7:37 am</h4>
+    <div class="postbody"><span class="postbody">Preparing 2 words in 5 instructions after loading a byte is pretty damn good.  Does the alternative involve generating an address in 1 instruction, then fetching two words from a 2KB lookup table?
+<br/>
+<br/>
+Maybe even converting the 1bpp stream into 4bpp tiles for use in tile-mapped modes, like PocketNES or the other emulators?
+<br/>
+<br/>
+Include "dirty regions" to update less information?<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#166938 - Lazy1 - Tue Feb 24, 2009 3:28 pm</h4>
+    <div class="postbody"><span class="postbody">I'm seriously completely amazed, your code is faster on the arm7 than mine was on the arm9.
+<br/>
+To convert the entire 512x342 framebuffer it took only 139 hblanks.
+<br/>
+<br/>
+The problem I was having earlier: 
+<br/>
+I copied the assembler source file to the arm7 directory without removing the line that puts it into itcm (oops!).
+<br/>
+I wonder why no error was generated though, works perfectly now.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#166951 - Cearn - Tue Feb 24, 2009 5:59 pm</h4>
+    <div class="postbody"><span class="postbody">A slightly faster version is possible by pre-loading the byte mask. Going off of Dwedit's code:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">conv_image_be_unrolled:
+<br/>
+    stmfd   sp!, {r4-r11}
+<br/>
+    ldr     r10, =0x01010101
+<br/>
+    mov     r11, 0xFF000000
+<br/>
+0:
+<br/>
+    ldr     r9,[r1], #4
+<br/>
+    @ bits 0-7
+<br/>
+    mov     r3, r9, lsl #24
+<br/>
+    orr     r3, r3, r3, lsr #9
+<br/>
+    orr     r3, r3, r3, lsr #18
+<br/>
+    and     r4, r10, r3
+<br/>
+    and     r3, r10, r3, lsr #4
+<br/>
+    @ bits 8-15
+<br/>
+    and     r5, r11, r9, lsl #16
+<br/>
+    orr     r5, r5, r5, lsr #9
+<br/>
+    orr     r5, r5, r5, lsr #18
+<br/>
+    and     r6, r10, r5
+<br/>
+    and     r5, r10, r5, lsr #4
+<br/>
+    @ bits 16-23
+<br/>
+    and     r7, r11, r9, lsl #8
+<br/>
+    orr     r7, r7, r7, lsr #9
+<br/>
+    orr     r7, r7, r7, lsr #18
+<br/>
+    and     r8, r10, r7
+<br/>
+    and     r7, r10, r7, lsr #4
+<br/>
+    @ bits 24-31
+<br/>
+    and     r9, r11, r9
+<br/>
+    orr     r9, r9, r9, lsr #9
+<br/>
+    orr     r9, r9, r9, lsr #18
+<br/>
+    and     r12, r10, r9
+<br/>
+    and     r9, r10, r9, lsr #4
+<br/>
+<br/>
+    stmia   r0!, {r3-r9, r12}
+<br/>
+    subs    r2, r2, #4
+<br/>
+    bgt     0b
+<br/>
+    ldmfd   sp!, {r4-r11}
+<br/>
+    bx      lr</td> </tr></table><span class="postbody">Yeah, it's only 2 less instructions in the loop, but every little bit helps. Using a large lookup table <span style="font-style: italic">may</span> be faster depending on processor and memory region.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#166975 - Miked0801 - Wed Feb 25, 2009 5:19 am</h4>
+    <div class="postbody"><span class="postbody">No, just looking to skim an instruction or two.  Work is ^$&amp;$^ busy right now though so when I get home, my mind is too mushy to attack.  Give me another day.
+<br/>
+<br/>
+Or a lookup table perhaps :)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#167034 - Lazy1 - Fri Feb 27, 2009 4:36 am</h4>
+    <div class="postbody"><span class="postbody">Out of curiosity, how would I scale the screen down by half in software?
+<br/>
+My code produces something visible but obviously is incorrect since I just guessed.
+<br/>
+<br/>
+<a class="postlink" href="http://img514.imageshack.us/my.php?image=output.png" target="_blank">http://img514.imageshack.us/my.php?image=output.png</a>
+<br/>
+<br/>
+I don't need any code but a general idea on how it's supposed to go would be very appreciated.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#167035 - Dwedit - Fri Feb 27, 2009 4:47 am</h4>
+    <div class="postbody"><span class="postbody">You sum 4 pixels and average them into one pixel.  Your output levels could be either 0%, 25%, 50%, 75%, or 100% intensity.
+<br/>
+Of course, in this situation you get the opportunity to use ClearType too.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#167053 - Lazy1 - Fri Feb 27, 2009 10:48 pm</h4>
+    <div class="postbody"><span class="postbody">Do you mean take 2 pixels from the top and bottom rows or 4 pixels from the same row?
+<br/>
+So far all I'm getting is washed out gray.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#167054 - TwentySeven - Fri Feb 27, 2009 10:52 pm</h4>
+    <div class="postbody"><span class="postbody">Eight pixels (4x2)
+<br/>
+<br/>
+ABCD
+<br/>
+EFGH
+<br/>
+<br/>
+becomes two pixels
+<br/>
+<br/>
+(A+B+E+F) / 4
+<br/>
+<br/>
+and
+<br/>
+<br/>
+(C+D+G+H) / 4</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#167056 - Lazy1 - Sat Feb 28, 2009 12:14 am</h4>
+    <div class="postbody"><span class="postbody">I think I get it: <a class="postlink" href="http://img187.imageshack.us/my.php?image=outp2.png" target="_blank">http://img187.imageshack.us/my.php?image=outp2.png</a>
+<br/>
+<br/>
+Expensive though, but I'm sure there is room for improvement.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#167058 - TwentySeven - Sat Feb 28, 2009 1:12 am</h4>
+    <div class="postbody"><span class="postbody">If you're happy with that image result, the actual algorithm can be significantly sped up...
+<br/>
+<br/>
+But theres other algos too, as someone mentioned before the DS LCD is suitable for sub-pixel rendering,  although that only gives you your horizontal scaling, not vertical.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#167060 - Lazy1 - Sat Feb 28, 2009 1:35 am</h4>
+    <div class="postbody"><span class="postbody">I tried subpixel rendering but yeah, it doesn't look quite right.
+<br/>
+One thing that differed in your instructions was the division by 4, that did not produce anything usable but 2 did.
+<br/>
+<br/>
+Hopefully it can be sped up so the arm7 can run it within 16ms, I like the idea of a scaled display not impacting performance. :D</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#167061 - Dwedit - Sat Feb 28, 2009 1:38 am</h4>
+    <div class="postbody"><span class="postbody">deleteme<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#167064 - Dwedit - Sat Feb 28, 2009 2:14 am</h4>
+    <div class="postbody"><span class="postbody">For subpixel rendering:
+<br/>
+<br/>
+Assuming RGB subpixel ordering, 0 is black, 1 is white...
+<br/>
+Switch Orange and Skyblue if using BGR subpixel orering
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+00 - Black
+<br/>
+00
+<br/>
+<br/>
+10 or 00 - Dark Orange
+<br/>
+00    10
+<br/>
+<br/>
+01 or 00- Dark SkyBlue
+<br/>
+00    01
+<br/>
+<br/>
+11 or 00 or 10 or 01 - Gray
+<br/>
+00    11    01    10
+<br/>
+<br/>
+10 - Orange
+<br/>
+10
+<br/>
+<br/>
+01 - SkyBlue
+<br/>
+01
+<br/>
+<br/>
+10 or 11 - Light Orange
+<br/>
+11    10
+<br/>
+<br/>
+01 or 11 - Light SkyBlue
+<br/>
+11    01
+<br/>
+<br/>
+11 - White
+<br/>
+11
+<br/>
+</td> </tr></table><span class="postbody"><br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#167066 - TwentySeven - Sat Feb 28, 2009 3:03 am</h4>
+    <div class="postbody"><span class="postbody">Do you have RGB values for those? :)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#167067 - Dwedit - Sat Feb 28, 2009 3:32 am</h4>
+    <div class="postbody"><span class="postbody">They should be self evident enough from the color names...
+<br/>
+<br/>
+In RGB:
+<br/>
+Orange: #FF8000
+<br/>
+DarkOrange: #804000
+<br/>
+LiteOrange: #FFC080
+<br/>
+SkyBlue: #0080FF
+<br/>
+DarkSkyBlue: #004080
+<br/>
+LiteSkyBlue: #80C0FF
+<br/>
+Gray: #808080
+<br/>
+White: #FFFFFF
+<br/>
+Black: #000000<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#167130 - Lazy1 - Mon Mar 02, 2009 8:24 pm</h4>
+    <div class="postbody"><span class="postbody">I got it down to using 234 lines, still a bit too expensive though.
+<br/>
+Can this C code be optimized?
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+void V_Draw( void ) {
+<br/>
+   u8* Top = ( u8* ) macfb_bin;
+<br/>
+   u8* Bottom = Top + 64;
+<br/>
+   u32 OutBits = 0;
+<br/>
+   u32 Temp = 0;
+<br/>
+   u32* Gfx = ( u32* ) BG_BMP_RAM( 0 );
+<br/>
+   u32 TopBits;
+<br/>
+   u32 BottomBits;
+<br/>
+   int S;
+<br/>
+   int E;
+<br/>
+   int i;
+<br/>
+   
+<br/>
+   S = HBlankCount;
+<br/>
+<br/>
+   for ( i = 0; i &lt; macfb_bin_size; i++ ) {
+<br/>
+      TopBits = ( u32 ) ( *Top++ );
+<br/>
+      BottomBits = ( u32 ) ( *Bottom++ );
+<br/>
+      
+<br/>
+      Temp = TopBits &gt;&gt; 6;
+<br/>
+      Temp+= BottomBits &gt;&gt; 6;
+<br/>
+      Temp&gt;&gt;= 1;
+<br/>
+      
+<br/>
+      OutBits = Temp;
+<br/>
+      
+<br/>
+      Temp = ( TopBits &gt;&gt; 4 ) &amp; 0x03;
+<br/>
+      Temp+= ( BottomBits &gt;&gt; 4 ) &amp; 0x03;
+<br/>
+      Temp&gt;&gt;= 1;
+<br/>
+      
+<br/>
+      OutBits |= ( Temp &lt;&lt; 8 );
+<br/>
+      
+<br/>
+      Temp = ( TopBits &gt;&gt; 2 ) &amp; 0x03;
+<br/>
+      Temp+= ( BottomBits &gt;&gt; 2 ) &amp; 0x03;
+<br/>
+      Temp&gt;&gt;= 1;
+<br/>
+      
+<br/>
+      OutBits |= ( Temp &lt;&lt; 16 );   
+<br/>
+      
+<br/>
+      Temp = ( TopBits ) &amp; 0x03;
+<br/>
+      Temp+= ( BottomBits ) &amp; 0x03;
+<br/>
+      Temp&gt;&gt;= 1;
+<br/>
+      
+<br/>
+      OutBits |= ( Temp &lt;&lt; 24 );
+<br/>
+      
+<br/>
+      *Gfx++ = OutBits;
+<br/>
+   }
+<br/>
+   
+<br/>
+   E = ( HBlankCount - S );
+<br/>
+   
+<br/>
+   iprintf( "Scaling took %d hblanks.\n", E );
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#167131 - Miked0801 - Mon Mar 02, 2009 8:56 pm</h4>
+    <div class="postbody"><span class="postbody">Don't I/O read 8bits at a time.  Read 32 bits source and dest once (if they are 4-byte aligned.  If not, try to align them.)  
+<br/>
+If so:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+TopBits = *((u32 *) Top)++;
+<br/>
+BottomBits = *((u32 *) Bottom)++;
+<br/>
+<br/>
+OutBits = 0;
+<br/>
+<br/>
+Temp = Top Bits &gt;&gt; 30;
+<br/>
+Temp += BottomBits &gt;&gt; 30;
+<br/>
+Temp &gt;&gt;= 1;
+<br/>
+OutBits |= Temp
+<br/>
+<br/>
+TopBits &lt;&lt;= 2;
+<br/>
+BottomBits &lt;&lt;= 2;
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Rinse and repeat for the next 15 entries.
+<br/>
+<br/>
+Otherwise:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+Temp = TopBits &gt;&gt; 6; 
+<br/>
+Temp+= BottomBits &gt;&gt; 6; 
+<br/>
+Temp&gt;&gt;= 1; 
+<br/>
+       
+<br/>
+OutBits |= Temp; 
+<br/>
+<br/>
+TopBits &lt;&lt;= 2;
+<br/>
+BottomBits &lt;&lt;= 2;
+<br/>
+...
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+and repeat the top code.  Trading shifts for ands.  The Shifts will generally be optimized better by the arm compiler (in ARM mode.)   In reality, look at the asm output to be sure.
+<br/>
+<br/>
+Or, setup a state table and run from there:  The bigger your table, the faster it will run (within reason).  A 256x256 entry table could do your everything for you with 2 adds, 1 shift, and a loopkup.  Not bad eh?
+<br/>
+<br/>
+Too big, then do a 16x16 table twice.  256 bytes and 4 adds, 3 shifts and an or.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#167226 - Lazy1 - Fri Mar 06, 2009 3:57 am</h4>
+    <div class="postbody"><span class="postbody">I changed it to only do 32bit reads/writes but now I'm not getting any useful images from my code.
+<br/>
+<br/>
+I try to read in 32bits from the 1bpp framebuffer and output them 4 at a time to the ds framebuffer.
+<br/>
+It's probably something incredibly stupid but I'm just not seeing it :/
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#define ExpandScaleDown( shift ) \
+<br/>
+OutBits = 0;\
+<br/>
+Temp = ( TopBits &gt;&gt; 30 );\
+<br/>
+Temp+= ( BottomBits &gt;&gt; 30 );\
+<br/>
+Temp&gt;&gt;= 1;\
+<br/>
+TopBits&lt;&lt;= 2;\
+<br/>
+BottomBits&lt;&lt;= 2;\
+<br/>
+OutBits|= ( Temp &lt;&lt; shift );
+<br/>
+<br/>
+void V_Draw( void ) {
+<br/>
+   u32* Top = ( u32* ) macfb_bin;
+<br/>
+   u32* Bottom = ( u32* ) ( &amp;macfb_bin[ 64 ] );
+<br/>
+   u32* Gfx = ( u32* ) BG_BMP_RAM( 0 );
+<br/>
+   u32 TopBits = 0;
+<br/>
+   u32 BottomBits = 0;
+<br/>
+   u32 Temp = 0;
+<br/>
+   u32 OutBits = 0;
+<br/>
+   int i;
+<br/>
+   int S;
+<br/>
+   int E;
+<br/>
+   
+<br/>
+   S = HBlankCount;
+<br/>
+   
+<br/>
+   for ( i = 0; i &lt; macfb_bin_size; i+= 4 ) {
+<br/>
+      TopBits = *Top++;
+<br/>
+      BottomBits = *Bottom++;
+<br/>
+      
+<br/>
+      ExpandScaleDown( 0 );
+<br/>
+      ExpandScaleDown( 8 );
+<br/>
+      ExpandScaleDown( 16 );
+<br/>
+      ExpandScaleDown( 24 );
+<br/>
+      
+<br/>
+      *Gfx++ = OutBits;
+<br/>
+      
+<br/>
+      ExpandScaleDown( 0 );
+<br/>
+      ExpandScaleDown( 8 );
+<br/>
+      ExpandScaleDown( 16 );
+<br/>
+      ExpandScaleDown( 24 );
+<br/>
+      
+<br/>
+      *Gfx++ = OutBits;
+<br/>
+<br/>
+      ExpandScaleDown( 0 );
+<br/>
+      ExpandScaleDown( 8 );
+<br/>
+      ExpandScaleDown( 16 );
+<br/>
+      ExpandScaleDown( 24 );
+<br/>
+      
+<br/>
+      *Gfx++ = OutBits;
+<br/>
+<br/>
+      ExpandScaleDown( 0 );
+<br/>
+      ExpandScaleDown( 8 );
+<br/>
+      ExpandScaleDown( 16 );
+<br/>
+      ExpandScaleDown( 24 );
+<br/>
+      
+<br/>
+      *Gfx++ = OutBits;
+<br/>
+<br/>
+      ExpandScaleDown( 0 );
+<br/>
+      ExpandScaleDown( 8 );
+<br/>
+      ExpandScaleDown( 16 );
+<br/>
+      ExpandScaleDown( 24 );
+<br/>
+      
+<br/>
+      *Gfx++ = OutBits;
+<br/>
+<br/>
+      ExpandScaleDown( 0 );
+<br/>
+      ExpandScaleDown( 8 );
+<br/>
+      ExpandScaleDown( 16 );
+<br/>
+      ExpandScaleDown( 24 );
+<br/>
+      
+<br/>
+      *Gfx++ = OutBits;
+<br/>
+<br/>
+      ExpandScaleDown( 0 );
+<br/>
+      ExpandScaleDown( 8 );
+<br/>
+      ExpandScaleDown( 16 );
+<br/>
+      ExpandScaleDown( 24 );
+<br/>
+      
+<br/>
+      *Gfx++ = OutBits;
+<br/>
+<br/>
+      ExpandScaleDown( 0 );
+<br/>
+      ExpandScaleDown( 8 );
+<br/>
+      ExpandScaleDown( 16 );
+<br/>
+      ExpandScaleDown( 24 );
+<br/>
+      
+<br/>
+      *Gfx++ = OutBits;      
+<br/>
+   }
+<br/>
+   
+<br/>
+   E = ( HBlankCount - S );
+<br/>
+   
+<br/>
+   iprintf( "Scale took %d lines.\n", E );
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#167236 - Miked0801 - Fri Mar 06, 2009 6:40 pm</h4>
+    <div class="postbody"><span class="postbody">A few questions:
+<br/>
+Is macfb_bin 4-byte aligned when you receive it?  If not, this will not work.
+<br/>
+<br/>
+Also, you are not coding in Fortran77.  Variable names S and E would earn a wrist slap from me where I work.
+<br/>
+<br/>
+Also, that macro is just asking for bugs.  Use inline code (after you debug it) instead and get type checking and ease of debugging.
+<br/>
+<br/>
+Anyways, I rethought that problem and using a lookup table will probably win in performance anyways along with being easier to write and maintain.
+<br/>
+<br/>
+Use this to generate a 256 entry lookup table
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+for(int i=0;i&lt;16;i++)
+<br/>
+{
+<br/>
+    for(int j=0;j&lt;16;j++)
+<br/>
+    {
+<br/>
+        int lowValue = ((i &amp; 0x03) + (j &amp; 0x03)) &gt;&gt; 1;
+<br/>
+        int highValue = ((i &gt;&gt; 2) + (j &gt;&gt; 2)) &gt;&gt; 1;
+<br/>
+        highValue  &lt;&lt;= 2;
+<br/>
+<br/>
+        printf("0x%x, ", (lowValue | highValue));
+<br/>
+    }
+<br/>
+    printf("\n");
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+and try something like this:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+static const u8 kAverageLookup[256] = {//data from output};
+<br/>
+<br/>
+u8 *Top = whatever;
+<br/>
+u8 *Bottom = whatever_offseted;
+<br/>
+<br/>
+for (int  i=0; i&lt;macfb_bin_size; i++) 
+<br/>
+{ 
+<br/>
+    // Grab the next 8 bits
+<br/>
+    u8 topBits = *Top++
+<br/>
+    u8 bottomBits = *Bottom++
+<br/>
+<br/>
+    // Get the low nibble of each stream.  Place the bottom bits
+<br/>
+    // Recombine them with bottomBits in the high nibble of a lookup
+<br/>
+    u8 lowIndex = topBits &amp; 0x0F;
+<br/>
+    u8 highIndex = bottomBits &lt;&lt; 4;
+<br/>
+    int outBits = kAverageLookup[lowIndex | highIndex];
+<br/>
+<br/>
+    // Get the high nibble of each stream.  Place the bottom bits
+<br/>
+    // Recombine them with bottomBits in the high nibble of a lookup
+<br/>
+    u8 lowIndex = topBits &gt;&gt; 4;
+<br/>
+    u8 highIndex = bottomBits &amp; 0xF0;
+<br/>
+    int outBits |= kAverageLookup[lowIndex | highIndex];
+<br/>
+<br/>
+    // Output
+<br/>
+    *Gfx++ = OutBits;
+<br/>
+}
+<br/>
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+If you can afford a 64k lookup, then you can take it a step further and go  FAST:
+<br/>
+<br/>
+Use this to generate a 64k entry lookup table (not completely tested)
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+for(int i=0;i&lt;256;i++)
+<br/>
+{
+<br/>
+    for(int j=0;j&lt;256;j++)
+<br/>
+    {
+<br/>
+        int nibble1 = ((i &amp; 0x03) + (j &amp; 0x03)) &gt;&gt; 1;
+<br/>
+        int nibble2 = (((i &amp; 0x0C) &gt;&gt; 2) + ((j &amp; 0x0C) &gt;&gt; 2)) &gt;&gt; 1;
+<br/>
+        int nibble3 = (((i &amp; 0x30) &gt;&gt; 4) + ((j &amp; 0x0C) &gt;&gt; 4)) &gt;&gt; 1;
+<br/>
+        int nibble4 = ((i &gt;&gt; 6) + (j &gt;&gt; 6)) &gt;&gt; 1;
+<br/>
+<br/>
+        int value = nibble1 | (nibble2 &lt;&lt; 2) | (nibble3 &lt;&lt; 4) | (nibble4 &lt;&lt; 6);
+<br/>
+        printf("0x%x, ", value);
+<br/>
+    }
+<br/>
+<br/>
+    printf("\n");
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+for (int  i=0; i&lt;macfb_bin_size; i++) 
+<br/>
+{ 
+<br/>
+    // Grab the next 8 bits
+<br/>
+    u8 topBits = *Top++
+<br/>
+    u8 bottomBits = *Bottom++
+<br/>
+<br/>
+    // Output
+<br/>
+    *Gfx++ = kAverageLookup[topBits | (bottomBits &lt;&lt; 8)];
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+And that will be awesome fast.  If that's not fast enough, then read in 4 bytes at a time and unroll the loop 4 times for another decent speed gain.  Still, roughly 18 cycles per byte (not counting memory waitstates) as is will be pretty dang fast.  The unroll with 4 byte read/write takes it down to around 13.5 cycles.
+<br/>
+<br/>
+Hell even the "slow" 256 entry table will run at around 26 cycles per byte.
+<br/>
+<br/>
+But back to your code, your passed in shift values are way wrong.  They should be 0, 2, 4, 6, ... 30 and then output to gfx as a u32.
+<br/>
+With care, it will run at around 29 cycles or so per byte from the metrics I was using on my examples.  But it will not cache as efficiently as the table code and is much harder to read.  Use a lookup.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#167361 - Lazy1 - Mon Mar 09, 2009 11:27 pm</h4>
+    <div class="postbody"><span class="postbody">Thank you very much for the help, a full screen scale now only takes 150 lines on the arm9.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+Also, you are not coding in Fortran77. Variable names S and E would earn a wrist slap from me where I work. 
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Yeah, usually I try to make good variable names but if I'm just screwing around with something I'll let a few bad ones slip by.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#167362 - Miked0801 - Mon Mar 09, 2009 11:40 pm</h4>
+    <div class="postbody"><span class="postbody">Using the 256 byte table or the 64k table version?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#167363 - Lazy1 - Mon Mar 09, 2009 11:53 pm</h4>
+    <div class="postbody"><span class="postbody">64K table version.
+<br/>
+<br/>
+Edit:
+<br/>
+This is embarrassing, now I have a bug to find. Seems each line is being doubled.
+<br/>
+I didn't notice at first since mistakenly the bg was set to 512x512.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#167366 - Miked0801 - Tue Mar 10, 2009 4:44 am</h4>
+    <div class="postbody"><span class="postbody">In my 64k generator:
+<br/>
+<br/>
+int nibble3 = (((i &amp; 0x30) &gt;&gt; 4) + ((j &amp; 0x0C) &gt;&gt; 4)) &gt;&gt; 1; 
+<br/>
+<br/>
+should be:
+<br/>
+<br/>
+int nibble3 = (((i &amp; 0x30) &gt;&gt; 4) + ((j &amp; 0x30) &gt;&gt; 4)) &gt;&gt; 1;</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#167370 - Lazy1 - Tue Mar 10, 2009 8:07 am</h4>
+    <div class="postbody"><span class="postbody">I figured it out somehow and now it's down to only 69 lines on hardware to scale down the screen.
+<br/>
+<br/>
+I did not use your code directly but you pointed me in the right path with the lookup table.
+<br/>
+<br/>
+Thanks :D</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#167381 - Miked0801 - Tue Mar 10, 2009 5:17 pm</h4>
+    <div class="postbody"><span class="postbody">Sweet.  Can you publish your final code here so we can see?  It's always fun to see how far a piece of code can go and going from 300+ lines to 69 lines is pretty sweet.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#167389 - Lazy1 - Tue Mar 10, 2009 7:17 pm</h4>
+    <div class="postbody"><span class="postbody">It's a little embarrassing since looking now my lookup table is actually 256Kb and not 64, I guess since I took the lookup table idea and sort of hacked into what I was doing before.
+<br/>
+I really need to get more sleep :/
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+u32 ScaledValueTable[ 256 * 256 ];
+<br/>
+<br/>
+void V_SetupScaler( void ) {
+<br/>
+   int i;
+<br/>
+   int j;
+<br/>
+   u32 Value = 0;
+<br/>
+   u32 Temp = 0;
+<br/>
+   
+<br/>
+   for ( i = 0; i &lt; 256; i++ ) {
+<br/>
+      for ( j = 0; j &lt; 256; j++ ) {
+<br/>
+         Temp = ( i &gt;&gt; 6 );
+<br/>
+         Temp+= ( j &gt;&gt; 6 );
+<br/>
+         Temp&gt;&gt;= 1;
+<br/>
+         
+<br/>
+         Value = ( Temp );
+<br/>
+         
+<br/>
+         Temp = ( i &gt;&gt; 4 ) &amp; 0x03;
+<br/>
+         Temp+= ( j &gt;&gt; 4 ) &amp; 0x03;
+<br/>
+         Temp&gt;&gt;= 1;
+<br/>
+         
+<br/>
+         Value |= ( Temp &lt;&lt; 8 );
+<br/>
+         
+<br/>
+         Temp = ( i &gt;&gt; 2 ) &amp; 0x03;
+<br/>
+         Temp+= ( j &gt;&gt; 2 ) &amp; 0x03;
+<br/>
+         Temp&gt;&gt;= 1;
+<br/>
+         
+<br/>
+         Value |= ( Temp &lt;&lt; 16 );   
+<br/>
+         
+<br/>
+         Temp = ( i &amp; 0x03 );
+<br/>
+         Temp+= ( j &amp; 0x03 );
+<br/>
+         Temp&gt;&gt;= 1;
+<br/>
+         
+<br/>
+         Value |= ( Temp &lt;&lt; 24 );
+<br/>
+         
+<br/>
+         ScaledValueTable[ i + ( j * 256 ) ] = Value;
+<br/>
+      }
+<br/>
+   }
+<br/>
+}
+<br/>
+<br/>
+void V_Draw( void ) {
+<br/>
+   u8* Top = ( u8* ) macfb_bin;
+<br/>
+   u8* Bottom = Top + 64;
+<br/>
+   u32* Gfx = ( u32* ) BG_BMP_RAM( 0 );
+<br/>
+   int HBlankStart = 0;
+<br/>
+   int HBlankEnd = 0;
+<br/>
+   int i = 0;
+<br/>
+   int j;
+<br/>
+   int x;
+<br/>
+   int y;
+<br/>
+<br/>
+   V_SetupScaler( );
+<br/>
+   
+<br/>
+   HBlankStart = HBlankCount;
+<br/>
+   
+<br/>
+   for ( y = 0; y &lt; 170; y++ ) {
+<br/>
+      for ( x = 0; x &lt; 256; x+= 4 ) {
+<br/>
+         *Gfx++ = ScaledValueTable[ *Top++ + ( *Bottom++ * 256 ) ];
+<br/>
+      }
+<br/>
+      
+<br/>
+      Top+= 64;
+<br/>
+      Bottom+= 64;
+<br/>
+   }
+<br/>
+<br/>
+   HBlankEnd = HBlankCount;
+<br/>
+   
+<br/>
+   iprintf( "Scale took %d lines.\n", ( HBlankEnd - HBlankStart ) );
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I'm so tired I really don't remember how that came to be but criticism is always welcome.
+<br/>
+On the arm7 it gets around 170 lines or so but takes up both vram banks C and D to hold the table.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

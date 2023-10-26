@@ -1,0 +1,213 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Can you stream a looping wav from efs? - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Can you stream a looping wav from efs?</h2>
+<div id="posts">
+<div class="post">
+    <h4>#170874 - iainprice - Sat Oct 24, 2009 5:10 pm</h4>
+    <div class="postbody"><span class="postbody">Can you stream a looping wav from efs?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#170875 - headspin - Sat Oct 24, 2009 8:08 pm</h4>
+    <div class="postbody"><span class="postbody">Yes you can<br/>_________________<br/><a class="postlink" href="http://headsoft.com.au/index.php?category=warhawk" target="_blank">Warhawk DS</a> | <a class="postlink" href="http://headsoft.com.au/index.php?category=mmll" target="_blank">Manic Miner: The Lost Levels</a> | <a class="postlink" href="http://headsoft.com.au/index.php?category=tdg" target="_blank">The Detective Game</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#170893 - iainprice - Sun Oct 25, 2009 11:25 am</h4>
+    <div class="postbody"><span class="postbody">:) good.... any help with loading the file from efs so that it can be streamed?
+<br/>
+<br/>
+Thanks.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#170895 - headspin - Sun Oct 25, 2009 1:57 pm</h4>
+    <div class="postbody"><span class="postbody">Here are the file io functions I wrote for streaming a file into a buffer. I also used a timer for calculating the position but I must warn you that without compensation for sync issues you may encounter clicking sounds.
+<br/>
+<br/>
+You can view my actual streaming code (in asm) <a class="postlink" href="http://forum.gbadev.org/viewtopic.php?t=16542" target="_blank">here</a>. It may have changed a bit but it still was never fixed to compensate for sync issues often caused by cards with lots of files and fragmentation.'
+<br/>
+<br/>
+With EFS you must use stat instead of fstat for getting file size because fstat will return the size of the whole file instead of the size of the embedded file. Without knowing that it can cause havok when writing data as you can imagine.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#include &lt;nds.h&gt;
+<br/>
+#include &lt;stdio.h&gt;
+<br/>
+#include &lt;malloc.h&gt;
+<br/>
+#include &lt;fat.h&gt;
+<br/>
+#include &lt;unistd.h&gt;
+<br/>
+<br/>
+<br/>
+#include "efs_lib.h"    // include EFS lib
+<br/>
+<br/>
+char *pFileBuffer = NULL;
+<br/>
+FILE *pFileStream = NULL;
+<br/>
+<br/>
+int initFileStream(char *fileName)
+<br/>
+{
+<br/>
+   struct stat fileStat;
+<br/>
+   
+<br/>
+   if(pFileStream != NULL)
+<br/>
+      fclose(pFileStream);
+<br/>
+   
+<br/>
+   pFileStream = fopen(fileName, "rb");
+<br/>
+   
+<br/>
+   if(pFileStream == NULL)
+<br/>
+      return 0;
+<br/>
+<br/>
+   if(stat(fileName, &amp;fileStat) != 0)
+<br/>
+      return 0;
+<br/>
+<br/>
+   return fileStat.st_size;
+<br/>
+}
+<br/>
+<br/>
+int readFileStream(char *pBuffer, int size)
+<br/>
+{ 
+<br/>
+   int result;
+<br/>
+   
+<br/>
+   if(pFileStream == NULL)
+<br/>
+      return 0;
+<br/>
+   
+<br/>
+   result = fread(pBuffer, 1, size, pFileStream);
+<br/>
+   
+<br/>
+   return result;
+<br/>
+}
+<br/>
+<br/>
+int resetFileStream()
+<br/>
+{ 
+<br/>
+   size_t result;
+<br/>
+   
+<br/>
+   if(pFileStream == NULL)
+<br/>
+      return 0;
+<br/>
+   
+<br/>
+   result = fseek(pFileStream, 0, SEEK_SET);
+<br/>
+   
+<br/>
+   if(result != 0)
+<br/>
+      return 0;
+<br/>
+   
+<br/>
+   return 1;
+<br/>
+}
+<br/>
+<br/>
+int closeFileStream()
+<br/>
+{ 
+<br/>
+   if(pFileStream != NULL)
+<br/>
+   {
+<br/>
+      fclose(pFileStream);
+<br/>
+      
+<br/>
+      return 1;
+<br/>
+   }
+<br/>
+   
+<br/>
+   return 0;
+<br/>
+}
+<br/>
+<br/>
+int readFileSize(char *fileName)
+<br/>
+{
+<br/>
+   struct stat fileStat;
+<br/>
+   size_t result;
+<br/>
+   
+<br/>
+   result = stat(fileName, &amp;fileStat);
+<br/>
+   
+<br/>
+   if(result != 0)
+<br/>
+      return 0;
+<br/>
+      
+<br/>
+   return fileStat.st_size;
+<br/>
+}</td> </tr></table><span class="postbody"><br/>_________________<br/><a class="postlink" href="http://headsoft.com.au/index.php?category=warhawk" target="_blank">Warhawk DS</a> | <a class="postlink" href="http://headsoft.com.au/index.php?category=mmll" target="_blank">Manic Miner: The Lost Levels</a> | <a class="postlink" href="http://headsoft.com.au/index.php?category=tdg" target="_blank">The Detective Game</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#170918 - iainprice - Mon Oct 26, 2009 1:59 pm</h4>
+    <div class="postbody"><span class="postbody">Thanks, would it be possible (or a good idea) to have two buffers, fill one while playing another, then swap, so that there is no delay when filling the buffer?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#170957 - headspin - Tue Oct 27, 2009 6:01 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>iainprice wrote:</b></span></td> </tr> <tr> <td class="quote">Thanks, would it be possible (or a good idea) to have two buffers, fill one while playing another, then swap, so that there is no delay when filling the buffer?</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+The code I linked to uses a buffer split into two and swaps between them. Without doing that there were audio artifacts.
+<br/>
+<br/>
+Unfortunately on some cards we have found sync issues would creep in when changing songs. So we are looking at changing to use a library that hopefully deals with these problems.<br/>_________________<br/><a class="postlink" href="http://headsoft.com.au/index.php?category=warhawk" target="_blank">Warhawk DS</a> | <a class="postlink" href="http://headsoft.com.au/index.php?category=mmll" target="_blank">Manic Miner: The Lost Levels</a> | <a class="postlink" href="http://headsoft.com.au/index.php?category=tdg" target="_blank">The Detective Game</a></span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

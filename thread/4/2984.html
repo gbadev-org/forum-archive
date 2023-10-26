@@ -1,0 +1,112 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>8-bit writes to VRAM - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > 8-bit writes to VRAM</h2>
+<div id="posts">
+<div class="post">
+    <h4>#17287 - poslundc - Fri Mar 05, 2004 9:13 pm</h4>
+    <div class="postbody"><span class="postbody">I've been playing around a little, investigating the rule that you can only write 16 bits at a time to VRAM.
+<br/>
+<br/>
+It seems that when I issue a strb command, the bottom 8 bits get repeated for the top 8 bits of the halfword as well. Does anyone care to confirm my findings here?
+<br/>
+<br/>
+I'm curious about what happens when you attempt to access a character array from C that's located in VRAM. Does it behave the same way that the strb command behaves? What about when reading from VRAM?
+<br/>
+<br/>
+Thanks,
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#17291 - torne - Fri Mar 05, 2004 9:23 pm</h4>
+    <div class="postbody"><span class="postbody">It should behave just the same in C, as the compiler does not know that 8-bit accesses are not possible. This is why you need to declare VRAM as an array of wider types =)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#17292 - tepples - Fri Mar 05, 2004 9:25 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>poslundc wrote:</b></span></td> </tr> <tr> <td class="quote">It seems that when I issue a strb command [with a VRAM destination address], the bottom 8 bits get repeated for the top 8 bits of the halfword as well.</td> </tr></table><span class="postbody">
+<br/>
+Correct. When telling the memory controller to write a byte value ('strb'), the ARM7 core duplicates the byte through D0-D31 of its data bus. A memory controller that doesn't support byte writes (such as the GBA memory controller in address range 0x05000000-0x0dffffff) will pick up D0-D15 or D16-D31 and treat it as a 16-bit word.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">I'm curious about what happens when you attempt to access a character array from C that's located in VRAM. Does it behave the same way that the strb command behaves?</td> </tr></table><span class="postbody">
+<br/>
+Given that accessing a 'char' array from C compiles to 'strb' instructions, yes.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">What about when reading from VRAM?</td> </tr></table><span class="postbody">
+<br/>
+Given how the ARM7 data bus works, I would take an educated guess that reading VRAM should work as one would naively expect. Remember that ROM has the same restriction of no 8-bit writes because the cart's write enable isn't split into low-byte and high-byte lines, yet 'ldrb' and 'ldrsb' from ROM work fine.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#17295 - tepples - Fri Mar 05, 2004 9:39 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>torne wrote:</b></span></td> </tr> <tr> <td class="quote">It should behave just the same in C, as the compiler does not know that 8-bit accesses are not possible. This is why you need to declare VRAM as an array of wider types =)</td> </tr></table><span class="postbody">
+<br/>
+I'll reproduce the bits of my header file that deal with VRAM:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+typedef unsigned short u16;
+<br/>
+typedef unsigned int   u32;
+<br/>
+<br/>
+#define VRAM   ((u16 *)0x06000000)  /* 0xc000 words */
+<br/>
+<br/>
+/* Pattern tables */
+<br/>
+<br/>
+#define PATRAM(x) ((u32 *)(0x06000000 | ((x) &lt;&lt; 14)))
+<br/>
+#define PATRAM4(x, c) ((u32 *)(0x06000000 | (((x) &lt;&lt; 14) + ((c) &lt;&lt; 5)) ))
+<br/>
+#define PATRAM8(x, c) ((u32 *)(0x06000000 | (((x) &lt;&lt; 14) + ((c) &lt;&lt; 6)) ))
+<br/>
+#define SPR_VRAM(x) ((u32 *)(0x06010000 | ((x) &lt;&lt; 5)))
+<br/>
+<br/>
+/* Nametables */
+<br/>
+typedef u16 NAMETABLE[32][32];
+<br/>
+<br/>
+#define MAP ((NAMETABLE *)0x06000000)
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+For example, tile 137 of pattern table 2 is PATRAM4(2, 137)[] or PATRAM8(2, 137)[] depending on the bitdepth, and location (15, 10) of non-rot/scale map 31 is MAP[31][10][15].<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#17298 - Miked0801 - Fri Mar 05, 2004 9:52 pm</h4>
+    <div class="postbody"><span class="postbody">I have found the same thing (8-bit writes get repeated to 16-bits).  I wasn't able to use it for an optimization though.  Doesn't happen on reads though</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

@@ -1,0 +1,308 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Debugging with GDB/Insight with masscat's stub and DSerial2 - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Debugging with GDB/Insight with masscat's stub and DSerial2</h2>
+<div id="posts">
+<div class="post">
+    <h4>#128090 - kansado - Tue May 08, 2007 3:18 pm</h4>
+    <div class="postbody"><span class="postbody">Since debugging with wifi was quite slow, I bought DSerial2 and tried to use it with masscat's GDB stub, expecting to get a lower packet latency.
+<br/>
+<br/>
+I've developed a replacement for serial_comms to work with DSerial2 instead of masscat's proposed circuits (mainly because I don't know too much about electronics.)
+<br/>
+<br/>
+When the debug test program linked against my serial_comms reaches debugHalt(), Insight and the stub interchange debug packets for a while, after which they get stuck in nonsense dialogues.
+<br/>
+<br/>
+This is the cable schematic:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">PC side (DB-25)         DSerial2 side (IO2)
+<br/>
+<br/>
+  2  TD  .______  _______. RS-232 TX
+<br/>
+                \/
+<br/>
+  3  RD  .______/\_______. RS-232 RX
+<br/>
+<br/>
+  4  RTS .__
+<br/>
+  5  CTS .__|
+<br/>
+  6  DSR .__|____________. Vdd
+<br/>
+  8  DCD .__|
+<br/>
+ 20  DTR .__|
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Probably I've misunsderstood something (or perhaps a lot of things) in the RS-232 specification, but this way I was able to send and receive data correctly with the DSerial2's firmware test program.
+<br/>
+<br/>
+I've updated masscat's code with the template for ARM7 in devKitPro r20.
+<br/>
+<br/>
+This is the debug_serial.c I've made:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#include &lt;stdlib.h&gt;
+<br/>
+#include &lt;stdint.h&gt;
+<br/>
+<br/>
+#include "debug_stub.h"
+<br/>
+<br/>
+#include "dserial.h"
+<br/>
+<br/>
+#define BUFFER_SIZE 2048
+<br/>
+<br/>
+char rxBuffer[BUFFER_SIZE];
+<br/>
+int head, byteCount;
+<br/>
+<br/>
+static void receiveHandler(char * data, unsigned int size)
+<br/>
+{
+<br/>
+   unsigned int i, pos = head + byteCount;
+<br/>
+   for (i = 0; i &lt; size; i ++) {
+<br/>
+      rxBuffer[pos % BUFFER_SIZE] = data[i];
+<br/>
+      pos ++;
+<br/>
+   }
+<br/>
+   byteCount += size;
+<br/>
+}
+<br/>
+<br/>
+static int
+<br/>
+init_fn( void *data __attribute__((unused))) {
+<br/>
+<br/>
+   while(!dseInit());
+<br/>
+   dseBoot();
+<br/>
+   swiDelay(9999); /* Wait for the FW to boot */
+<br/>
+   dseSetModes(ENABLE_RS232);
+<br/>
+   dseUartSetBaudrate(9600);
+<br/>
+   head = 0;
+<br/>
+   byteCount = 0;
+<br/>
+   dseUartSetReceiveHandler(receiveHandler);
+<br/>
+<br/>
+  return 1;
+<br/>
+}
+<br/>
+<br/>
+static void
+<br/>
+writeByte_fn( uint8_t byte) {
+<br/>
+  dseUartSendBuffer(&amp;byte, 1, true);
+<br/>
+}
+<br/>
+<br/>
+static void
+<br/>
+writeData_fn( uint8_t *buffer, uint32_t count) {
+<br/>
+  dseUartSendBuffer(buffer, count, true);
+<br/>
+}
+<br/>
+<br/>
+static int
+<br/>
+readByte_fn( uint8_t *read_byte) {
+<br/>
+  if (byteCount &gt; 0) {
+<br/>
+    *read_byte = rxBuffer[head];
+<br/>
+   head ++;
+<br/>
+   head %= BUFFER_SIZE;
+<br/>
+   byteCount --;
+<br/>
+   return 1;
+<br/>
+  } else {
+<br/>
+    return 0;
+<br/>
+  }
+<br/>
+}
+<br/>
+<br/>
+static void
+<br/>
+poll_fn( void) {
+<br/>
+}
+<br/>
+<br/>
+static uint32_t
+<br/>
+irqs_fn( void) {
+<br/>
+  return IRQ_CARD_LINE;
+<br/>
+}
+<br/>
+<br/>
+/** The instance of the comms function interface */
+<br/>
+struct comms_fn_iface_debug serialCommsIf_debug = {
+<br/>
+  .init_fn = init_fn,
+<br/>
+  .readByte_fn = readByte_fn,
+<br/>
+  .writeByte_fn = writeByte_fn,
+<br/>
+  .writeData_fn = writeData_fn,
+<br/>
+  .poll_fn = poll_fn,
+<br/>
+  .get_IRQs = irqs_fn
+<br/>
+};</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I hope I've not forgotten anything.
+<br/>
+<br/>
+By the way, I've not noticed a lower packet latency compared to wifi, but I won't trust this result until I achieve a complete debug session. Perhaps the botteneck isn't in the wifi element as I thought.
+<br/>
+<br/>
+Are people out there interested in debugging with DSerial2? Anybody knows what I'm doing wrong? Any help would be appreciated.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#128108 - masscat - Tue May 08, 2007 5:50 pm</h4>
+    <div class="postbody"><span class="postbody">Good to see you using and extending the stub.
+<br/>
+<br/>
+I found it easier to test the stub using the command line version of GDB rather than Insight as you have more control over the commands the debugger is sending out. For example Insight can issue lots of memory reads commands.
+<br/>
+<br/>
+I have not worked on the stub for a while and cannot remember what state I left it in. If I can get it running under the Desmume emulator I may try to complete it (debugging the debugger stub on the hardware is not much fun).
+<br/>
+<br/>
+Since you are getting some communication between the NDS and PC I would think the hardware side is fine.
+<br/>
+As you get rubbish comms after some correct messages you may be overwriting the read buffer (or a write buffer inside the DSerial2 code?) before you have used it.
+<br/>
+<br/>
+You can enable a debug log function which you can send the output to the screen. Have a look in monitor/main.c for an example function (logFn_debug()). If you have a look through the stub source code you will see lots of LOG calls, which if DO_LOGGING is defined, gets directed to logFn_debug(). Enabling these or adding some to your comms code may help you find the problem.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#130794 - natrium42 - Fri Jun 08, 2007 1:09 am</h4>
+    <div class="postbody"><span class="postbody">Hardware should be connected as follows:
+<br/>
+<br/>
+Pin 2 at DB9 ----- RS232_TX at IO2
+<br/>
+Pin 3 at DB9 ----- RS232_RX at IO2
+<br/>
+Pin 5 at DB9 ----- GND at IO2 or IO1
+<br/>
+<br/>
+Most modern computers use DB9 for serial port and DB25 for parallel port. Make sure you are using the right port :)
+<br/>
+<br/>
+The problem in your code is that dseUartSendBuffer() is currently limited to sending up to MAX_DATA_SIZE (32). So you need to break up the message into chunks of 32 bytes.
+<br/>
+<br/>
+Dovoto actually started doing the DSerial stub for masscat's code too before he found your post. Here is his port with minor bug fixes: <a href="http://www.natrium42.com/temp/dserial-debug.zip" target="_blank">http://www.natrium42.com/temp/dserial-debug.zip</a>
+<br/>
+<br/>
+You can connect to it with gdb using commands:
+<br/>
+(gdb) set remotebaud 9600
+<br/>
+(gdb) target remote COM1
+<br/>
+<br/>
+Upping the baudrate to 115200 shouldn't be a problem; or higher if your COM port supports it.<br/>_________________<br/><a class="postlink" href="http://www.natrium42.com" target="_blank">www.natrium42.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#130821 - dovoto - Fri Jun 08, 2007 2:26 pm</h4>
+    <div class="postbody"><span class="postbody">Note that the zip natrium provided contains masscats code slightly restructured and not entirely without issues do to this restructuring.  Specifically the communications stub for masscat's original spi/uart bridge serial port is disabled (due to me not including the spi/uart source in that zip).
+<br/>
+<br/>
+Masscat, if you have more updates it would be great if you could take a look at the zip.  The structure is a bit more devkitpro standardized (and results in a little bit less hassel while using in libnds projects with template makefiles) so it might be worth continuing.<br/>_________________<br/><a href="http://www.drunkencoders.com" target="_blank">www.drunkencoders.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#130849 - masscat - Fri Jun 08, 2007 6:37 pm</h4>
+    <div class="postbody"><span class="postbody">There is not much of a problem not including my spi/uart bridge code as I think that there is about one of them in existence and that is built on some prototype board and sat on my shelf (did anybody else build one?). I will have to think about getting a DSerial, it is a little bit more compact and probably requires less wiggling to get a good connection.
+<br/>
+<br/>
+I have had a look at the zip file. Looks like the code for interfacing to DSerial fitted well within the debug stub comms functions interface. Were there any problems?
+<br/>
+The new layout seems fine too.
+<br/>
+<br/>
+This recent talk has re awoken my interest in the stub so I may do some more work on it. One feature I did want to implement was to ability to break a running target.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#130857 - dovoto - Fri Jun 08, 2007 7:14 pm</h4>
+    <div class="postbody"><span class="postbody">I would love to see work continue on the project.  A decent debugger would be a great adition to the homebrew scene.<br/>_________________<br/><a href="http://www.drunkencoders.com" target="_blank">www.drunkencoders.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#130888 - josath - Sat Jun 09, 2007 12:32 am</h4>
+    <div class="postbody"><span class="postbody">as soon as i hear there's a decent working debugger over serial, i'm using that as an excuse to buy a dserial :P</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#130904 - wintermute - Sat Jun 09, 2007 3:09 am</h4>
+    <div class="postbody"><span class="postbody">This also seems to work quite well with the current Insight build provided by devkitPro with the minor caveat that you'll need to set up the initial connection using the console window rather than the target settings dialog. I have a build of 6.6 which will work as expected and I'll release that after a little more testing.
+<br/>
+<br/>
+Masscat, if you're interested I'd like to offer the debug stub as a devkitPro module downloadable via the installer as per libnds, dswifi etc. Obviously I'd prefer the standardized format Dovoto used to build your code so that it fits in with the rest of the libraries. I can add an install target &amp; give you CVS access if you're up for maintaining the lib as part of devkitPro.<br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#130943 - masscat - Sat Jun 09, 2007 1:53 pm</h4>
+    <div class="postbody"><span class="postbody">Moved stub talk over to the <a class="postlink" href="http://forum.gbadev.org/viewtopic.php?p=130942#130942" target="_blank">A Debugger Reborn</a> thread.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

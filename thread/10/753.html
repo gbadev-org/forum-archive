@@ -1,0 +1,141 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Unsigned mixing - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Audio > Unsigned mixing</h2>
+<div id="posts">
+<div class="post">
+    <h4>#3825 - DekuTree64 - Mon Mar 10, 2003 1:10 am</h4>
+    <div class="postbody"><span class="postbody">Well, I've searched around the internet, and haven't found anything on this. How exactly do you mix unsegned samples? And would you ever end up with a value below zero to store/load when mixing channels? If so, then I'll probably jst stick with signed.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#3827 - jd - Mon Mar 10, 2003 2:24 am</h4>
+    <div class="postbody"><span class="postbody">Unsigned samples are mixed the same way as signed ones - i.e. you add them together. However, the problem is that you will get an audible click at the start and end of the sample due to the jump from 0 to 128. You can work around this by warping the sample but this is tricky to do without noticeably affecting audio quality.
+<br/>
+<br/>
+However, the only advantage I can see of unsigned mixing on the GBA is that you can use ldrb rather than ldrsb which gives you access to more addressing modes. My mixer was originally unsigned but then I discovered a way to get back the performance losses caused by ldrsb so I switched to signed.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#3828 - DekuTree64 - Mon Mar 10, 2003 2:50 am</h4>
+    <div class="postbody"><span class="postbody">Actually I was thinking more along the lines of using ldm to load a bunch of samples from the mixing buffer (which are 16-bit, so I can just do the clipping at the end), and then adding unsigned samples to those, so I could add 2 samples into a register, and then write them back to memory without having to worry about like adding a -1 to the sample in the lower half and messing up the other one.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#3830 - tepples - Mon Mar 10, 2003 3:58 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>DekuTree64 wrote:</b></span></td> </tr> <tr> <td class="quote">Actually I was thinking more along the lines of using ldm to load a bunch of samples from the mixing buffer (which are 16-bit, so I can just do the clipping at the end), and then adding unsigned samples to those, so I could add 2 samples into a register, and then write them back to memory without having to worry about like adding a -1 to the sample in the lower half and messing up the other one.</td> </tr></table><span class="postbody">
+<br/>
+You can work around this off by -1 error without switching to unsigned mixing.  Correct for it when you downconvert from your 16-bit mix bus to an 8-bit mixbus by adding 1 to the high order sample if the low order sample is negative.  But if your conversion to 8-bit involves a right shift (my mixer shifts right 7 places), it won't really matter whether or not you correct it because the maximum possible error (-1) is far less than the quantization granularity (steps of size 128).<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#3833 - DekuTree64 - Mon Mar 10, 2003 5:02 am</h4>
+    <div class="postbody"><span class="postbody">Actually it could be up to 8 off, since there's 8 channels to be mixed before downsampling, but I guess it wouldn't make that big of a difference. Probably just a little scratchy sounding in the worst case. I would like to enable panning though, so it might work better to just load one sample at a time since I'd only have half the registers for each channel to use with ldm/stm anyway. 
+<br/>
+I'd say the most amazing mixer I've seen (or heard) is the one in Tales of Phantasia for SNES. Especially the surround mode sounds great on headphones (that's done by negating one channel, right?). The game itself seems pretty simple though, so it probably is taking up a lot of the processor time, but then again my game is even simpler than that, and the GBA has a much faster processor, so I can spare a lot of time for good sound. It's just so much fun trying to make it super-fast though^^</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#3868 - tepples - Tue Mar 11, 2003 6:32 am</h4>
+    <div class="postbody"><span class="postbody">The off by -1 error in the high order bits occurs only when the low order bits wrap around from positive to negative.  It is "corrected" when the low order bits go back to positive.  Thus, it's actually a maximum error of -1, not -n for n channels, and it can be fully compensated for during down conversion to 8-bit.
+<br/>
+<br/>
+Super NES sound was completely different. It was controlled by a completely separate CPU whose instruction set was 6502-like (but not quite) and whose communication with the main CPU was a female dog to get working right.  But the mixing was in hardware, with a "left volume" and a "right volume" per channel.
+<br/>
+<br/>
+(lightbulb) I just thought of an efficient way to do Super NES style stereo mixing that's almost as efficient as mono, by misusing the CPU's multiplier as a ghetto vector unit.  Store the left channel of the mix bus in the low-order bits of a 32-bit word and the right channel in the high order bits.  Load the volumes the same way: 32 left channel, 53 right channel = 0x00350020.  Then multiplication of <span style="font-style: italic">both</span> volumes by an 8-bit sample can be done with one 'mla' instruction.  Feel free to use or expand on this technique in your mixer.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#3880 - DekuTree64 - Tue Mar 11, 2003 5:03 pm</h4>
+    <div class="postbody"><span class="postbody">Hmm, very cool idea. Don't know why I didn't realize it myself, cause I love doing stuff like that^^ I think I could store the samples in the temporary buffer alternating between left and right, so I'd just have to load in a word, multiply the sample by the volume word, add it, and write it back. Then just do the separating/shift for volume/off by -1/clipping all at the end. Which also means I still get to use ldm/stm, so it should be super fast^^ That final processing will take a lot of time though, but I think it doing it in ASM I could optimize it well enough.
+<br/>
+Or maybe I could use those extra regs to do 2 channels at a time. That would save a read/write per sample, but I don't know how much it would help if the mix buf is in IWRAM, and I think it would get pretty messy trying to figure out which channels to mix, and dealing with looping, so it's probably not worth the trouble.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#3913 - DekuTree64 - Wed Mar 12, 2003 7:25 pm</h4>
+    <div class="postbody"><span class="postbody">Woo~
+<br/>
+Hey Tepples, remember that post a while back where that guy was talking about mixing 4 channels at once? I finally figured out how he did it. If you shift your wav data pointer left 8, and add the position to that, then you only need 3 regs per channel. One for the wav+pos, one for inc, and one for vol. So then you have 3 regs left over. Unfortunately you need 4, one for the mixbuf pointer, one for the coutner, one to load samples, and one to add them into. The only way I can think of to get around that is to have a specific address to write one of them to (I'd do the counter), so then you process the samples, load the counter, decrement it, and write it back. Still 3 reads/writes per sample per channel less than doing them one at a time. But what do you think would be faster, that, or doing 8 samples at a time with ldm/stm? That saves 7 instruction reads for each chunk, but the 4 channel version saves a lot of counter decrements/branches, and would involve a little extra time to collect up all the active channels that aren't within a buffer length of the end, and then do the rest one at a time anyway, which needs more IWRAM for the code.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#3917 - tepples - Wed Mar 12, 2003 8:02 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>DekuTree64 wrote:</b></span></td> </tr> <tr> <td class="quote">remember that post a while back where that guy was talking about mixing 4 channels at once? I finally figured out how he did it. If you shift your wav data pointer left 8, and add the position to that</td> </tr></table><span class="postbody">
+<br/>
+I originally had it with &lt;&lt;8 instead of &lt;&lt;16, but sampled instruments played at low rates started to get out of tune.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">then you only need 3 regs per channel. One for the wav+pos, one for inc, and one for vol. So then you have 3 regs left over. Unfortunately you need 4</td> </tr></table><span class="postbody">
+<br/>
+Make that 5. If you don't have another pointer for the base address of your samples (using a + (b &gt;&gt; 8) addressing), you can only address samples in 0x00000000-0x00ffffff, none of which is allocated to anything readable.  Most of the time, samples will be either somewhere in 0x02000000-0x0203ffff (EWRAM) or 0x08000000-0x08ffffff (ROM).
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">have a specific address to write one of them to (I'd do the counter)</td> </tr></table><span class="postbody">
+<br/>
+Then how would you load that address?  ARM doesn't have direct addressing because it doesn't have large constants.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">but the 4 channel version saves a lot of counter decrements/branches</td> </tr></table><span class="postbody">
+<br/>
+Unrolled loops save branches just as well.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">which needs more IWRAM for the code.</td> </tr></table><span class="postbody">
+<br/>
+It's possible to overlay IWRAM if necessary.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#3918 - DekuTree64 - Wed Mar 12, 2003 8:19 pm</h4>
+    <div class="postbody"><span class="postbody">Hmm, what if you had one register with 0x8000000, and used that + wav reg &gt;&gt; 8? You'd still have one to load samples and one to add them into. And to load from the specific adress, just use something like ldr r0, =0x2000000. And if you use 16-bit fixed point for your pos, wouldn't that only allow 65535 samples per sound? I guess that would probably be enough though, since most sounds don't need to be sampled at a very high rate, or be very long.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#3935 - tepples - Thu Mar 13, 2003 5:06 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">And if you use 16-bit fixed point for your pos, wouldn't that only allow 65535 samples per sound?</td> </tr></table><span class="postbody">
+<br/>
+Not if you have a separate register with the base address of where each sample was at the start of a mix segment.
+<br/>
+<br/>
+And how would one handle samples that loop or terminate in such a mixer?  Wouldn't there need to be a "sample end address" register for each channel being mixed?<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#3938 - DekuTree64 - Thu Mar 13, 2003 6:59 am</h4>
+    <div class="postbody"><span class="postbody">Yea, I was thinking about that, and decided the speed difference wouldn't be worth the trouble, so I went back to my old idea. But the plan I came up with for that involved basically creating a new mixer each frame. First, you'd collect up all the active chanels into a list, then sort them by distance from the end of the sound. Then you take the first 4 (or less) channels and copy in the code to mix a sample from each of them, and then the code to check the end of the loop. So like, if you only had 3 channels playing, it would only make 3 copies of the sample mixing code. Then for the counter to know when to stop, you'd set it to the fewest samples left of any channel, and when you get to the end, you check for looping, and if so you deal with that, if not, you set that channel's source reg to a mixbuf sized block of memory set to 0, so it's basically turned off. Then you set the counter to the next lowest channel - the previous channel's samples left (so you continue for that many more samples), and then do the same thing for that channel, and so on for the other 2 (or however many you had left). 
+<br/>
+Does any of that make sense? I think it's a pretty good idea, but the time of setting it up and generating the code every frame would probably be about just as much as the extra time to load/store each sample for each channel. You could probably get away with putting the mix buf in EWRAM that way, since at most you'd be reading/writing twice per sample, but seeing as I'm not pressed for IWRAM space, not doing it for a commercial game, and it would take me a good while to get all the details of how the lists would work figured out, it's not really worth the trouble. 
+<br/>
+Anyone here feel free to use/expand on it though, I'd love to see how well it would actually work^^</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

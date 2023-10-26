@@ -1,0 +1,163 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Converting from tiled to bitmap - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > Converting from tiled to bitmap</h2>
+<div id="posts">
+<div class="post">
+    <h4>#122115 - Lick - Sat Mar 17, 2007 2:08 am</h4>
+    <div class="postbody"><span class="postbody">I'm trying to convert a 8x8 tilemap that consists of 4x4 pixels into a 32x32 bitmap.
+<br/>
+I've tried, but all the looping has given me a headache. Could someone think of some code that would do this?
+<br/>
+<br/>
+Thanks. I'm going to get some sleep now.<br/>_________________<br/><a class="postlink" href="http://licklick.wordpress.com" target="_blank">http://licklick.wordpress.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#122125 - tepples - Sat Mar 17, 2007 4:09 am</h4>
+    <div class="postbody"><span class="postbody">Do you want to do this conversion on the GBA, on the DS, or on the PC?<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#122155 - Cearn - Sat Mar 17, 2007 1:50 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+<br/>
+// Yer average bitmap blitter
+<br/>
+void bmpBlit(BITMAP *dst, int dstX, int dstY, int width, int height,
+<br/>
+    const BITMAP *src, int srcX, int srcY)
+<br/>
+{
+<br/>
+    // Assuming BPPs are the same and no clipping is necessary, 
+<br/>
+    // for simplicity's sake
+<br/>
+<br/>
+    int ix, iy;
+<br/>
+    int bpp= dst-&gt;bpp;
+<br/>
+<br/>
+    BYTE *dstD= dst-&gt;data[dstY*dst-&gt;pitch + dstX*bpp/8];
+<br/>
+    BYTE *srcD= src-&gt;data[srcY*src-&gt;pitch + srcX*bpp/8];
+<br/>
+    int pitch= width*bpp/8;
+<br/>
+<br/>
+    for(iy=0; iy&lt;height; iy++)
+<br/>
+        for(ix=0; ix&lt;pitch; ix++)
+<br/>
+            dstD[iy*dst-&gt;pitch + ix]= srcD[iy*src-&gt;pitch + ix];
+<br/>
+}
+<br/>
+<br/>
+<br/>
+// In draw map function
+<br/>
+<br/>
+int itx, ity;               // loop indices for the map
+<br/>
+int px, py;                 // pixel coords of the tile in the tileset
+<br/>
+int tid;                    // tile index
+<br/>
+BITMAP *bmp;                // Destination bitmap
+<br/>
+TILEMAP *map;               // Tilemap
+<br/>
+<br/>
+BITMAP *tiles= map-&gt;tileSet; // Tileset bitmap
+<br/>
+int tw= map-&gt;tileWidth, th= map-&gt;tileHeight;
+<br/>
+<br/>
+for(ity=0; ity&lt;map-&gt;height; ity++)
+<br/>
+{
+<br/>
+    for(itx=0; itx&lt;map-&gt;width; itx++)
+<br/>
+    {
+<br/>
+        tid= mapGetTileId(map, itx, ity);
+<br/>
+        px= tid%map-&gt;width * tw;
+<br/>
+        py= tid/map-&gt;width * th;
+<br/>
+<br/>
+        bmpBlit(bmp, itx*tw, ity*th, tw, th, tiles, px, py);
+<br/>
+    }
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Something like that anyway. The basic steps:<ul><li>loop over all map entries (itx, ity)
+<br/>
+</li><li>for each entry, get the tile index and translate that to coordinates on the tileset. 
+<br/>
+</li><li>Now simply blit rectangle (px, py, px+tw, py+th) of the tileset onto the destination bitmap at (itx*tw, ity*th).</li></ul>
+<br/>
+There are plenty of possible optimizations here, of course. If your sizes are fixed, you can hardcode those. If your tileset is one tile wide, you don't need the divisions: just use px=0 and py= tid*th. If your bpp is fixed, you can cast to the right type and copy using those instead of in bytes. In fact, depending on width and bpp of the tiles, you can probably copy a whole tile scanline in one assignment. And then possibly integrate bmpBlip into the main drawing routine, or make it it an inline function. 
+<br/>
+<br/>
+But do these things <span style="font-style: italic">after</span> you get the basic thing working.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#122157 - Lick - Sat Mar 17, 2007 2:03 pm</h4>
+    <div class="postbody"><span class="postbody">Thanks for the help!<br/>_________________<br/><a class="postlink" href="http://licklick.wordpress.com" target="_blank">http://licklick.wordpress.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#122163 - Lick - Sat Mar 17, 2007 2:47 pm</h4>
+    <div class="postbody"><span class="postbody">I wrestled with the code and came up with the following code, it converts the DS Cartridge Icon to a paletted bitmap (16 color).
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">        for(u32 q=0; q&lt;16; q++) {
+<br/>
+          u32 tof = (q&amp;3)*(8/2) + (q&gt;&gt;2)*(8*8/2*4);
+<br/>
+          u32 sof = (q)*(8*8/2);
+<br/>
+          for(u32 y=0; y&lt;8; y++) {
+<br/>
+            for(u32 x=0; x&lt;8/2; x++) {
+<br/>
+              dst[tof+y*(32/2)+x] = src[sof+y*(8/2)+x];
+<br/>
+            }
+<br/>
+          }
+<br/>
+        }</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Using the output in dst I created a texture and <a class="postlink" href="http://lickr.org/files/DSC04417.JPG" target="_blank">it shows up nicely</a>. Yay! =D<br/>_________________<br/><a class="postlink" href="http://licklick.wordpress.com" target="_blank">http://licklick.wordpress.com</a></span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

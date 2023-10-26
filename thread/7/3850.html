@@ -1,0 +1,299 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Outputting a dependency-list using GCC.. - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>C/C++ > Outputting a dependency-list using GCC..</h2>
+<div id="posts">
+<div class="post">
+    <h4>#24672 - booger - Mon Aug 09, 2004 10:39 am</h4>
+    <div class="postbody"><span class="postbody">I'm using the GCC-option -M to generate a list of rules for my project.
+<br/>
+This works fine, except that it refuses to build dependencies for my assembler-sourcefiles. A snippet from my makefile:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+$(DEPENDFILE):
+<br/>
+   @arm-elf-gcc -mthumb-interwork $(CFLAGS) -I$(AGBINC) -M $(CFILES) $(SFILES) &gt; $@</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Anyone know what's wrong?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#24929 - DKL - Fri Aug 13, 2004 5:57 pm</h4>
+    <div class="postbody"><span class="postbody">For asm dependencies, use the --MD option from GAS. I can post one of my makefiles if you really want an example.
+<br/>
+<br/>
+DKL</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#24993 - booger - Sat Aug 14, 2004 7:00 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+For asm dependencies, use the --MD option from GAS. I can post one of my makefiles if you really want an example.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Yes, please post an example.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#25016 - DKL - Sun Aug 15, 2004 10:11 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+NAME = Name_of_your_bin
+<br/>
+<br/>
+vpath %.raw data/
+<br/>
+vpath %.lz  data/
+<br/>
+<br/>
+AS = @arm-elf-as
+<br/>
+CC = @arm-elf-gcc
+<br/>
+LD = @arm-elf-gcc
+<br/>
+OC = @arm-elf-objcopy
+<br/>
+RM = @rm -f
+<br/>
+SD = sed
+<br/>
+<br/>
+DEFINES =
+<br/>
+CFLAGS  = -mthumb -mthumb-interwork -mcpu=arm7tdmi -save-temps -fverbose-asm -Wall -O3 $(DEFINES)
+<br/>
+AFLAGS  = -mthumb-interwork -mcpu=arm7tdmi
+<br/>
+LFLAGS  = -nostartfiles -Tlnkscript -mthumb-interwork
+<br/>
+<br/>
+#
+<br/>
+# keep the order for the .S files
+<br/>
+.SFILES     = crt0.S your_S_files_01.S your_S_files_02.S
+<br/>
+.CFILES     = main.c your_c_files_01.c your_c_files_02.c
+<br/>
+.OFILES   = $(.SFILES:.S=.o) $(.CFILES:.c=.o)
+<br/>
+.DEPFILES = $(.SFILES:.S=.d) $(.CFILES:.c=.d)
+<br/>
+.OVRFILES = data/your_overlay_data.raw
+<br/>
+<br/>
+TARGET_ELF = $(NAME).elf
+<br/>
+TARGET_BIN = $(NAME).gba
+<br/>
+<br/>
+.PHONY: all clean
+<br/>
+all: $(TARGET_BIN)
+<br/>
+<br/>
+clean:
+<br/>
+   $(RM) $(TARGET_BIN) $(TARGET_ELF) $(.CFILES:.c=.s) $(.CFILES:.c=.i) $(.OFILES) $(.DEPFILES)
+<br/>
+<br/>
+$(TARGET_BIN) : $(TARGET_ELF)
+<br/>
+   $(OC) -O binary $&lt; $(&lt;:.elf=.tmp)
+<br/>
+   cat $(&lt;:.elf=.tmp) $(.OVRFILES) &gt; $@
+<br/>
+   $(RM) $(&lt;:.elf=.tmp)
+<br/>
+<br/>
+$(TARGET_ELF): $(.OFILES)
+<br/>
+   $(LD) $(LFLAGS) $(.OFILES) -o $@
+<br/>
+<br/>
+%.o: %.c
+<br/>
+   $(CC) $(CFLAGS) -c $&lt; -o $@
+<br/>
+<br/>
+%.o: %.S
+<br/>
+   $(AS) $(AFLAGS) $&lt; -o $@
+<br/>
+<br/>
+%.d: %.c
+<br/>
+   $(CC) $(CFLAGS) -MM $&lt; | $(SD) "s/$*.o/&amp; $@/g" &gt; $@
+<br/>
+<br/>
+%.d: %.S
+<br/>
+   $(AS) $(AFLAGS) $&lt; -o $(@:.d=.o) --MD $(@:.d=.dtmp) 
+<br/>
+   $(SD) -e "s/$*.o/&amp; $@/g" $(@:.d=.dtmp) &gt;$@
+<br/>
+   $(RM) $(@:.d=.dtmp)
+<br/>
+       
+<br/>
+include $(.DEPFILES)
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Dependencies are created in different files (.d files) and are then included in the makefile. I'm using a custom crt0.S &amp; linker script, maybe you won't need '-nostartfiles -Tlnkscript' options.
+<br/>
+<br/>
+As you can see, for dependencies, Sed is used to fix the strings (add .d files to dep. list). So it will build .d &amp; .o each time a file on which they depend is modified. 
+<br/>
+<br/>
+An asm file is assembled the same time it's checked for dep. I found no other way to do that. It works so I'm happy. :)
+<br/>
+<br/>
+Also, you'll have warnings the first time you'll make your project, since .d files don't exist yet. Don't care about that, they will by the time the end of the makefile is reached.
+<br/>
+<br/>
+Hope it will help.
+<br/>
+<br/>
+Happy coding,
+<br/>
+DKL</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#25231 - col - Thu Aug 19, 2004 3:57 am</h4>
+    <div class="postbody"><span class="postbody">Instead of
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code"> include $(.DEPFILES)  </td> </tr></table><span class="postbody">
+<br/>
+use
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code"> -include $(.DEPFILES)  </td> </tr></table><span class="postbody">
+<br/>
+and you shouldn't get those pesky warnings.
+<br/>
+<br/>
+Also, is there any reason you are using -MM instead of -MD for generating dependency files ?
+<br/>
+from the gcc manual (v3.2.3)
+<br/>
+'-MD can be used to generate a dependency output file as a side-effect of the compilation process'
+<br/>
+looky here:
+<br/>
+<a href="http://gcc.gnu.org/onlinedocs/gcc-3.2.3/gcc/Preprocessor-Options.html#Preprocessor%20Options" target="_blank">http://gcc.gnu.org/onlinedocs/gcc-3.2.3/gcc/Preprocessor-Options.html#Preprocessor%20Options</a>
+<br/>
+here's an example from my makefile:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+%.o: %.cpp
+<br/>
+   $(CC) $(INCLUDES) $(DEFAULT_SWITCHES) -MD -MP -o $@ $&lt;
+<br/>
+...
+<br/>
+...
+<br/>
+-include $(SRC:.o=.d)
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+no regex required :)
+<br/>
+<br/>
+cheers
+<br/>
+<br/>
+Col</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#25241 - DKL - Thu Aug 19, 2004 9:20 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>col wrote:</b></span></td> </tr> <tr> <td class="quote">Instead of
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code"> include $(.DEPFILES)  </td> </tr></table><span class="postbody">
+<br/>
+use
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code"> -include $(.DEPFILES)  </td> </tr></table><span class="postbody">
+<br/>
+and you shouldn't get those pesky warnings.</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Ah yes sure, I didn't even think to use "-" at this place. How dumb...
+<br/>
+Thank you. :)
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Also, is there any reason you are using -MM instead of -MD for generating dependency files ?</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Yep, there is. -MM won't take account of system header files (like &lt;stdio.h&gt;). I don't think you are modifying these files. Anyway, I don't even use standard libraries for my own gba dev, so that's the best choice. :)
+<br/>
+<br/>
+Regards,
+<br/>
+DKL</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#25244 - col - Thu Aug 19, 2004 12:00 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>DKL wrote:</b></span></td> </tr> <tr> <td class="quote">...
+<br/>
+Yep, there is. -MM won't take account of system header files (like &lt;stdio.h&gt;). I don't think you are modifying these files. Anyway, I don't even use standard libraries for my own gba dev, so that's the best choice. :)
+<br/>
+<br/>
+Regards,
+<br/>
+DKL</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+If you want to ignore system headers, use -MMD.
+<br/>
+It's all at the link I posted :)
+<br/>
+<br/>
+cheers
+<br/>
+<br/>
+Col</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#25245 - DKL - Thu Aug 19, 2004 12:31 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>col wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+If you want to ignore system headers, use -MMD.
+<br/>
+It's all at the link I posted :)
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Oooh, sorry, I didn't see what you mean the first time (just woke up :) ).
+<br/>
+Sure, it's far easier that way ! I didn't even see this option. Thanks a lot. :)
+<br/>
+<br/>
+Regards,
+<br/>
+DKL</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

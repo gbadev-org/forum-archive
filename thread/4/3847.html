@@ -1,0 +1,185 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>multiplayer troubles - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > multiplayer troubles</h2>
+<div id="posts">
+<div class="post">
+    <h4>#24649 - dovoto - Sun Aug 08, 2004 5:09 pm</h4>
+    <div class="postbody"><span class="postbody">Speeking of multiplayer / multiboot...
+<br/>
+<br/>
+I was able to get multiboot working with little issue booting up to three slaves.  I have only tested one slave on hardware as i only have 2 gba but they all boot on no$.
+<br/>
+<br/>
+But I am haveing a bit of trouble with the concepts of multiplayer.  I was able to get non interupt driven comms to work with each GBA waiting in a loop till the other was ready once per frame.  
+<br/>
+<br/>
+Once i switched to interupts though I have been haveing issues.  It works flawlessly on no$ and is stable but It locks up on the hardware.  My basic flow of events is this:
+<br/>
+<br/>
+master multiboots slaves:
+<br/>
+slaves init multiplay and enable sio irq with 0xDEAD in the send register.
+<br/>
+<br/>
+once per frame master sends 0xDEED to wake up the slaves.  THe slaves imediatly disable the interupt and multiplay comms then reinable comms to accept handshake data...they wait for master recieve register to also recieve 0xdead.  Once it detects 0xDEAD it goes into its recieve loop to recieve the data from the other gba.  All sends from master wait for the read bit (bit 3) to indicate all gba ready.  Everytime data is recieved the slave immediatly exit multiplayer mode and process the data before reinabling for the next chunk.
+<br/>
+<br/>
+after the master detects slave is ready it sends 0xdead then sends the data.
+<br/>
+<br/>
+after completion slave reinables sio interupt and returns.
+<br/>
+<br/>
+THe interupt is being called.
+<br/>
+THere are no other interupts installed.
+<br/>
+Works well on no$
+<br/>
+<br/>
+My question is:  Are there delays that I should be inserting?  I allready insert a hefty one on the master after sending wake up data to give time for the slave to respond.
+<br/>
+<br/>
+Any advice would be appreciated.  THanks.
+<br/>
+-jason<br/>_________________<br/><a href="http://www.drunkencoders.com" target="_blank">www.drunkencoders.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#24653 - col - Sun Aug 08, 2004 7:47 pm</h4>
+    <div class="postbody"><span class="postbody">Does it lock up instantly?
+<br/>
+or does it run for a while before locking up ? if so, how long?
+<br/>
+<br/>
+what type of interrupt service routine are you using?
+<br/>
+<br/>
+There is an important difference between hardware and no$gba. In no$gba, the master and slaves start and stay perfectly synchronised to the vblank - hardware is not like this, the phase difference between the different units varies on startup and changes gradually at runtime depending on the slight timing differences between the different units. This can have serious implications depending on how your comms code and your game loop are designed.
+<br/>
+<br/>
+cheers
+<br/>
+<br/>
+Col</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#24660 - Krakken - Mon Aug 09, 2004 1:12 am</h4>
+    <div class="postbody"><span class="postbody">I just looked over my *buggy* multiplayer code using interrupts. I too had problems when using interrupts. From what I can remember, the hardware went into an endless loop. I believe it was because, like col said, the GBA units wern't properly synchronised and were talking to each other in "bits". I never really got to the bottom of all the bugs as it was such a hassle to flash the ROM every time I made a tiny change.
+<br/>
+<br/>
+I did actually get a little demo where two characters would walk around a screen successfully. I can send you the code I used if you wanted me to?
+<br/>
+<br/>
+Good luck.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#24683 - dovoto - Mon Aug 09, 2004 5:44 pm</h4>
+    <div class="postbody"><span class="postbody">Any working irq driven multiplay code would be nice to see.
+<br/>
+<br/>
+It locks up imediatly.
+<br/>
+<br/>
+I use wntrmutes irq handler from devkit.tk.
+<br/>
+<br/>
+It is the only irq running.
+<br/>
+<br/>
+I have not played with it in a day or so (finals) but will look again tomorrow, i will also nopaste the source I have now.
+<br/>
+<br/>
+<br/>
+-jason<br/>_________________<br/><a href="http://www.drunkencoders.com" target="_blank">www.drunkencoders.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#24697 - col - Tue Aug 10, 2004 12:56 am</h4>
+    <div class="postbody"><span class="postbody">I'm guessing that you are using multiplayer mode? 
+<br/>
+and have used the sgade code as a starting point?
+<br/>
+<br/>
+The basic technique used in sgade is sound - use a timer interrupt to control the master - the timer setting is your 'delay'. the slave(s) should use the SIO interrupt.
+<br/>
+<br/>
+How small you can set the delay will depend on what other stuff is happening in the game/demo how many units are connected, and probably  lots of other undocumented things - so use trial and error to find a good setting. I suggest you ditch the macro that sgade uses.
+<br/>
+<br/>
+You have to check for transfer errors, and the safest bet if you find any is to restart the transfer process for that packet with a new handshake '0xDEAD'.
+<br/>
+<br/>
+cheers
+<br/>
+<br/>
+col</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#24702 - dovoto - Tue Aug 10, 2004 1:51 am</h4>
+    <div class="postbody"><span class="postbody">Actulay i have not looked at sgade...i forgot about them.  I will take a look at their method.  Thanks
+<br/>
+<br/>
+Right now mine checks for lost packets with a simple checksum of the recieved/sent data...but it never actualy gets that far so who knows if it actualy works :)
+<br/>
+<br/>
+Thanks for you help<br/>_________________<br/><a href="http://www.drunkencoders.com" target="_blank">www.drunkencoders.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#24713 - Krakken - Tue Aug 10, 2004 4:38 am</h4>
+    <div class="postbody"><span class="postbody">I sent my code to you earlier. If you have any questions just gimme a shout.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#24753 - dovoto - Tue Aug 10, 2004 11:09 pm</h4>
+    <div class="postbody"><span class="postbody">Okay..looked at krakens code and dont really see any fundamental difference.  Am about to look at SGADE code but in the meantime here is mine.  If anyone sees a flaw in my code please let me know.  Keep in mind it does work on the emu, not that this means anything.  This code no longer locks up but instead just returns as it seems the first handshake is never agreed upon.
+<br/>
+<br/>
+<a class="postlink" href="http://rafb.net/paste/results/zhfvsj31.html" target="_blank">http://rafb.net/paste/results/zhfvsj31.html</a><br/>_________________<br/><a href="http://www.drunkencoders.com" target="_blank">www.drunkencoders.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#24762 - col - Wed Aug 11, 2004 1:06 am</h4>
+    <div class="postbody"><span class="postbody">dovoto,
+<br/>
+<br/>
+I had a quick scan of your code and noticed that you are trying to transfer a multi-word packet in a single interrupt service.
+<br/>
+<br/>
+What you need to do is set things up so that each time there is an interrupt, you initiate a single u16 transfer. 
+<br/>
+setting up and initiating a transfer is fast - the transfer itself is very slow - so you need to leave a big gap between transfers. Using a timer interrupt to control the master lets you continue with other processes during the actual transfer.
+<br/>
+<br/>
+cheers
+<br/>
+<br/>
+Col</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#24764 - dovoto - Wed Aug 11, 2004 1:38 am</h4>
+    <div class="postbody"><span class="postbody">Col,
+<br/>
+<br/>
+   Thanks.  I will try this next then. 
+<br/>
+<br/>
+-jason<br/>_________________<br/><a href="http://www.drunkencoders.com" target="_blank">www.drunkencoders.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#24766 - Krakken - Wed Aug 11, 2004 1:56 am</h4>
+    <div class="postbody"><span class="postbody">Yeah I think I was doing the same in my code. That would actually explain some of my problems actually. It adds up with the strange problems I was having.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

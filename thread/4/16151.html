@@ -1,0 +1,143 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Making a bootable GBA rom with ARM RVDS - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > Making a bootable GBA rom with ARM RVDS</h2>
+<div id="posts">
+<div class="post">
+    <h4>#164088 - kusma - Mon Oct 20, 2008 4:04 pm</h4>
+    <div class="postbody"><span class="postbody">I've recently gotten an ARM RVDS (4.0) license to play with at home, and I was thinking of doing some RVDS builds of various software I've written. Now, I'm pretty much able to compile my sources with no problems, but generating a bootable ROM is something I haven't quite got yet. My assumption is that I need a boot-header (including the gba header + code to setup the stacks and load data into the iwram and ewram sections). I see that some RVDS (or SDT) code refer to a boot.o, to be passed with the "-fist"-argument to armlink.
+<br/>
+<br/>
+Is this correct, and where can I find a suitable source file (or do I have to write this myself)? Is there something else I should be aware of?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#164097 - kusma - Mon Oct 20, 2008 6:13 pm</h4>
+    <div class="postbody"><span class="postbody">OK, I figured it out :)
+<br/>
+I'm posting the solution here for future reference:
+<br/>
+<br/>
+I found a simple boot.asm at <a class="postlink" href="http://stc.cx/~k-statik/boot.asm" target="_blank">http://stc.cx/~k-statik/boot.asm</a>, and modified it slightly (basically just added PRESERVE8 to get rid of an annoying linker-error - I haven't looked that much into it, but it looked correct to me). I renamed the file, and assembled it like this:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">armasm --cpu=ARM7TDMI start.asm</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I compiled the following C-source code in a similar way
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#define REG_DISPCNT *((volatile unsigned short*)0x04000000)
+<br/>
+#define BG_COLORS    ((volatile unsigned short*)0x05000000)
+<br/>
+int C_Entry()
+<br/>
+{
+<br/>
+   int i = 0;
+<br/>
+   REG_DISPCNT = 0;
+<br/>
+   while (1) BG_COLORS[0] = i++ &amp; 0xFFFF;
+<br/>
+   return 0;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">armcc -c --cpu=ARM7TDMI main.c</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Then I produced the ROM with these commands (note that I named the file start.asm, not boot.asm as the link suggest - this seems to be a slightly more common name):
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">armlink --first start.o start.o main.o --ro-base 0x8000000 --rw-base 0x3000000 --output test.elf
+<br/>
+fromelf --bin test.elf --output test.gba
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+And now I have flashing colors with armcc. Yay.
+<br/>
+<br/>
+edit: fixed the ro-base.</span><span class="gensmall"><br/><br/>Last edited by kusma on Wed Oct 22, 2008 8:02 am; edited 1 time in total</span></div>    
+</div>
+<div class="post">
+    <h4>#164098 - kusma - Mon Oct 20, 2008 6:15 pm</h4>
+    <div class="postbody"><span class="postbody">Oh, and yeah. I only ran this binary on an emulator. I guess you'd need to GBAFIX it to make it run on the real hardware...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#164123 - Lord Graga - Tue Oct 21, 2008 11:15 am</h4>
+    <div class="postbody"><span class="postbody">Benchmarks! Benchmarks!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#164124 - kusma - Tue Oct 21, 2008 12:20 pm</h4>
+    <div class="postbody"><span class="postbody">Before I can do anything like that, I need to figure out how to put code in IWRAM ;)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#164247 - Lord Graga - Fri Oct 24, 2008 11:37 am</h4>
+    <div class="postbody"><span class="postbody">If everything fails, manually? :P</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#164252 - kusma - Fri Oct 24, 2008 12:59 pm</h4>
+    <div class="postbody"><span class="postbody">I want to avoid doing it manually, because all memory-references needs to be rewritten (or the code must be compiled as position independent, which lowers performance). Luckily, it didn't take long to figure it out. I just need to finish up the scatter-file and the scatter-loader first. And then I need some time on my hands first. ;)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#164266 - Lord Graga - Sat Oct 25, 2008 12:50 am</h4>
+    <div class="postbody"><span class="postbody">GBAwesome, looking much forward to it. If it turns out to be much better (or just 5%), I'm gonna have to spend some time sweettalking my embeded systems proffessor into getting me a student license.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#164326 - kusma - Tue Oct 28, 2008 7:19 pm</h4>
+    <div class="postbody"><span class="postbody">You requested benchmarks, here you've got at least one; floating point additions (the floating point support libraries is one of the really good things in armcc). The following code was executed in three different configurations
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">int i;
+<br/>
+while (REG_VCOUNT &gt; 0);
+<br/>
+BG_COLORS[0] = 0xF0;
+<br/>
+for (i = 0; i &lt; 500; ++i)
+<br/>
+{
+<br/>
+   f += 0.01f;
+<br/>
+}
+<br/>
+BG_COLORS[0] = 0x0;
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Here's the results:
+<br/>
+gcc (ROM fp-lib code?)   : 122 lines
+<br/>
+armcc (ROM fp-lib code)  : 58 lines
+<br/>
+armcc (IWRAM fp-lib code): 21 lines
+<br/>
+<br/>
+The code in question itself was in both cases compiled as thumb, and placed in iwram.
+<br/>
+<br/>
+So there you go ;)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#164332 - elwing - Tue Oct 28, 2008 8:06 pm</h4>
+    <div class="postbody"><span class="postbody">wow, the armcc perform simply great...</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

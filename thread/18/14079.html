@@ -1,0 +1,120 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Extended Background Palettes - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Extended Background Palettes</h2>
+<div id="posts">
+<div class="post">
+    <h4>#139402 - Corsix - Wed Sep 05, 2007 9:57 pm</h4>
+    <div class="postbody"><span class="postbody">I am trying to move from using the default BG palette to using an extended BG palette, but I am having some difficulty.
+<br/>
+The dualis debugging type things show that the map data contains the correct  tile indexes, and that the tiles contain the correct palette indexes, and that the palette contains the correct colours, however the video output window shows pure black, suggesting that I did not link the tiles to the extended palette.
+<br/>
+<br/>
+I'm using background 3, mode 0, main 2D core.
+<br/>
+<br/>
+Standard palette code (which works nicely):
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">videoSetMode   (MODE_0_2D | DISPLAY_SPR_1D_LAYOUT | DISPLAY_SPR_ACTIVE | DISPLAY_SPR_EXT_PALETTE);
+<br/>
+...
+<br/>
+/* A -&gt; main bg */ vramSetBankA(VRAM_A_MAIN_BG_0x06000000);
+<br/>
+...
+<br/>
+SetBmpPaletteTo( BG_PALETTE, pBmp);</td> </tr></table><span class="postbody">
+<br/>
+When I change those sections to the following code, the background appears black:</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">videoSetMode   (MODE_0_2D | DISPLAY_SPR_1D_LAYOUT | DISPLAY_SPR_ACTIVE | DISPLAY_BG_EXT_PALETTE | DISPLAY_SPR_EXT_PALETTE);
+<br/>
+...
+<br/>
+/* A -&gt; main bg */ vramSetBankA(VRAM_A_MAIN_BG_0x06000000);
+<br/>
+/* F -&gt; main bg extpal */vramSetBankF(VRAM_F_BG_EXT_PALETTE);
+<br/>
+...
+<br/>
+#define EXT_PALETTE(BANK, NUM) ( reinterpret_cast&lt;_ext_palette*&gt;(BANK)[0][NUM] )
+<br/>
+VRAM_F_CR = VRAM_ENABLE | VRAM_F_LCD;
+<br/>
+SetBmpPaletteTo( EXT_PALETTE(VRAM_F, 0), pBmp);
+<br/>
+VRAM_F_CR = VRAM_ENABLE | VRAM_F_BG_EXT_PALETTE;</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+What am I forgetting to do?
+<br/>
+<br/>
+Edit: If I use BG0 instead of BG3, the extended palette code works, so I'm obviously not understanding something about BG numbers and extended palettes.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#139412 - mml - Wed Sep 05, 2007 11:33 pm</h4>
+    <div class="postbody"><span class="postbody">It's not that thing where the high bit of a 16 bit colour is an alpha bit, and you must set it to 1 for it to not be completely transparent, is it?  I don't remember when this applies, but it's the first thing that comes to mind...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#139422 - Cydrak - Thu Sep 06, 2007 1:12 am</h4>
+    <div class="postbody"><span class="postbody">typedef u16 _ext_palette[16][256];
+<br/>
+<br/>
+This is 16 x 256 = 4096 colors, but GBAtek says there are four of them, one for each layer. So BG3 will try to use the one at 3*8 = 24 KB, which is past the end of the bank. This is probably why you're seeing BG0 works.
+<br/>
+<br/>
+My guess (I haven't tried) is it may help to map F at 16 KB. This should supply colors for BG2/3 instead of 0/1. I didn't see any constants in libnds, so you'd have to define your own:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">enum {
+<br/>
+    VRAM_MAIN_BG_EXT_PALETTE_0_1 = 4 | VRAM_OFFSET(0),  // the default
+<br/>
+    VRAM_MAIN_BG_EXT_PALETTE_2_3 = 4 | VRAM_OFFSET(1)
+<br/>
+};
+<br/>
+VRAM_F_CR = VRAM_ENABLE | VRAM_F_LCD;
+<br/>
+SetBmpPaletteTo( EXT_PALETTE(VRAM_F, 1), pBmp);
+<br/>
+VRAM_F_CR = VRAM_ENABLE | VRAM_MAIN_BG_EXT_PALETTE_2_3;
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+If this is the case, there's not much use for the default--BGs 0/1 can be set to use palettes 2/3 respectively (using BG_PALETTE_SLOTn), whereas the reverse isn't true.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#139446 - Corsix - Thu Sep 06, 2007 8:00 am</h4>
+    <div class="postbody"><span class="postbody">I've extended the EXT_PALETTE macro to specify a slot:</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#define EXT_PALETTE(BANK, SLOT, NUM) ( reinterpret_cast&lt;_ext_palette*&gt;(BANK)[SLOT][NUM] )</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+With F mapped as the main background extension palette, main BG3 uses F slot 1.
+<br/>
+With H mapped as the sub background extension palette, sub BG3 uses H slot 3.
+<br/>
+With I mapped as the sub sprite extension palette, sub sprites use I slot 0.
+<br/>
+<br/>
+There seem to be some constants for swapping between background palette slots (or at least between 0/2 and 1/3):</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#define BG_PALETTE_SLOT0 0
+<br/>
+#define BG_PALETTE_SLOT1 0
+<br/>
+#define BG_PALETTE_SLOT2 BIT(13)
+<br/>
+#define BG_PALETTE_SLOT3 BIT(13)</td> </tr></table><span class="postbody">Sprites don't seem to have any such options, so I assume they always use slot 0.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

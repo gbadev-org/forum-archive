@@ -1,0 +1,112 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Inline asm in GCC - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>ASM > Inline asm in GCC</h2>
+<div id="posts">
+<div class="post">
+    <h4>#35134 - loppy - Mon Jan 31, 2005 1:46 am</h4>
+    <div class="postbody"><span class="postbody">Hello,
+<br/>
+<br/>
+I'm writing a GBA game in GCC and am trying to optimise some of the graphics code by converting it to inline ASM.  I've got the ASM code working and it's definitely faster, but I can't work out how to pass the start address of the block of graphics I'm moving from the 'C' code to the asm code.
+<br/>
+<br/>
+I tried explicitly telling GCC to use a register to hold the address data on the assumption that the ASM code would be able to see it but the value that the ASM code sees is always different.
+<br/>
+<br/>
+Am I going about this the wrong way?  Has anyone in this forum ever worked out a good way of doing this?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#35139 - DekuTree64 - Mon Jan 31, 2005 2:28 am</h4>
+    <div class="postbody"><span class="postbody">I believe it's something like this:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">u16 *graphicsData;
+<br/>
+u16 *copyOfGraphicsData;
+<br/>
+asm volatile( "ldr r0, %1"
+<br/>
+              "str r0, %0" 
+<br/>
+              : "=m" (copyOfGraphicsData)   // outputs
+<br/>
+              : "r" (graphicsData)          // inputs
+<br/>
+              : "r0");</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I know you didn't ask about outputs, but I figured I'd throw that in there to show how the %x ordering works. Just whatever order they appear in.
+<br/>
+<br/>
+That said, I much prefer to write assembly code in seperate .s files, just like any other function. Then you can go with the ARM procedure call standard to get your arguments, which is much better documented (lots of posts around here on it too), and not compiler-dependent.
+<br/>
+<br/>
+All you need to know for starters is that in a pure assembly function with 4 or less arguments, the args are placed in r0-r3, the return address is in r14, and you place the return value in r0 before returning to the caller.
+<br/>
+<br/>
+Also, make sure to save r4-r11 and r13 (stack pointer) if you need to change them, and restore them before returning. r12 is free to corrupt, and r14 doesn't need to be the same, just as long as you still return to the address that was originally in it.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#35160 - poslundc - Mon Jan 31, 2005 2:50 pm</h4>
+    <div class="postbody"><span class="postbody">Have a look at <a class="postlink" href="http://www.geocities.com/dylan_cuthbert/asmrules.html" target="_blank">this set of rules</a> for dealing with GCC's inline assembly command.
+<br/>
+<br/>
+But I agree with DekuTree64: separate assembly files (normally .s, or .S if you want them to run through the C preprocessor first) are a far superior choice 99% of the time. Easier to implement, easier to debug, easier to port and easier to maintain. I think the only time I've ever used inline ASM is when writing static inline C functions to access the BIOS routines.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#35169 - loppy - Mon Jan 31, 2005 5:12 pm</h4>
+    <div class="postbody"><span class="postbody">Thanks,
+<br/>
+<br/>
+I'll try inline first and then convert some to seperate .s files so I can compare the two methods.  Am I right in assuming that there's no performance diffeence between inline and .s?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#35171 - Miked0801 - Mon Jan 31, 2005 8:10 pm</h4>
+    <div class="postbody"><span class="postbody">The only performace will be in how quickly you'll be able to understand and maintain your code.  I've found that inline assembly is just wasky to implement - too many rules about what can be corrupted and hard to debug when something goes wrong.  Just make a seperate file and be done with it...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#35264 - sasq - Wed Feb 02, 2005 9:21 am</h4>
+    <div class="postbody"><span class="postbody">Well of course there is a slight  performance difference as inline is, well, inline and code in separate files needs a jump. But if you need that kind of speed you should put your assembly in IWRAM anyway which always needs a jump.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#35292 - Miked0801 - Wed Feb 02, 2005 6:06 pm</h4>
+    <div class="postbody"><span class="postbody">The C code needs to jump/call to get to your function as well...
+<br/>
+<br/>
+(edit) oh wait, duh - nevermind :)</span><span class="gensmall"><br/><br/>Last edited by Miked0801 on Wed Feb 02, 2005 11:24 pm; edited 1 time in total</span></div>    
+</div>
+<div class="post">
+    <h4>#35298 - poslundc - Wed Feb 02, 2005 7:35 pm</h4>
+    <div class="postbody"><span class="postbody">That's why I use inline ASM for calling the BIOS routines using static inline functions.
+<br/>
+<br/>
+... Not that it really makes a difference in the grand scheme of things, though.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

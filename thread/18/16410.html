@@ -1,0 +1,120 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>dswifi: flushing sends, and hangs - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > dswifi: flushing sends, and hangs</h2>
+<div id="posts">
+<div class="post">
+    <h4>#166386 - zigg - Sat Feb 07, 2009 6:05 am</h4>
+    <div class="postbody"><span class="postbody">I'm working on a DS-based server that will allow a PC to read and write arbitrary sections of a game card's save chip.  I figure this will be useful to easily write software that does the same thing that my old Band Brothers Save Tool did, without rewriting the entire chip each time and hopefully a bit easier on the whole.
+<br/>
+<br/>
+Be kind with the following--I don't do C all that often, and I only know a few real basic things about DS architecture. :)
+<br/>
+<br/>
+I'm compiling against r24 and dswifi 0.3.6.  Here's today's code: <a href="http://www.zigg.com/tmp/savehost-20090206.tar.gz" target="_blank">http://www.zigg.com/tmp/savehost-20090206.tar.gz</a>
+<br/>
+<br/>
+Anyway, I've run into two problems today:
+<br/>
+<br/>
+1.  I seem to need some voodoo to get send() to actually send everything out. 
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">        for(buf_p = buf; (buf_p - buf) &lt; size; buf_p += SAVEHOST_BLOCK_SIZE) {
+<br/>
+                iprintf("\n\x1b[1Asending: %u:%u ", (buf_p - buf), min(size - (buf_p - buf), SAVEHOST_BLOCK_SIZE));
+<br/>
+                send(sock, buf_p, min(size - (buf_p - buf), SAVEHOST_BLOCK_SIZE), 0);
+<br/>
+                /* seems to work for savsender, maybe useful here too? */
+<br/>
+                swiWaitForVBlank();
+<br/>
+                swiWaitForVBlank();
+<br/>
+        }</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+The voodoo in question is the swiWaitForVBlank calls.  Basically, I've lifted this pattern from savsender.  If I don't add those calls, my dumped save ends up dropping bytes.  (BTW, SAVEHOST_BLOCK_SIZE is currently 256, something else I lifted from savsender.  I don't know how efficient that is, to be honest.)
+<br/>
+<br/>
+Is there a better way to solve this problem?
+<br/>
+<br/>
+2.  The enclosed card.c is enhanced to support the 64Mbit save chip from Band Brothers DX--though I can't quite verify that it works 100% yet because I haven't successfully dumped more than about 480KBytes of the 8MBytes--my app hangs around that time each time I try.   (I'm using the enclosed client/savedump.py, which just needs an IP address and will dump the save data to stdout.  I did it with my old 256KByte Band Brothers save and it worked perfectly.)
+<br/>
+<br/>
+Is there something I'm doing wrong?  I guess I'm sort of asking someone to read all my code there, but I really have no idea where to start.
+<br/>
+<br/>
+Thanks much for any help.[/code]</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#166390 - Pete_Lockwood - Sat Feb 07, 2009 9:14 am</h4>
+    <div class="postbody"><span class="postbody">Without reading your code, and referring only to the snippet..  You're assuming that the send() call always succeeds in sending SAVEHOST_BLOCK_SIZE bytes.
+<br/>
+<br/>
+The solution <span style="font-style: italic">may</span> be as simple as collecting the result of the send() and incrementing your pointer position by that value rather than always by SAVEHOST_BLOCK_SIZE.  You might wanna try that and post back if it doesn't help.<br/>_________________<br/>It's not an illusion, it just looks like one.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#166411 - zigg - Sat Feb 07, 2009 4:10 pm</h4>
+    <div class="postbody"><span class="postbody">Oops!  Yeah, that could explain a lot there.  Clearly it has been far too long since I was in college taking networking. ;)
+<br/>
+<br/>
+Followup question: is there a point to calling swiWaitForVBlank() in my loop at all, if I instead make sure that I'm sending until I can send no more?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#166412 - Maxxie - Sat Feb 07, 2009 4:30 pm</h4>
+    <div class="postbody"><span class="postbody">If you are failing to send more, it could be usefull to do a vblank wait to safe cpu power in descrete intervals instead of trying continously until it works.<br/>_________________<br/><a class="postlink" href="http://nintendods.desperate-programmers.com/doku.php?id=wireless_io_map" target="_blank">Trying  to bring more detail into understanding the wireless hardware</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#166415 - Pete_Lockwood - Sat Feb 07, 2009 5:16 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>zigg wrote:</b></span></td> </tr> <tr> <td class="quote">Followup question: is there a point to calling swiWaitForVBlank() in my loop at all, if I instead make sure that I'm sending until I can send no more?</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+The perfect answer to that could be more DS-specific than I'm able to provide but I think personally I'd probably wait for a vblank if send() didn't send as many bytes as I asked it to send.
+<br/>
+<br/>
+So something like
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+if(sent = send(x,y,z,size) != size)
+<br/>
+    swiWaitForVBlank();
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I think that's what Maxxie's suggesting too.<br/>_________________<br/>It's not an illusion, it just looks like one.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#166418 - zigg - Sat Feb 07, 2009 5:51 pm</h4>
+    <div class="postbody"><span class="postbody">Watching the send() return seems to have done it.  I did still get one random hang but my success rate has gone way up.
+<br/>
+<br/>
+vblank wait seems to be useful for performance, too; if I put enough in, I can send larger and larger blocks in a single send().  (Might be interesting to develop an algorithm to increase the number of waits depending on how well the sends are performing.)
+<br/>
+<br/>
+Thanks for your help, all!
+<br/>
+<br/>
+<span style="font-weight: bold">EDIT:</span> Just saw your reply, Pete.  I was replying to the thread that was sitting a little too long here in this tab instead of reloading.  I didn't ignore your post :)</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

@@ -1,0 +1,278 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>sprites in bitmap graphic modes (i.e. mode 3) - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > sprites in bitmap graphic modes (i.e. mode 3)</h2>
+<div id="posts">
+<div class="post">
+    <h4>#133598 - cuse - Sat Jul 07, 2007 11:22 am</h4>
+    <div class="postbody"><span class="postbody">Hi!
+<br/>
+<br/>
+I know this is a FAQ and I read the various hints that I can only use the upper 512 sprite tiles, but I still couldn't get sprites appear in a bitmap graphic mode. Here is my test code:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#include"../../HeaderFiles/gba.h"
+<br/>
+#include"../../HeaderFiles/graphics.h"
+<br/>
+#include"../../HeaderFiles/dma.h"
+<br/>
+#include"../../HeaderFiles/interrupt.h"
+<br/>
+#include"../../HeaderFiles/screenmode.h"
+<br/>
+#include"../../HeaderFiles/sprite.h"
+<br/>
+<br/>
+// just an arbitrary 16 color palette for sprites
+<br/>
+const unsigned short characters_Palette[16] = {
+<br/>
+0x0000, 0x7bde, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
+<br/>
+0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000
+<br/>
+};
+<br/>
+<br/>
+// this bitmap for our sprite reflects the digit 7
+<br/>
+const unsigned char digit7_Bitmap[32] = {
+<br/>
+0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0xff, 0xff, 0x1f, 0x11, 0xff, 0xff, 0x11, 0xf1,
+<br/>
+0xff, 0x1f, 0x11, 0xff, 0xff, 0x1f, 0xf1, 0xff, 0xff, 0x1f, 0xf1, 0xff, 0xff, 0x1f, 0xf1, 0xff
+<br/>
+};
+<br/>
+<br/>
+#define DIGIT_SIZE 8 // height and width of sprites
+<br/>
+#define DIGIT_SPRITE_SIZE     (DIGIT_SIZE*DIGIT_SIZE)   // size of sprites (in pixels)
+<br/>
+#define DIGIT_SPRITE_SIZE_BY2   (DIGIT_SPRITE_SIZE/2)   // size of sprite bitmaps (in data-words, for copying of the data)
+<br/>
+#define DIGIT_SPRITE_DISTANCE   (DIGIT_SPRITE_SIZE/32)   // size of sprite bitmaps (in 32byte blocks, for calculating the character index)
+<br/>
+<br/>
+// some test sprite object
+<br/>
+OAMEntry fooSprite;
+<br/>
+<br/>
+inline void gba_cpy16(u16* target, u16* source, u16 count) {
+<br/>
+    DMA3Copy(source,target, count, DMA_16NOW);
+<br/>
+}
+<br/>
+<br/>
+void copy_sprite_bitmaps_to_oamdata() {
+<br/>
+    // the GBA supports up to 1024 sprite bitmaps (tiles) in text graphic modes,
+<br/>
+    // and up to 512 (the upper 512 ones) in bitmap graphic modes, in this test
+<br/>
+    // we simply apply to all 1024 sprite bitmap slots the same bitmap
+<br/>
+    int i;
+<br/>
+    for (i = 0; i &lt; 1024; i++)
+<br/>
+        gba_cpy16( OAMData + i * DIGIT_SPRITE_SIZE_BY2, (u16*) digit7_Bitmap, DIGIT_SPRITE_SIZE_BY2);
+<br/>
+}
+<br/>
+<br/>
+// load the pallete for our sprites
+<br/>
+inline void copy_sprite_palette() {
+<br/>
+    gba_cpy16((u16*)OBJPaletteMem, (u16*)characters_Palette, 16);
+<br/>
+}
+<br/>
+<br/>
+void interrupt_handler() {
+<br/>
+    // disable interrupts
+<br/>
+    REG_IME = 0;
+<br/>
+<br/>
+    // retrieve the interrupt type that occured
+<br/>
+    register u16 interrupts = REG_IE &amp; REG_IF;
+<br/>
+<br/>
+    // VBlank interrupt (60 times per second)
+<br/>
+    if (interrupts &amp; INT_VBLANK) {
+<br/>
+        // the GBA supports 128 sprite objects, we simply apply to all 128
+<br/>
+        // sprite objects the same data
+<br/>
+        int i;
+<br/>
+        for (i = 0; i &lt; 128; ++i)
+<br/>
+            gba_cpy16((u16*)&amp;OAMMem[i*2], (u16*)&amp;fooSprite, sizeof(OAMEntry)/2);
+<br/>
+    }
+<br/>
+<br/>
+    // mask out all interrupts we dealed with
+<br/>
+    REG_IF |= REG_IF;
+<br/>
+    // re-enable interrupts
+<br/>
+    REG_IME = 1;
+<br/>
+}
+<br/>
+<br/>
+void setup_interrupts() {
+<br/>
+    // our interrupt handler function
+<br/>
+    REG_INTERUPT = (u32)interrupt_handler;
+<br/>
+    // generate a VBlank interrupt on each redraw of the screen
+<br/>
+    REG_DISPSTAT |= DISP_INT_VBLANK;
+<br/>
+    // enable VBlank interrupt
+<br/>
+    REG_IE |= INT_VBLANK;
+<br/>
+    // enable the interrupt controller
+<br/>
+    REG_IME = 1;
+<br/>
+}
+<br/>
+<br/>
+int main(void) {
+<br/>
+    // set graphic mode
+<br/>
+    //SetMode(MODE_0 | OBJ_ENABLE | OBJ_MAP_1D); // this graphic mode would work with sprites yes, but ...
+<br/>
+    SetMode(MODE_3 | OBJ_ENABLE | OBJ_MAP_1D); // ... why the heck doesn't this app work with this graphic mode???
+<br/>
+<br/>
+    // load the sprite bitmap and sprite palette to the respective GBA address
+<br/>
+    copy_sprite_bitmaps_to_oamdata();
+<br/>
+    copy_sprite_palette();
+<br/>
+<br/>
+    // now we setup some demo sprite object ...
+<br/>
+<br/>
+    // set sprite position
+<br/>
+    const int x = 50;
+<br/>
+    const int y = 20;
+<br/>
+    fooSprite.attribute0 = SQUARE | COLOR_16 | y;
+<br/>
+    fooSprite.attribute1 = SIZE_8 | x;
+<br/>
+    // set sprite bitmap (a.k.a. "tile")
+<br/>
+    const int bitmap = 512; // in bitmap graphic modes 512 is the first tile index we can allegedly use
+<br/>
+    fooSprite.attribute2 &amp;= 0xf000;
+<br/>
+    fooSprite.attribute2 |= (bitmap * DIGIT_SPRITE_DISTANCE);
+<br/>
+    // set sprite color palette
+<br/>
+    const int palette = 0;
+<br/>
+    fooSprite.attribute2 &amp;= 0x0fff;
+<br/>
+    fooSprite.attribute2 |= PALETTE(palette);
+<br/>
+<br/>
+    // enable VBlank interrup, as we have to update the sprites object data
+<br/>
+    // for each graphic frame
+<br/>
+    setup_interrupts();
+<br/>
+<br/>
+    // endless loop
+<br/>
+    while(1);
+<br/>
+<br/>
+    return 0;
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+The code above works fine for text modes, but not for bitmap graphic modes.
+<br/>
+<br/>
+What am I doing wrong? Any hints?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#133603 - Cearn - Sat Jul 07, 2007 12:43 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>cuse wrote:</b></span></td> </tr> <tr> <td class="quote">Hi!
+<br/>
+<br/>
+I know this is a FAQ and I read the various hints that I can only use the upper 512 sprite tiles, but I still couldn't get sprites appear in a bitmap graphic mode. Here is my test code:
+<br/>
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code"> 
+<br/>
+#define DIGIT_SIZE 8 // height and width of sprites
+<br/>
+#define DIGIT_SPRITE_SIZE     (DIGIT_SIZE*DIGIT_SIZE)   // size of sprites (in pixels)
+<br/>
+#define DIGIT_SPRITE_SIZE_BY2   (DIGIT_SPRITE_SIZE/2)   // size of sprite bitmaps (in data-words, for copying of the data)
+<br/>
+#define DIGIT_SPRITE_DISTANCE   (DIGIT_SPRITE_SIZE/32)   // size of sprite bitmaps (in 32byte blocks, for calculating the character index) 
+<br/>
+<br/>
+    &lt;snip&gt;
+<br/>
+<br/>
+    // set sprite bitmap (a.k.a. "tile")
+<br/>
+    const int bitmap = 512; // in bitmap graphic modes 512 is the first tile index we can allegedly use
+<br/>
+    fooSprite.attribute2 &amp;= 0xf000;
+<br/>
+    fooSprite.attribute2 |= (bitmap * DIGIT_SPRITE_DISTANCE);
+<br/>
+</td> </tr></table><span class="postbody"></span></td> </tr></table><span class="postbody">
+<br/>
+DIGIT_SPRITE_SIZE is the size in pixels, but not in bytes because tile-indexing for objects works in 4-bit (i.e., half-byte) mode. DIGIT_SPRITE_DISTANCE should be 1, not 2. (bitmap * DIGIT_SPRITE_DISTANCE) equals 512*2 = 1024, which will be interpreted as tile-index 0, which doesn't exist in the bitmap modes. DIGIT_SPRITE_SIZE_BY2 is too large for the same reason.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#133927 - cuse - Mon Jul 09, 2007 9:23 pm</h4>
+    <div class="postbody"><span class="postbody">Yep, that was it! Thanks a lot Cearn!</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

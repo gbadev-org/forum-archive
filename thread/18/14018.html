@@ -1,0 +1,210 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>initConsoleDefault() bug? - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > initConsoleDefault() bug?</h2>
+<div id="posts">
+<div class="post">
+    <h4>#138708 - Moby Disk - Tue Aug 28, 2007 3:31 am</h4>
+    <div class="postbody"><span class="postbody">I was pleased to find that printf() and cout work if you call initConsoleDefault() in libnds.  But I did notice that if you do std::cout &lt;&lt; std::endl; before calling initConsoleDefault() that the console does not work for the duration of the application.
+<br/>
+<br/>
+Does anyone know why?  How do I submit bug reports to libnds?  Is there an official forum for libnds?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#138710 - tepples - Tue Aug 28, 2007 4:04 am</h4>
+    <div class="postbody"><span class="postbody"><span style="font-weight: bold">Short answer:</span>
+<br/>
+Please show us the source code that misbehaves.
+<br/>
+<br/>
+<span style="font-weight: bold">Long answer:</span>
+<br/>
+Is there a reason that you can't make sure to call the init function before making output? Are you trying to make output in a global constructor?
+<br/>
+<br/>
+But first make sure that you have a valid bug report. GCC as provided in devkitARM appears to be a "freestanding" implementation of the C language, and freestanding implementations do not have to implement I/O the way the standard recommends. For example, devkitARM+libnds provides a subset of the output to std::stdout and std::cout that a "hosted" implementation provides, allowing code that runs on a "hosted" implementation to be ported more easily, but you have to call the init functions first.
+<br/>
+<br/>
+If you're confident that the issue you see is a defect in devkitARM+libnds, and you can reproduce this defect with a test case, feel free to use <a class="postlink" href="http://sourceforge.net/tracker/?group_id=114505" target="_blank">the official issue tracker</a> for devkitARM, libnds, and other devkitPro projects.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#138747 - Moby Disk - Tue Aug 28, 2007 2:42 pm</h4>
+    <div class="postbody"><span class="postbody">Thanks for the reply!
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Is there a reason that you can't make sure to call the init function before making output? Are you trying to make output in a global constructor? </td> </tr></table><span class="postbody">
+<br/>
+I was porting a library of mine that did console output before it made an initialization callback.  I moved the consoleInitDefault() code from the callback into the top of main and that eliminated it.  No global constructors so I'm safe.  (Off-topic: Is there a way to tell gcc to call them in any particular order?)
+<br/>
+<br/>
+I am not confident this is a defect at all - maybe just a limitation.  I can definitely reproduce it, but it is probably not worth fixing - just a caveat I guess.
+<br/>
+<br/>
+If I was feeling tenacious, what would I need to step into the &lt;&lt; operator for std::cout and into the libnds console code if I wanted to see what was happening?  I suppose I would need to build libnds but would I also need the source to the gcc standard library implementation?  I'm not sure where I would get that.
+<br/>
+<br/>
+FYI, code to reproduce, in case anyone is interested:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#include &lt;nds.h&gt;
+<br/>
+#include &lt;stdio.h&gt;
+<br/>
+#include &lt;iostream&gt;
+<br/>
+<br/>
+void initTextOnBottom()
+<br/>
+{
+<br/>
+   videoSetModeSub(MODE_0_2D | DISPLAY_BG0_ACTIVE);
+<br/>
+   vramSetBankC(VRAM_C_SUB_BG_0x06200000);
+<br/>
+<br/>
+   // black backdrop
+<br/>
+   BG_PALETTE_SUB[0]=RGB15(0,0,0);
+<br/>
+<br/>
+   SUB_BG0_CR = BG_MAP_BASE(31);//use bg0 for the text
+<br/>
+   
+<br/>
+   BG_PALETTE_SUB[255] = RGB15(25,25,25);//by default font rendered with color 255
+<br/>
+   
+<br/>
+   //consoleInit() is a lot more flexible but this gets you up and running quick
+<br/>
+   consoleInitDefault((u16*)SCREEN_BASE_BLOCK_SUB(31), (u16*)CHAR_BASE_BLOCK_SUB(0), 16);
+<br/>
+}
+<br/>
+<br/>
+int main()
+<br/>
+{   
+<br/>
+   // Turn on everything
+<br/>
+   powerON(POWER_ALL);
+<br/>
+<br/>
+   // IRQ basic setup
+<br/>
+   irqInit();
+<br/>
+   irqSet(IRQ_VBLANK, 0);
+<br/>
+<br/>
+   // Output text - there is nowhere for this text to go anyway
+<br/>
+   std::cout &lt;&lt; "Before consoleInitDefault";
+<br/>
+<br/>
+   // ----- Uncomment this line to break consoleInitDefault() -----
+<br/>
+   // std::cout &lt;&lt; std::endl;
+<br/>
+<br/>
+   // Console mode
+<br/>
+   initTextOnBottom();
+<br/>
+<br/>
+   // This text will appear on the pseudo-console
+<br/>
+   std::cout &lt;&lt; "After consoleInitDefault" &lt;&lt; std::endl;
+<br/>
+<br/>
+   // Stop
+<br/>
+   while(1)
+<br/>
+   {
+<br/>
+      swiWaitForVBlank();
+<br/>
+   }
+<br/>
+   
+<br/>
+   return 0;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#138760 - tepples - Tue Aug 28, 2007 7:59 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Moby Disk wrote:</b></span></td> </tr> <tr> <td class="quote">No global constructors so I'm safe.  (Off-topic: Is there a way to tell gcc to call them in any particular order?)</td> </tr></table><span class="postbody">
+<br/>
+The ISO C++ standard defines no way to specify the order of construction of global objects in general. You could try using global <span style="font-style: italic">pointers</span> to objects, which are implicitly initialized to NULL, and constructing the object explicitly when needed:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">Foo *someGlobalObj;
+<br/>
+<br/>
+Bar::Bar() {
+<br/>
+  if (!someGlobalObj) {
+<br/>
+    someGlobalObj = new Foo();
+<br/>
+  }
+<br/>
+  someGlobalObj-&gt;someMethod();
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+See <a class="postlink" href="http://www.parashift.com/c++-faq-lite/ctors.html" target="_blank">"Constructors" in C++ FAQ Lite</a> for details.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">I suppose I would need to build libnds but would I also need the source to the gcc standard library implementation?</td> </tr></table><span class="postbody">
+<br/>
+When you write to std::cout, you are actually calling into four libraries: <ol type="1"><li>GNU libstdc++, where std::cout of &lt;iostream&gt; calls functions in &lt;cstdio&gt;; </li><li>Newlib, where &lt;cstdio&gt; functions such as std::fputs() and std::fwrite() call the underlying platform's write() implementation; </li><li>devkitARM's devoptab, which routes calls to write() into implementations that work on separate devices; and </li><li>device drivers such as libnds's console, which handles write() by modifying VRAM, and libfat, which handles write() by writing to a file system made of flash sectors. </li></ol>
+<br/>
+In order to allow step 3 to see step 4, you need to consoleInitDefault() and/or fatInitDefault() before you write().
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+FYI, code to reproduce, in case anyone is interested:
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#include &lt;nds.h&gt;
+<br/>
+#include &lt;stdio.h&gt;
+<br/>
+#include &lt;iostream&gt;</td> </tr></table><span class="postbody"></span></td> </tr></table><span class="postbody">
+<br/>
+It is no longer "good C++" to include &lt;iostream.h&gt; and &lt;stdio.h&gt;; the new method is &lt;iostream&gt; and &lt;cstdio&gt;. The C++ compiler and library shipped in most GCC distributions provide &lt;stdio.h&gt; for C++ programs as an extension for backward compatibility with code written before the standardization of C++.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

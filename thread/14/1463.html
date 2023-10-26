@@ -1,0 +1,443 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>MODE4 WaitForVsync() - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Beginners > MODE4 WaitForVsync()</h2>
+<div id="posts">
+<div class="post">
+    <h4>#7343 - hnager - Sun Jun 15, 2003 9:49 pm</h4>
+    <div class="postbody"><span class="postbody">I'm using MODE4 and the classic, erase, draw, move way of moving sprites onscreen but i'm getting a lot of flicker...I thought that WaitForVsync would fix this, but no luck. Is the process different when working in MODE4/?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7349 - tepples - Mon Jun 16, 2003 12:19 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>hnager wrote:</b></span></td> </tr> <tr> <td class="quote">I'm using MODE4 and the classic, erase, draw, move way of moving sprites onscreen but i'm getting a lot of flicker...I thought that WaitForVsync would fix this, but no luck. Is the process different when working in MODE4/?</td> </tr></table><span class="postbody">
+<br/>
+When working in mode 4, you still have 16 KB of VRAM for sprite cels. But if you want sprites to go behind some (but not other) things in the background, then try this: erase, move, draw, and then switch buffers. This is double buffering with hardware page flipping.  However, you will have to keep track of two dirty rectangles for each sprite, one on each page.
+<br/>
+<br/>
+(Have trouble with the terminology I used in this comment? Read about it in any 2D graphics tutorial, be it Mode 13h, Mode X, or DirectDraw.)<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7350 - hnager - Mon Jun 16, 2003 1:18 am</h4>
+    <div class="postbody"><span class="postbody">I should clarify - I'm writing directly to the videobuffer as opposed to using sprites. 2d polygons where I draw a line point to point in black(0) then move the points and redraw. I'm actually working from an old book which uses mode 13h for its examples (hence mode4). Are you saying that I should draw to a buffer (not the video buffer) and then use DMA to copy that full block to the video buffer? Would that simplify the process?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7352 - hnager - Mon Jun 16, 2003 2:25 am</h4>
+    <div class="postbody"><span class="postbody">Instead of Flipping the buffers I just  did this - works great:
+<br/>
+<br/>
+#define FrontBuffer ((u16*)0x6000000)
+<br/>
+#define BackBuffer ((u16*)0x600A000)
+<br/>
+<br/>
+u16* CurrentBuffer = BackBuffer;
+<br/>
+<br/>
+void UpdateDisplay(){
+<br/>
+    DMA_Copy( 3,(void*)BackBuffer,(void*)FrontBuffer,(240*160)/4, DMA_32NOW);
+<br/>
+}
+<br/>
+<br/>
+int main(){
+<br/>
+<br/>
+...
+<br/>
+<br/>
+while(1){
+<br/>
+<br/>
+ EraseRocks();
+<br/>
+ MoveRocks();
+<br/>
+ DrawRocks();
+<br/>
+<br/>
+ WaitForVsync();
+<br/>
+ UpdateDisplay();
+<br/>
+}
+<br/>
+}
+<br/>
+<br/>
+Thanks for the help.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7360 - djei-dot - Mon Jun 16, 2003 11:25 am</h4>
+    <div class="postbody"><span class="postbody">To switch buffers you just have to set/unset the bit in REG_DISPCNT</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7361 - funkeejeffou - Mon Jun 16, 2003 11:55 am</h4>
+    <div class="postbody"><span class="postbody">bit 10 of REG_DISP (located at 0x4000000) to be more precise.
+<br/>
+if you want to diplay buffer0 located at 0x6000000, then set bit 10 in REG_DISP to 0.
+<br/>
+if you want to display buffer1 located at 0x600A000, then set bit 10 in REG_DISP to 1.
+<br/>
+That's it.
+<br/>
+Tepples, do you know if we can display another background in mode 4 (as BG3 above BG2 with a fixed BMP)?
+<br/>
+And if I want to write into the 16Kb of VRAM left, how do we do if we do not want to display the sprites?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7364 - hnager - Mon Jun 16, 2003 1:21 pm</h4>
+    <div class="postbody"><span class="postbody">To avoid maintaining two screens (dirty rectangles on both) I just used the back buffer as just that...doing all of my drawing there and using DMA to copy that chunk over to the front buffer...From what I've seen, that's how it was done in the mode 13h days...Are there any pitfalls to doing this? I assume it's faster to just switch which buffer to use to draw the screen, but in my case it seems as if the DMA_Copy() overhead is a better route than keeping track of two screens at the same time for erasing...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7369 - Quirky - Mon Jun 16, 2003 2:03 pm</h4>
+    <div class="postbody"><span class="postbody">The flipping by setting the register bit method is a lot faster (DMA is not too shabby, but not infinitely fast either)
+<br/>
+<br/>
+You basically do this:
+<br/>
+<br/>
+screen 0 is showing, screen 1 is the buffer
+<br/>
+draw to screen 1
+<br/>
+waitforvsync()
+<br/>
+flip
+<br/>
+screen 1 is showing, screen 0 is the buffer
+<br/>
+draw to screen 0
+<br/>
+waitforvsync()
+<br/>
+flip
+<br/>
+... and so on.
+<br/>
+<br/>
+The trick is to keep track of which screen is the "buffer". Instead of using defines, you could use a variable set to the current screen address buffer. Then, have a flip() function that sets the relevent register bit and updates the address of the buffer to the one that is currently not seen.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7370 - funkeejeffou - Mon Jun 16, 2003 2:06 pm</h4>
+    <div class="postbody"><span class="postbody">Mode 13h isn't quite the same as mode 4.
+<br/>
+<br/>
+In mode 13h, the big advantage is the linear organisation of the memory, you just write consecutively into the video ram as in an array (other modes usually require jumps in memory).
+<br/>
+In this mode, there is one screen buffer in VRAM wich is what is always displayed, so when you double buffer in this mode, you must create an array in your system RAM (not in VRAM) and once this buffer is filled, you copy it to VRAM.
+<br/>
+Mode 4 is different, it offers you this second buffer in VRAM, at the adress 0x600A000 whereas the first was at 0x6000000.
+<br/>
+So just write to a buffer while displaying the other, and to switch the buffer to be displayed, write in REG_DISP the desired value in bit 10 (bit 10 set if 0x600A000 to be displayed, unset if 0x6000000 to be displayed).
+<br/>
+There is no need to copy a buffer to another here, just set unset a bit in a system register.
+<br/>
+<br/>
+What you do :
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void UpdateDisplay(){ 
+<br/>
+DMA_Copy( 3,(void*)BackBuffer,(void*)FrontBuffer,(240*160)/4, DMA_32NOW); 
+<br/>
+} </td> </tr></table><span class="postbody">
+<br/>
+is totally absurd and stupid (sorry).
+<br/>
+You're making 19200 write access to VRAM to obtain the same result as if you would've written ONE halfword to a register.
+<br/>
+If you seek for speed and performance, it is certainly not the right way to reach it...
+<br/>
+<br/>
+Hope it is clear now.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7376 - hnager - Mon Jun 16, 2003 3:26 pm</h4>
+    <div class="postbody"><span class="postbody">Thanks for the feedback. I knew that DMA came at a cost, but the problem is that inorder to :
+<br/>
+<br/>
+Erase();
+<br/>
+Move();
+<br/>
+Draw();
+<br/>
+WaitForVsync();
+<br/>
+Flip();
+<br/>
+<br/>
+I need to have the erase take care of 2 screens. In my example I have an asteroids-type clone using 2d polygons - so to erase I'm drawing the 'rocks' as black(0) in a single buffer example.
+<br/>
+<br/>
+I would like to take advantage of the doublebuffer - but when using a page flip method I have to erase one step back inorder to clear the backbuffer...I'm having trouble accomplishing that - any suggestions?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7403 - Quirky - Tue Jun 17, 2003 7:33 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>hnager wrote:</b></span></td> </tr> <tr> <td class="quote">Thanks for the feedback. I knew that DMA came at a cost, but the problem is that inorder to :
+<br/>
+<br/>
+Erase();
+<br/>
+Move();
+<br/>
+Draw();
+<br/>
+WaitForVsync();
+<br/>
+Flip();
+<br/>
+<br/>
+I need to have the erase take care of 2 screens. In my example I have an asteroids-type clone using 2d polygons - so to erase I'm drawing the 'rocks' as black(0) in a single buffer example.
+<br/>
+<br/>
+I would like to take advantage of the doublebuffer - but when using a page flip method I have to erase one step back inorder to clear the backbuffer...I'm having trouble accomplishing that - any suggestions?</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+You only ever need to clear the buffer, which is the "screen" you don't see. If you erase both screens at the same time it would erase the graphics of the visible one too, which is not what you want. Perhaps if I rewrite it like this it's more obvious? :
+<br/>
+<br/>
+EraseBuffer();
+<br/>
+Move();
+<br/>
+DrawToBuffer();
+<br/>
+WaitForVsync();
+<br/>
+Flip();
+<br/>
+<br/>
+As you can see, you only ever drawto/erasefrom the buffer. Isn't that what you do now anyway? You only ever erase the buffer you store in RAM (before you draw to it and then copy it to screen), right?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7406 - tepples - Tue Jun 17, 2003 11:07 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quirky wrote:</b></span></td> </tr> <tr> <td class="quote">Perhaps if I rewrite it like this it's more obvious? :
+<br/>
+<br/>
+EraseBuffer();
+<br/>
+Move();
+<br/>
+DrawToBuffer();
+<br/>
+WaitForVsync();
+<br/>
+Flip();
+<br/>
+<br/>
+As you can see, you only ever drawto/erasefrom the buffer. Isn't that what you do now anyway? You only ever erase the buffer you store in RAM (before you draw to it and then copy it to screen), right?</td> </tr></table><span class="postbody">
+<br/>
+That is, unless hnager is trying to use some sort of dirty-rectangle system. With a software double buffer, only one dirty rectangle need be stored, but a hardware double buffer requires two sets of dirty rectangles, one for each buffer.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7410 - hnager - Tue Jun 17, 2003 12:24 pm</h4>
+    <div class="postbody"><span class="postbody">tepples - that's exactly what I'm doing, and exactly why I didn't go for the page flipping - it seemed like too much to keep track of and potentially slower to have to maintain 2 sets of dirty rectangles. The alternate (redrawing the whole screen) seems less efficient than the one dma_copy...true?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7453 - tepples - Wed Jun 18, 2003 5:31 am</h4>
+    <div class="postbody"><span class="postbody">If you're doing anything 3D, you're probably redrawing the whole screen.
+<br/>
+<br/>
+And it'd be much faster to keep two sets of dirty rectangles than to dma_copy the buffer from EWRAM every frame. Remember that EWRAM has two wait states while VRAM typically has less than one.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7466 - hnager - Wed Jun 18, 2003 11:56 am</h4>
+    <div class="postbody"><span class="postbody">Fair enough - I'll revisit that file and see what I can do as far as keeping track of two sets of rectangles. 
+<br/>
+<br/>
+One last question on this subject (for now):
+<br/>
+<br/>
+I'm drawing all of my 'sprites' as 2d polygons with line clipping -  considering all of the calculations which I'm doing to draw/erase the screen - would it  make more sense (especially as I have more objects onscreen) to  redraw the entire screen and abandon the dirty rectangles?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7474 - niltsair - Wed Jun 18, 2003 2:23 pm</h4>
+    <div class="postbody"><span class="postbody">Couldn't you use hardware sprites instead? There's ~1/2 screen worth of tiles in 256colors, and ~1screen in 16colors when in mode 3,4,5.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7475 - hnager - Wed Jun 18, 2003 2:52 pm</h4>
+    <div class="postbody"><span class="postbody">I have the sprites as a set of 5 points, randomly positioned within a set of parameters so that the 'asteroids' are all randomly sized - could this be achieved with sprites? it's a trade off I suppose.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7476 - niltsair - Wed Jun 18, 2003 3:05 pm</h4>
+    <div class="postbody"><span class="postbody">Yes it could be done, and much more faster too if you don't have to worry about screen refresh.
+<br/>
+<br/>
+You could also change their priority to make some appears on top of others.
+<br/>
+<br/>
+They can be 8,16,32,64 sized. Setting any of their color to palette entry 0 will make this pixel transparent.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7479 - Quirky - Wed Jun 18, 2003 3:51 pm</h4>
+    <div class="postbody"><span class="postbody">You could draw the asteroid once and then use hardware rotation to rotate it as well. That would save a lot of effort.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7485 - hnager - Wed Jun 18, 2003 4:42 pm</h4>
+    <div class="postbody"><span class="postbody">would it be possible to draw 4 asteroids directly to the sprite data (using the random parameters I have in place) as if it were vram and then refer to those as if a normal sprite?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7499 - niltsair - Wed Jun 18, 2003 6:43 pm</h4>
+    <div class="postbody"><span class="postbody">Yes.
+<br/>
+<br/>
+There's would be 2 ways :
+<br/>
+<span style="font-weight: bold">2DArray</span>
+<br/>
+The data is grouped in 8x8 tiles.  You have to manage the 8x8 subdivision. 
+<br/>
+<br/>
+<span style="font-weight: bold">3D array</span>
+<br/>
+The data is used directly. You just specify the upper left corner of the sprite. Wastefull of tiles used (have to make sure eveything fit). Faster to draw in bitmap mode because no need to check the 8x8 bondaries.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7519 - hnager - Thu Jun 19, 2003 2:48 am</h4>
+    <div class="postbody"><span class="postbody">If I'm not mistaken - the sprite data is written in 16 bit chunks so if I wanted to treat a 1-dimensional chunk of OAMData as the sprite data for a 16X16 256 color sprite, I would first need a palette to refer to, and also need some way to write in 16 bit chunks. 
+<br/>
+<br/>
+Any suggestions? To recap - I was making an asteroids type clone in mode4 using 2d polygons but it seems far fram efficient. So it was suggested that I use hardware sprites with scaling/rotation to achieve a better performing game. What I don't want to lose is the random rock sizes and shapes (within parameters)...So what I'm trying to do now is set up the multiple rocks as sprites (at runtime) and work with them like any other sprite after that.
+<br/>
+<br/>
+thanks.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7523 - Quirky - Thu Jun 19, 2003 8:14 am</h4>
+    <div class="postbody"><span class="postbody">Well, I imagine that now you have a "drawPixel" type routine that takes x,y on screen and draws them. Or something to that effect. What you'll probably want is a drawPixel that takes as its arguments the x,y position and a sprite number, i.e. drawPixel(0,0, 1, col) would put a pixel of colour "col" at position x=0, y=0 in sprite 1.
+<br/>
+<br/>
+From there, you would need to think about which sprite tiles the sprite uses. Say it was the first sprite (sprite 0), which was 16*16 in size and pointed to the start of sprite tile memory for its gfx. It would use 4 tiles, the first 4 in sprite tile memory. So you'd have to work out where the "on screen" x,y position was in this memory... bearing in mind that the tiles are laid out like this on screen:
+<br/>
+<br/>
+[tile 0][tile 1]
+<br/>
+[tile 2][tile 3]
+<br/>
+<br/>
+but in memory they are laid out a bit differently - for y=0,  0&lt;=x&lt;8 would be in tile 0, 8&lt;=x&lt;16 would be in tile 1 and so on. You have to think about this layout to calculate the x,y position, look at the tile data in VBA to help. And keep in mind that you read/write 2 pixels at once (or 4 pixels at once in 16 colour sprite mode) but that is the same for writing to the screen in mode 4.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7531 - hnager - Thu Jun 19, 2003 12:42 pm</h4>
+    <div class="postbody"><span class="postbody">How would a 256 color sprite work? Isn't that written as one long array 0-15 on the first line, etc?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7532 - Quirky - Thu Jun 19, 2003 1:40 pm</h4>
+    <div class="postbody"><span class="postbody">It's written something like this, if you imagine 8*8 tiles next to each other:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+0001 0203 0405 0607    4041 4243 4445 4647
+<br/>
+0809 0a0b 0c0d 0e0f    4849 4a4b 4c4d 4e4f
+<br/>
+1011... etc            5 ... etc
+<br/>
+1                      5
+<br/>
+2                      6
+<br/>
+2                      6
+<br/>
+3                      7
+<br/>
+3839 3a3b 3c3d 3e3f    7879 7a7b 7c7d 7e7f
+<br/>
+<br/>
+<br/>
+8081.....      8687    c0c1.....  
+<br/>
+8                      c
+<br/>
+9                      d
+<br/>
+9                      d
+<br/>
+a                      e
+<br/>
+a                      e
+<br/>
+b                      f
+<br/>
+b                      f8f9 fafb fcfd feff
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+where each 4 numbers there represents a 16 bit value in VRAM with the index from 0 being shown in a "byte". 
+<br/>
+<br/>
+i.e. in mode 0 sprite tile ram starts at 0x6010000 the next tile is at 0x6010020.. and so on. so if you want to draw to x=9, y=0, and your sprite is 16*16 and uses the 0th tile first you would need to put a value at 0x6010020 (not 40, as you read 2 values at a time) in the upper byte to set that pixel in the sprite.
+<br/>
+<br/>
+I may have cocked something up there though, as I haven't done this for a while ;) but that is the basic idea.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7534 - hnager - Thu Jun 19, 2003 2:19 pm</h4>
+    <div class="postbody"><span class="postbody">Ah - it's all starting to make sense - like you said - it's like plotting a pixel in mode 4 once I figure out which quadrant it lives in.
+<br/>
+<br/>
+So I can still use this type of technique (something along these lines):
+<br/>
+<br/>
+    if(x % 2) 
+<br/>
+       OAMData = (OAMData  &amp; 0x00FF) | (color&lt;&lt;8); 
+<br/>
+    else 
+<br/>
+        OAMData  = (OAMData  &amp; 0xFF00) | color; 
+<br/>
+<br/>
+ But if the palette is stored as 16 bit values then should I only plot every other?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7535 - Quirky - Thu Jun 19, 2003 2:30 pm</h4>
+    <div class="postbody"><span class="postbody">That's basically it, find out the tile, then find the "mini" x, y offset inside that tile, read the 16 bit value (pixel pair) alter the pixel you want and write back the 16 bit value. 
+<br/>
+<br/>
+Not sure what you mean by "plot every other" though?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7566 - hnager - Fri Jun 20, 2003 12:03 am</h4>
+    <div class="postbody"><span class="postbody">Sorry - it was too early in the day - ignore the 'plot every other'.
+<br/>
+<br/>
+Drawing directly to the sprite tiles is really helping better how sprites work in general - thanks again.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

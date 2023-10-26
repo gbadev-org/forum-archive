@@ -1,0 +1,654 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Reloading a texture at a specific address - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Reloading a texture at a specific address</h2>
+<div id="posts">
+<div class="post">
+    <h4>#135386 - Rajveer - Mon Jul 23, 2007 1:33 am</h4>
+    <div class="postbody"><span class="postbody">I have a ship selection screen with 2 types of textures: Icons and HUD textures which I want to keep in memory all the time, and the currently selected ship texture which I want to load depending on which ship the user is viewing. In the end I want to allow the user to add their own ships to the game, so I can't restrict the ship number to allow loading all of the ship textures at once. I've searched and found that there is no way to unload textures from VRAM, but is there a way to load my icons/hud textures into one bank, lock it, load my currently selected ship texture into another bank and keep replacing the ship texture in the second bank?
+<br/>
+<br/>
+Cheers.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#135393 - elhobbs - Mon Jul 23, 2007 2:02 am</h4>
+    <div class="postbody"><span class="postbody">the libnds pseudo gl implementation is a good way to get started and get something on screen. however, when you start needing more advance texture management capabilities then you probably need to do it yourself. you may want to take a look at the source code to libnds. the texture management stuff is not too complicated. it is really just banks of memory. the most complicated things you will need to deal with is that switching the vram from texture to lcd(so that you can write it) and then back again, and how to do this so that the screen will not flicker.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#135482 - Rajveer - Mon Jul 23, 2007 9:17 pm</h4>
+    <div class="postbody"><span class="postbody">Cheers for the reply. I'll dive into the source and see what I can pull up! The second part interests me alot, about switching the VRAM from texture to lcd. I don't think I'm understanding you: I write to VRAM after I set specific banks to texture with vramSetBankA(VRAM_A_TEXTURE);, so wouldn't I just keep it set to that? Or would changing a specific bank have the effect of emptying it so that you can rewrite to it? Even if I did empty that bank, how would I specify writing to it without writing to any other bank?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#135502 - Sausage Boy - Tue Jul 24, 2007 12:02 am</h4>
+    <div class="postbody"><span class="postbody">You can't write to a texture bank, you have to switch it to lcd mode, and then switch it back.<br/>_________________<br/>"no offense, but this is the gayest game ever"</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#135561 - Rajveer - Tue Jul 24, 2007 4:49 pm</h4>
+    <div class="postbody"><span class="postbody">Ahh, so I see after looking at the source. Cool, doesn't seem hard, but before I start writing my own texture loading functions, just wondering if there are any texture libraries out there already? Also, about the screen flickering when changing VRAM, any solution?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#135563 - simonjhall - Tue Jul 24, 2007 5:01 pm</h4>
+    <div class="postbody"><span class="postbody">I wrote a whole texture system for quake...maybe I should post that here!
+<br/>
+The flickering is a problem that I had too - basically you need to unlock the vram bank, copy in your data and then relock your bank between certain values of vcount (I'll look em up for you if you want), as that's when the geometry engine is idle.
+<br/>
+<br/>
+If you haven't relocked the bank by the time the 3D hardware needs a texture from that block it'll only be able to fetch black and so (if your whole scene is textured) the screen will flicker black.
+<br/>
+<br/>
+As I had far more texture data than vram I loaded the textures from disk on demand (after freeing an old/unused texture). However the amount of time you have to unlock/copy/relock the bank is pretty short and disk reading isn't fast enough to do that in one go. So I did this:
+<br/>
+- find an old texture and free it
+<br/>
+- load new texture from disk into one of the useless banks eg H (or spare main memory)
+<br/>
+- when the geometry engine is idle (vcount 170?) unlock the bank you're going to copy it into
+<br/>
+- DMA the texture from your temporary store to the vram destination
+<br/>
+- lock the bank as soon as you're done
+<br/>
+<br/>
+If you lock the bank before vcount ~215 you'll not see any flickering.<br/>_________________<br/><span style="font-weight: bold"><a class="postlink" href="https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&amp;business=simonjhall%40gmail%2ecom&amp;no_shipping=2&amp;no_note=1&amp;tax=0&amp;currency_code=GBP&amp;lc=GB&amp;bn=PP%2dDonationsBF&amp;charset=UTF%2d8" target="_blank">Big thanks to everyone who donated for Quake2</a></span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#135565 - Rajveer - Tue Jul 24, 2007 5:18 pm</h4>
+    <div class="postbody"><span class="postbody">That's funny, I was actually just reading your older thraed about it! Cheers for the details, I'll give it a shot and see what I can do!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#135566 - simonjhall - Tue Jul 24, 2007 5:32 pm</h4>
+    <div class="postbody"><span class="postbody">Btw if you're wondering why in Quake models have a white texture for a few frames when you see something for the first time / you've not seen for a while it's because it's loading it from the disk to the temporary store. This isn't the same as the vcount flickering problem.
+<br/>
+<br/>
+In your case, if you've got enough main memory (so you don't have to pull textures from disk like me) then you ought to be able to do an unlock/dma/lock within the time frame and you should never notice any kind of flicking / missing texture-ness. DMA is well better than memcpy in this case as you need to lock/unlock as quick as you can ;-)
+<br/>
+<br/>
+Also, once you've got all this working proper-like you'll be chuffed with your effort, as this is a pretty intricate piece of code!<br/>_________________<br/><span style="font-weight: bold"><a class="postlink" href="https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&amp;business=simonjhall%40gmail%2ecom&amp;no_shipping=2&amp;no_note=1&amp;tax=0&amp;currency_code=GBP&amp;lc=GB&amp;bn=PP%2dDonationsBF&amp;charset=UTF%2d8" target="_blank">Big thanks to everyone who donated for Quake2</a></span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#135679 - silent_code - Wed Jul 25, 2007 3:50 pm</h4>
+    <div class="postbody"><span class="postbody">man, that's pretty good work simon! (you quitting the scene = we lost!) ;D</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#135685 - Sausage Boy - Wed Jul 25, 2007 4:44 pm</h4>
+    <div class="postbody"><span class="postbody">I'm currently writing a texture allocator. It doesn't handle copying data or anything, it just gives you a free location in vram to write to, and lets you delete textures you don't need.<br/>_________________<br/>"no offense, but this is the gayest game ever"</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#135687 - kusma - Wed Jul 25, 2007 4:50 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Sausage Boy wrote:</b></span></td> </tr> <tr> <td class="quote">I'm currently writing a texture allocator. It doesn't handle copying data or anything, it just gives you a free location in vram to write to, and lets you delete textures you don't need.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+What algorithm are you using? And is there a reason why you just don't take any of all those already-available memory-allocators floating around in the tubes?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#135693 - simonjhall - Wed Jul 25, 2007 5:24 pm</h4>
+    <div class="postbody"><span class="postbody">Yeah I sorta regret writing all the memory allocators myself (I retrofitted the sound allocator I wrote for the ARM7 sound system) as it was a bit of a pain to debug. Lots of fiddly problems you wouldn't quite expect or only happened after 1274 frames etc ;-)
+<br/>
+So yeah if you can, get an off-the-shelf memory allocator system.
+<br/>
+However the coolest thing you can do with constrained situations like this is that you defrag you RAM during the GPU 'dead time' to remove small holes in your memory! Sounds cool, but not as worth-it as you'd expect :-(<br/>_________________<br/><span style="font-weight: bold"><a class="postlink" href="https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&amp;business=simonjhall%40gmail%2ecom&amp;no_shipping=2&amp;no_note=1&amp;tax=0&amp;currency_code=GBP&amp;lc=GB&amp;bn=PP%2dDonationsBF&amp;charset=UTF%2d8" target="_blank">Big thanks to everyone who donated for Quake2</a></span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#135697 - Sausage Boy - Wed Jul 25, 2007 5:40 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>kusma wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Sausage Boy wrote:</b></span></td> </tr> <tr> <td class="quote">I'm currently writing a texture allocator. It doesn't handle copying data or anything, it just gives you a free location in vram to write to, and lets you delete textures you don't need.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+What algorithm are you using? And is there a reason why you just don't take any of all those already-available memory-allocators floating around in the tubes?</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I'm using the buddy memory allocation technique. It's particularly suitable for this purpose, since it can only allocate blocks that are powers of two, and all the DS textures are powers of two.
+<br/>
+<br/>
+As for not using a prewritten one, it's a combination of wanting to write a memory allocator and wanting one that is written to manage the DS's texture memory.<br/>_________________<br/>"no offense, but this is the gayest game ever"</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#135867 - tepples - Thu Jul 26, 2007 9:44 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>simonjhall wrote:</b></span></td> </tr> <tr> <td class="quote">Btw if you're wondering why in Quake models have a white texture for a few frames when you see something for the first time / you've not seen for a while it's because it's loading it from the disk to the temporary store.</td> </tr></table><span class="postbody">
+<br/>
+Can this be worked around? For instance, would it be possible to cache the texture at a much lower resolution, even just the average color across the whole texture, and use it to draw objects before their textures load?<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#136561 - Rajveer - Thu Aug 02, 2007 9:20 pm</h4>
+    <div class="postbody"><span class="postbody">Ok I finally got off my ass and started looking into the code. I've never used DMA copy so my plan atm is to simply load ship textures to the beginning of bank B, I'm just adapting glTexImage2D. My aim is to keep overwriting a texture at 0x06820000 so that I can keep loading different ships one at a time to view, when that works I'll look into DMA copying:
+<br/>
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void ObjTexImageSpecificAddress(uint32* addr, GL_TEXTURE_TYPE_ENUM type, int sizeX, int sizeY, int param, const uint8* texture)
+<br/>
+{
+<br/>
+   uint32 size = 0;
+<br/>
+   uint32 vramTemp;
+<br/>
+<br/>
+   size = 1 &lt;&lt; (sizeX + sizeY + 6);
+<br/>
+  
+<br/>
+<br/>
+   switch (type)
+<br/>
+   {
+<br/>
+      case GL_RGB:
+<br/>
+      case GL_RGBA:
+<br/>
+         size = size &lt;&lt; 1;
+<br/>
+         break;
+<br/>
+      case GL_RGB4:
+<br/>
+         size = size &gt;&gt; 2;
+<br/>
+         break;
+<br/>
+      case GL_RGB16:
+<br/>
+         size = size &gt;&gt; 1;
+<br/>
+         break;
+<br/>
+<br/>
+      default:
+<br/>
+         break;
+<br/>
+   }
+<br/>
+   
+<br/>
+   // unlock texture memory
+<br/>
+   vramTemp = vramSetMainBanks(VRAM_A_LCD,VRAM_B_LCD,VRAM_C_LCD,VRAM_D_LCD);
+<br/>
+<br/>
+   if (type == GL_RGB)
+<br/>
+   {
+<br/>
+      // We do GL_RGB as GL_RGBA, but we set each alpha bit to 1 during the copy
+<br/>
+      u16 * src = (u16*)texture;
+<br/>
+      u16 * dest = (u16*)addr;
+<br/>
+      
+<br/>
+      glTexParameter(sizeX, sizeY, addr, GL_RGBA, param);
+<br/>
+      
+<br/>
+      while (size--)
+<br/>
+      {
+<br/>
+         *dest++ = *src | (1 &lt;&lt; 15);
+<br/>
+         src++;
+<br/>
+      }
+<br/>
+   }
+<br/>
+   else
+<br/>
+   {
+<br/>
+      // For everything else, we do a straight copy
+<br/>
+      glTexParameter(sizeX, sizeY, addr, type, param);
+<br/>
+      swiCopy((uint32*)texture, addr , size / 4 | COPY_MODE_WORD);
+<br/>
+   }
+<br/>
+<br/>
+   vramRestoreMainBanks(vramTemp);
+<br/>
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+When using glTexImage2D I could change the ship 31 times before nothing would show (tex size 16384, 512k VRAM, 512000 / 16384 = ~31). Unfortunately the same is happening with this code, meaning that the texture is not getting overwritten but added to VRAM. It's probably a pointer being updated problem, but I'm hungry and out of my coding "phase", so could somebody help?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#136567 - elhobbs - Thu Aug 02, 2007 9:46 pm</h4>
+    <div class="postbody"><span class="postbody">this code does not modify addr - which is were the texture is being loaded into vram. So, I do not think the problem lies in this function. How are you calling this function? Are passing 0x06820000 as the addr(first param)? or are you using a variable that may is being updated/changed somewhere? or perhaps your source texture is being changed to all black after 31 iterations? if you are able to run in an emulator like desmume you use one of the viewers to look at the texture memory as a picture as it runs so you can see what is changing where.
+<br/>
+<br/>
+a couple of suggestions(won't fix your problem but it will improve the function):
+<br/>
+1) do not change all of the banks to LCD. just the one you are writing to. if youa re doing this in the vblank update window move this code out of this function and do all of your texture updates then switch it back
+<br/>
+2) store texture in a suitable format to avoid conversion (GL_RGBA not GL_RGB - or use a palettized format like GL_RGB256)
+<br/>
+3)replace swiCopy with dmaCopy((uint32*)texture, addr , size); this will use dma channel 3 (so dont if you are using it for something else)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#136573 - Rajveer - Thu Aug 02, 2007 10:12 pm</h4>
+    <div class="postbody"><span class="postbody">Cheers for the reply and the suggestions. I'm passing 0x06820000 as the first parameter so each time I call it addr becomes 0x06820000. After 31 iterations, the model just doesn't display, not even with a black texture. Palette space isn't a problem as bank E (64k) can store 125 palettes for 128*128 256 colour textures.
+<br/>
+<br/>
+I'll use the suggestions. On a side note with the dmaCopy point how would I use different channels?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#136580 - elhobbs - Thu Aug 02, 2007 11:22 pm</h4>
+    <div class="postbody"><span class="postbody">use dmaCopyHalfWords(channel,(uint32*)texture, addr , size);  where channel is 0 through 3.
+<br/>
+<br/>
+<br/>
+does the model display correctly after 31 frames with texturing disabled (GFX_TEX_FORMAT=0)?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#136589 - Rajveer - Fri Aug 03, 2007 12:37 am</h4>
+    <div class="postbody"><span class="postbody">Yep, the model displays correctly without a texture. Just in case, I should mention that it's not after 31 frames, but after 31 times the user changes the selected ship and therefore after 31 times the currently selected ship's texture gets loaded.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#136605 - elhobbs - Fri Aug 03, 2007 4:10 am</h4>
+    <div class="postbody"><span class="postbody">well I think your problem lies outside of ObjTexImageSpecificAddress. not sure how to help more without more code or a binary to test.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#136647 - Rajveer - Fri Aug 03, 2007 3:18 pm</h4>
+    <div class="postbody"><span class="postbody">Here's how I'm calling the function. This seems to work too, so I'm not sure where the error is.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">//--------------------------------------------------------------------------------------------------
+<br/>
+void ObjLoadTexture(struct ObjTexture* texture,char* texture_Location, char* texture_Palette_Location, uint32* address)
+<br/>
+//Input texture struct, texture location, palette location, store texture and palette in object's texture variables
+<br/>
+//--------------------------------------------------------------------------------------------------
+<br/>
+{
+<br/>
+   //Before anything, change texture size variables to match libnds
+<br/>
+   int texture_U_Size = 0;
+<br/>
+   int texture_V_Size = 0;
+<br/>
+   --WORKS--
+<br/>
+   
+<br/>
+   //Load Texture into RAM
+<br/>
+   --WORKS--
+<br/>
+   
+<br/>
+   if(address == NULL)
+<br/>
+   {
+<br/>
+      //Generate Texture   
+<br/>
+      glGenTextures(1, &amp;texture-&gt;texture);
+<br/>
+      glBindTexture(0, texture-&gt;texture);
+<br/>
+      glTexImage2D(0, 0, texture-&gt;texture_Format, texture_U_Size, texture_V_Size,
+<br/>
+               0, TEXGEN_TEXCOORD | (texture-&gt;wrap_S &lt;&lt; 16) | (texture-&gt;wrap_T &lt;&lt; 17) | (texture-&gt;flip_S &lt;&lt; 18) |
+<br/>
+                  (texture-&gt;flip_T &lt;&lt; 19), (u8*)mem);
+<br/>
+   }
+<br/>
+   else
+<br/>
+   {
+<br/>
+      //Generate Texture within VRAM Bank B, only during VBLANK
+<br/>
+      glGenTextures(1, &amp;texture-&gt;texture);
+<br/>
+      glBindTexture(0, texture-&gt;texture);
+<br/>
+      while((REG_VCOUNT &lt; 192) || (REG_VCOUNT &gt; 214))
+<br/>
+      {}
+<br/>
+      if((REG_VCOUNT &gt;= 192) &amp;&amp; (REG_VCOUNT &lt;= 214))
+<br/>
+      {
+<br/>
+         ObjTexImageSpecificAddress((uint32*)0x06820000, texture-&gt;texture_Format, texture_U_Size,
+<br/>
+                                 texture_V_Size, TEXGEN_TEXCOORD | (texture-&gt;wrap_S &lt;&lt; 16) | (texture-&gt;wrap_T &lt;&lt; 17)
+<br/>
+                                 | (texture-&gt;flip_S &lt;&lt; 18) | (texture-&gt;flip_T &lt;&lt; 19), (u8*)mem);
+<br/>
+      }
+<br/>
+   }      
+<br/>
+   
+<br/>
+   //Free Texture from RAM
+<br/>
+   --WORKS--   
+<br/>
+   //Load Texture Palette into RAM
+<br/>
+   --WORKS--
+<br/>
+      
+<br/>
+   //Create space for Texture Palette storage in RAM, read into RAM and close filestream
+<br/>
+   --WORKS--
+<br/>
+   
+<br/>
+   //Generate Texture Palette
+<br/>
+   texture-&gt;texture_Palette = gluTexLoadPal((u16*)mem, texture-&gt;texture_Palette_Count, texture-&gt;texture_Format);
+<br/>
+   
+<br/>
+   //Free Texture Palette from RAM
+<br/>
+   --WORKS--
+<br/>
+   
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+And how I'm calling this function:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">ObjLoadTexture(ret-&gt;Model-&gt;Texture,file_Location,file_Location2, (uint32*)0x06820000);</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+On a side note I'm not sure if I'm waiting for REG_VCOUNT efficiently or properly. I'm stuck in a while loop until VCOUNT reaches the correct value, which is fine with me as I don't need to do anything until the texture loads.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#136791 - elhobbs - Sun Aug 05, 2007 9:04 am</h4>
+    <div class="postbody"><span class="postbody">glBindTexture does two things, it set the values stored (by libnds in glTexParameter) into the texture hardware and it sets the active texture(this sets the index into the array of texture objects that libnds is tracking for you).so, in order to use a texture you need to bind it at least two times. once to load it (so libnds can track it for you) and again each time you want to use it (so libnds will update the hardware for you).
+<br/>
+There are a few issue with the way you are implementing this, for instance you will eventually run out textures - you do not need to glGenTextures each time you releoad a texture.
+<br/>
+<br/>
+I recommend a new approach. instead of providing an abolute address to reload a texture at you could pass a flag indicating a reload( you will need to track wether the thing has every loaded yourself). 
+<br/>
+<br/>
+here is a slightly modified version of your code:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void ObjLoadTexture(struct ObjTexture* texture,char* texture_Location, char* texture_Palette_Location, int reload) 
+<br/>
+//Input texture struct, texture location, palette location, store texture and palette in object's texture variables 
+<br/>
+//-------------------------------------------------------------------------------------------------- 
+<br/>
+{ 
+<br/>
+   //Before anything, change texture size variables to match libnds 
+<br/>
+   int texture_U_Size = 0; 
+<br/>
+   int texture_V_Size = 0;
+<br/>
+   uint32* address;
+<br/>
+   --WORKS-- 
+<br/>
+    
+<br/>
+   //Load Texture into RAM 
+<br/>
+   --WORKS-- 
+<br/>
+    
+<br/>
+   if(texture-&gt;loaded == 0 || reload == 0) 
+<br/>
+   { 
+<br/>
+      //Generate Texture    
+<br/>
+      glGenTextures(1, &amp;texture-&gt;texture); 
+<br/>
+      glBindTexture(0, texture-&gt;texture); 
+<br/>
+      glTexImage2D(0, 0, texture-&gt;texture_Format, texture_U_Size, texture_V_Size, 
+<br/>
+               0, TEXGEN_TEXCOORD | (texture-&gt;wrap_S &lt;&lt; 16) | (texture-&gt;wrap_T &lt;&lt; 17) | (texture-&gt;flip_S &lt;&lt; 18) | 
+<br/>
+                  (texture-&gt;flip_T &lt;&lt; 19), (u8*)mem); 
+<br/>
+   } 
+<br/>
+   else 
+<br/>
+   { 
+<br/>
+      //Generate Texture within VRAM Bank B, only during VBLANK 
+<br/>
+      //glGenTextures(1, &amp;texture-&gt;texture); not needed
+<br/>
+      glBindTexture(0, texture-&gt;texture); 
+<br/>
+     address = 0x06800000 + glGetTexturePointer();
+<br/>
+      while((REG_VCOUNT &lt; 192) || (REG_VCOUNT &gt; 214)) 
+<br/>
+      {} 
+<br/>
+      if((REG_VCOUNT &gt;= 192) &amp;&amp; (REG_VCOUNT &lt;= 214)) 
+<br/>
+      { 
+<br/>
+         ObjTexImageSpecificAddress(address, texture-&gt;texture_Format, texture_U_Size, 
+<br/>
+                                 texture_V_Size, TEXGEN_TEXCOORD | (texture-&gt;wrap_S &lt;&lt; 16) | (texture-&gt;wrap_T &lt;&lt; 17) 
+<br/>
+                                 | (texture-&gt;flip_S &lt;&lt; 18) | (texture-&gt;flip_T &lt;&lt; 19), (u8*)mem); 
+<br/>
+      } 
+<br/>
+   }       
+<br/>
+    
+<br/>
+   //Free Texture from RAM 
+<br/>
+   --WORKS--    
+<br/>
+   //Load Texture Palette into RAM 
+<br/>
+   --WORKS-- 
+<br/>
+       
+<br/>
+   //Create space for Texture Palette storage in RAM, read into RAM and close filestream 
+<br/>
+   --WORKS-- 
+<br/>
+    
+<br/>
+   //Generate Texture Palette 
+<br/>
+   texture-&gt;texture_Palette = gluTexLoadPal((u16*)mem, texture-&gt;texture_Palette_Count, texture-&gt;texture_Format); 
+<br/>
+    
+<br/>
+   //Free Texture Palette from RAM 
+<br/>
+   --WORKS-- 
+<br/>
+    
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+keep in mind that the reload will be updating the hardware texture register (as it is reusing the texture address stored by libnds )but an initial load will only update libnds and will require binding to it again with glBindTexture before it is used. also, you are going to have similiar problems with calling gluTexLoadPal each time as it will eventually use all of bank E that libnds will let you use for palettes.
+<br/>
+<br/>
+this all assumes that the reloaded texture is the same size as the original texture.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#137144 - Rajveer - Wed Aug 08, 2007 11:36 am</h4>
+    <div class="postbody"><span class="postbody">Great, cheers for the modifications, I'll be using those. I'll have to create an unload texture function, would I just load a null texture to the address of the one I want to delete (of the same size)?
+<br/>
+<br/>
+Also, I'm looking at palettes now, are palettes handled in a similar way to textures? I can't see a table of stored palette names so how are they tracked by libnds? (Or is it only by the address we pass when using glColorTable)
+<br/>
+<br/>
+One more point, reloading a texture would only be a problem if I load a larger texture in place of a smaller texture right? (The other way round would make the VRAM fragmented but wouldn't overwrite anything) If this is the case I could handle this by only unloading the smaller textures if possible.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#137153 - silent_code - Wed Aug 08, 2007 1:03 pm</h4>
+    <div class="postbody"><span class="postbody">sidenote:
+<br/>
+<br/>
+well, you can still decide how to layout vram. e.g. regular textures could be loaded top down (from the highest adress to the lowest) and special / fixed / persistent / etc. textures could be vice versa. like with a heap and a stack (sort of).
+<br/>
+you'd have to test which of the possible strategies fits best for you, but at least try them out.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#137157 - simonjhall - Wed Aug 08, 2007 1:48 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Rajveer wrote:</b></span></td> </tr> <tr> <td class="quote">One more point, reloading a texture would only be a problem if I load a larger texture in place of a smaller texture right? (The other way round would make the VRAM fragmented but wouldn't overwrite anything) If this is the case I could handle this by only unloading the smaller textures if possible.</td> </tr></table><span class="postbody">Yeah, that's right.
+<br/>
+To combat this problem there are schemes you can use to ensure the minimum fragmentation etc etc, so look them up if you'd like to know.
+<br/>
+What I originally did was, if loading a texture which won't fit into the largest block, keep freeing unused textures until that texture did fit. Really I should have tried freeing textures around the largest block - but as I say there there are different freeing schemes you can use.
+<br/>
+One final thing I tried was defragmenting video memory during idle time, to consolidate all the free blocks. It was quite easy to do, but wasn't really worth losing the processor time for what you gained :-(<br/>_________________<br/><span style="font-weight: bold"><a class="postlink" href="https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&amp;business=simonjhall%40gmail%2ecom&amp;no_shipping=2&amp;no_note=1&amp;tax=0&amp;currency_code=GBP&amp;lc=GB&amp;bn=PP%2dDonationsBF&amp;charset=UTF%2d8" target="_blank">Big thanks to everyone who donated for Quake2</a></span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#137248 - Moby Disk - Thu Aug 09, 2007 2:18 pm</h4>
+    <div class="postbody"><span class="postbody">Thank you sooo much for this topic!  I've been dreading texture management as I go into NDS development.  I think this is something that you should submit for inclusion into libnds.  I know I will use it!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#146835 - melw - Sun Dec 09, 2007 10:36 pm</h4>
+    <div class="postbody"><span class="postbody">Reviving an old topic as I found this while searching for tips... I'm currently working on something that needs dynamic textures, but struggling with the short timeframe between vblank and next frame being rendered. I'd wish to upload a new 16bit 128x128 texture after each frame, but so far the the limit seems to be at copying 128x70 pixels at once. If more is being copied to VRAM at once the upper part of screen starts to flicker / render white instead of intended content.
+<br/>
+<br/>
+I could always split the update on two frames, only uploading 128x64 pixels at time and updating texture only every second frame, but first I'd like to hear if you guys have any clever optimization suggestions.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">// end of frame, uploading the new texture, all textures in VRAM_A
+<br/>
+swiWaitForVBlank();
+<br/>
+glBindTexture(GL_TEXTURE_2D, textureIds[TEXTURE_IMAGE]);
+<br/>
+uint32 vramTemp = VRAM_CR;
+<br/>
+VRAM_A_CR = VRAM_ENABLE | VRAM_A_LCD;
+<br/>
+uint32 *addr = (uint32*)VRAM_A+(curTexture*((128*128)&gt;&gt;1));
+<br/>
+dmaCopy((uint32*)textureBuffer, addr, ((128*128)&lt;&lt;1)); // this is the bottleneck, copying only ((128*70)&lt;&lt;1) works ok
+<br/>
+VRAM_CR = vramTemp;</td> </tr></table><span class="postbody">
+<br/>
+As for why using swiWaitForVBlank() - I'm using as well REG_DISPCAPCNT for dual screen 3d, and doing the REG_VCOUNT comparisons manually result also in flickering/inaccurate screen updates. Moving from swiCopy() to dmaCopy() helped a bit with performance.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#146836 - tepples - Sun Dec 09, 2007 10:53 pm</h4>
+    <div class="postbody"><span class="postbody">Is there a reason that the texture needs to be 16-bit?<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#146852 - melw - Mon Dec 10, 2007 3:39 am</h4>
+    <div class="postbody"><span class="postbody">In this case, I value color precision over everything else. The source images are in true color and while it would be certainly possible to strip colors down to 8 bits and calculate palettes on the fly, that just doesn't seem like a plausible solution.
+<br/>
+<br/>
+If I can't get this working working full-frame I can see two options: <ul><li>Simply update the whole texture every second frame
+<br/>
+</li><li>Only update half of the texture each frame (might work better if there's not much of difference in shapes or movement between the frames).</li></ul></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#146853 - tepples - Mon Dec 10, 2007 3:59 am</h4>
+    <div class="postbody"><span class="postbody">What kind of source images are you talking about, and what kind of model are you mapping them onto? (I'm trying to rule out use of the 2D hardware, whose texture memory is effectively dual ported.)<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#146854 - melw - Mon Dec 10, 2007 4:19 am</h4>
+    <div class="postbody"><span class="postbody">Textures are mapped on 3d models, although mostly to flat surfaces, so 2d hardware isn't going to help much in this case.
+<br/>
+<br/>
+I did some tests with dmaCopying and I got bit closer to the goal by using all the four channels, changing the the line from above:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">dmaCopy((uint32*)textureBuffer, addr, ((128*128)&lt;&lt;1));
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+to
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">uint16 part_size = ((128*128)&gt;&gt;2);
+<br/>
+dmaCopyWordsAsynch(0, textureBuffer, addr, part_size&lt;&lt;1);
+<br/>
+dmaCopyWordsAsynch(1, textureBuffer + part_size,   addr + (part_size&gt;&gt;1),   part_size&lt;&lt;1 );
+<br/>
+dmaCopyWordsAsynch(2, textureBuffer + part_size*2, addr + (part_size&gt;&gt;1)*2, part_size&lt;&lt;1 );
+<br/>
+dmaCopyWords(      3, textureBuffer + part_size*3, addr + (part_size&gt;&gt;1)*3, part_size&lt;&lt;1 );             
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Now I can copy 128x109 worth of the texture to VRAM until the flicker begins... close but still no cigar.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#146856 - zeruda - Mon Dec 10, 2007 6:37 am</h4>
+    <div class="postbody"><span class="postbody">nm</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#146906 - tepples - Tue Dec 11, 2007 3:17 am</h4>
+    <div class="postbody"><span class="postbody">But where does the texture come from?<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#146914 - melw - Tue Dec 11, 2007 7:54 am</h4>
+    <div class="postbody"><span class="postbody">The texture comes from uint16* textureBuffer that's been updated every frame with sweet 16bit RGBA pixels. :) But as I said, generating the texture data isn't the problem, copying it all to VRAM in timely manner is.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#146936 - edwdig - Tue Dec 11, 2007 4:48 pm</h4>
+    <div class="postbody"><span class="postbody">By any chance do you have an extra 128 KB VRAM bank available? You could load your new texture into one bank while the screen is being drawn, then a swap of banks during vblank. Obviously you'd have to load whatever other textures are using the bank into both banks.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

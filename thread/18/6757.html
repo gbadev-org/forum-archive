@@ -1,0 +1,205 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>SWI doing interesting things - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > SWI doing interesting things</h2>
+<div id="posts">
+<div class="post">
+    <h4>#52968 - chishm - Mon Sep 05, 2005 3:43 am</h4>
+    <div class="postbody"><span class="postbody">I was messing around trying to get the ARM9 back into a PassMe startup loop using this code:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">// Return to loop
+<br/>
+*((vu32*)0x027FFE04) = (u32)0xE59FF018;    // ldr pc, 0x027FFE24
+<br/>
+*((vu32*)0x027FFE24) = (u32)0x027FFE04;    // Set ARM9 Loop address
+<br/>
+asm volatile("bx %0" : : "r" (0x027FF000) );</td> </tr></table><span class="postbody">
+<br/>
+However, that didn't work. The ARM9 would return to the loop (I think) but I couldn't break it back out by changing the jump address. Out of frustration I though I would just reset the whole thing, calling:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">asm volatile(".thumb\n  swi 0x00\n");  // Soft reset</td> </tr></table><span class="postbody">
+<br/>
+I thought this would reset the NDS. The weird thing is, it only reset the ARM9, which entered a FlashMe loop. This is just what I wanted.
+<br/>
+For interest, this is the exact code:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">// Return to loop
+<br/>
+*((vu32*)0x027FFE04) = (u32)0xE59FF018;    // ldr pc, 0x027FFE24
+<br/>
+*((vu32*)0x027FFE24) = (u32)0x027FFE04;    // Set ARM9 Loop address
+<br/>
+asm volatile(".thumb\n  swi 0x00\n");  // Soft reset
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#53020 - tepples - Mon Sep 05, 2005 3:14 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>chishm wrote:</b></span></td> </tr> <tr> <td class="quote">I was messing around trying to get the ARM9 back into a PassMe startup loop using this code:
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">// Return to loop
+<br/>
+*((vu32*)0x027FFE04) = (u32)0xE59FF018;    // ldr pc, 0x027FFE24
+<br/>
+*((vu32*)0x027FFE24) = (u32)0x027FFE04;    // Set ARM9 Loop address
+<br/>
+asm volatile("bx %0" : : "r" (0x027FF000) );</td> </tr></table><span class="postbody">
+<br/>
+However, that didn't work. The ARM9 would return to the loop (I think) but I couldn't break it back out by changing the jump address.</span></td> </tr></table><span class="postbody">
+<br/>
+Could it be a cache coherency problem? Did you try setting that memory to be uncacheable?<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#53090 - chishm - Tue Sep 06, 2005 1:06 am</h4>
+    <div class="postbody"><span class="postbody">That's what I thought, but using Darkain's code to clear and disable the cache didn't fix it. I know it did something, because all my other functions (held in cache) disappeared. However, the problem is solved now, in what I think is a much more elegant way.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#145786 - knight0fdragon - Thu Nov 22, 2007 1:25 pm</h4>
+    <div class="postbody"><span class="postbody">ok, could someone please tell me what I am missing, because this is really starting to bug me.
+<br/>
+<br/>
+I am trying to get the arm9 into a passme style loop while the arm7 does its own thing, but the problem I am having is that everything? is resetting, and I just want the arm9 to reset into the passme loop.
+<br/>
+<br/>
+Here is my code
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+int main(void) 
+<br/>
+{
+<br/>
+//---------------------------------------------------------------------------------
+<br/>
+  irqInit();
+<br/>
+  irqEnable(IRQ_VBLANK);
+<br/>
+ 
+<br/>
+  touchPosition touchXY;
+<br/>
+  videoSetMode(MODE_0_2D | DISPLAY_BG0_ACTIVE);   //not using the main screen
+<br/>
+  videoSetModeSub(MODE_5_2D | DISPLAY_BG3_ACTIVE);   //sub bg 0 will be used to print text
+<br/>
+  vramSetBankA(VRAM_A_MAIN_BG);
+<br/>
+  vramSetBankC(VRAM_C_SUB_BG);
+<br/>
+  BG0_CR = BG_MAP_BASE(31);
+<br/>
+  SUB_BG3_CR = BG_BMP16_256x256;
+<br/>
+  SUB_BG3_XDX = 1 &lt;&lt; 8;
+<br/>
+  SUB_BG3_YDY = 1 &lt;&lt; 8;
+<br/>
+  BG_PALETTE[255] = RGB15(31,31,31);   //by default font will be rendered with color 255
+<br/>
+ 
+<br/>
+  //consoleInit() is a lot more flexible but this gets you up and running quick
+<br/>
+  consoleInitDefault((u16*)SCREEN_BASE_BLOCK(31), (u16*)CHAR_BASE_BLOCK(0), 16);
+<br/>
+ 
+<br/>
+  iprintf("\n\n\tHello World!\n");
+<br/>
+  bool vramC = true;
+<br/>
+  while(1) 
+<br/>
+  {
+<br/>
+    scanKeys();
+<br/>
+    int keyPressed = keysDown();
+<br/>
+    if (keyPressed &amp; KEY_A)
+<br/>
+    {
+<br/>
+      vramSetBankC(VRAM_C_ARM7);
+<br/>
+      swiWaitForVBlank();
+<br/>
+      vramSetBankC(VRAM_C_SUB_BG);
+<br/>
+    }
+<br/>
+    if (keyPressed &amp; KEY_B)
+<br/>
+    {
+<br/>
+      iprintf("Now arm9 is in the infinite loop");
+<br/>
+      *((vu32*)0x027FFE04) = (u32)0xE59FF018;    // ldr pc, 0x027FFE24 
+<br/>
+      *((vu32*)0x027FFE24) = (u32)0x027FFE04;    // Set ARM9 Loop address 
+<br/>
+      asm volatile("swi 0x00\n");  // Soft reset 
+<br/>
+      iprintf("Error");
+<br/>
+    }
+<br/>
+    touchXY=touchReadXY();
+<br/>
+    iprintf("\x1b[10;0HTouch x = %04X, %04X\n", touchXY.x, touchXY.px);
+<br/>
+    iprintf("Touch y = %04X, %04X\n", touchXY.y, touchXY.py);
+<br/>
+  }
+<br/>
+  return 0;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody"><br/>_________________<br/><a href="http://www.myspace.com/knight0fdragonds" target="_blank">http://www.myspace.com/knight0fdragonds</a>
+<br/>
+<br/>
+MK DS FC: Dragon 330772 075464 
+<br/>
+AC WW FC: Anthony SamsClub 1933-3433-9458 
+<br/>
+MPFH: Dragon 0215 4231 1206</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#145795 - Lick - Thu Nov 22, 2007 4:11 pm</h4>
+    <div class="postbody"><span class="postbody">Check out the source code of rebootlib?<br/>_________________<br/><a class="postlink" href="http://licklick.wordpress.com" target="_blank">http://licklick.wordpress.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#145796 - knight0fdragon - Thu Nov 22, 2007 4:39 pm</h4>
+    <div class="postbody"><span class="postbody">damn it, I forgot to disable the IRQ, what a waste of 3 hours lol<br/>_________________<br/><a href="http://www.myspace.com/knight0fdragonds" target="_blank">http://www.myspace.com/knight0fdragonds</a>
+<br/>
+<br/>
+MK DS FC: Dragon 330772 075464 
+<br/>
+AC WW FC: Anthony SamsClub 1933-3433-9458 
+<br/>
+MPFH: Dragon 0215 4231 1206</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

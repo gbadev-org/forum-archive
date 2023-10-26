@@ -1,0 +1,245 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Double-buffered audio playback - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Audio > Double-buffered audio playback</h2>
+<div id="posts">
+<div class="post">
+    <h4>#58962 - SittingDuck - Thu Oct 27, 2005 5:07 pm</h4>
+    <div class="postbody"><span class="postbody">What's wrong with this?
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#include "gba.h"
+<br/>
+#include "dispcnt.h"
+<br/>
+#include "interrupt.h"
+<br/>
+#include "core_asm.h"
+<br/>
+<br/>
+void DoVBlank(void);
+<br/>
+<br/>
+extern s8 testTone[];
+<br/>
+s8* pos;
+<br/>
+<br/>
+///// AUDIO BUFFERS /////
+<br/>
+<br/>
+// adjust this to make the sound sound just right!
+<br/>
+#define ABUFSIZE 736
+<br/>
+s8 abuffers[2][ABUFSIZE];
+<br/>
+u32 abuf = 0;
+<br/>
+<br/>
+int main(void){
+<br/>
+  pos = &amp;testTone[0];
+<br/>
+<br/>
+  memcpy32(&amp;abuffers, pos, (ABUFSIZE*2));
+<br/>
+  pos += (ABUFSIZE*2);
+<br/>
+<br/>
+  // set interrupt routine
+<br/>
+  IntrTable[0] = DoVBlank;
+<br/>
+<br/>
+  // enable video mode 4
+<br/>
+  REG_DISPCNT = DCNT_MODE_4 | DCNT_BG2_ENABLE;
+<br/>
+  memset16(MEM_VRAM, 0xFFFF, 240*160);
+<br/>
+  PALETTE256[255] = 0x1F;
+<br/>
+<br/>
+  // initialize interrupt service routine
+<br/>
+  int_init;
+<br/>
+  // enable all interrupts
+<br/>
+  REG_IME = 1;
+<br/>
+  // request VBlank interrupt
+<br/>
+  REG_IE |= INT_VBLANK;
+<br/>
+  REG_DISPSTAT |= DSTAT_INT_V;
+<br/>
+<br/>
+  // set up sound output
+<br/>
+  REG_SOUNDCNT_L = 0;
+<br/>
+  REG_SOUNDCNT_H = SNDCH_VOLUME_3 | SNDCH_A2LEFT | SNDCH_A2RIGHT;
+<br/>
+  REG_SOUNDCNT_X = SNDCX_ON;
+<br/>
+<br/>
+  // set up DMA
+<br/>
+  REG_DMA1SAD = (u32) &amp;abuffers[0];
+<br/>
+  REG_DMA1DAD = (u32) &amp;REG_SGFIFOA;
+<br/>
+  REG_DMA1CNT_L = 0;
+<br/>
+  REG_DMA1CNT_H = DMA_DST_FIXED | DMA_SRC_INC | DMA_REPEAT | DMA_WORD | DMA_START_FIFO | DMA_ENABLE;
+<br/>
+<br/>
+  // set up timer for 44.1kHz
+<br/>
+  REG_TM0CNT_L = 0xFE82;  // is this right?
+<br/>
+  REG_TM0CNT_H = TM_CYCLES_1 | TM_ENABLE;
+<br/>
+<br/>
+  while(1); 
+<br/>
+<br/>
+  return 0;
+<br/>
+}
+<br/>
+<br/>
+void DoVBlank(void){
+<br/>
+  void* buffer;
+<br/>
+  u16 old;
+<br/>
+<br/>
+  // we have to turn the DMA off momentarily for the source address
+<br/>
+  // change to take effect. Store the original settings first and
+<br/>
+  // put them back afterwards.
+<br/>
+<br/>
+  if(abuf == 1){
+<br/>
+    old = REG_DMA1CNT_H;                 // store old DMA settings
+<br/>
+    REG_DMA1CNT_H = 0;                   // stop DMA
+<br/>
+    REG_DMA1SAD = (u32) &amp;abuffers[0];    // set DMA source
+<br/>
+    NOP;
+<br/>
+    REG_DMA1CNT_H = old;                 // start DMA
+<br/>
+    abuf = 0;                 
+<br/>
+    buffer = &amp;abuffers[1];
+<br/>
+  } else {
+<br/>
+    abuf = 1;
+<br/>
+    buffer = &amp;abuffers[0];
+<br/>
+  }
+<br/>
+<br/>
+  memcpy32(buffer, pos, ABUFSIZE);  // refill buffer
+<br/>
+  pos += ABUFSIZE;
+<br/>
+  if(((u32)pos-(u32)&amp;testTone) &gt; 44100) pos = (s8*)&amp;testTone;
+<br/>
+  PALETTE256[255]++;                // debug purposes - shows it's running
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+It works OK apart from clicks and crackles. I took the frequency and the buffer size from the list of perfect buffer sizes at <a class="postlink" href="http://deku.gbadev.org/program/sound1.html" target="_blank">http://deku.gbadev.org/program/sound1.html</a> so I don't see how it's still clicking. The source data, testTone, is 44160 samples long so that it is divisible by the buffer size. I have put a sample of the sound output <a class="postlink" href="http://website.lineone.net/~joshua-phillips/_private/cr_gb_10.wav" target="_blank">here</a>.
+<br/>
+<br/>
+Compiler: DevKitArm
+<br/>
+Emulator: VisualBoyAdvance</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#58979 - SittingDuck - Thu Oct 27, 2005 8:33 pm</h4>
+    <div class="postbody"><span class="postbody">Oh, and here's the binary: <a class="postlink" href="http://website.lineone.net/~joshua-phillips/_private/synth.zip" target="_blank">here</a>.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#58982 - tepples - Thu Oct 27, 2005 8:44 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">  REG_TM0CNT_L = 0xFE82;  // is this right?
+<br/>
+</td> </tr></table><span class="postbody"></span></td> </tr></table><span class="postbody">
+<br/>
+This line sets the playback delay to 382. This number is not a factor of 280896, the number of cycles per vblank. If you're switching buffers in a vblank ISR, then you need to use a compatible rate, such as one computed by <a class="postlink" href="http://www.pineight.com/gba/samplerates/" target="_blank">this program</a>. The closest vblank-friendly sample rate to 44100 Hz is 42048.16 Hz.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#58984 - SittingDuck - Thu Oct 27, 2005 8:59 pm</h4>
+    <div class="postbody"><span class="postbody">It's still doing the same thing, but at a lower pitch. :-(. But I think I did it wrong again. I'll keep on trying...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#58985 - DekuTree64 - Thu Oct 27, 2005 9:15 pm</h4>
+    <div class="postbody"><span class="postbody">Huh, yeah, it looks like that last sample rate in my list doesn't work after all. Sorry about that, I'll remove it from the list. 
+<br/>
+<br/>
+The one above it, 42048Hz with a buffer size of 704 samples, should work. The timer value would be 0xFE71, which is 65536 - 16777216 / 42048.16.
+<br/>
+<br/>
+Also, you said the sample's length was 44160, which is indeed a multiple of your old buffer size and would work, but this line:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">  if(((u32)pos-(u32)&amp;testTone) &gt; 44100) pos = (s8*)&amp;testTone;</td> </tr></table><span class="postbody">
+<br/>
+isn't checking against that number. Plus it should be doing &gt;= instead of just &gt;, since after copying the last chunk, the counter would be exactly equal to the length, so it wouldn't reset, and would read off the end of the sample next time. 
+<br/>
+<br/>
+But then using the new buffer size of 704 samples, 44160 won't line up anymore... Looks like the closest integer multiples of 704 are 43648 and 44352.
+<br/>
+<br/>
+Hope that helps :)<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#59033 - SittingDuck - Fri Oct 28, 2005 7:51 am</h4>
+    <div class="postbody"><span class="postbody">Thanks very much. :-D</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#59034 - SittingDuck - Fri Oct 28, 2005 8:11 am</h4>
+    <div class="postbody"><span class="postbody">IT WORKS! I could kiss you! OK, I won't go that far.
+<br/>
+<br/>
+^_^</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

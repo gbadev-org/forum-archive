@@ -1,0 +1,247 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Curse you, DMA - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Audio > Curse you, DMA</h2>
+<div id="posts">
+<div class="post">
+    <h4>#13137 - poslundc - Sat Dec 06, 2003 2:46 am</h4>
+    <div class="postbody"><span class="postbody">At DekuTree64's suggestion, I tried converting my sound player so that instead of using an interrupt every on a 16 KHz cycle I would use DMA1 instead.
+<br/>
+<br/>
+The trouble is that DMA1 sits there glaring at me and does absolutely nothing. I have checked a dozen other demos and as far as I can tell I am doing exactly the same thing they are doing. I have checked the memory map and the DMA1 source, destination and control registers all have the correct values, and my EWRAM buffer has data in it. My timers and interrupts are working (this program works when I switch it back to a timer-based system).
+<br/>
+<br/>
+This has me absolutely stumped. I don't know what I could possibly be doing wrong; the DMA just won't seem to activate.
+<br/>
+<br/>
+Here's the code, with some pseudocode for brevity's sake:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">char         *sndBuffA = (char *)EWRAM;
+<br/>
+char         *sndBuffB = (char *)(EWRAM + 256);
+<br/>
+char         *buffActive;
+<br/>
+<br/>
+void IntTIMER1(void)
+<br/>
+{
+<br/>
+   unsigned short   i;
+<br/>
+   char         *buff;
+<br/>
+   
+<br/>
+   i = 256;
+<br/>
+   
+<br/>
+   buff = buffActive;
+<br/>
+   buffActive = (buffActive == sndBuffA) ? sndBuffB : sndBuffA;
+<br/>
+   REG_DMA1SAD = (unsigned int)buffActive;
+<br/>
+<br/>
+   if (channels[0].sampleClock)      // just dump in channel 0 for now
+<br/>
+      while (i--)
+<br/>
+         // dump values into buffer
+<br/>
+<br/>
+   REG_IF = INT_TIMER1;
+<br/>
+}
+<br/>
+<br/>
+void AgbMain(void)
+<br/>
+{
+<br/>
+   REG_SOUNDCNT_H = 0x0B0F;
+<br/>
+   REG_SOUNDCNT_X = 0x0080;
+<br/>
+<br/>
+   InitInterrupts();
+<br/>
+   PlaySample(0, (ModSample *)(&amp;(testMod[4])), n);
+<br/>
+<br/>
+   buffActive = sndBuffA;   
+<br/>
+   REG_DMA1SAD = (unsigned int)buffActive;      // Source: sound buffer
+<br/>
+   REG_DMA1DAD = 0x040000A0;      // Dest: sound FIFO
+<br/>
+   REG_DMA1CNT_H = 0xB600;
+<br/>
+   
+<br/>
+   REG_TM0CNT_L = 0xFBFF;         // Activate sound chip 16384 times/second
+<br/>
+   REG_TM1CNT_L = 0xFEFF;         // Refill buffer every 256 bytes that go through
+<br/>
+<br/>
+   REG_TM1CNT_H = 0x00C4;         // Enable with IRQ and cascade from Timer 0
+<br/>
+   REG_TM0CNT_H = 0x0080;         // Interrupt at 16384 Hz
+<br/>
+<br/>
+   while(1);
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+It's so bloody straightforward I can't figure out what could possibly be wrong with it. Like I said, it works fine with the timers, the memory map displays the correct values for the DMA registers (although the source never increments), and there is data in the buffer.
+<br/>
+<br/>
+Anyone feel up to fielding this one?
+<br/>
+<br/>
+Thanks,
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#13140 - DekuTree64 - Sat Dec 06, 2003 3:41 am</h4>
+    <div class="postbody"><span class="postbody">You need to set the dest fixed bit in DM1CNT, otherwise it will increment each time and be writing sound data to all sorts of registers. 
+<br/>
+So instead of 0xb600, set it to 0xb640.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#13141 - poslundc - Sat Dec 06, 2003 4:03 am</h4>
+    <div class="postbody"><span class="postbody">Already tried that in my myriad of experiments... no such luck.
+<br/>
+<br/>
+Any other ideas?
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#13144 - tepples - Sat Dec 06, 2003 4:26 am</h4>
+    <div class="postbody"><span class="postbody">Most obvious problem that I saw is that you have to turn <span style="font-style: italic">off</span> a DMA channel before you can write a new source address.
+<br/>
+<br/>
+An excerpt of tested code from my music engine follows:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">struct DMACHN
+<br/>
+{
+<br/>
+  const void *src;
+<br/>
+  void *dst;
+<br/>
+  u16 count;
+<br/>
+  u16 control;
+<br/>
+};
+<br/>
+<br/>
+#define DMA ((volatile struct DMACHN *)0x040000b0)
+<br/>
+#define DMA_DSTUNCH     0x0040
+<br/>
+#define DMA_SRCINC      0x0000
+<br/>
+#define DMA_REPEAT      0x0200
+<br/>
+#define DMA_U32         0x0400
+<br/>
+#define DMA_SPECIAL     0xB000
+<br/>
+<br/>
+static void dsound_switch_buffers(const void *src)
+<br/>
+{
+<br/>
+  DMA[1].control = 0;
+<br/>
+<br/>
+  /* no-op to let DMA registers catch up */
+<br/>
+  asm volatile ("eor r0, r0; eor r0, r0" ::: "r0");
+<br/>
+<br/>
+  DMA[1].src = src;
+<br/>
+  DMA[1].dst = (void *)0x040000a0; /* write to FIFO A address */
+<br/>
+  DMA[1].count = 1;
+<br/>
+  DMA[1].control = DMA_DSTUNCH | DMA_SRCINC | DMA_REPEAT | DMA_U32 | DMA_SPECIAL;
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+The dsound_switch_buffers() function starts DMA at a given address.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#13145 - poslundc - Sat Dec 06, 2003 4:57 am</h4>
+    <div class="postbody"><span class="postbody">Tepples, you are the freaking patron saint of the GBA or something.
+<br/>
+<br/>
+I was already turning the DMA control off and then on again in my tests, but I wasn't allowing the extra cycles for the "off" command to get written to memory.
+<br/>
+<br/>
+Bah! No one else's sample code seems to need even to shut DMA off before writing a new start address, let alone allow for latency. How annoying.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#13157 - tepples - Sat Dec 06, 2003 4:13 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>poslundc wrote:</b></span></td> </tr> <tr> <td class="quote">No one else's sample code seems to need even to shut DMA off before writing a new start address, let alone allow for latency.</td> </tr></table><span class="postbody">
+<br/>
+Perhaps others' sample code is designed to work only in older emulators, written before VisualBoyAdvance became as accurate as it is now by people who don't own an MBV2 cable. This was a big problem on the NES-scene when NESticle was the best thing out there; the increases in accuracy that came with LoopyNES and then FCE Ultra have improved the quality of more recent NES homebrew software with the hardware.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#13210 - SmileyDude - Mon Dec 08, 2003 6:19 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote">Perhaps others' sample code is designed to work only in older emulators, written before VisualBoyAdvance became as accurate as it is now by people who don't own an MBV2 cable.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+This one definetly caught me when I was working on my mixer earlier this year -- VBA under Linux would work fine, but when I tried it on the GBA it wouldn't work at all.
+<br/>
+<br/>
+General rule of thumb for me is that when I work with hardware specific code (like sound mixing or graphics code), I test on hardware more often.  Otherwise, if I'm working on something like game logic, or tweaking some graphics, I can test on hardware when I reach certain milestones.<br/>_________________<br/>dennis</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

@@ -1,0 +1,384 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Proper way to use Vblank Interrupt - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > Proper way to use Vblank Interrupt</h2>
+<div id="posts">
+<div class="post">
+    <h4>#11841 - Tinyn - Tue Oct 21, 2003 7:27 am</h4>
+    <div class="postbody"><span class="postbody">So, I don't want to just do while(VCOUNT != 160), cause thats lame. But I can't seem to figure out how Im supposed to use the interrupt.
+<br/>
+<br/>
+Do I...
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+<br/>
+int main(void){
+<br/>
+// Stuff
+<br/>
+<br/>
+  SWI_VBlankInterWait();
+<br/>
+}
+<br/>
+<br/>
+InterruptHandler() {
+<br/>
+  if(IF &amp; VB_INTER)
+<br/>
+   // Do real stuff
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+And evrything important is done by the Interrupt Handler (or functions it calls)
+<br/>
+<br/>
+Or...
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+void main(void) {
+<br/>
+// stuff
+<br/>
+  while(1) {
+<br/>
+    SWI_VBlankInterWait();
+<br/>
+    // Do real stuff
+<br/>
+  }
+<br/>
+}
+<br/>
+<br/>
+void InterruptHandler() {
+<br/>
+ // Do not much, cause just noticing that the interrupt happened and returning
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+The first puts junk in the InterruptHandler that feels wrong, but the second doesn't like its going to work that way, it won't return back to immediatly after the SWI function. I really don't see how this thing works.
+<br/>
+<br/>
+<br/>
+PS: Why, why is my compiled C/C++ including a "b  #07000160" in its ASM? 07000160 is a very very silly place to jump to...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#11843 - Gopher - Tue Oct 21, 2003 9:57 am</h4>
+    <div class="postbody"><span class="postbody">I have a flexable module I use for handling interrupts that lets me assign seperate functions to each interrupt. Here's what I use...
+<br/>
+<br/>
+ggbaInterrupt.h
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#ifndef  GGBAInterrupt_H
+<br/>
+#define GGBAInterrupt_H
+<br/>
+<br/>
+#include "GGBA.h"
+<br/>
+<br/>
+#define gbaEnableInterrupt(wInterrupt) REG_IE |= (wInterrupt);
+<br/>
+<br/>
+#define gbaDisableInterrupt(wInterrupt) REG_IE &amp;=~(wInterrupt);
+<br/>
+<br/>
+#define gbaEnableMasterInterrupt REG_IME = 1;
+<br/>
+#define gbaDisableMasterInterrupt REG_IME = 0;
+<br/>
+<br/>
+inline void gbaEnableInterruptHandler();
+<br/>
+<br/>
+<br/>
+inline void gbaSetInterruptHandler(
+<br/>
+      hword wInterrupt, 
+<br/>
+      gbaInterruptFunc* pFunc);
+<br/>
+<br/>
+<br/>
+<br/>
+<br/>
+#endif
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+ggbaInterrupt.c
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#include "GGBAInterrupt.h"
+<br/>
+#include "GGBAGfx.h"
+<br/>
+<br/>
+static gbaInterruptFunc *sg_InterruptTable[14]={0,};
+<br/>
+<br/>
+inline hword IntFlagToIndex(hword wFlag)
+<br/>
+{
+<br/>
+  hword index=0;
+<br/>
+<br/>
+  if (0==wFlag)
+<br/>
+    return 0xffff;
+<br/>
+<br/>
+  while (0==(wFlag&amp;1))
+<br/>
+  {
+<br/>
+    index++;
+<br/>
+    wFlag&gt;&gt;=1;
+<br/>
+  }
+<br/>
+  return index;
+<br/>
+}
+<br/>
+<br/>
+<br/>
+void InterruptHandler(void)
+<br/>
+{
+<br/>
+  hword index=0;
+<br/>
+  
+<br/>
+  while (REG_IF)
+<br/>
+  {
+<br/>
+    index IntFlagToIndex(REG_IF);
+<br/>
+  
+<br/>
+    if (index!=0xffff &amp;&amp; sg_InterruptTable[index])
+<br/>
+        sg_InterruptTable[index]();  
+<br/>
+<br/>
+    REG_IF|=wflag;
+<br/>
+  }
+<br/>
+<br/>
+}   
+<br/>
+<br/>
+<br/>
+inline void gbaEnableInterruptHandler() 
+<br/>
+{
+<br/>
+  *GBA_INT_FUNC_PTR=&amp;InterruptHandler;
+<br/>
+}
+<br/>
+<br/>
+<br/>
+<br/>
+inline void gbaSetInterruptHandler(
+<br/>
+      hword wInterrupt, 
+<br/>
+      gbaInterruptFunc* pFunc)
+<br/>
+{
+<br/>
+ 
+<br/>
+<br/>
+  hword index=IntFlagToIndex(wInterrupt);
+<br/>
+  if (index!=0xffff)
+<br/>
+    sg_InterruptTable[index]=pFunc;
+<br/>
+<br/>
+}
+<br/>
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Not the most efficient approach, but very flexable and works well for rapid prototyping. If the speed becomes an issue, I can always optimize by implementing app-specific handlers once if it becomes an issue.
+<br/>
+<br/>
+I'm not sure exactly how the interrupt handler sends interrupt events, so to be on the safe side at present I have it handling the case of multiple interrupt flags being set at once. Anyone know if this can actually happen, or does it always send the flags one at a time on seperate calls to the interrupt handler? And while I'm asking questions, will interrupts interrupt eachother, or do they queue up internally and come out one-at-a-time?
+<br/>
+[/url]<br/>_________________<br/>"Only two things are infinite: the universe, and human stupidity. The first is debatable." -Albert Einstein</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12192 - dushan42 - Mon Nov 03, 2003 2:49 pm</h4>
+    <div class="postbody"><span class="postbody">I'm new to GBA development, so I'd also like to know what's the usual VBLANK practice.
+<br/>
+<br/>
+Tinyn, I'd avoid the first option - keep your interrupt handlers short.
+<br/>
+In my project, I've gone for the following solution:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">int gLastFrameCount=1;
+<br/>
+int gFrameCount=0;
+<br/>
+bool gProcessingFrame = true;
+<br/>
+<br/>
+void main()
+<br/>
+{
+<br/>
+   while(1)
+<br/>
+   {
+<br/>
+      processFrame(); // (update gamestate, draw into offscreen buffers)
+<br/>
+      gProcessingFrame = false;
+<br/>
+      while(!gProcessingFrame); // Wait for the next frame
+<br/>
+   }
+<br/>
+}
+<br/>
+<br/>
+void VBlankHandler()
+<br/>
+{
+<br/>
+   gFrameCount++;
+<br/>
+   if (gProcessingFrame)
+<br/>
+      return; // prcessFrame() hasn't finished yet - we've missed this frame...
+<br/>
+   
+<br/>
+   processVBlank(); // launch DMA transfers from offscreen buffers into VRAM
+<br/>
+   gLastFrameCount = gFrameCount; // useful for framerate independence / FPS display
+<br/>
+   gFrameCount = 0;
+<br/>
+   gProcessingFrame = true; // kick off processing of the next frame
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+To prevent nasty tearing effects, I only write to VRAM and/or graphics control registers in the processVBlank() function. Make sure that it doesn't overrun the VBLANK period. 
+<br/>
+I use mode 0 and simply DMA precalculated EWRAM buffer into VRAM - not the most efficient approach, but it keeps things very simple.
+<br/>
+<br/>
+I'd be interested in seeing alternative solutions.
+<br/>
+<br/>
+<br/>
+dushan42</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12202 - sajiimori - Mon Nov 03, 2003 7:57 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+bool gProcessingFrame = true;
+<br/>
+...
+<br/>
+      gProcessingFrame = false; 
+<br/>
+      while(!gProcessingFrame); // Wait for the next frame
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Careful, that variable needs to be declared volatile or you could get lockups.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12203 - dushan42 - Mon Nov 03, 2003 8:46 pm</h4>
+    <div class="postbody"><span class="postbody">Good point! 
+<br/>
+<br/>
+I was at work so I was typing that of the top of my head - treat it as pseudocode! :)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12221 - Drago - Tue Nov 04, 2003 9:36 am</h4>
+    <div class="postbody"><span class="postbody">This method lets you save batteries while waiting:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+while(true)
+<br/>
+{
+<br/>
+    // Read keys, chk collision, move entities...
+<br/>
+    updateGame();
+<br/>
+<br/>
+    // Switch the CPU into low-power mode until VBlank occurs
+<br/>
+    VBlankIntrWait();
+<br/>
+<br/>
+    // Dump to VRAM
+<br/>
+    drawFrame();
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Note that you must acknowledge the wait by OR'ing the bit 0 (VBLANK) to [3007FF8h]. A good place to do that is inside the VBLANK handler.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#12223 - dushan42 - Tue Nov 04, 2003 1:48 pm</h4>
+    <div class="postbody"><span class="postbody">Thanks for the tip - I wasn't quite sure before what was the advantage of using SWI to  sync with VBLANK..
+<br/>
+<br/>
+I also forgot to mention that I have to wait for my DMA transfer to finish before I start drawing into the off-screen buffer again.. I guess I should replace that loop with IntrWait (SWI 4).
+<br/>
+<br/>
+edit: ehm, it appears that DMA transfers halt the CPU (?!??) so there's no need to explicitly wait for them to finish.. that makes things a bit easier :)</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

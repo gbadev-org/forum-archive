@@ -1,0 +1,186 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Strange error... (inline asm) - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>ASM > Strange error... (inline asm)</h2>
+<div id="posts">
+<div class="post">
+    <h4>#7568 - Arek the Absolute - Fri Jun 20, 2003 2:32 am</h4>
+    <div class="postbody"><span class="postbody">Let me first off confess that I barely know any assembly, and that this question is actually for a C++ program, but it uses inline assembly, and that's what's causing my problem, so it seemed most fitting here. I'm using source for multiboot programs that I got from a site Tepples was so kind as to point me to. <a class="postlink" href="http://downtou.cjb.net/" target="_blank">(here)</a> and for a while it suited me just fine, so I've never really tampered with it. However, now I've noticed that sometimes I get an error from G++'s assembler that reads "/cygdrive/c/WINDOWS/TEMP/cciz3X2B.s: Assembler messages:
+<br/>
+/cygdrive/c/WINDOWS/TEMP/cciz3X2B.s:16092: Error: invalid literal constant: pool needs to be closer"
+<br/>
+<br/>
+The assembly code it's pointing at is contained in this:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+void SendROM()
+<br/>
+{
+<br/>
+   u8 palette;
+<br/>
+   u8 debug = 1;
+<br/>
+   u16 i;
+<br/>
+   u16 key;
+<br/>
+   u32 length;
+<br/>
+<br/>
+   mp.cb = 2;
+<br/>
+   mp.pc = 0xd1;
+<br/>
+   mp.startp = (u8 *)&amp;multiboot [0xc0];
+<br/>
+   length = sizeof(multiboot) - 0xc0;
+<br/>
+   length = (length + 15) &amp; ~15; // 16 byte units
+<br/>
+   if (length &lt; 0x1c0) length = 0x1c0;
+<br/>
+   mp.endp = (u8 *)&amp;multiboot [0xc0] + length;
+<br/>
+<br/>
+   palette = 0xc1;
+<br/>
+   mp.palette = palette;
+<br/>
+<br/>
+   i = xfer(0x6300+palette);
+<br/>
+   i = xfer(0x6300+palette);
+<br/>
+<br/>
+   mp.cd[0] = i;
+<br/>
+   mp.cd[1] = 0xff;
+<br/>
+   mp.cd[2] = 0xff;
+<br/>
+<br/>
+   key = (0x11 + (i &amp; 0xff) + 0xff + 0xff) &amp; 0xff;
+<br/>
+   mp.hs_data = key;
+<br/>
+<br/>
+   i = xfer(0x6400 | (key &amp; 0xff));
+<br/>
+<br/>
+   // Execute BIOS routine to transfer client binary to slave unit
+<br/>
+   asm volatile (
+<br/>
+      " ldr r0,=mp\n" // &lt;- i suspect it's this line causing the problem
+<br/>
+      " mov r1,#1\n"
+<br/>
+      " swi 0x250000\n"       //NOTE!!!!! Use 0x250000 for ARM C Compiler mode.
+<br/>
+      :  // Outputs       // 0x25 here will only work for Thumb mode.
+<br/>
+      :  // Inputs
+<br/>
+      : "r0","r1","r2","r8","r9","r10","r11","r12"     // Regs crushed &amp; smushed
+<br/>
+      );
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+The problem is, not being that familiar with assembly, I have no idea what that error means. Worse yet, it seems to pop up at very odd moments. Here's an example from my main function:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+   REG_DISPCNT = 0x1442; // screenmode = mode 2, sprites enabled
+<br/>
+                         // bg2 enabled, 1d object mapping
+<br/>
+<br/>
+   game.InitPlayers(); // just initializes sprites
+<br/>
+<br/>
+   // DMA copy in the image and palette data for the sprite
+<br/>
+DMA_Copy(3,(void*)imagedataPalette,(void*)OBJPaletteMem,128,0x84000000);
+<br/>
+   DMA_Copy(3,(void*)imagedata_image,(void*)OAMData,256,0x84000000);
+<br/>
+<br/>
+   REG_BG2CNT = 0x5983;
+<br/>
+<br/>
+   // DMA copy in the image and palette data for the tiles
+<br/>
+   BGPaletteMem[0] = 0xBBBB;
+<br/>
+<br/>
+   // set REG_RCNT bits E-F to determine transfer mode?
+<br/>
+   Text("Waiting for connection",30,100); // prints to the screen using sprites
+<br/>
+<br/>
+       .... etc...
+<br/>
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I stop there because I've noticed that if I comment out that last line of code, the one that prints to the screen using sprites, I get that error from the assembler. If I don't comment it out, I don't get the error. I can post source for the Text function if necessary, but it's somewhat lengthy and I figured it's probably enough to say that it doesn't use anything related to the multiboot stuff. All it uses is a constant image array containing image data for the sprites, and DMA copies to put the image data where it belongs. Simply put, I have no idea why it's causing any problem, or rather, why it's solving any problems by being there.
+<br/>
+<br/>
+Any suggestions? Can anyone maybe clue me in as to what that error means, at least? I can't seem to make any sense out of this problem, much less solve it.<br/>_________________<br/>-Arek the Absolute</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7569 - tepples - Fri Jun 20, 2003 3:18 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Arek the Absolute wrote:</b></span></td> </tr> <tr> <td class="quote">I'm using source for multiboot programs that I got from a site Tepples was so kind as to point me to. <a class="postlink" href="http://downtou.cjb.net/" target="_blank">(here)</a></td> </tr></table><span class="postbody">
+<br/>
+Which I have recently got to work.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">However, now I've noticed that sometimes I get an error from G++'s assembler that reads "/cygdrive/c/WINDOWS/TEMP/cciz3X2B.s: Assembler messages:
+<br/>
+/cygdrive/c/WINDOWS/TEMP/cciz3X2B.s:16092: Error: invalid literal constant: pool needs to be closer"</td> </tr></table><span class="postbody">
+<br/>
+In general, "pool needs to be closer" means that a function is too big. In the ARM architecture, large constants are stored in data blocks called "pools" placed between functions. A pool has to be close enough for PC-relative addressing to reach it. To force a pool to be added within arm's reach (pun intended), try putting SendROM() and the other multiboot.c functions in a file by itself, compiling it to a .o file, and including it in your link command line.
+<br/>
+<br/>
+DON'T:
+<br/>
+Add other C files to your main.c by #include "foo.c".
+<br/>
+<br/>
+DO:
+<br/>
+Add other C files by compiling them separately (gcc {options} -c foo.c -o foo.o) and link them together (gcc {options} a.o b.o c.o d.o -o game.elf).<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#7608 - Arek the Absolute - Fri Jun 20, 2003 10:51 pm</h4>
+    <div class="postbody"><span class="postbody">And once again you've done me quite the favor by explaining that. Thanks a lot!<br/>_________________<br/>-Arek the Absolute</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

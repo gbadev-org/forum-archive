@@ -1,0 +1,248 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Extra calls to memcpy - how do I get rid of these? - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Extra calls to memcpy - how do I get rid of these?</h2>
+<div id="posts">
+<div class="post">
+    <h4>#134801 - simonjhall - Tue Jul 17, 2007 12:08 am</h4>
+    <div class="postbody"><span class="postbody">Me again ;-)
+<br/>
+So I've replaced as many strbs and all the funny variants of strb from my code, removed all the memcpys, memsets, strcpys, strncpys etc etc...but I'm still getting dodgy results.
+<br/>
+<br/>
+My problems begin on one function which has no strbs, yet runs fine from normal memory. Here's the guts of the function (I have cut a lot away to replicate this funny condition btw):
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void Mod_LoadPlanes (lump_t *l)
+<br/>
+{
+<br/>
+   int         i, j;
+<br/>
+   mplane_t   *out;
+<br/>
+   dplane_t    *in;
+<br/>
+   int         count;
+<br/>
+   int         bits;
+<br/>
+<br/>
+   for ( i=0 ; i&lt;count ; i++)
+<br/>
+   {
+<br/>
+      for (j=0 ; j&lt;3 ; j++)
+<br/>
+      {
+<br/>
+         out-&gt;normal[j] = LittleFloat (in-&gt;normal[j]);
+<br/>
+      }
+<br/>
+<br/>
+   }
+<br/>
+}</td> </tr></table><span class="postbody">Again, it doesn't function correctly, but this code here will still generate weirdness.
+<br/>
+The prototype for LittleFloat is
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">extern   float   (*LittleFloat) (float l);</td> </tr></table><span class="postbody">ie, it's a function pointer so gets called through bx to a register.
+<br/>
+Normal is of type fixed_point, and there's operator overloading which converts from one to the other. The fixed_point type is four bytes in size.
+<br/>
+<br/>
+Yet the disassembly looks like this:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void Mod_LoadPlanes (lump_t *l)
+<br/>
+201bbb4:       e92d4070        stmdb   sp!, {r4, r5, r6, lr}
+<br/>
+201bbb8:       e3a06000        mov     r6, #0  ; 0x0
+<br/>
+201bbbc:       e24dd008        sub     sp, sp, #8      ; 0x8
+<br/>
+201bbc0:       ea000013        b       201bc14 &lt;_Z14Mod_LoadPlanesP6lump_t+0x60&gt;
+<br/>
+201bbc4:       e3a05000        mov     r5, #0  ; 0x0
+<br/>
+201bbc8:       e7950004        ldr     r0, [r5, r4]
+<br/>
+201bbcc:       e59f3054        ldr     r3, [pc, #84]   ; 201bc28 &lt;.text+0x1b9e8&gt;
+<br/>
+201bbd0:       e593c000        ldr     ip, [r3]
+<br/>
+201bbd4:       e1a0e00f        mov     lr, pc
+<br/>
+201bbd8:       e12fff1c        bx      ip
+<br/>
+201bbdc:       e28d4004        add     r4, sp, #4      ; 0x4
+<br/>
+201bbe0:       e1a01000        mov     r1, r0
+<br/>
+201bbe4:       e59f3040        ldr     r3, [pc, #64]   ; 201bc2c &lt;.text+0x1b9ec&gt;
+<br/>
+201bbe8:       e1a00004        mov     r0, r4
+<br/>
+201bbec:       e1a0e00f        mov     lr, pc
+<br/>
+201bbf0:       e12fff13        bx      r3
+<br/>
+201bbf4:       e0850004        add     r0, r5, r4
+<br/>
+201bbf8:       e1a01004        mov     r1, r4
+<br/>
+201bbfc:       e2855004        add     r5, r5, #4      ; 0x4
+<br/>
+201bc00:       e3a02004        mov     r2, #4  ; 0x4
+<br/>
+201bc04:       eb012e41        bl      2067510 &lt;memcpy&gt;  &lt;---- memcpy for four bytes!
+<br/>
+201bc08:       e355000c        cmp     r5, #12 ; 0xc
+<br/>
+201bc0c:       1affffed        bne     201bbc8 &lt;_Z14Mod_LoadPlanesP6lump_t+0x14&gt;
+<br/>
+201bc10:       e2866001        add     r6, r6, #1      ; 0x1
+<br/>
+201bc14:       e1560004        cmp     r6, r4
+<br/>
+201bc18:       baffffe9        blt     201bbc4 &lt;_Z14Mod_LoadPlanesP6lump_t+0x10&gt;
+<br/>
+201bc1c:       e28dd008        add     sp, sp, #8      ; 0x8
+<br/>
+201bc20:       e8bd4070        ldmia   sp!, {r4, r5, r6, lr}
+<br/>
+201bc24:       e12fff1e        bx      lr
+<br/>
+201bc28:       020ac70c        andeq   ip, sl, #3145728        ; 0x300000
+<br/>
+201bc2c:       02076114        andeq   r6, r7, #5      ; 0x5</td> </tr></table><span class="postbody">
+<br/>
+Using a bit of objdump and nm tells me that 20ac70c is the function pointer LittleFloat, so the ldr followed by the bx (at 201bbd0) does the call to LittleFloat.
+<br/>
+2076114 (the target of the second bx) is the function which promotes float types to my fixed_point class (size 4 bytes). This fixed_point class is then stored in normal[j] (normal is of type *fixed_point).
+<br/>
+<br/>
+So (if that made any sense)...what's with the four-byte memcpy? This is the code generated with -Os - I don't get the memcpy if I compile it without the option.
+<br/>
+<br/>
+I wouldn't normally care about these memcpys too much, but they are breaking my slot-2 shenanigans.
+<br/>
+<br/>
+So to reiterate:
+<br/>
+- how do I get rid of four-byte memcpys? The whole point of me of doing the floating/fixed point stuff was to make it fast - extra code ain't gonna help
+<br/>
+- if I can't get rid of the memcpy, how can I tell it to use a different (ie my) memcpy? I could replace the first instruction of memcpy with a branch to my memcpy, by that's a bit hacky.
+<br/>
+<br/>
+Ta all.
+<br/>
+<br/>
+PS: if there are mistakes, it's cos I'm tired!<br/>_________________<br/><span style="font-weight: bold"><a class="postlink" href="https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&amp;business=simonjhall%40gmail%2ecom&amp;no_shipping=2&amp;no_note=1&amp;tax=0&amp;currency_code=GBP&amp;lc=GB&amp;bn=PP%2dDonationsBF&amp;charset=UTF%2d8" target="_blank">Big thanks to everyone who donated for Quake2</a></span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#134803 - kusma - Tue Jul 17, 2007 12:38 am</h4>
+    <div class="postbody"><span class="postbody">Weird. I've tried to replicate the issue based on what you're reporting here, and I can't get it to generate a memcpy. Could you give the complete set of build-flags?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#134804 - PeterM - Tue Jul 17, 2007 12:54 am</h4>
+    <div class="postbody"><span class="postbody">Since the DS is little endian and the code is probably quite far from being portable now, would it help to rip out all the LittleX function pointers and replace them with dummy inline functions or macros?<br/>_________________<br/><a href="http://aaiiee.wordpress.com/" target="_blank">http://aaiiee.wordpress.com/</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#134838 - elhobbs - Tue Jul 17, 2007 2:42 pm</h4>
+    <div class="postbody"><span class="postbody">do you need to override the assigment operator for your fixed point class(operator=) ?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#134877 - simonjhall - Tue Jul 17, 2007 10:12 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>kusma wrote:</b></span></td> </tr> <tr> <td class="quote">Weird. I've tried to replicate the issue based on what you're reporting here, and I can't get it to generate a memcpy. Could you give the complete set of build-flags?</td> </tr></table><span class="postbody">I can't seem to find a similar problem in older builds (in that function, it may just happen elsewhere). In this build the float-&gt;fixed overloading is bx'ed, then memcpy'd. In older builds the float-&gt;fixed is inlined and no memcpy is used.
+<br/>
+This happens regardless of doing it in thumb or arm...
+<br/>
+<br/>
+The build line I'm using is pretty much what's in the makefile you have.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">-Dstricmp=strcasecmp -I "c:/devkitPro/libnds/include" -I "c:/devkitPro/libnds/include/nds" -DARM9 -mthumb-interwork -fno-rtti -fno-exceptions -g -Os -mtune=arm9</td> </tr></table><span class="postbody">
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">do you need to override the assigment operator for your fixed point class(operator=) ?</td> </tr></table><span class="postbody">Maybe..I'll have a go...
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">would it help to rip out all the LittleX function pointers</td> </tr></table><span class="postbody">Probably - but the thing I'm worried about is, if it can happen here, where else is it happening?
+<br/>
+<br/>
+Hmm ;-)
+<br/>
+<br/>
+EDIT: kusma, it happens in just three other places (bar model loading) - check out r_alias.c, line 413 (fixed point -&gt; fixed point store), r_aclip.c, line 266 (float -&gt; float store) and line 253 (float-&gt;float). Obv the source may have changed a little bit but just objdump the functions those line numbers lie in and search for bls to memcpy :-)<br/>_________________<br/><span style="font-weight: bold"><a class="postlink" href="https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&amp;business=simonjhall%40gmail%2ecom&amp;no_shipping=2&amp;no_note=1&amp;tax=0&amp;currency_code=GBP&amp;lc=GB&amp;bn=PP%2dDonationsBF&amp;charset=UTF%2d8" target="_blank">Big thanks to everyone who donated for Quake2</a></span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#134883 - kusma - Tue Jul 17, 2007 11:08 pm</h4>
+    <div class="postbody"><span class="postbody">To be honest, I only tried to reproduce it stand-alone. Perhaps I'll dig into the sources and give it a go. But now I feel like sleeping ;)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#134884 - Dwedit - Tue Jul 17, 2007 11:18 pm</h4>
+    <div class="postbody"><span class="postbody">memcpy does 32-bit writes as long as the source, destination, and number of bytes to copy are all word aligned or multiples of 4.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#134885 - Lazy1 - Tue Jul 17, 2007 11:31 pm</h4>
+    <div class="postbody"><span class="postbody">A little off topic, but why -Os instead of -O2 or -O3?
+<br/>
+If the correct code is generated with -O2, is there any advantage to smaller code size?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#134886 - simonjhall - Tue Jul 17, 2007 11:51 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Lazy1 wrote:</b></span></td> </tr> <tr> <td class="quote">A little off topic, but why -Os instead of -O2 or -O3?
+<br/>
+If the correct code is generated with -O2, is there any advantage to smaller code size?</td> </tr></table><span class="postbody">The correct code was being generated with no -O at all - I haven't tried O2/3 yet. But anyway, I've always used -Os and thumb due to the complete lack of memory. But now I don't need to cos I've got THIRTY TWO MEGS EXTRA MEMORY!
+<br/>
+Can you tell I've just got it working? Time to dig out the old thread again ;-)
+<br/>
+<br/>
+BTW: I objdump/grep/addr2lined the elf, looking for memcpys and manually sorting out the cases where it happens (not the most robust of methods!)<br/>_________________<br/><span style="font-weight: bold"><a class="postlink" href="https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&amp;business=simonjhall%40gmail%2ecom&amp;no_shipping=2&amp;no_note=1&amp;tax=0&amp;currency_code=GBP&amp;lc=GB&amp;bn=PP%2dDonationsBF&amp;charset=UTF%2d8" target="_blank">Big thanks to everyone who donated for Quake2</a></span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#134887 - Dwedit - Wed Jul 18, 2007 12:08 am</h4>
+    <div class="postbody"><span class="postbody">-O2 pads the code with nops due to some idea that aligning branch targets to 8 byte boundaries improves performance.  It might on some systems, but probably not on this one.  -Os does not add padding.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#134889 - DekuTree64 - Wed Jul 18, 2007 12:12 am</h4>
+    <div class="postbody"><span class="postbody">Yay!
+<br/>
+<br/>
+Probably would be a good idea to check for similar problems with memset too. I've had the compiler generate calls to that for things like initializing local structs to 0.
+<br/>
+<br/>
+Also, have you gotten cache to work on the expanded memory? I remember someone was saying that you can't cache GBA cart space a while back, but I never got around to testing it.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#134893 - masscat - Wed Jul 18, 2007 1:02 am</h4>
+    <div class="postbody"><span class="postbody">Looking at the <a class="postlink" href="http://gcc.gnu.org/onlinedocs/gcc-4.2.0/gcc/Standards.html" target="_blank">GCC docs</a>, it appears that GCC will happily generate calls to memcpy, memmove, memset and memcmp, expecting these to be provided externally.
+<br/>
+<br/>
+You could replace those functions in libg.a with your own GBA slot safe versions. Something like:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">ar dv libg.a lib_a-memcpy.o lib_a-memset.o lib_a-memcmp.o lib_a-memmove.o
+<br/>
+ar rs libg.a custom_fns_obj_file.o</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

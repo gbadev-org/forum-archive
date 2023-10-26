@@ -1,0 +1,604 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>motion blur,[NEW]Possible 1 bank "HDR"+bloom+dof - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > motion blur,[NEW]Possible 1 bank "HDR"+bloom+dof</h2>
+<div id="posts">
+<div class="post">
+    <h4>#138189 - omaremad - Mon Aug 20, 2007 11:11 pm</h4>
+    <div class="postbody"><span class="postbody">I cant seem to get single bank mtion blur working with the newest libnds (both my code and the demo made by deku64 <a href="http://forum.gbadev.org/viewtopic.php?t=7983&amp;highlight=motion+blur" target="_blank">http://forum.gbadev.org/viewtopic.php?t=7983&amp;highlight=motion+blur</a>)
+<br/>
+<br/>
+I am using the following code:
+<br/>
+3D is running on the main screen, main screen video mode is FB1; so i can render the contents of Bank B LCD.
+<br/>
+I place the regcapture code before drawing anything (first thing in my main loop).
+<br/>
+<br/>
+i flush at the end and also vblank.
+<br/>
+<br/>
+setup code (before loop)
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+videoSetMode(MODE_FB1);
+<br/>
+ vramSetBankB(VRAM_B_LCD);
+<br/>
+<br/>
+<br/>
+<br/>
+glInit();
+<br/>
+<br/>
+   // enable antialiasing
+<br/>
+   glEnable(GL_ANTIALIAS);
+<br/>
+<br/>
+   // setup the rear plane
+<br/>
+   glClearColor(0,0,0,31); // BG must be opaque for AA to work
+<br/>
+   glClearPolyID(63); // BG must have a unique polygon ID for AA to work
+<br/>
+   glClearDepth(0x7FFF);
+<br/>
+<br/>
+   //this should work the same as the normal gl call
+<br/>
+   glViewPort(0,0,255,191);
+<br/>
+<br/>
+   //any floating point gl call is being converted to fixed prior to being implemented
+<br/>
+   glMatrixMode(GL_PROJECTION);
+<br/>
+   glLoadIdentity();
+<br/>
+   gluPerspective(35, 256.0 / 192.0, 0.1, 40);
+<br/>
+<br/>
+   gluLookAt(   0.0, 0.0, 1.0,      //camera possition
+<br/>
+            0.0, 0.0, 0.0,      //look at
+<br/>
+            0.0, 1.0, 0.0);      //up
+<br/>
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+regcapture setup
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+<br/>
+    while (1)
+<br/>
+    {
+<br/>
+<br/>
+ REG_DISPCAPCNT= DCAP_ENABLE |
+<br/>
+    DCAP_MODE(2) |   // Capture Source    (0=Source A, 1=Source B, 2/3=Sources A+B blended)
+<br/>
+    DCAP_DST(0) |   // VRAM Write Offset (0=00000h, 0=08000h, 0=10000h, 0=18000h)
+<br/>
+    DCAP_SRC(0) |   // Source A          (0=Graphics Screen BG+3D+OBJ, 1=3D Screen)
+<br/>
+    DCAP_SIZE(3) |   // Capture Size      (0=128x128, 1=256x64, 2=256x128, 3=256x192 dots)
+<br/>
+    DCAP_OFFSET(0)|   // VRAM Read Offset  (0=00000h, 0=08000h, 0=10000h, 0=18000h)
+<br/>
+    DCAP_BANK(1) |   // VRAM Write Block  (0..3 = VRAM A..D) (VRAM must be allocated to LCDC)
+<br/>
+    DCAP_B(6) |   // EVB (0..16, or 0..31 ?) Blending Factor for Source A (or B ?)
+<br/>
+    DCAP_A(14);   // EVA (0..16, or 0..31 ?) Blending Factor for Source B (or A ?)</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+im using blending mode 2 or 3 (both give black screens)
+<br/>
+<br/>
+I remeber dekus code working fine on old versions of devkitpro but i dont have the setup to test it on.
+<br/>
+<br/>
+Update:
+<br/>
+Messing around with the regcapture hardware i have devised  (there is actual code but ill say why i need help) a method for 1 bank "HDR"+bloom+dof+motion blur.
+<br/>
+<br/>
+The diffrence between the DCAP_B factor and the DCAP_A one defines how long lasting the motion blur lasts (the decay). The magnitude of DCAP_B seems to be useful for exposure control (defines how strong the additive blend is ). a DCAP_B value of 16 seems to have a permenant burn in effect normatter what DCAP_A is (further testing required).
+<br/>
+<br/>
+So now we got our hardware acclerated blur and exposure control, we can start doing some effects.
+<br/>
+<br/>
+For Bloom simply jiggle your camera position every frame, diffrent jiggles positions / speeds can simulate diffrent blur kernels.
+<br/>
+<br/>
+For Dof jiggle your camera target this will make far away objects more blurred.
+<br/>
+<br/>
+Now for HDR:
+<br/>
+<br/>
+Im going to represent our colour data as it is captured, RGBA.
+<br/>
+<br/>
+We will use RGB components to define the LDR colour range and A to describe the magnitude of the irradiance. Why alpha for irradiance? well thats because we get a free multiply with alpha if we use the capture hardware.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+from gbatek
+<br/>
+Capture A+B (blending):
+<br/>
+ Dest_Intensity = (  (SrcA_Intensitity * SrcA_Alpha * EVA)
+<br/>
+                   + (SrcB_Intensitity * SrcB_Alpha * EVB) ) / 16
+<br/>
+ Dest_Alpha = (SrcA_Alpha AND (EVA&gt;0)) OR (SrcB_Alpha AND EVB&gt;0))
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+So by using a combination of alpha values and exposure control we can define more than colour; we can also define brightness.
+<br/>
+<br/>
+Simply changing the exposure seems to automatically interpolate nicely depending on motion blur decay.
+<br/>
+<br/>
+Getting the average scene brightness is just averaging several pixels from the LCD mapped v bank (my case its bank b).
+<br/>
+<br/>
+So whats my problem? i cant seem to find a way to define those alpha values, i tried using glPolyFmt(POLY_ALPHA(31)| POLY_CULL_NONE); for maximum brightness and glPolyFmt(POLY_ALPHA(1)| POLY_CULL_NONE); for minimum brightness but it seems  poly alpha is only useful for polygon to polygon blending? Is there a way to define the alpha value of a fragment that will be stored much like the colours when the screen is captured.
+<br/>
+<br/>
+If anyone is experienced with ds tranparency and alpha storage please help :).</span><span class="gensmall"><br/><br/>Last edited by omaremad on Tue Aug 21, 2007 9:52 pm; edited 2 times in total</span></div>    
+</div>
+<div class="post">
+    <h4>#138210 - Cydrak - Tue Aug 21, 2007 5:16 am</h4>
+    <div class="postbody"><span class="postbody">I can't speak to the old code, as the link in that thread is broken... however I've done a blur on dual screens and it works fine.
+<br/>
+<br/>
+But, about DCAP_SRC(0). This selects VRAM + the final *2D* output, with 3D mixed in, and sprites and layers accounted for. Of course, they respect the BGn_ACTIVE bits. Apparently this is true even for framebuffer mode (!).
+<br/>
+<br/>
+The problem with that would be, videoSetMode() rewrites DISPLAY_CR, so if you pass only MODE_FB1 (I think) you're implicitly disabling all the layers...
+<br/>
+<br/>
+Does it work with MODE_FB1 | ENABLE_3D | DISPLAY_BG0_ACTIVE ?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#138216 - omaremad - Tue Aug 21, 2007 8:16 am</h4>
+    <div class="postbody"><span class="postbody">Thanks, that fixed it :)
+<br/>
+<br/>
+Seems the old FB1 didnt disable the 3d cores.
+<br/>
+Now it works; i can see blur inside polygons and also colour banding (because low percision math?).</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#138256 - omaremad - Tue Aug 21, 2007 9:53 pm</h4>
+    <div class="postbody"><span class="postbody">See updated OP.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#138275 - Cydrak - Wed Aug 22, 2007 2:32 am</h4>
+    <div class="postbody"><span class="postbody">Heh, the HDR thing sounds nifty! Unfortunately, capture alpha is only 1 bit (DS 16bpp format). :( So I don't see how to do it...
+<br/>
+<br/>
+Specifically it gives you 1 alpha bit + 15 bits BGR, which explains the banding, yeah... Although internally the depth is higher (I'd guess 6-6-6-6), the blending reuses that 16bpp. If you draw a scene and mirror to the subscreen, the difference is obvious.
+<br/>
+<br/>
+I haven't tested exhaustively, but here's my experience with this stuff:
+<br/>
+<br/>
+- Poly alpha overrides AA and fog, so you would give up those effects. (If anyone manages to avoid this I'd love to hear it!)
+<br/>
+- B factors above 7/16 (namely the useful ones :P) will produce some burn-in, maybe due to rounding; otherwise 8/16 would just be a &gt;&gt;1 which always hits 0. So you might have to avoid the darkest "burnable" colors in your scene. 16/16 won't decay as it's just 1.0, you're simply adding each frame to the last.
+<br/>
+<br/>
+- If you choose the 2D source, output will be opaque, since the backdrop is always solid.
+<br/>
+- If you capture 3D (DCAP_SRC(1)), you should get one bit of alpha (assuming your backplane is transparent). This is what BG0 displays by default.
+<br/>
+- If you set a BLEND_CR on BG0, it blends with the full, 5/6 bpp alpha. Unfortunately, it doesn't seem possible to capture that. :(
+<br/>
+<br/>
+If you really want alpha or Z (maybe for some software effect...) there are a couple desparate things you could try (in a second pass, with colors and lighting off etc):
+<br/>
+<br/>
+- Draw white geometry over black, to yield alpha values.
+<br/>
+- Draw with a linear fog table, giving a rough Z. The fog seems to follow this formula (corrections appreciated, note W-buffering should be off, it seems to work differently):
+<br/>
+<br/>
+   // For a full ramp over zNear..zFar, use fogOffset = fogShift = 0.
+<br/>
+   // I.fog is 7 bits, range 0..1.0. Zbuf is 15 bits.
+<br/>
+   I.fog = fogTable[ clamp(0..31, (Zbuf - fogOffset) &gt;&gt; (10-fogShift)) ];
+<br/>
+   A.out = A.in + I.fog*(A.fog - A.in)
+<br/>
+   C.out = C.in + I.fog*(C.fog - C.in) // GL_FOG
+<br/>
+   C.out = C.in // GL_FOG | GL_FOG_ONLY_ALPHA</span><span class="gensmall"><br/><br/>Last edited by Cydrak on Thu Aug 23, 2007 1:26 am; edited 2 times in total</span></div>    
+</div>
+<div class="post">
+    <h4>#138283 - omaremad - Wed Aug 22, 2007 8:35 am</h4>
+    <div class="postbody"><span class="postbody">Well i thought there was some kind of alpha storage because gbatek says 3d is rendered in 18 bit and is then converted to 15 bits (after or before the blending i dont know)
+<br/>
+<br/>
+<br/>
+Anyway 1 bit isnt bad since i can use PWM to get a diffrent brightness levels, but poly alpha zero also turns on wireframe mode, ill look around to see how i can make the alpha bit zero while keeping my polygons filled.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#138295 - omaremad - Wed Aug 22, 2007 2:09 pm</h4>
+    <div class="postbody"><span class="postbody">I`ll just use a diffrent part of the hardware to do the multiply, ill use the material settings and darken/brighten the scene depending on a ratio between the actual brightness(old alpha values) and the exposure value.
+<br/>
+<br/>
+That way i dont have to modify each vertex colour in software.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#138325 - silent_code - Wed Aug 22, 2007 11:27 pm</h4>
+    <div class="postbody"><span class="postbody">you might want to play a bit with the material's ambient colour for a nice overexposure effect and of course, it would be nice to see a demo of what you've done, some day. :)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#138362 - Dood77 - Thu Aug 23, 2007 8:16 am</h4>
+    <div class="postbody"><span class="postbody">I would love a demo too!<br/>_________________<br/>If I use a term wrong or something then feel free to correct, I?m not much of a programmer.
+<br/>
+<span style="font-size: 9px; line-height: normal">
+<br/>
+Original DS Phat obtained on day of release + flashme v7
+<br/>
+Supercard: miniSD, Kingston 1GB, Kingston 2GB
+<br/>
+Ralink chipset PCI NIC
+<br/>
+</span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#138500 - omaremad - Fri Aug 24, 2007 7:32 pm</h4>
+    <div class="postbody"><span class="postbody">Im currently short on time so i cant make a polished demo let alone continue my current project. However ill put some code here with explainations which is better since it would be like a tutorial.
+<br/>
+<br/>
+The setup for our main screen is as follows
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">videoSetMode(MODE_FB1 | ENABLE_3D | DISPLAY_BG0_ACTIVE);
+<br/>
+<br/>
+vramSetBankB(VRAM_B_LCD);
+<br/>
+<br/>
+glInit();
+<br/>
+<br/>
+   // enable antialiasing
+<br/>
+   glEnable(GL_ANTIALIAS);
+<br/>
+<br/>
+   // setup the rear plane
+<br/>
+   glClearColor(0,0,0,31); // BG must be opaque for AA to work
+<br/>
+   glClearPolyID(63); // BG must have a unique polygon ID for AA to work
+<br/>
+   glClearDepth(0x7FFF);
+<br/>
+<br/>
+   //this should work the same as the normal gl call
+<br/>
+   glViewPort(0,0,255,191);
+<br/>
+<br/>
+   //any floating point gl call is being converted to fixed prior to being implemented
+<br/>
+   glMatrixMode(GL_PROJECTION);
+<br/>
+   glLoadIdentity();
+<br/>
+   gluPerspective(35, 256.0 / 192.0, 0.1, 40);
+<br/>
+<br/>
+   gluLookAt(   0.0, 0.0, 1.0,      //camera possition
+<br/>
+            0.0, 0.0, 0.0,      //look at
+<br/>
+            0.0, 1.0, 0.0);      //up
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+We activate the 3d core and enable Frame buffer mode 1(which reads from Vram Bank 1 which is B). I reccomend using banks A,B or D over C since you will need C if you plan on using lots of data for the sub screen.
+<br/>
+<br/>
+Antialiasing also helps give Bloom a more natural effect.
+<br/>
+<br/>
+For our bloom filter we will use the following code, it gives a moderate amount of motion blur too. The filter works by taking 5  weighted samples, the un jittered image has the most weight (DCAP_B value 16) while jittered images have a lower weight.
+<br/>
+<br/>
+The bloom size is controlled using a constant value + random value. Frame is a frame counter integer, it is used as a random number seed and also to select the scene transformation during diffrent samplings.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">s32 random(signed int min, signed int max,int seed)
+<br/>
+      {
+<br/>
+         seed *= 69069;
+<br/>
+         if(seed == 0) {seed++;}
+<br/>
+         return min + ((((max - min + 1) * (seed &gt;&gt; 16))) &gt;&gt; 16);
+<br/>
+      }</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">Float rand = inttof32(random(-10,10,frame));
+<br/>
+rand = rand/200.0f;</td> </tr></table><span class="postbody">
+<br/>
+Float is a struct around f32 with some operator overloads.
+<br/>
+<br/>
+These values are then used to translate the scene by tiny amounts.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+switch (frame%5)
+<br/>
+        {
+<br/>
+        case 0:
+<br/>
+            REG_DISPCAPCNT= DCAP_ENABLE |
+<br/>
+                            DCAP_MODE(2) |   // Capture Source    (0=Source A, 1=Source B, 2/3=Sources A+B blended)
+<br/>
+                            DCAP_DST(0) |   // VRAM Write Offset (0=00000h, 0=08000h, 0=10000h, 0=18000h)
+<br/>
+                            DCAP_SRC(1) |   // Source A          (0=Graphics Screen BG+3D+OBJ, 1=3D Screen)
+<br/>
+                            DCAP_SIZE(3) |   // Capture Size      (0=128x128, 1=256x64, 2=256x128, 3=256x192 dots)
+<br/>
+                            DCAP_OFFSET(0)|   // VRAM Read Offset  (0=00000h, 0=08000h, 0=10000h, 0=18000h)
+<br/>
+                            DCAP_BANK(1) |   // VRAM Write Block  (0..3 = VRAM A..D) (VRAM must be allocated to LCDC)
+<br/>
+                            DCAP_B(14) |   // EVB (0..16, or 0..31 ?) Blending Factor for Source A (or B ?)
+<br/>
+                            DCAP_A(2);   // EVA (0..16, or 0..31 ?) Blending Factor for Source B (or A ?)
+<br/>
+            glTranslate3f32(floattof32(0.04f)+rand.val, floattof32(0.0f)+rand.val, floattof32(0.0f));
+<br/>
+            break;
+<br/>
+<br/>
+        case 1:
+<br/>
+            REG_DISPCAPCNT= DCAP_ENABLE |
+<br/>
+                            DCAP_MODE(2) |   // Capture Source    (0=Source A, 1=Source B, 2/3=Sources A+B blended)
+<br/>
+                            DCAP_DST(0) |   // VRAM Write Offset (0=00000h, 0=08000h, 0=10000h, 0=18000h)
+<br/>
+                            DCAP_SRC(1) |   // Source A          (0=Graphics Screen BG+3D+OBJ, 1=3D Screen)
+<br/>
+                            DCAP_SIZE(3) |   // Capture Size      (0=128x128, 1=256x64, 2=256x128, 3=256x192 dots)
+<br/>
+                            DCAP_OFFSET(0)|   // VRAM Read Offset  (0=00000h, 0=08000h, 0=10000h, 0=18000h)
+<br/>
+                            DCAP_BANK(1) |   // VRAM Write Block  (0..3 = VRAM A..D) (VRAM must be allocated to LCDC)
+<br/>
+                            DCAP_B(14) |   // EVB (0..16, or 0..31 ?) Blending Factor for Source A (or B ?)
+<br/>
+                            DCAP_A(2);   // EVA (0..16, or 0..31 ?) Blending Factor for Source B (or A ?)
+<br/>
+            glTranslate3f32(floattof32(0.0f)+rand.val, floattof32(-0.04f)-rand.val, floattof32(0.0f));
+<br/>
+            break;
+<br/>
+<br/>
+        case 2:
+<br/>
+            REG_DISPCAPCNT= DCAP_ENABLE |
+<br/>
+                            DCAP_MODE(2) |   // Capture Source    (0=Source A, 1=Source B, 2/3=Sources A+B blended)
+<br/>
+                            DCAP_DST(0) |   // VRAM Write Offset (0=00000h, 0=08000h, 0=10000h, 0=18000h)
+<br/>
+                            DCAP_SRC(1) |   // Source A          (0=Graphics Screen BG+3D+OBJ, 1=3D Screen)
+<br/>
+                            DCAP_SIZE(3) |   // Capture Size      (0=128x128, 1=256x64, 2=256x128, 3=256x192 dots)
+<br/>
+                            DCAP_OFFSET(0)|   // VRAM Read Offset  (0=00000h, 0=08000h, 0=10000h, 0=18000h)
+<br/>
+                            DCAP_BANK(1) |   // VRAM Write Block  (0..3 = VRAM A..D) (VRAM must be allocated to LCDC)
+<br/>
+                            DCAP_B(14) |   // EVB (0..16, or 0..31 ?) Blending Factor for Source A (or B ?)
+<br/>
+                            DCAP_A(2);   // EVA (0..16, or 0..31 ?) Blending Factor for Source B (or A ?)
+<br/>
+            glTranslate3f32(floattof32(0.00f)-rand.val, floattof32(0.04f)+rand.val, floattof32(0));
+<br/>
+            break;
+<br/>
+<br/>
+        case 3:
+<br/>
+            REG_DISPCAPCNT= DCAP_ENABLE |
+<br/>
+                            DCAP_MODE(2) |   // Capture Source    (0=Source A, 1=Source B, 2/3=Sources A+B blended)
+<br/>
+                            DCAP_DST(0) |   // VRAM Write Offset (0=00000h, 0=08000h, 0=10000h, 0=18000h)
+<br/>
+                            DCAP_SRC(1) |   // Source A          (0=Graphics Screen BG+3D+OBJ, 1=3D Screen)
+<br/>
+                            DCAP_SIZE(3) |   // Capture Size      (0=128x128, 1=256x64, 2=256x128, 3=256x192 dots)
+<br/>
+                            DCAP_OFFSET(0)|   // VRAM Read Offset  (0=00000h, 0=08000h, 0=10000h, 0=18000h)
+<br/>
+                            DCAP_BANK(1) |   // VRAM Write Block  (0..3 = VRAM A..D) (VRAM must be allocated to LCDC)
+<br/>
+                            DCAP_B(14) |   // EVB (0..16, or 0..31 ?) Blending Factor for Source A (or B ?)
+<br/>
+                            DCAP_A(2);   // EVA (0..16, or 0..31 ?) Blending Factor for Source B (or A ?)
+<br/>
+            glTranslate3f32(floattof32(-0.04f)-rand.val, floattof32(0.00f)+rand.val, floattof32(0.0f));
+<br/>
+            break;
+<br/>
+        case 4:
+<br/>
+            REG_DISPCAPCNT= DCAP_ENABLE |
+<br/>
+                            DCAP_MODE(2) |   // Capture Source    (0=Source A, 1=Source B, 2/3=Sources A+B blended)
+<br/>
+                            DCAP_DST(0) |   // VRAM Write Offset (0=00000h, 0=08000h, 0=10000h, 0=18000h)
+<br/>
+                            DCAP_SRC(1) |   // Source A          (0=Graphics Screen BG+3D+OBJ, 1=3D Screen)
+<br/>
+                            DCAP_SIZE(3) |   // Capture Size      (0=128x128, 1=256x64, 2=256x128, 3=256x192 dots)
+<br/>
+                            DCAP_OFFSET(0)|   // VRAM Read Offset  (0=00000h, 0=08000h, 0=10000h, 0=18000h)
+<br/>
+                            DCAP_BANK(1) |   // VRAM Write Block  (0..3 = VRAM A..D) (VRAM must be allocated to LCDC)
+<br/>
+                            DCAP_B(16) |   // EVB (0..16, or 0..31 ?) Blending Factor for Source A (or B ?)
+<br/>
+                            DCAP_A(2);   // EVA (0..16, or 0..31 ?) Blending Factor for Source B (or A ?)
+<br/>
+          
+<br/>
+            break;
+<br/>
+<br/>
+        }
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+You can take more samples for bloom at the cost of flicker, lower frame rates also induce flicker so try to use packed geometry rather than glBegin() etc...
+<br/>
+<br/>
+For the HDR effectyou will need two inputs and a object based rendering approach.
+<br/>
+<br/>
+Paramaters:
+<br/>
+<br/>
+-Average scene brightness,get this by averaging the brightness of onscreen objects or by taking random samples from memory range of the  LCD bank (in my case i read it using VRAMB[pixel]).
+<br/>
+<br/>
+-Brightness of current object, this can be either a user defined constant or calculated in real time; treat the whole object as if its a single vertex and do software lighting on that.
+<br/>
+<br/>
+we take these two paramters and then we compute the apparent brightness (brightness will affect bloom power see gbatek blending equation).
+<br/>
+<br/>
+finalvalue = (objectBrightness/sceneBrightness);
+<br/>
+<br/>
+we then take the final value and multiply it by our ambient value which we set using
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">glMaterialf(GL_DIFFUSE, RGB15(16,16,16));</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Ill have to revise the Rnd number generator since i think my seeding method is biasisng (bloom starts to look good after 1/2 minutes of runtime)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#141613 - silent_code - Thu Sep 27, 2007 3:19 pm</h4>
+    <div class="postbody"><span class="postbody">hi!
+<br/>
+it works fine (after adjusting those values), thank you very much! :^)
+<br/>
+although i still have to find a good blending ratio, as the current settings blur the image too much and too low settings make the whole thing obsolete, as the effect is barely noticable.
+<br/>
+what i didn't get is the bloom. it's more of a depth of field effect than a bloom, because the latter would brighten stuff instead just blending over. it's a pitty you can't change the blending mode on the nds. :^C</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#141623 - Noda - Thu Sep 27, 2007 6:57 pm</h4>
+    <div class="postbody"><span class="postbody">can you post some screenshots of your results? ^^</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#141893 - silent_code - Mon Oct 01, 2007 10:25 am</h4>
+    <div class="postbody"><span class="postbody">it will take a while (i don't have inet@home (TM), so i'm rarely online), but i might release a new version of my shadow volume demo (still with gbfs - NODA, please help me with efs!), so everyone can see for themselves. but i guess it would be cool to have some screens online, too. :^D
+<br/>
+<br/>
+ps: can i use the code for that demo and can i make it public? (i guess the answer is yes, though i prefer asking beforehand. ;^) )  whom should i credit for it (means, by what name)?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#142963 - silent_code - Mon Oct 15, 2007 5:47 pm</h4>
+    <div class="postbody"><span class="postbody">just a "short" throw-in:
+<br/>
+<br/>
+blending factors are 0..15 (4bit)! to get an even amount of colors from both "sources" ("live render" and capture) you set the ratios to sum up to 16. lower total will result in a darker image, higher will result in "over-blending", thus claming color components.
+<br/>
+<br/>
+the formular is roughly (per component):
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">(factorA * colorA + factorB * colorB) / 16</td> </tr></table><span class="postbody">again with clamping the result. (check out gbatek for the full thing!)
+<br/>
+<br/>
+i don't know with which bit depth the clamping works. all colors are 15/16bit, rendering/lighting is 24bit, displays are 18bit and capturing seems to be 15bit (less colorfull than "live render").
+<br/>
+<br/>
+if one would like to make a true bloom effect, one had to render the scene twice, first time capturing for bloom processing. that isn't very fast though. but otherwise there's colors bleeding from the previous frame(s) and that ruins the whole image (aka "burned-in colors").
+<br/>
+<br/>
+any ideas?
+<br/>
+<br/>
+btw: the depth of field effect works (with flickering that may be caused by bad blending ratios), but also suffers from color burning and over the top motion blur... or better motion *smudge*. :^C</span><span class="gensmall"><br/><br/>Last edited by silent_code on Mon Oct 15, 2007 6:47 pm; edited 2 times in total</span></div>    
+</div>
+<div class="post">
+    <h4>#142966 - Lick - Mon Oct 15, 2007 6:13 pm</h4>
+    <div class="postbody"><span class="postbody">Pictures or it didn't happen. ;)<br/>_________________<br/><a class="postlink" href="http://licklick.wordpress.com" target="_blank">http://licklick.wordpress.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#142968 - silent_code - Mon Oct 15, 2007 6:24 pm</h4>
+    <div class="postbody"><span class="postbody">what pictures do you like? you better not want to see the depth of field, because i canned it in favour of a lovely motion blur effect! ;^p (might be able to restore a build with the dof, though...)
+<br/>
+<br/>
+&lt;offtopic&gt;
+<br/>
+man, gbatek has expanded quite a *BIT*! it's nice to see that the (still unreleased) volume shadow mini-tutorial is finally obsolete.
+<br/>
+&lt;/offtopic&gt;</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#143008 - Noda - Tue Oct 16, 2007 1:21 am</h4>
+    <div class="postbody"><span class="postbody">Still, I'm very interested into that shadow volume mini tutorial, as I didn't get the thing even with the new gbatek info :/ I'm probably missing something...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#143063 - silent_code - Tue Oct 16, 2007 2:04 pm</h4>
+    <div class="postbody"><span class="postbody">"you wish - i serve" ;^D
+<br/>
+tutorial will be up very soon (here on the forum first, then i'll eventually make a html page for my website).
+<br/>
+<br/>
+EDIT: there you go: <a class="postlink" href="http://forum.gbadev.org/viewtopic.php?p=143065" target="_blank">http://forum.gbadev.org/viewtopic.php?p=143065</a></span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

@@ -1,0 +1,247 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Some surprising timings - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Some surprising timings</h2>
+<div id="posts">
+<div class="post">
+    <h4>#158208 - Maxxie - Sat Jun 07, 2008 1:15 pm</h4>
+    <div class="postbody"><span class="postbody">Heya dudes,
+<br/>
+<br/>
+I was doing some investigation on memory access timings, to compare emulator accuracy with the hardware here. Well i have just run the first tests on the hardware (an old v3 fat DS) and i was somewhat surprised by the numbers.
+<br/>
+<br/>
+Maybe some of you can explain it to me why?
+<br/>
+<br/>
+a) 16bit read access to a used (as text bg) vram is as fast or faster then same access to the wram (while having the instructions cached)
+<br/>
+<br/>
+b) read access to wram not yet in a cacheline takes much more time then accessing memory on its not at all cached mirror
+<br/>
+<br/>
+The setup is:
+<br/>
+- The Arm7 is in a endless loop not accessing wram, disabled IRQs
+<br/>
+- The arm9 is running the tests
+<br/>
+- instruction and data cache is cleared before the first iteration of each test
+<br/>
+- no cache is cleared between iterations, except stated otherwise
+<br/>
+- irq and dma are disabled
+<br/>
+- time is taken with cascaded f/1 timer, polled (no irq)
+<br/>
+- non sequential follow a predictable pattern: (iteration * 0x1234) &amp; (memsize - 1)
+<br/>
+- time is middled for one out of 100000 iterations
+<br/>
+- all measurements use the same framing (GetTime();read=...;GetTime())
+<br/>
+- optimization is turned off
+<br/>
+- all memcnt registers are not modified
+<br/>
+<br/>
+Timings:
+<br/>
+Pure timer reads:
+<br/>
+with IC cleared each iteration: 244 cycles
+<br/>
+without clearing: 100 cycles
+<br/>
+<br/>
+Wram (cached) reads
+<br/>
+32 bit sequential: 108c
+<br/>
+32 bit non sequential: 126c
+<br/>
+16 bit sequential: 106c
+<br/>
+16 bit non sequential: 127c
+<br/>
+8 bit sequential: 103c
+<br/>
+8 bit non sequential: 123c
+<br/>
+<br/>
+Wram (mirror) reads
+<br/>
+32 bit sequential: 112c
+<br/>
+32 bit non sequential: 113c
+<br/>
+16 bit sequential: 112c
+<br/>
+16 bit non sequential: 111c
+<br/>
+8 bit sequential: 112c
+<br/>
+8 bit non sequential: 112c
+<br/>
+<br/>
+Vram (textbg) reads
+<br/>
+32 bit sequential: 112c
+<br/>
+32 bit non sequential: 111c
+<br/>
+16 bit sequential: 108c
+<br/>
+16 bit non sequential: 105c
+<br/>
+<br/>
+( <a href="http://www.speedshare.org/download.php?id=1F9B99493" target="_blank">http://www.speedshare.org/download.php?id=1F9B99493</a> if you like to test yourself )
+<br/>
+<br/>
+PS: On the original comparison: desmume fails massively on the timings here, alltho i expected it to report less (internal)cycles/instruction, it reports ~340cycles for any access.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#158209 - eKid - Sat Jun 07, 2008 1:34 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">a) 16bit read access to a used (as text bg) vram is as fast or faster then same access to the wram (while having the instructions cached) 
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+The VRAM is a bit faster than the main ram. If it's in use by the video hardware a small waitstate may occur, though I would expect cached main ram to be very much faster. :\
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">b) read access to wram not yet in a cacheline takes much more time then accessing memory on its not at all cached mirror 
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+When you miss the cache (and the data is in a cached region), the cache has to load 8 words of data from that area (32 bytes being the size of each cache line). If the memory isn't cached, you may be able to access a single word faster. But if you access multiple words in the same [uncached] spot, you'll probably end up with a larger cpu load.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#158211 - Maxxie - Sat Jun 07, 2008 1:57 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>eKid wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">b) read access to wram not yet in a cacheline takes much more time then accessing memory on its not at all cached mirror 
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+When you miss the cache (and the data is in a cached region), the cache has to load 8 words of data from that area (32 bytes being the size of each cache line). If the memory isn't cached, you may be able to access a single word faster. But if you access multiple words in the same [uncached] spot, you'll probably end up with a larger cpu load.</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+This might as well explain the cached not faster then vram issue too. I expected the cache to operated more asynchronous (fetch the rest in the cachline while the cpu continues)
+<br/>
+<br/>
+In sequencial access cachemisses are issued every 32 iterations, as it is initially empty (flushed before first iteration)
+<br/>
+<br/>
+I will think of a more detailed test to measure pure cache access.
+<br/>
+<span style="font-weight: bold">:edit:</span> i did now check different approaches, from doing the access twice each iteration (second measured, first to get it into cache) or to access the very same address for all iterations did not change much. ~107c
+<br/>
+<br/>
+Thanks for the explaining.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#158253 - Maxxie - Sun Jun 08, 2008 11:25 am</h4>
+    <div class="postbody"><span class="postbody">After looking at the assembly of the iterations, i noticed that even tho the sourcecode did only use different constant and varsizes but looked identical, it created quite some different code.
+<br/>
+<br/>
+I have changed this now by doing the things that are different in each case in  .arm assembler, so i have full control on it.
+<br/>
+Also i fixed a measuring inaccuracy that was caused by possible timerwraparounds after while reading the timer values.
+<br/>
+Tara is now used to correct the timings.
+<br/>
+<br/>
+(Tara is measured by a dummy call to .arm code containing only "bx lr", where the reads have a ldr/ldrh/ldrb just before this bx lr)
+<br/>
+<br/>
+That lead to MUCH more explainable timings:
+<br/>
+Cached Wram timings are now all 2 cycles per read. (Both sequential and non sequential)
+<br/>
+<br/>
+The mirror takes 10(for 32 bit access) or 9 (for smaller) cycles
+<br/>
+<br/>
+VRAM takes 6 for 32 and 5 cycles for 16bit.
+<br/>
+<br/>
+These timings are now constant through all runs, but i will investigate further if there is any inconsistency left between measurements.
+<br/>
+<br/>
+Am thinking on creating a detailed table on instruction timings on the DS for hand optimizing code</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#158261 - eKid - Sun Jun 08, 2008 1:10 pm</h4>
+    <div class="postbody"><span class="postbody">Have you seen this?
+<br/>
+<a class="postlink" href="http://nocash.emubase.de/gbatek.htm#dsmemorytimings" target="_blank">http://nocash.emubase.de/gbatek.htm#dsmemorytimings</a>
+<br/>
+<br/>
+Also, <a class="postlink" href="http://nocash.emubase.de/gbatek.htm#arminstructionsummary" target="_blank">http://nocash.emubase.de/gbatek.htm#arminstructionsummary</a>, for an overview of instruction timings.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#158262 - Maxxie - Sun Jun 08, 2008 1:22 pm</h4>
+    <div class="postbody"><span class="postbody">Yes, i have seen them, as well as the timings in the DDI documents form arm.
+<br/>
+<br/>
+I however have never understood the I,S,N cycles. I really prever the plain numbers and to have a system that can compare the execution time of single instructions through the different devices. "Its feels more real"</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#158266 - Cearn - Sun Jun 08, 2008 4:01 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Maxxie wrote:</b></span></td> </tr> <tr> <td class="quote">After looking at the assembly of the iterations, i noticed that even tho the sourcecode did only use different constant and varsizes but looked identical, it created quite some different code.</td> </tr></table><span class="postbody"> This could be because you had optimizations off. The assembly produced under -O0 is just awful. That said, the code you get for small copy loops with -O2/-O3 can be somewhat odd as well. This is especially true in Thumb code, where ldr, ldrh and ldrb don't have the same capabilities.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>eKid wrote:</b></span></td> </tr> <tr> <td class="quote">Have you seen this?
+<br/>
+<a class="postlink" href="http://nocash.emubase.de/gbatek.htm#dsmemorytimings" target="_blank">http://nocash.emubase.de/gbatek.htm#dsmemorytimings</a>
+<br/>
+<br/>
+Also, <a class="postlink" href="http://nocash.emubase.de/gbatek.htm#arminstructionsummary" target="_blank">http://nocash.emubase.de/gbatek.htm#arminstructionsummary</a>, for an overview of instruction timings.</td> </tr></table><span class="postbody">
+<br/>
+Note that the arm instruction summary in GBATek still deals with the ARMv4 architecture. The ARM9 is an ARMv5 chip, which if I recall correctly has a different set timings for loads and stores.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#158371 - edwdig - Mon Jun 09, 2008 8:28 pm</h4>
+    <div class="postbody"><span class="postbody">Got an accurate cycle count for accessing uncached WRAM ?
+<br/>
+<br/>
+I'm curious how much of a speed advantage there is to accessing the uncached mirror in cases where you know you're going to be missing the cache consistently.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#158373 - Maxxie - Mon Jun 09, 2008 8:45 pm</h4>
+    <div class="postbody"><span class="postbody">(.arm instructions used)
+<br/>
+LDR r0,[r0,r1] takes 10cycles on the 0x02400000-0x027FFFFF mirror
+<br/>
+LDRH/B r0,[r0,r1] takes 9cycles on the 0x02400000-0x027FFFFF mirror
+<br/>
+<br/>
+There is no difference in sequential and non sequential access (the psram is initialized as continously/non burst)
+<br/>
+Same instructions on the cached mirror takes 2 cycles for 32 as well as 16bit read access
+<br/>
+<br/>
+Cycles are measured as f/1 timerticks, so at 33MHz clock.
+<br/>
+<br/>
+Well yeah, uncached is much slower then cached access, and this meets my subjective observations, when i disabled cache completely when i worked on some software IPC  fifo.
+<br/>
+<br/>
+:edit: i just noticed why my data cache clearing does no effect at all. ... Guess that i should call an invalidate after the flush *grr* i'll do measures of cachemisses tomorrow when i fixed that.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

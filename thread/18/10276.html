@@ -1,0 +1,274 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Optimized (Physics based) Matrix Calculations - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Optimized (Physics based) Matrix Calculations</h2>
+<div id="posts">
+<div class="post">
+    <h4>#91631 - JessTicular - Sat Jul 08, 2006 1:18 pm</h4>
+    <div class="postbody"><span class="postbody">G'day :)
+<br/>
+<br/>
+I'm in the process of writing a Rigid-Body dynamics system for a game, but I'm having some troubles with speed.
+<br/>
+<br/>
+The main one at the moment seems to be with Matrix multiplications ( and all other multiplications for that matter).
+<br/>
+<br/>
+All my code is in Fixed Point format, using the libnds functions for mulf32, divf32, and sqrtf32 to utilize the hardware functionality.
+<br/>
+<br/>
+I thought maybe it would be possible to use the hardware functions for matrix multiplication via the Geometry interface?
+<br/>
+<br/>
+Looking over the NDSTech Wiki (<a class="postlink" href="http://www.bottledlight.com/ds/index.php/Video/GeometryEngine" target="_blank">here</a>) I can see there are functions for multiplying matricies, but for the life of me, I cannot think of any way to actually use them.
+<br/>
+It seems as though you have to first give it a series of 9 f32 values, then somehow specify a matrix to multiply that with. And then, how do you get the result out? It seems as though it stays in the hardware.
+<br/>
+<br/>
+Any help with this would be appreciated.
+<br/>
+<br/>
+Also, if anyone can suggest additional speed-ups (DS Hardware related) for the calculations primarily used in Physics, I would be very thankfull!
+<br/>
+Area's of interest:
+<br/>
+<span style="font-weight: bold">o</span> sqrt function - for Normalizing the Quaternions &amp; Vectors
+<br/>
+<span style="font-weight: bold">o</span> Dot Products
+<br/>
+<span style="font-weight: bold">o</span> Cross Products
+<br/>
+<span style="font-weight: bold">o</span> Grassmann products - Product of two Quaternions
+<br/>
+<span style="font-weight: bold">o</span> Quaternion to Matrix Conversion
+<br/>
+<br/>
+Thank you :)
+<br/>
+<br/>
+<br/>
+Here is some info about the operations I have already:
+<br/>
+<br/>
+<span style="font-style: italic">Quaternion to Matrix Conversion:</span>
+<br/>
+2 conversions from float to fixed
+<br/>
+13 mulf32's
+<br/>
+12 additions
+<br/>
+<br/>
+<span style="font-style: italic">Grassmann Product:</span>
+<br/>
+16 mulf32's
+<br/>
+12 additions
+<br/>
+<br/>
+<span style="font-style: italic">Cross Products</span>
+<br/>
+6 mulf32's
+<br/>
+3 additions
+<br/>
+<br/>
+<br/>
+And, finally, some code for you to see what I've already done (all code posted is released under the GNU GPL):
+<br/>
+<br/>
+Oh, and the 'SCALAR' type is defined as;
+<br/>
+typedef f32 SCALAR;
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">// ******** Quaternion Class ********
+<br/>
+<br/>
+// Quaternion to Matrix
+<br/>
+const MATRIX QUATERNION::toMatrix() const{
+<br/>
+<br/>
+   SCALAR one = floatToFixed(1);
+<br/>
+   SCALAR two = floatToFixed(2);
+<br/>
+   
+<br/>
+   SCALAR r2 = mulf32(two,r);
+<br/>
+   SCALAR x2 = mulf32(two,x);
+<br/>
+   SCALAR y2 = mulf32(two,y);
+<br/>
+   SCALAR z2 = mulf32(two,z);
+<br/>
+<br/>
+   SCALAR yy = mulf32(y2,y);
+<br/>
+   SCALAR xx = mulf32(x2,x);
+<br/>
+   SCALAR zz = mulf32(z2,z);
+<br/>
+   
+<br/>
+   SCALAR xy = mulf32(x2,y);
+<br/>
+   SCALAR xz = mulf32(x2,z);
+<br/>
+   SCALAR xr = mulf32(r2,x);
+<br/>
+   
+<br/>
+   SCALAR yr = mulf32(r2,y);
+<br/>
+   SCALAR yz = mulf32(y2,z);
+<br/>
+   
+<br/>
+   SCALAR zr = mulf32(r2,z);
+<br/>
+<br/>
+   VECTOR c0 = VECTOR( one - yy - zz,
+<br/>
+                       xy + zr,
+<br/>
+                       xz - yr
+<br/>
+                              );
+<br/>
+                                    
+<br/>
+   VECTOR c1 = VECTOR( xy - zr,
+<br/>
+                       one - xx - zz,
+<br/>
+                       yz + xr
+<br/>
+                              );
+<br/>
+                                    
+<br/>
+   VECTOR c2 = VECTOR( xz + yr,
+<br/>
+                       yz - xr,
+<br/>
+                       one - xx - yy
+<br/>
+                              );
+<br/>
+                                    
+<br/>
+   return MATRIX(c0, c1, c2);
+<br/>
+}
+<br/>
+<br/>
+// grassmann product
+<br/>
+const QUATERNION QUATERNION::operator * ( const QUATERNION&amp; q ) const{
+<br/>
+   return QUATERNION(  mulf32(r,q.r) - mulf32(x,q.x) - mulf32(y,q.y) - mulf32(z,q.z),
+<br/>
+                       mulf32(x,q.r) + mulf32(r,q.x) + mulf32(y,q.z) - mulf32(z,q.y),
+<br/>
+                       mulf32(y,q.r) + mulf32(r,q.y) + mulf32(z,q.x) - mulf32(x,q.z),
+<br/>
+                                 mulf32(z,q.r) + mulf32(r,q.z) + mulf32(x,q.y) - mulf32(y,q.x)
+<br/>
+                              );
+<br/>
+<br/>
+}
+<br/>
+<br/>
+// cross product
+<br/>
+const QUATERNION QUATERNION::cross( const QUATERNION&amp; q ) const{
+<br/>
+   VECTOR result;
+<br/>
+   result.x = mulf32(y, q.z) - mulf32(q.y, z);
+<br/>
+   result.y = mulf32(z, q.x) - mulf32(q.z, x);
+<br/>
+   result.z = mulf32(x, q.y) - mulf32(q.x, y);
+<br/>
+   return QUATERNION(  0,
+<br/>
+                                 result.x,
+<br/>
+                       result.y,
+<br/>
+                       result.z
+<br/>
+                              );
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">// ******** Matrix Class ********
+<br/>
+<br/>
+// C is defined as an array 3-SCALAR vector with members x, y, z
+<br/>
+// each element of C (ie, each set of 3-SCALARs) represents a column of the matrix
+<br/>
+<br/>
+<br/>
+//post-multiply by a vector
+<br/>
+const VECTOR MATRIX::operator * ( const VECTOR&amp; v ) const{
+<br/>
+   return( C[0]*v.x + C[1]*v.y + C[2]*v.z );
+<br/>
+}
+<br/>
+<br/>
+//post-multiply by a matrix
+<br/>
+const MATRIX MATRIX::operator * ( const MATRIX&amp; m ) const{
+<br/>
+   return MATRIX( (*this) * m.C[0], (*this) * m.C[1], (*this) * m.C[2] );
+<br/>
+}</td> </tr></table><span class="postbody"><br/>_________________<br/><span style="font-size: 9px; line-height: normal"><span style="font-weight: bold">Nintendo DS &amp; Dominos :: <a class="postlink" href="http://dsdominos.sourceforge.net" target="_blank">DS Dominos</a></span>
+<br/>
+<a class="postlink" href="http://jt0.org" target="_blank">http://jt0.org</a></span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#91684 - sajiimori - Sat Jul 08, 2006 7:22 pm</h4>
+    <div class="postbody"><span class="postbody">Returning matrices by value is pretty expensive.  To get an idea of the work it involves, make a version that takes a destination pointer (ugly, I know), compile both versions using -O2 -S, and look at the differences in both the function and the code that calls it.
+<br/>
+<br/>
+The same may be true of quaternions, to a lesser extent.  Check the output for those as well.
+<br/>
+<br/>
+Also check the output of toMatrix() to see if the compiler is optimizing out the work of constructing temporary vectors and copying them into the matrix.  Compare the output to writing values straight into the matrix, without using the constructor that takes 3 vectors.
+<br/>
+<br/>
+These functions are good candidates for ITCM.
+<br/>
+<br/>
+I haven't said a word about math, but data shuffling operations are often just as important, and that includes reading opcodes from main memory.
+<br/>
+<br/>
+On an unrelated note, a typesafe fixed-point class would clean things up a lot.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

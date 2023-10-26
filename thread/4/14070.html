@@ -1,0 +1,364 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Handling large maps - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > Handling large maps</h2>
+<div id="posts">
+<div class="post">
+    <h4>#139317 - f33ldead - Tue Sep 04, 2007 5:22 pm</h4>
+    <div class="postbody"><span class="postbody">Hello,
+<br/>
+<br/>
+I'm planning to write a demo in text modes, but I'm concerned about some topics:
+<br/>
+<br/>
+<ul>
+<br/>
+<li>A background layer's size is not enough for a RPG world map.
+<br/>
+How are maps implemented in usual RPGs then? It looks like by dynamically updating the background, but I'm not sure how to implement this effectively. Any examples will be greatly appreciated!
+<br/>
+</li><li>Fonts.
+<br/>
+Do you guys spare a layer for fonts? If not, how would you implement text output?
+<br/>
+</li></ul>
+<br/>
+<br/>
+Thanks!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#139320 - Kyoufu Kawa - Tue Sep 04, 2007 6:01 pm</h4>
+    <div class="postbody"><span class="postbody">Larger-than-VRAM maps are indeed loaded on demand, wrapping around the edges. This works since the VRAM map is somewhat larger than the screen and wraps around anyway. Basically, when you've scrolled one tile in a given direction, you draw the strip that would appear next just outside of the screen.
+<br/>
+<br/>
+That's not just for RPGs but also for most platformers. In fact, any genre can use it.
+<br/>
+<br/>
+I'll leave it to somebody else to explain it in more detail.
+<br/>
+<br/>
+<br/>
+Oops, forgot a part. Yes. Some game (engines) use a spare layer for the text output. Some of these merge the text and interface into one layer, some use two seperate layers. Other games use sprites, one for each character. Which does have the added benefit of special effects like wobbles and such.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#139327 - Cydrak - Tue Sep 04, 2007 8:13 pm</h4>
+    <div class="postbody"><span class="postbody">It's like you said, you need to "stream" the larger map into the smaller one.
+<br/>
+<br/>
+A standard map is 32x32, right? Well, they wrap around, so the way I would think about it, it's really an infinite, repeating "grid" of 32x32 screens. If you ignore the range on the BG scroll, that's the behavior you should get.
+<br/>
+<br/>
+Now imagine writing your big worldmap onto the infinite grid:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">// Note: X, Y in tile coordinates
+<br/>
+for(y = mapY0; y &lt; mapY1; y++)
+<br/>
+    for(x = mapX0; x &lt; mapX1; x++)
+<br/>
+        screenMap[x &amp; 31, y &amp; 31] = worldMap[x, y];
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+This is what you would like to do, but of course it wouldn't work at all, it would stomp right over itself because of the repeat.
+<br/>
+<br/>
+However, the actual -screen- is only 30x20 tiles, a "view" onto the larger grid. Since you're probably tracking the scroll already, a small change to the above ought to work:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">for(y = viewY0; y &lt; viewY1; y++)
+<br/>
+    for(x = viewX0; x &lt; viewX1; x++)
+<br/>
+        screenMap[x &amp; 31, y &amp; 31] = worldMap[x, y];
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+The trick is just to show the right part at the right time. A lot of games further improve on this, only updating at the scrolled edges:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void scroll(int dx, int dy) {
+<br/>
+    if(dx &gt; 0) {
+<br/>
+        for(x = viewX1; x &lt; viewX1+dx; x++)
+<br/>
+            for(y = viewY0; y &lt; viewY1; y++)
+<br/>
+                screenMap[x &amp; 31, y &amp; 31] = worldMap[x, y];
+<br/>
+    } else if(dx &lt; 0) {
+<br/>
+        for(x = viewX0+dx+1; x &lt; viewX0; x++)
+<br/>
+            for(y = viewY0; y &lt; viewY1; y++)
+<br/>
+                screenMap[x &amp; 31, y &amp; 31] = worldMap[x, y];
+<br/>
+    }
+<br/>
+    viewX0 += dx, viewX1 += dx;
+<br/>
+    
+<br/>
+    if(dy &gt; 0) {
+<br/>
+        for(y = viewY1; y &lt; viewY1+dy; y++)
+<br/>
+            for(x = viewX0; x &lt; viewX1; x++)
+<br/>
+                screenMap[x &amp; 31, y &amp; 31] = worldMap[x, y];
+<br/>
+    } else if(dy &lt; 0) {
+<br/>
+        for(y = viewY0+dy+1; y &lt; viewY0; y++)
+<br/>
+            for(x = viewX0; x &lt; viewX1; x++)
+<br/>
+                screenMap[x &amp; 31, y &amp; 31] = worldMap[x, y];
+<br/>
+    }
+<br/>
+    viewY0 += dy, viewY1 += dy;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+I haven't tested that sorta code, I'm sure it could be better, it's just a sketch of how I might approach it. To do pixel scrolling, I guess you'd need to round (viewX0, viewY0) down and (viewX1, viewY1) up to the next tile.
+<br/>
+<br/>
+Fonts almost have to go on another layer if you're scrolling (whether it's the map or the dialog). If you just want fixed width, it's just a matter of writing the tilemap. Some people use sprites instead, this is one easier way to do variable width.
+<br/>
+<br/>
+Since there is no challenge to doing fixed width, I'll try to explain the other case, which is what I did.
+<br/>
+<br/>
+I'm working on the DS, so I went all out and grabbed a screen's worth of 16 color tiles, treating them as a sorta bitmap. (On the GBA you'd prolly use a smaller region.) My fonts are just linear 16 color bitmaps with characters sliced out of them, and I use something like this:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void printChar(u32* tiles, int tileHeight, int&amp; drawX, int&amp; drawY, const Char&amp; char)
+<br/>
+{
+<br/>
+    for(int charX = 0; charX &lt; char.width) {
+<br/>
+        writeX = drawX + charX - char.xAnchor;
+<br/>
+        
+<br/>
+        if(writeX &lt; minX) {
+<br/>
+            charX += 8 - (writeX &amp; 7);
+<br/>
+            continue;
+<br/>
+        }
+<br/>
+        if(writeX &gt;= maxX)
+<br/>
+            break;
+<br/>
+        
+<br/>
+        // Chop off pixels to the right of the character
+<br/>
+        rightClip = charX + 8 - char.width;
+<br/>
+        
+<br/>
+        // Chop off pixels to the left of this tile
+<br/>
+        charShift = 4*(writeX &amp; 7);
+<br/>
+        charMask = 0xffffffff &gt;&gt; (rightClip &gt; 0 ? 4*rightClip : 0);
+<br/>
+        charMask &lt;&lt;= charShift;
+<br/>
+        
+<br/>
+        charXOffset = char.nibbleOffset + charX;
+<br/>
+        const u32* charData = (u32*)(char.fontData + char.charXOffset/2
+<br/>
+                            - bitmapWidth/2*char.yBaseline);
+<br/>
+        
+<br/>
+        align = (unsigned)charData &amp; 3;
+<br/>
+        alignMask = 0xffffffff &gt;&gt; (8*align);
+<br/>
+                
+<br/>
+        u32* tileColumn = tiles + tileHeight*(writeX &amp; ~7)
+<br/>
+                                + (drawY - char.yBaseline);
+<br/>
+        
+<br/>
+        // I didn't do Y clipping here, there's two ways that make sense.
+<br/>
+        // One is to discard out of bounds pixels. The other is to wrap
+<br/>
+        //   around the layer edges, which is good if you're scrolling.
+<br/>
+        // Both would probably move this loop into a function.
+<br/>
+        
+<br/>
+        for(int charY = 1; charY &lt; char.rowHeight; charY++)
+<br/>
+        {
+<br/>
+            yOffset = bitmapWidth/8*charY;
+<br/>
+            
+<br/>
+            // Fetch 8 pixels of font--possibly a 9th if odd X offset
+<br/>
+            // The misaligned access here is purposeful,
+<br/>
+            //   and it does the bytewise shifting for us.
+<br/>
+            charCol0 = charData[yOffset+0];
+<br/>
+            charCol1 = charData[yOffset+1];
+<br/>
+            charPixels = charCol0 &amp; alignMask | charCol1 &amp; ~alignMask;
+<br/>
+            if(charXOffset &amp; 1)
+<br/>
+                charPixels = charCol1&lt;&lt;28 | charPixels&gt;&gt;4;
+<br/>
+            
+<br/>
+            // Move them to match the character's position over the tile
+<br/>
+            charPixels &lt;&lt;= charShift;
+<br/>
+            
+<br/>
+            // Find all the nonzero font pixels and generate a mask
+<br/>
+            charAlpha = charPixels;
+<br/>
+            charAlpha = (charAlpha | charAlpha&gt;&gt;2) &amp; 0x33333333;
+<br/>
+            charAlpha = (charAlpha | charAlpha&gt;&gt;1) &amp; 0x11111111;
+<br/>
+            charAlpha = (charAlpha&lt;&lt;4) - charAlpha;
+<br/>
+            charAlpha &amp;= charMask;
+<br/>
+            
+<br/>
+            // Alpha blit 8 pixels to the screen
+<br/>
+            tilePixels = tileColumn[charY];
+<br/>
+            tileColumn[charY] = (tilePixels &amp; ~charAlpha) | (charPixels &amp; charAlpha);
+<br/>
+        }
+<br/>
+        // Move to next column, aligning write position
+<br/>
+        //   if the first was a partial tile
+<br/>
+        charX += 8 - (writeX &amp; 7);
+<br/>
+    }
+<br/>
+    drawX += char.xAdvance;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Note that there's no restriction on character size, and letters can quite happily overlap, e.g. stylish cursive or hanging italics. They are placed so (xAnchor, yBaseline) is over the cursor, and the next character is printed xAdvance pixels to the right. nibbleOffset is the top left of the full character box. How you get those per-character measurements is up to you. I was lazy, I actually embed them as marker pixels, right in the bitmap, and parse them to create the font in memory.
+<br/>
+<br/>
+Okay, so this is probably overkill. ^_^ But not only does it skirt around VRAM 16-bitness, there's only three reads and a write per 8 pixels... if you're not afraid of bit mashing, it should give you cool ideas... (One thing I added was priority masking--I can have an outlined font with tight spacing, where the colored outlines merge together, but won't step on the letters themselves.)
+<br/>
+<br/>
+I'm pretty sleepy, so apologies in advance if this turns out more confusing than anything else... &gt;_&gt;</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#140126 - f33ldead - Thu Sep 13, 2007 7:44 pm</h4>
+    <div class="postbody"><span class="postbody">Thanks for the ideas. I've also seen a <a class="postlink" href="http://www.coranac.com/tonc/text/text.htm" target="_blank">more detailed text at Cearn's site</a>, so I've settled it completely. However, about the scrolling issue... Cydrak, thanks but that's nothing like what's in my mind. Such memory copy is much of a overhead, because it's not a linear copy so that we can't DMA it out or memcpy() in a simple, single fast call.
+<br/>
+<br/>
+I had this idea. My actual map, which is something big, will be stored somewhere in the memory, whose nametable is chopped into 32x32 mini-maps. However, I'll use a 128x128 map in VRAM, and load mini-maps into the correct "slots"
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">0 1
+<br/>
+2 3</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Assume the character is moving to, say, right. When 31th column appears on the screen, I'll load the current mini-map to 0th slot, and "neighboring" nametable to the 1st slot, so it'll go smoothly. If he's moving down, I'll load current to 0, and "neighbor" to 1, so on. The advantage of doing so is, nametables are linear, and can be DMAed (or copied by some other simple function).
+<br/>
+<br/>
+Any comments, ideas?
+<br/>
+<br/>
+However, I wonder how commercial RPGs handle the situation.
+<br/>
+<br/>
+<span style="font-weight: bold">edit:</span> By the way, I hope Cearn's mirach will break a <span style="font-style: italic">huge</span> map into 32x32 mini-map chunks. It apparently works correctly for 128x128 maps, but I'm not sure if it will for a map, say, 256x512. I'll test it as I get home.<br/>_________________<br/>It's real, spooky action at distance!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#140162 - ThousandKnives - Fri Sep 14, 2007 12:26 am</h4>
+    <div class="postbody"><span class="postbody">How you store map data depends somewhat on whether you are coding for GBA or DS (your post doesn't specify), since the DS's screen width is equal to the width of a map block.  Therefore, unless someone knows a really neat technique, it is not possible to do sub-tile horizontal scrolling of a map on DS without expanding your map RAM to 64x32.  Vertical scrolling is easy since there is a large buffer in relation to the screen size, but since the DS screen is 32 tiles wide, you need a map buffer width of 33 tiles to do horizontal scrolling at a sub-tile level, since as the screen is scrolling there are two different slivers visible at either side of the screen adding up to 33 discrete columns that need to be displayed.
+<br/>
+<br/>
+Otherwise, as pointed out, the technique is pretty straightforward: keep the full map in memory and copy as needed to the map buffer.  You can optimize this as you like but in the end a 32x32 map section of map is only 1024 bytes to copy, which is not a major deal.  Storing map data in blocks like the tiles themselves is certainly a good idea but even that hardly seems necessary.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#140211 - keldon - Fri Sep 14, 2007 7:23 am</h4>
+    <div class="postbody"><span class="postbody"><a class="postlink" href="http://www.devrs.com/gb/files/mapscroll.txt" target="_blank">Large map scrolling concept</a> by Jason tells you how it generally works. Don't worry about it being for GBDK, the concept works for tile modes in general.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#140378 - f33ldead - Sat Sep 15, 2007 10:42 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>keldon wrote:</b></span></td> </tr> <tr> <td class="quote">http://www.devrs.com/gb/files/mapscroll.txt</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Have you read the previous posts?<br/>_________________<br/>It's real, spooky action at distance!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#140405 - DiscoStew - Sun Sep 16, 2007 4:37 am</h4>
+    <div class="postbody"><span class="postbody">Although the DS has a width of 32 tiles, if you really didn't care about have all 32 horizontal tiles show, you could set up windowing to blacken out the sides, maybe 4 to 8 pixels in length for each side, allowing behind-the-curtain updating of the tiles if you didn't want to resort to expanding the layer size.
+<br/>
+<br/>
+I've had an old project on my GBA that dealt with large maps using a custom compressed format that split maps into 64x64 metatile sections (1 metatile = 2x2 defined tiles). If I can find it, perhaps I'll post it (after cleaning it up and possibly optimizing it after the lessons learned with working on the DS).<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#140438 - f33ldead - Sun Sep 16, 2007 12:46 pm</h4>
+    <div class="postbody"><span class="postbody">BTW, I forgot to mention, mine is a GBA program.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>DiscoStew wrote:</b></span></td> </tr> <tr> <td class="quote">'ve had an old project on my GBA that dealt with large maps using a custom compressed format that split maps into 64x64 metatile sections (1 metatile = 2x2 defined tiles). If I can find it, perhaps I'll post it (after cleaning it up and possibly optimizing it after the lessons learned with working on the DS).</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I'll be looking for it :)<br/>_________________<br/>It's real, spooky action at distance!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#140746 - Miked0801 - Wed Sep 19, 2007 6:06 pm</h4>
+    <div class="postbody"><span class="postbody">For our edge scrolling in DS (bitmap), we just make sure to sync BG movement and tile loading during VBlank.  No edge room sucks, bit is solvable.
+<br/>
+<br/>
+For Char scrolling, we used 512x256 to make the loading available outside of interrupt time.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

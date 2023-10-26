@@ -1,0 +1,154 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Single tiles that the player can walk behind - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>ASM > Single tiles that the player can walk behind</h2>
+<div id="posts">
+<div class="post">
+    <h4>#177708 - chickendude - Wed Dec 05, 2012 2:55 pm</h4>
+    <div class="postbody"><span class="postbody">I was just wondering if there was an easy way to handle tiles (like, say, a sign) that will cover the player when they walk behind it but which will be drawn behind the player when the player is in front. Here's a screenshot of what i mean:
+<br/>
+<a class="postlink" href="http://www.mirari.fr/2PFu" target="_blank">http://www.mirari.fr/2PFu</a>
+<br/>
+There i drew all tiles up until the player's Y position, then drew the player, then the rest of the tiles. So tiles behind the player get drawn below and tiles in front get drawn on top. But on the GBA that's all done by hardware. I've got different layers and priorities working (more or less):
+<br/>
+<a class="postlink" href="http://www.mirari.fr/VAU7" target="_blank">http://www.mirari.fr/VAU7</a>
+<br/>
+But now i'd like to add another layer. That sign in the middle, for example, i'd like to be able to walk behind it and in front of it. Any ideas/tips?
+<br/>
+<br/>
+EDIT: I've got an idea. I could check the tiles the top of the player is in and if it's a tile in the foreground layer, i can change the player sprite's priority to draw on top. This has some limitations, as it wouldn't let me put another foreground tile directly below it, and some tiles should always be drawn on top. I guess that means another layer is needed: a ground/background layer, an "objects"/foreground layer, and lastly a "bridge" layer that always gets drawn on top.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177709 - sverx - Wed Dec 05, 2012 5:31 pm</h4>
+    <div class="postbody"><span class="postbody">You just need two backgrounds. One for everything 'under' the sprite, the other for everything 'over' the sprite. If there's something that can be either 'under' or 'over' you've just got to move it to the appropriate background.<br/>_________________<br/><a class="postlink" href="http://bit.ly/yiQrz9" target="_blank">libXM7</a>|<a class="postlink" href="http://bit.ly/yJwcOo" target="_blank">NDS programming tutorial (Italiano)</a>|<a class="postlink" href="http://disjointedstudio.blogspot.com/" target="_blank">Waimanu DS / GBA</a>|<a class="postlink" href="http://adshomebrewersdiary.blogspot.com" target="_blank">A DS Homebrewer's Diary</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177710 - chickendude - Wed Dec 05, 2012 5:49 pm</h4>
+    <div class="postbody"><span class="postbody">What about a sign? If i'm moving it to the background layer, it'll overwrite whatever tile was there before, probably a ground tile. Since individual tiles can't change priorities, only the full mapset, wouldn't it be easier to change the player's priority? Or how would you move it to the other background? You'd remove the tile(s) from one screenblock, then copy it into the other. It seems pretty complicated to keep track of which tiles need to be where when... Though that seems like a useful idea for things like bridges where sometimes you go under them and other times you go across them, since you can make the change when you detect the player going up some stairs, a ladder, etc.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177711 - sverx - Thu Dec 06, 2012 10:41 am</h4>
+    <div class="postbody"><span class="postbody">What about using sprites instead? I mean, if you haven't got an huge amount of such 'objects', you can use sprites, simply sorting them according to the Y coordinate.
+<br/>
+Of course you can keep on using two separates backgrounds for everything that is always 'behind' the player and for everything that is always 'above' the player, such as roofs for instance...<br/>_________________<br/><a class="postlink" href="http://bit.ly/yiQrz9" target="_blank">libXM7</a>|<a class="postlink" href="http://bit.ly/yJwcOo" target="_blank">NDS programming tutorial (Italiano)</a>|<a class="postlink" href="http://disjointedstudio.blogspot.com/" target="_blank">Waimanu DS / GBA</a>|<a class="postlink" href="http://adshomebrewersdiary.blogspot.com" target="_blank">A DS Homebrewer's Diary</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177713 - chickendude - Thu Dec 06, 2012 8:10 pm</h4>
+    <div class="postbody"><span class="postbody">That's definitely an option, as in each map i don't think there will be that many tiles like that, most will fit cleanly into foreground/background. Again it's just a little more complicated since sprite coordinates are handled differently from map coordinates (they're based on screen position). But i guess as i'll already have to handle things like NPCs or enemies onscreen it'd be more or less the same as having a static NPC.
+<br/>
+<br/>
+Thanks for the suggestions :)
+<br/>
+<br/>
+I rewrote my tilemapper again today and it just amazes me how short the code is (and my code is definitely not very optimized!). It breaks a 512x512 map using 32x32 "metatiles" into its individual tiles (tile 0 really = tiles 0-15, tile 1 = tiles 16-31, etc.).
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">@ r0 = map
+<br/>
+@ r2 = destination
+<br/>
+drawMapScroll:
+<br/>
+   ldr r11, =0x03020100
+<br/>
+   mov r9, #16               @ 16 rangs
+<br/>
+drawMapOutterLoop:
+<br/>
+   mov r8, #16               @ 16 colonnes
+<br/>
+drawMapRowLoop:
+<br/>
+   ldrb r3, [r0],#1
+<br/>
+   mov r3, r3, LSL #4         @ tileId*16
+<br/>
+   mov r10, #4
+<br/>
+drawMapSpriteLoop:
+<br/>
+   and r3,r3,#0xFF
+<br/>
+   add r3,r3,LSL #8         @ $01+$0100 = $0101
+<br/>
+   add r3,r3,LSL #16         @ $0101+ $01010000 = $01010101
+<br/>
+   add r3,r3,r11            @ $01010101 + $03020100 = $04030201 :) (les tiles qu'il faut inserter)
+<br/>
+   str r3, [r2],#64
+<br/>
+   add r3, #4
+<br/>
+   subs r10, r10, #1
+<br/>
+   bne drawMapSpriteLoop
+<br/>
+<br/>
+   sub r2, r2, #256-4         @ Le -4 est pour aller à la prochaine colonne
+<br/>
+   subs r8, r8, #1
+<br/>
+   bne drawMapRowLoop
+<br/>
+   add r2,r2,#256-64
+<br/>
+   subs r9, r9, #1
+<br/>
+   bne drawMapOutterLoop
+<br/>
+   bx lr</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177719 - ScottLininger - Thu Dec 13, 2012 5:25 pm</h4>
+    <div class="postbody"><span class="postbody">I always used sprites for that. Since you can then place those objects at exact pixel locations instead of being "fixed" to the tile grid, you can give your worlds a more organic feel, too.
+<br/>
+<br/>
+-Scott<br/>_________________<br/>Some of my <a class="postlink" href="http://www.scottlininger.com/" target="_blank">GBA projects</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177720 - chickendude - Fri Dec 14, 2012 8:03 am</h4>
+    <div class="postbody"><span class="postbody">But every time the camera shifts you've got to update all their coordinates, right? I'm still not quite sure what the GBA is capable of (with my lousy code) so i'll try a few things out. I just realized the pain of larger maps for text backgrounds and how they're stored (32x32 segments) so now i'm trying to update my tilemapper to handle wider maps.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177721 - gauauu - Fri Dec 14, 2012 4:12 pm</h4>
+    <div class="postbody"><span class="postbody">+1 on using sprites. That's what I've done as well. Sure you have to track them and move them when the camera moves, but you have to do that with any sprites, so you should already have code to handle that.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177722 - Miked0801 - Mon Dec 17, 2012 6:33 pm</h4>
+    <div class="postbody"><span class="postbody">We've used sprites when possible and mixed 2BG layers when that wasn't possible due to color, VRAM, or sprites on a line restrictions.  With BGs, you also need to tag the area in front of the 2nd BG such that you can dynamically change the priority of the actor sprite when it icould need to sort.  There are always going to be cases where this will break if you place objects to close together - say a table right next to a chair where the hero sprite is sorting on top of one and behind another.  We always just made sure to avoid these cases when placing actors.  If you have 3 or 4 or 5 sprites all walking in the same area sorting with BG and not, you will get sorting issues.
+<br/>
+<br/>
+Sprites are the way to go if at all possible...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177725 - chickendude - Thu Dec 20, 2012 8:02 pm</h4>
+    <div class="postbody"><span class="postbody">I had initially thought that putting all static things into the background would be more efficient/quicker, but i'll rethink it after everything you've all said. It just <span style="font-style: italic">feels</span> weird to treat the base of a tree as an object rather than part of the background, but maybe you all are right.
+<br/>
+<br/>
+Btw, i just got a linker today (an Elink2) and sent my little program to the GBA. It's pretty cool seeing it run on actual hardware :) Strangely, though, the program (the ROM takes up about 14 kb with the GBA header and all) somehow takes up 7 MB on the cartridge.
+<br/>
+<br/>
+Thanks for all the input.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177728 - sverx - Fri Dec 21, 2012 10:14 am</h4>
+    <div class="postbody"><span class="postbody">Of course you don't have to use sprites for each object or for the whole objects, I would use them just for those parts where it's not possible to use a BG tile at all.
+<br/>
+<br/>
+As for the linker... I have a SuperCardSD and I think that it's actually easier to copy my files onto a SD and put them into the SuperCard. :)<br/>_________________<br/><a class="postlink" href="http://bit.ly/yiQrz9" target="_blank">libXM7</a>|<a class="postlink" href="http://bit.ly/yJwcOo" target="_blank">NDS programming tutorial (Italiano)</a>|<a class="postlink" href="http://disjointedstudio.blogspot.com/" target="_blank">Waimanu DS / GBA</a>|<a class="postlink" href="http://adshomebrewersdiary.blogspot.com" target="_blank">A DS Homebrewer's Diary</a></span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

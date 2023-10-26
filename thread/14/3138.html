@@ -1,0 +1,493 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>more alpha blending fun! - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Beginners > more alpha blending fun!</h2>
+<div id="posts">
+<div class="post">
+    <h4>#18516 - TheMikaus - Sun Mar 28, 2004 7:44 am</h4>
+    <div class="postbody"><span class="postbody">This is my code (sorry about the huge block)
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+//include a graphic
+<br/>
+#include "circle.h"
+<br/>
+<br/>
+#define SetMode(mode) Register_DisplayController = (mode)
+<br/>
+<br/>
+#define Register_DisplayController  *(volatile unsigned short *)0x4000000
+<br/>
+#define Register_ScanlineCounter *(volatile unsigned short *)0x4000006
+<br/>
+#define Register_BlendModifier *(unsigned short *) 0x4000050
+<br/>
+#define Register_ColorEvaluation *(unsigned short *) 0x4000052
+<br/>
+#define Register_Controller (volatile unsigned int *) 0x04000130
+<br/>
+<br/>
+#define SpriteState_Memory ((unsigned short *) 0x7000000)
+<br/>
+#define SpriteImage_Memory ((unsigned short *) 0x6010000)
+<br/>
+#define SpritePal_Memory ((unsigned short *) 0x5000200)
+<br/>
+<br/>
+#define setTransparency(a,b,c) { Register_BlendModifier = ((1 &lt;&lt; (a)) | (1 &lt;&lt; (b))); Register_ColorEvaluation = (c) + (c &lt;&lt; 8);}
+<br/>
+<br/>
+unsigned short * spriteData3 = SpriteState_Memory + 8192;
+<br/>
+<br/>
+typedef struct tagBlender
+<br/>
+{
+<br/>
+    unsigned source_bg0 : 1;
+<br/>
+    unsigned source_bg1 : 1;
+<br/>
+    unsigned source_bg2 : 1;
+<br/>
+    unsigned source_bg3 : 1;
+<br/>
+    unsigned source_sprites : 1;
+<br/>
+    unsigned source_backdrop : 1;
+<br/>
+    
+<br/>
+    unsigned blend_mode : 2;
+<br/>
+    
+<br/>
+    unsigned dest_bg0 : 1;
+<br/>
+    unsigned dest_bg1 : 1;
+<br/>
+    unsigned dest_bg2 : 1;
+<br/>
+    unsigned dest_bg3 : 1;
+<br/>
+    unsigned dest_sprites : 1;
+<br/>
+    unsigned dest_backdrop : 1;
+<br/>
+} blender;
+<br/>
+<br/>
+<br/>
+typedef struct tagButtons
+<br/>
+{
+<br/>
+    unsigned a : 1;
+<br/>
+    unsigned b : 1;
+<br/>
+    unsigned select : 1;
+<br/>
+    unsigned start : 1;
+<br/>
+    unsigned right : 1;
+<br/>
+    unsigned left : 1;
+<br/>
+    unsigned up : 1;
+<br/>
+    unsigned down : 1;
+<br/>
+    unsigned r : 1;
+<br/>
+    unsigned l : 1;
+<br/>
+} Buttons;
+<br/>
+<br/>
+typedef struct tagSprite
+<br/>
+{
+<br/>
+    unsigned short at0;
+<br/>
+    unsigned short at1;
+<br/>
+    unsigned short at2;
+<br/>
+    unsigned short at3;
+<br/>
+} Sprite, *pSprite;
+<br/>
+<br/>
+<br/>
+typedef struct tagSprited
+<br/>
+{
+<br/>
+    //at0
+<br/>
+    unsigned y : 8;
+<br/>
+<br/>
+    unsigned rotation : 1;
+<br/>
+    unsigned DoubleSize : 1;
+<br/>
+    unsigned translucent : 1;
+<br/>
+    unsigned windowed : 1;
+<br/>
+    unsigned mosaic : 1;
+<br/>
+    unsigned color_256 : 1;
+<br/>
+    unsigned tall : 1;
+<br/>
+    unsigned wide : 1;
+<br/>
+<br/>
+    //at1
+<br/>
+    unsigned x : 9;
+<br/>
+    unsigned unknowna : 3;
+<br/>
+    unsigned hflip : 1;
+<br/>
+    unsigned vflip : 1;
+<br/>
+    unsigned spriteSize:2;
+<br/>
+    
+<br/>
+    //at2
+<br/>
+    unsigned name : 10;
+<br/>
+    unsigned ground : 2;
+<br/>
+    unsigned pallette : 4;
+<br/>
+    
+<br/>
+    unsigned short at3;
+<br/>
+    
+<br/>
+} sSprite;
+<br/>
+<br/>
+Sprite sprites[128];
+<br/>
+<br/>
+sSprite  * s2prites = (sSprite *)sprites;
+<br/>
+<br/>
+#define vsync() while((Register_ScanlineCounter &lt; 160));
+<br/>
+<br/>
+void updateSpriteMemory()
+<br/>
+{
+<br/>
+    int n;
+<br/>
+    unsigned short * temp;
+<br/>
+    temp = (unsigned short *)sprites;
+<br/>
+    
+<br/>
+    for(n = 0; n &lt; 128 * 4; n++)
+<br/>
+    {
+<br/>
+        SpriteState_Memory[n] = temp[n];
+<br/>
+    }
+<br/>
+}
+<br/>
+<br/>
+int main(void)
+<br/>
+{
+<br/>
+    unsigned short x;
+<br/>
+    unsigned char y;
+<br/>
+    
+<br/>
+     Buttons * controller = (Buttons *)Register_Controller;
+<br/>
+    signed short xdir = 1, ydir = 1;
+<br/>
+    
+<br/>
+    int char_number = 0;
+<br/>
+    int n;
+<br/>
+    int xd,yd;
+<br/>
+    
+<br/>
+    xd=yd=1;
+<br/>
+    x= 10;
+<br/>
+     y = 10;
+<br/>
+//obj en, mode2, 1d ,bg2en
+<br/>
+    SetMode( 0x1000 | 2 | 0x40 | 0x400);
+<br/>
+    
+<br/>
+    for(n = 0; n &lt; 128; n++)
+<br/>
+    {
+<br/>
+        //set everything to zero
+<br/>
+        sprites[n].at0 = 0;
+<br/>
+        sprites[n].at1 = 0;
+<br/>
+        sprites[n].at2 = 0;
+<br/>
+        sprites[n].at3 = 0;
+<br/>
+        
+<br/>
+        //move everything off screen
+<br/>
+        s2prites[n].y = 160;
+<br/>
+        s2prites[n].x = 240;
+<br/>
+    }
+<br/>
+    
+<br/>
+    //Set the Palette
+<br/>
+    
+<br/>
+    for ( n = 0; n &lt; 256; n ++)
+<br/>
+    {
+<br/>
+        SpritePal_Memory[n] = circlePalette[n];
+<br/>
+    }
+<br/>
+<br/>
+    for ( n = 0; n &lt; 256 * 8; n ++)
+<br/>
+    {
+<br/>
+        SpriteImage_Memory[n] = circleData[n];
+<br/>
+<br/>
+    }
+<br/>
+    
+<br/>
+    //set up first sprite
+<br/>
+<br/>
+    s2prites[0].name = 0;
+<br/>
+    s2prites[0].color_256 = 1;
+<br/>
+    s2prites[0].spriteSize = 3;
+<br/>
+    s2prites[0].y = 0;
+<br/>
+    s2prites[0].x = 150;
+<br/>
+    s2prites[0].translucent = 1;
+<br/>
+ 
+<br/>
+    s2prites[0].vflip = 0;
+<br/>
+    s2prites[0].hflip = 0;
+<br/>
+    s2prites[0].ground = 0;
+<br/>
+<br/>
+    blender * bre = (blender *) Register_BlendModifier;
+<br/>
+    bre-&gt;source_sprites = 1;
+<br/>
+    bre-&gt;blend_mode = 1;
+<br/>
+    bre-&gt;dest_bg2 = 1;
+<br/>
+    Register_ColorEvaluation = (8) + (8 &lt;&lt; 8);
+<br/>
+    
+<br/>
+    int atime = 0;
+<br/>
+    int btime = 0;
+<br/>
+    int uptime = 0;
+<br/>
+    int downtime = 0;
+<br/>
+    
+<br/>
+    
+<br/>
+    while(1)
+<br/>
+    {
+<br/>
+//delay so vga doesn't go a-wall
+<br/>
+        for(n = 0; n &lt; 16000; n++);
+<br/>
+        y += yd;
+<br/>
+        x += xd;
+<br/>
+        if ( y &gt; 160 - 64) yd = -1;
+<br/>
+        else if ( y == 0) yd = 1;
+<br/>
+        if ( x &gt; 240 - 64) xd = -1;
+<br/>
+        else if (x == 0) xd = 1;
+<br/>
+        s2prites[0].x=x;
+<br/>
+        s2prites[0].y=y;
+<br/>
+        if(!controller-&gt;a) atime++;
+<br/>
+        else atime =0;
+<br/>
+        
+<br/>
+        if(!controller-&gt;b) btime++;
+<br/>
+        else btime =0;
+<br/>
+        
+<br/>
+        if(!controller-&gt;up) uptime++;
+<br/>
+        else uptime =0;
+<br/>
+        
+<br/>
+        if(!controller-&gt;down) downtime++;
+<br/>
+        else downtime =0;
+<br/>
+        
+<br/>
+        
+<br/>
+        
+<br/>
+        if(uptime == 1)
+<br/>
+        {
+<br/>
+            s2prites[0].translucent = !s2prites[0].translucent;
+<br/>
+        }
+<br/>
+        
+<br/>
+        if(atime == 1)
+<br/>
+        {
+<br/>
+            s2prites[0].vflip = !s2prites[0].vflip;
+<br/>
+        }
+<br/>
+        if(btime == 1)
+<br/>
+        {
+<br/>
+            s2prites[0].hflip = !s2prites[0].hflip;
+<br/>
+        }
+<br/>
+        
+<br/>
+        vsync();
+<br/>
+        
+<br/>
+        updateSpriteMemory();
+<br/>
+    }
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I'm trying to get alpha blending to work, and I don't really know what I'm doing wrong.  It just displays the sprite as normal. a and b change the flip and up changes the translucency bit on the sprite.
+<br/>
+<br/>
+But I'm lost, it doesn't make the sprite blend at all! :(  help!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#18532 - DekuTree64 - Sun Mar 28, 2004 4:42 pm</h4>
+    <div class="postbody"><span class="postbody">Are you setting up the BG anywhere? It looks like you're only doing the sprite, so the BG tiles and screen data should still be all zeroed out, which would be transparent. No blending is performed if it's between a color and a transparent pixel.
+<br/>
+Try loading in some tiles and see if it works.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#18539 - tepples - Sun Mar 28, 2004 7:19 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>DekuTree64 wrote:</b></span></td> </tr> <tr> <td class="quote">the BG tiles and screen data should still be all zeroed out, which would be transparent. No blending is performed if it's between a color and a transparent pixel.</td> </tr></table><span class="postbody">
+<br/>
+If you tell the GBA to blend between the backdrop (or "sky" as some docs call it) and a layer, wouldn't that work?<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#18599 - TheMikaus - Mon Mar 29, 2004 3:28 pm</h4>
+    <div class="postbody"><span class="postbody">Setting the background worked.
+<br/>
+<br/>
+The use of backdrop does wierd blending.  I have this background picture of a red sky and a red sprite bouncing. and on backdrop it only blends the darker colors together.  Looks kinda wierd.  Anyway.  Thanks again!</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

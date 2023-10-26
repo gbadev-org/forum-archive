@@ -1,0 +1,135 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Odd byte location read error - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Odd byte location read error</h2>
+<div id="posts">
+<div class="post">
+    <h4>#108388 - dak - Wed Nov 08, 2006 11:53 am</h4>
+    <div class="postbody"><span class="postbody">Hi again,
+<br/>
+I've encountered another kink in my code; I opened a file and tryed going through and extracting data.  Nabbing a word from an even byte works just fine (i.e.: 0B0C comes to 3083), but when reading from an odd byte -- I get weirdness.
+<br/>
+<br/>
+Lets say I have a dword: 0040 001F
+<br/>
+<br/>
+And I tell the system to read from byte 1 (40 00), instead of getting 64, it reads the hex in the order of 00 40 (which will be interpreted as 16384).  My guess is that it is always reading the first byte of a word and although 40 is first in this number, 00 is the first in it's own byte (thats an uber guess at the situation).
+<br/>
+<br/>
+heeeelp!  Should I just check for an odd byte and fix this manually?
+<br/>
+<br/>
+-dak</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#108411 - Lick - Wed Nov 08, 2006 4:07 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>dak wrote:</b></span></td> </tr> <tr> <td class="quote">Should I just check for an odd byte and fix this manually?
+<br/>
+<br/>
+-dak</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Yes.<br/>_________________<br/><a class="postlink" href="http://licklick.wordpress.com" target="_blank">http://licklick.wordpress.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#108416 - masscat - Wed Nov 08, 2006 5:10 pm</h4>
+    <div class="postbody"><span class="postbody">To quote the ARM reference manual for the LDRH instrustion (load half word - 16bit value):
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Non halfword-aligned addresses
+<br/>
+If the load address is not halfword-aligned, the loaded value is UNPREDICTABLE.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+That is, do not do it. Read byte by byte and build the value with shifting and orring or make sure your data is aligned.
+<br/>
+<br/>
+Also note the ARM is little endian (unless you have changed it). Therefore if you have the following bytes stored in memory:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">Address     Byte value
+<br/>
+0x02000000  0x12
+<br/>
+0x02000001  0x34
+<br/>
+0x02000002  0x56
+<br/>
+0x02000003  0x78
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Reading a 32bit value from address 0x02000000 will place the value 0x78563412 in the register.
+<br/>
+At which end of your boiled egg do you start to eat?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#108437 - dak - Wed Nov 08, 2006 8:32 pm</h4>
+    <div class="postbody"><span class="postbody">thx guys - much appreciated</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#108450 - dak - Wed Nov 08, 2006 10:48 pm</h4>
+    <div class="postbody"><span class="postbody">I just spoke to a buddy of mine, and he says that there should be compiler options to auto-magically align odd-located words.  Is there any possibility that this is the case (read would help) in this situation?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#108451 - sajiimori - Wed Nov 08, 2006 11:05 pm</h4>
+    <div class="postbody"><span class="postbody">The compiler has no control over the contents of your files, and it has no idea what you're going to do with them.  If you load your file starting at a word-aligned address, and you want to read a half-word at an odd offset into the file, then it'll break without extra care.
+<br/>
+<br/>
+I'd suggest writing read16 and read32 functions that automatically handle unaligned reads.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#108465 - tepples - Thu Nov 09, 2006 4:15 am</h4>
+    <div class="postbody"><span class="postbody">Untested, but the functions should look somewhat like the following. Use the m series for big-endian (Motorola; network byte order) data, and use the i series for little-endian (Intel) data.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">unsigned int peeki32(const unsigned char *src) {
+<br/>
+  return src[0] | (src[1] &lt;&lt; 8) | (src[2] &lt;&lt; 16) | (src[3] &lt;&lt; 24);
+<br/>
+}
+<br/>
+<br/>
+unsigned int peeki16(const unsigned char *src) {
+<br/>
+  return src[0] | (src[1] &lt;&lt; 8);
+<br/>
+}
+<br/>
+<br/>
+unsigned int peekm32(const unsigned char *src) {
+<br/>
+  return src[3] | (src[2] &lt;&lt; 8) | (src[1] &lt;&lt; 16) | (src[0] &lt;&lt; 24);
+<br/>
+}
+<br/>
+<br/>
+unsigned int peekm16(const unsigned char *src) {
+<br/>
+  return src[1] | (src[0] &lt;&lt; 8);
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody"><br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

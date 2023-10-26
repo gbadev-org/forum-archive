@@ -1,0 +1,247 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Loading display lists from fat - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Loading display lists from fat</h2>
+<div id="posts">
+<div class="post">
+    <h4>#159340 - Meduusa - Sun Jun 29, 2008 3:29 pm</h4>
+    <div class="postbody"><span class="postbody">Im trying to load display lists from fat so that I dont have to link them to the binary.
+<br/>
+<br/>
+First I took a Display_List_2 example from libnds examples and modified it so
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#include &lt;stdio.h&gt;
+<br/>
+#include &lt;nds.h&gt;
+<br/>
+#include &lt;fat.h&gt;
+<br/>
+<br/>
+int main()
+<br/>
+{
+<br/>
+   FILE *model;
+<br/>
+<br/>
+   powerON(POWER_ALL);
+<br/>
+<br/>
+   //irqs are nice
+<br/>
+   irqInit();
+<br/>
+   irqSet(IRQ_VBLANK, 0);
+<br/>
+<br/>
+   //set mode 0, enable BG0 and set it to 3D
+<br/>
+   videoSetMode(MODE_0_3D);
+<br/>
+<br/>
+   // initialize gl
+<br/>
+   glInit();
+<br/>
+   
+<br/>
+   // enable antialiasing
+<br/>
+   glEnable(GL_ANTIALIAS);
+<br/>
+   
+<br/>
+   // setup the rear plane
+<br/>
+   glClearColor(0,0,0,31); // BG must be opaque for AA to work
+<br/>
+   glClearPolyID(63); // BG must have a unique polygon ID for AA to work
+<br/>
+   glClearDepth(0x7FFF);
+<br/>
+<br/>
+   //this should work the same as the normal gl call
+<br/>
+   glViewport(0,0,255,191);
+<br/>
+   
+<br/>
+   //any floating point gl call is being converted to fixed prior to being implemented
+<br/>
+   glMatrixMode(GL_PROJECTION);
+<br/>
+   glLoadIdentity();
+<br/>
+   gluPerspective(70, 256.0 / 192.0, 0.1, 40);
+<br/>
+   
+<br/>
+   gluLookAt(   0.0, 0.0, 3.5,      //camera possition 
+<br/>
+            0.0, 0.0, 0.0,      //look at
+<br/>
+            0.0, 1.0, 0.0);      //up
+<br/>
+   
+<br/>
+   glLight(0, RGB15(31,31,31) , 0,              floattov10(-1.0),       0);
+<br/>
+   glLight(1, RGB15(31,0,31),   0,              floattov10(1) - 1,          0);
+<br/>
+   glLight(2, RGB15(0,31,0) ,   floattov10(-1.0), 0,                0);
+<br/>
+   glLight(3, RGB15(0,0,31) ,   floattov10(1.0) - 1,  0,                0);
+<br/>
+   
+<br/>
+   //not a real gl function and will likely change
+<br/>
+   glPolyFmt(POLY_ALPHA(31) | POLY_CULL_BACK | POLY_FORMAT_LIGHT0 | POLY_FORMAT_LIGHT1 | 
+<br/>
+           POLY_FORMAT_LIGHT2 | POLY_FORMAT_LIGHT3 );
+<br/>
+<br/>
+<br/>
+   fatInitDefault();
+<br/>
+   model = fopen("model.bin", "r");
+<br/>
+<br/>
+   while(1)      
+<br/>
+   {
+<br/>
+      glPushMatrix();
+<br/>
+      
+<br/>
+      glCallList((u32*)model);
+<br/>
+<br/>
+      glPopMatrix(1);   
+<br/>
+      glFlush(0);
+<br/>
+   }
+<br/>
+   return 0;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+everything goes fine untill it gets to
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">glCallList((u32*)model);</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I think its correct but  for some reason my model dosen show up
+<br/>
+<br/>
+model.bin is a teapot.bin from a data folder that I renamed to model.bin and put into root of my flash card.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#159341 - tepples - Sun Jun 29, 2008 4:30 pm</h4>
+    <div class="postbody"><span class="postbody">In your code, I don't see anything that allocates RAM to hold the model and loads the model from the card into RAM. The fopen() function does not do this by itself; you have to use malloc(), fread(), and fclose().<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#159345 - DiscoStew - Sun Jun 29, 2008 4:51 pm</h4>
+    <div class="postbody"><span class="postbody">Basically what tepples said. The data needs to be loaded into memory prior to using it. Just allocate enough memory to hold the model, open and read the file once into the allocated memory, close that file, and use the new pointer from the allocation to use with glCallList.<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#159350 - M3d10n - Sun Jun 29, 2008 6:10 pm</h4>
+    <div class="postbody"><span class="postbody">When you do this:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">model = fopen("model.bin", "r"); </td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Model gets a pointer to a struct that holds information about the file in question, not the file data itself. You'll need to read the file size, malloc enough memory to hold it then use fread to read the entire file into the memory area you alloced. A pointer to the malloc'ed memory is what goes into glCallList().
+<br/>
+<br/>
+Here's a code snippet that does that:
+<br/>
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">char* readWholeFile(const char * filename)
+<br/>
+{
+<br/>
+   //Open file
+<br/>
+   FILE* dl = NULL;
+<br/>
+   dl = fopen(filename, "r");
+<br/>
+   
+<br/>
+   //Find file size
+<br/>
+   fseek(dl , 0 , SEEK_END);
+<br/>
+   int dlTotalBytes = ftell(dl);
+<br/>
+   rewind(dl);
+<br/>
+<br/>
+   //allocate memory to contain the whole file:
+<br/>
+   char* fileBuffer = (char*)malloc(dlTotalBytes);      
+<br/>
+   int result = fread(fileBuffer,1,dlTotalBytes,dl);
+<br/>
+<br/>
+   //Something went wrong? Free the memory.
+<br/>
+   if (result != dlTotalBytes)
+<br/>
+   {
+<br/>
+      free(fileBuffer);
+<br/>
+      fileBuffer = NULL;
+<br/>
+   }
+<br/>
+<br/>
+   //Close and return
+<br/>
+   fclose(dl);   
+<br/>
+   return fileBuffer;
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Of course you'll have to get rid of the resulting pointer yourself.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#159354 - Meduusa - Sun Jun 29, 2008 6:44 pm</h4>
+    <div class="postbody"><span class="postbody">BIG thanks to you guys, you rule!
+<br/>
+I got it working now</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

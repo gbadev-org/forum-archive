@@ -1,0 +1,101 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>gba_mb.specs bug (was Reporting a bug w/o SF.net) - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > gba_mb.specs bug (was Reporting a bug w/o SF.net)</h2>
+<div id="posts">
+<div class="post">
+    <h4>#145018 - tepples - Sat Nov 10, 2007 3:19 pm</h4>
+    <div class="postbody"><span class="postbody"><span style="font-weight: bold">Reporting a bug if I can't log in to SourceForge.net?</span>
+<br/>
+<br/>
+I have discovered what might be a defect in devkitARM R21. I have written a detailed description of the behaviors that I have observed when running a libgba example, but <a class="postlink" href="http://forum.gbadev.org/viewtopic.php?p=142843#142843" target="_blank">Mighty Max and wintermute said that maintainers don't read forums</a>, so I won't paste it here. But the devkitPro project's bug tracker does not take anonymous submissions. I tried to log in to SourceForge.net using the user name that I had used before, but it would not take my password. So I requested a password reset. It has been 16 hours, and the confirmation e-mail message has not yet arrived in my inbox nor in my junk mail folder. What is the next step in trying to report a problem with devkitARM or another devkitPro project?<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"><br/><br/>Last edited by tepples on Sat Nov 24, 2007 6:14 pm; edited 1 time in total</span></div>    
+</div>
+<div class="post">
+    <h4>#145020 - Mighty Max - Sat Nov 10, 2007 3:45 pm</h4>
+    <div class="postbody"><span class="postbody">How about directly addressing the maintainer(s) ?<br/>_________________<br/><a class="postlink" href="http://mightymax.org/gbamp_multiboot.html" target="_blank">GBAMP Multiboot</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#145036 - tepples - Sat Nov 10, 2007 8:25 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Mighty Max wrote:</b></span></td> </tr> <tr> <td class="quote">How about directly addressing the maintainer(s) ?</td> </tr></table><span class="postbody">
+<br/>
+I got in touch with wintermute on <a class="postlink" href="irc://irc.blitzed.org/gbadev" target="_blank">blitzed#gbadev</a>. It was a problem with the GBA link script, where a program would work as .mb but not as .gba. Wintermute came up with a one line fix to .../devkitARM/arm-eabi/lib/gba_mb.ld, changing this:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">__ewram_overlay_end = ABSOLUTE(.);</td> </tr></table><span class="postbody">
+<br/>
+to this:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">__ewram_overlay_end = __load_stop_ewram9;</td> </tr></table><span class="postbody">
+<br/>
+He suggested that this solution isn't perfect, but at least it worked for me.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#145052 - Cearn - Sun Nov 11, 2007 1:17 am</h4>
+    <div class="postbody"><span class="postbody">The root of the problem is that __end__ (which is tied to __ewram_overlay_end) ends up as an iwram address, rather than an ewram address, causing the copy from 'rom' to ewram in ctr0.s to go wrong. It seems that the linker doesn't like ABSOLUTE(.) outside of a section definition if that section is empty; it looks like it just takes the end location of the last non-empty section.
+<br/>
+<br/>
+For example, there is this for the sbss section:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">// line 234-ish
+<br/>
+   .sbss ALIGN(4):
+<br/>
+    {
+<br/>
+      __sbss_start = ABSOLUTE(.);
+<br/>
+      *(.sbss)
+<br/>
+      . = ALIGN(4);
+<br/>
+      __sbss_end  = ABSOLUTE(.);
+<br/>
+   }
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+With a near-blank multiboot project, the __sbss_end is inside ewram where it belongs. However, if I move the __sbss_end line outside the braces (which is where _ewram_overlay_end is found as well), __sbss_end has shifted to iwram. 
+<br/>
+<br/>
+But if I then add anything to sbss or ewram manually, like so:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">EWRAM_DATA u8 foo;
+<br/>
+// or
+<br/>
+EWRAM_SBB u8 bar;
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Both sbss and ewram ends are where they're supposed to be.
+<br/>
+<br/>
+I know this doesn't solve the problem, but maybe it'll help figure out what's going on. It does suggest a workaround that doesn't rely on messing with the linkscripts yourself: put a dummy variable in ewram.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

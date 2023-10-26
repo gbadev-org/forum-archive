@@ -1,0 +1,82 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Non-8x8 tilemaps - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>ASM > Non-8x8 tilemaps</h2>
+<div id="posts">
+<div class="post">
+    <h4>#177683 - chickendude - Thu Nov 29, 2012 5:06 pm</h4>
+    <div class="postbody"><span class="postbody">My next question is about how to handle non-8x8 tilemaps. I made a simple demo using 32x32 tiles, but i soon realized that while in theory my tiles were 32x32, in practice i just had a bunch of 8x8 tiles arranged to form a 32x32 sprite. I suppose that's just how the hardware works, but it makes my map data 16x larger! Instead of:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">.byte 0,0,0, etc.</td> </tr></table><span class="postbody">
+<br/>
+I've got:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">.byte 0x0,0x1,0x2,0x3, 0x0,0x1,0x2,0x3, 0x0,0x1,0x2,0x3, etc.
+<br/>
+.byte 0x4,0x5,0x6,0x7, 0x4,0x5,0x6,0x7, 0x4,0x5,0x6,0x7, etc.
+<br/>
+.byte 0x8,0x9,0xA,0xB, 0x8,0x9,0xA,0xB, 0x8,0x9,0xA,0xB, etc.
+<br/>
+.byte 0xC,0xD,0xE,0xF, 0xC,0xD,0xE,0xF, 0xC,0xD,0xE,0xF, etc.</td> </tr></table><span class="postbody">
+<br/>
+I was just wondering is that general practice? Coming from the z80, it seems like a huge waste of space and i'd rather write an "extraction" routine to build the tilemap of 8x8 tiles using my first, much smaller (and easier to manage) tilemap.
+<br/>
+<br/>
+And to sneak in another little question, if i may, are there any major differences between the GBA and the NDS that would make reading NDS (assembly) source less useful if my main goal is to write for the GBA? There seem to be a few NDS demos and even some complete games written in assembly, whereas for the GBA i haven't found all that much (i guess i'm probably about 10 years too late).</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177684 - Dwedit - Thu Nov 29, 2012 6:35 pm</h4>
+    <div class="postbody"><span class="postbody">You use metatiles, that's what people call any kind of game tile composed of more than one physical tile.  So instead of updating a single physical tile in vram, you have a table of multiple tiles and attributes that correspond to the metatile.
+<br/>
+<br/>
+Let's say you wanted to do things in the simplest possible way.  You want 32x32 tiles, so you'd have a collection of 16 16-bit words for each metatile.
+<br/>
+The halfwords here are exactly what you'd be writing to Video RAM.  This lets you select which palette it uses, and whether or not to flip the tile graphics.
+<br/>
+<br/>
+For the number of possible metatiles, you can either make a map of one byte per tile (0-255), or two bytes per tile (0-65535).
+<br/>
+<br/>
+<br/>
+As for differences between the NDS and GBA, NDS has an ARM9 instead of an ARM7, so it has a few more instructions available (like BLX, a function call instruction that can change between ARM and THUMB mode), but all of the GBA instructions still work fine.  Also, supposedly the SWAP instruction is "forbidden" for some reason on the GBA.
+<br/>
+On the NDS, you need to deal with the memory cache if you want to use DMA.  DMA is either used for fast memory copies, or for screen effects that change each scanline.  When transferring from RAM, flush the cache first.
+<br/>
+NDS has different code for setting up the video mode to get ready to display everything, in addition to setting the video mode, and setting what kind of background to use, you need to assign video memory, and assign whether it uses Engine A or Engine B.  The DMA registers also use slightly different bit values.  None of this is beyond what #ifdefs would do.
+<br/>
+Also, NDS has features like 3D mode, extended palettes, video render capture, and more video memory.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177690 - chickendude - Thu Nov 29, 2012 7:35 pm</h4>
+    <div class="postbody"><span class="postbody">Thanks, then it is indeed a metatile what i was thinking of. And i just want to state this to make sure i've got things clear: 16-bit tile entries ("map" entries) are for "text"/non-rotating backgrounds, giving you a 10-bit tile range with 6 bits of data, whereas rotational backgrounds use 8-bit entries.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177724 - Miked0801 - Mon Dec 17, 2012 6:40 pm</h4>
+    <div class="postbody"><span class="postbody">Swap is bugged according to all documetation I've read for GBA.  It doesn't do what is says.  We wouldn't be allowed to ship titles using that instruction.
+<br/>
+<br/>
+One other thing about meta tiles since you seem to be space concerned - a simple delta compression routine will compress most map data by 90% or more :)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#178319 - KabTak47 - Tue Feb 17, 2015 8:32 am</h4>
+    <div class="postbody"><span class="postbody">There is an incbin directive in GAS, but it can't specify a start position and length. 
+<br/>
+<br/>
+When using the devkitpro makefiles, the assembler has the current directory set to the "build" directory instead of the source code directory. Include and incbin become relative the build directory instead of the source code directory. But #include (handled by the preprocessor) still works correctly.<br/>_________________<br/>ali</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

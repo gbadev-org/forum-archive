@@ -1,0 +1,421 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>n00by question (code not working right) - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>ASM > n00by question (code not working right)</h2>
+<div id="posts">
+<div class="post">
+    <h4>#127978 - JapanLover - Mon May 07, 2007 4:15 am</h4>
+    <div class="postbody"><span class="postbody">hey there...
+<br/>
+<br/>
+i'm just starting to do asm on gba (i've done some asm in dos and windows, but never arm)...
+<br/>
+<br/>
+here is a little bit of code that doesn't seem to work right.........
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">@ --- screen.h (presumably) ---
+<br/>
+#define REG_DISPCNT     0x04000000
+<br/>
+<br/>
+#define MODE_3          0x0003
+<br/>
+#define BG2_ENABLE      0x0400
+<br/>
+<br/>
+#define vram    0x06000000
+<br/>
+<br/>
+@ --- main.s ---
+<br/>
+    .text         @ where the code should go
+<br/>
+    .code   32    @ code type (ARM in this case)
+<br/>
+    .global main  @ makes main visible for the whole project
+<br/>
+main:
+<br/>
+    ldr r1,=REG_DISPCNT
+<br/>
+    ldr r2,=BG2_ENABLE|MODE_3
+<br/>
+    str r2,[r1]
+<br/>
+    ldr r1,=0x03E0
+<br/>
+    ldr r2,=0x06000000
+<br/>
+   ldr r3,=0x06012C00
+<br/>
+   .Lopp:
+<br/>
+   str r1,[r2]
+<br/>
+   add r2,#1
+<br/>
+   cmp r2,r3
+<br/>
+   ble .Lopp
+<br/>
+.Lloop:
+<br/>
+    b .Lloop
+<br/>
+.pool</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+shouldn't that fill the screen with green ?...
+<br/>
+<br/>
+instead i get stripes...
+<br/>
+<br/>
+what am i doing wrong?
+<br/>
+<br/>
+i appreciate any replies =)
+<br/>
+<br/>
+thanks in advance for you time/help =)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127988 - kusma - Mon May 07, 2007 7:30 am</h4>
+    <div class="postbody"><span class="postbody">you're storing 0x000003E0 (str writes 32bits, each pixel is 16bits), that is one green and one black pixel. Try either loading 0x03E003E0 into r1 instead of 0x03E0, or using the strh-instruction to store a halfword instead.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127989 - kusma - Mon May 07, 2007 9:09 am</h4>
+    <div class="postbody"><span class="postbody">oh, and i also see that you increase the pointer you're writing to with one. This will mean that you'll do a lot of unaligned stores, and this isn't supported on ARM. You should increase it with the data-size you store (in this case 4) instead. This can be done without a separate instruction by using the !-postfix on the destination-operand. ("str r1, [r2]!" - notice the exclamation-mark)
+<br/>
+<br/>
+edit: In cas you didn't know: unaligned writes are writes to addresses that aren't exact multiplies of the data-size. This means that for 32bit writes, the two least significant bits of the address must be 0, and for 16 bit writes the one least significant bit must be 0. IIRC, most ARM-implementations ignores the lower bits, but this might not always be the case. The result is undefined.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127993 - Cearn - Mon May 07, 2007 11:08 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>kusma wrote:</b></span></td> </tr> <tr> <td class="quote">This can be done without a separate instruction by using the !-postfix on the destination-operand. (<span style="font-weight: bold">"str r1, [r2]!"</span> - notice the exclamation-mark)</td> </tr></table><span class="postbody">
+<br/>
+This isn't quite true. The exclamation mark means 'pre-indexed write-back'. "str Rd, [Rn, Op2]!" means you take the address given by <span style="font-style: italic">Rn+Op2</span>, store <span style="font-style: italic">Rd</span> there, and then update <span style="font-style: italic">Rn</span> to the offset address: <span style="font-style: italic">Rn = Rn+Op2</span>. But as <span style="font-style: italic">Op2</span>=0 in kusma's case, nothing would actually change. He probably meant "str r1, [r2,#4]!".
+<br/>
+<br/>
+However, that's not quite right either because that's <span style="font-style: italic">pre</span>-indexing, so you'd miss the first address. What you want is post-indexed write-back: "str r1, [r2], #4".
+<br/>
+<br/>
+There's a slightly faster way to loop as well: don't count up to 0x12C00, count down to 0. Also, code needs to be aligned just like data.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">@ --- screen.h (presumably) ---
+<br/>
+#define REG_DISPCNT     0x04000000
+<br/>
+<br/>
+#define MODE_3          0x0003
+<br/>
+#define BG2_ENABLE      0x0400
+<br/>
+<br/>
+#define VRAM            0x06000000
+<br/>
+<br/>
+@ --- main.s ---
+<br/>
+    .text           @ where the code should go
+<br/>
+    .align          @ Align to words
+<br/>
+    .arm            @ code type (ARM in this case)
+<br/>
+    .global main    @ makes main visible for the whole project
+<br/>
+main:
+<br/>
+    ldr     r1,=REG_DISPCNT
+<br/>
+    ldr     r2,=BG2_ENABLE|MODE_3
+<br/>
+    str     r2,[r1]
+<br/>
+<br/>
+    ldr     r1,=0x03E0
+<br/>
+    orr     r1, r1, r1 lsl #16      @ r1 |= r1&lt;&lt;16
+<br/>
+    ldr     r2,=VRAM
+<br/>
+    ldr     r3,=0x12C00             @ Number of bytes
+<br/>
+Lopp:
+<br/>
+        str     r1, [r2], #4        @ *wordptr++ = r1
+<br/>
+        subs    r3, r3, #4          @ subtract and compare to 0
+<br/>
+        bne     .Lopp
+<br/>
+.Lloop:
+<br/>
+    b       .Lloop
+<br/>
+.pool
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#127998 - kusma - Mon May 07, 2007 12:36 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Cearn wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+However, that's not quite right either because that's <span style="font-style: italic">pre</span>-indexing, so you'd miss the first address. What you want is post-indexed write-back: "str r1, [r2], #4".
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Right. Sorry about my confusion here ;)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#128044 - JapanLover - Tue May 08, 2007 12:56 am</h4>
+    <div class="postbody"><span class="postbody">thanks for the help guys, i thought it might have something to do with storing too much, i just couldn't figure out where i was doing that...
+<br/>
+<br/>
+cearn i got an error when trying to assemble the code you provided...
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Error: garbage following instruction -- `orr r1,r1,r1 lsl#16'</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+edit:
+<br/>
+<br/>
+another quick question...
+<br/>
+<br/>
+i'm now messing around with mode 4...
+<br/>
+<br/>
+and from what i understood, you write a byte into the vram that corresponds to a color in the palette, so used strb to write that byte to vram, but when i did that i got two pixels instead of the one that i wanted, so then i tried strh and got the one pixel i was after...
+<br/>
+<br/>
+does that make any sense? it doesn't to me...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#128067 - Cearn - Tue May 08, 2007 7:32 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>JapanLover wrote:</b></span></td> </tr> <tr> <td class="quote">thanks for the help guys, i thought it might have something to do with storing too much, i just couldn't figure out where i was doing that...
+<br/>
+<br/>
+cearn i got an error when trying to assemble the code you provided...
+<br/>
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Error: garbage following instruction -- `orr r1,r1,r1 lsl#16'</td> </tr></table><span class="postbody">
+<br/>
+</span></td> </tr></table><span class="postbody">
+<br/>
+`orr r1,r1,r1<span style="font-weight: bold">,</span> lsl #16', then. I often miss the comma before the shift &gt;_&gt;.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>JapanLover wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+edit:
+<br/>
+<br/>
+another quick question...
+<br/>
+<br/>
+i'm now messing around with mode 4...
+<br/>
+<br/>
+and from what i understood, you write a byte into the vram that corresponds to a color in the palette, so used strb to write that byte to vram, but when i did that i got two pixels instead of the one that i wanted, so then i tried strh and got the one pixel i was after...
+<br/>
+<br/>
+does that make any sense? it doesn't to me...</td> </tr></table><span class="postbody">
+<br/>
+You can't write in byte-sized chunks to VRAM. Well, you can, but it'd fill both pixels in that halfword with that byte. With strh you have something similar going on as the str case in mode 3: you're still plotting two pixels, but if you're only filling for one you'd get one colored pixel and one zero-pixel.
+<br/>
+<br/>
+The byte-write thing is covered in most tutorials. While most GBA tutorials focus on C, they can still help you with the intricacies of the GBA hardware. <a class="postlink" href="http://www.coranac.com/tonc/text/toc.htm" target="_blank">Tonc</a> covers most nearly all aspects of the hardware in detail, and has an assembly chapter to boot.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#128136 - JapanLover - Tue May 08, 2007 10:45 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Cearn wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>JapanLover wrote:</b></span></td> </tr> <tr> <td class="quote">thanks for the help guys, i thought it might have something to do with storing too much, i just couldn't figure out where i was doing that...
+<br/>
+<br/>
+cearn i got an error when trying to assemble the code you provided...
+<br/>
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Error: garbage following instruction -- `orr r1,r1,r1 lsl#16'</td> </tr></table><span class="postbody">
+<br/>
+</span></td> </tr></table><span class="postbody">
+<br/>
+`orr r1,r1,r1<span style="font-weight: bold">,</span> lsl #16', then. I often miss the comma before the shift &gt;_&gt;.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>JapanLover wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+edit:
+<br/>
+<br/>
+another quick question...
+<br/>
+<br/>
+i'm now messing around with mode 4...
+<br/>
+<br/>
+and from what i understood, you write a byte into the vram that corresponds to a color in the palette, so used strb to write that byte to vram, but when i did that i got two pixels instead of the one that i wanted, so then i tried strh and got the one pixel i was after...
+<br/>
+<br/>
+does that make any sense? it doesn't to me...</td> </tr></table><span class="postbody">
+<br/>
+You can't write in byte-sized chunks to VRAM. Well, you can, but it'd fill both pixels in that halfword with that byte. With strh you have something similar going on as the str case in mode 3: you're still plotting two pixels, but if you're only filling for one you'd get one colored pixel and one zero-pixel.
+<br/>
+<br/>
+The byte-write thing is covered in most tutorials. While most GBA tutorials focus on C, they can still help you with the intricacies of the GBA hardware. <a class="postlink" href="http://www.coranac.com/tonc/text/toc.htm" target="_blank">Tonc</a> covers most nearly all aspects of the hardware in detail, and has an assembly chapter to boot.</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+gotcha!
+<br/>
+<br/>
+thanks for the help =)
+<br/>
+<br/>
+i have been reading Tonc but i've been sorta just scanning it so i missed the part about 'the byte-write thing'
+<br/>
+<br/>
+Tonc is really great, it must have taken a lot of effort on your part, so i thank you very much</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#128274 - JapanLover - Thu May 10, 2007 6:16 am</h4>
+    <div class="postbody"><span class="postbody">alllllright i've got another problem with non-working code again....
+<br/>
+<br/>
+not sure at all whats wrong this time...
+<br/>
+<br/>
+i'm trying to draw a diagonal line, in mode 4...
+<br/>
+<br/>
+i feel like i'm so close to getting it right, but it's off for some reason...
+<br/>
+<br/>
+please take a look...
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">.text                      @ where the code should go
+<br/>
+.align                     @ align to words
+<br/>
+.arm                       @ code type (ARM in this case)
+<br/>
+.global main               @ makes main visible for the whole project
+<br/>
+<br/>
+main:
+<br/>
+   ldr    r1,=0x04000000   @ display register location thingy
+<br/>
+   ldr    r2,=0x0404       @ BG2 orr MODE4
+<br/>
+   str    r2,[r1]          @ put display setting in register
+<br/>
+<br/>
+   ldrh   r1,=0x03E0       @ 16bit colour into r1
+<br/>
+   ldr    r2,=0x5000002    @ loading palette location into r2
+<br/>
+   strh   r1, [r2]         @ and finally putting colour into palette
+<br/>
+<br/>
+   ldr    r2,=0x06000000   @ vram loaded into r2
+<br/>
+   ldr    r1,=0x01         @ color from palette loaded
+<br/>
+   ldr    r3,=0x0A         @ number of pixels to draw
+<br/>
+   ldr    r4,=0x0101       @ number to later xor with loaded
+<br/>
+<br/>
+.Lop:
+<br/>
+   str    r1,[r2],#0xf0    @ palette number put into vram and 240 added to pointer
+<br/>
+   eor    r1,r1,r4         @ palette numbers switched with a xor
+<br/>
+   str    r1,[r2],#0xf2    @ palette number put into vram and 242 added to pointer
+<br/>
+   eor    r1,r1,r4         @ palette numbers switched with a xor
+<br/>
+   subs   r3,r3,#1         @ decrease number of pixels left
+<br/>
+   bne    .Lop             @ loop until we've drawn all the pixels we wanted
+<br/>
+<br/>
+.Lloop:
+<br/>
+   b     .Lloop            @ continuous loop
+<br/>
+.pool
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+also, what exactly is .pool for?...
+<br/>
+<br/>
+thanks for any replies once again =)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#128284 - Cearn - Thu May 10, 2007 8:35 am</h4>
+    <div class="postbody"><span class="postbody">Inside the loop, use <span style="font-style: italic">strh</span>, not <span style="font-style: italic">str</span>.
+<br/>
+<br/>
+.pool is where literal values (as in ldr Rd,=<span style="font-style: italic">value</span>) are dumped. I think it's not really required anymore though. Answers to these questions can be found in the manual:  <a class="postlink" href="http://sourceware.org/binutils/docs-2.17/as/index.html" target="_blank">http://sourceware.org/binutils/docs-2.17/as/index.html</a>. Manuals for othe GNU tools can be found <a class="postlink" href="http://www.gnu.org/manual/manual.html" target="_blank">here</a>. Note that they've hidden the GNU assembler documents under binutils, rather than give it its own slot :(.
+<br/>
+<br/>
+Other points:
+<br/>
+<ul><li>The registers start at r0, not r1. 
+<br/>
+</li><li> Registers r0-r3 and r12 can be used as scratch registers, the rest should leave a function with the same value as they came in. Use the stack for temporary storage. r0-r3 are also used for function parameters and r0 for the return value.
+<br/>
+</li><li>Thumb code for recommended for GBA ROM because of its 16bit bus.</li><li>Memory loads (ldr) are usually slightly slower than mov. The assembler will turn 'ldr r0,=xx' into a mov if possible by itself, but it's still something to be aware of.
+<br/>
+</li></ul>These aren't really important now, but could be later.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#128381 - JapanLover - Fri May 11, 2007 2:12 am</h4>
+    <div class="postbody"><span class="postbody">thanks Cearn =)
+<br/>
+<br/>
+and thanks for the extra tips!...
+<br/>
+<br/>
+one thing though...
+<br/>
+<br/>
+i'm a little confused as to when i'm using thumb or arm...
+<br/>
+<br/>
+is it just that some instructions are thumb and some arm? or is something else to it?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#128433 - tepples - Fri May 11, 2007 1:01 pm</h4>
+    <div class="postbody"><span class="postbody">ARM ordinarily uses a 32-bit instruction encoding. <a class="postlink" href="http://en.wikipedia.org/wiki/ARM_architecture#.27Thumb.27" target="_blank">Thumb</a> is a compressed 16-bit encoding of common ARM instructions. A subroutine ("function" in C) can be compiled to ARM instructions or to Thumb instructions. (In GCC, this is controlled by the -marm or -mthumb compiler option.) When a subroutine puts the instruction decoder into Thumb mode, the CPU acts as if each Thumb instruction were decoded into one ARM instruction. A subroutine compiled to Thumb instructions may run faster from 16-bit memory than the same subroutine compiled to ARM instructions because each fetch cycle executes faster, pulling one 16-bit unit rather than two. However, in 32-bit memory (such as IWRAM on the GBA or any ARM9 cacheable memory on the DS), ARM instructions run faster because many ARM instructions correspond to two or three Thumb instructions.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

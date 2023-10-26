@@ -1,0 +1,203 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Points on a circle - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Beginners > Points on a circle</h2>
+<div id="posts">
+<div class="post">
+    <h4>#164342 - crazakp - Wed Oct 29, 2008 1:41 am</h4>
+    <div class="postbody"><span class="postbody">I looked through a couple threads about trig functions and bit shifting and fixed point numbers before deciding to post.  I don't think this is an issue with any of those, but I could be wrong.
+<br/>
+<br/>
+What I'd like to do is move a sprite in a circle.  Starting at 0 degrees, if the user presses up, it moves up a degree, if they press down, down a degree.  
+<br/>
+<br/>
+So to accomplish this, I would just need to figure out the (x,y) coordinate based on the angle, radius, and center.   
+<br/>
+<br/>
+Since I just started learning about fixed point numbers and LUTs, I tried to make a simple example in mode 3, where I would just draw a circle.
+<br/>
+<br/>
+My problem is that it draws the circle at (0,0) no matter what.  Could someone help me figure out what's wrong with my code?  I'm using tonc.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#define MEM_VRAM   0x06000000
+<br/>
+#define vid_mem      ((COLOR*)MEM_VRAM)
+<br/>
+#define CLR_RED      0x001F
+<br/>
+<br/>
+int main()
+<br/>
+{
+<br/>
+   COLOR clr = CLR_RED;
+<br/>
+   int i,x,y,radius,cx,cy,angle;
+<br/>
+   
+<br/>
+   radius = 25&lt;&lt;8;
+<br/>
+   cx = 75&lt;&lt;8;
+<br/>
+   cy = 75&lt;&lt;8;
+<br/>
+   
+<br/>
+   REG_DISPCNT= DCNT_BG2 | DCNT_MODE3;
+<br/>
+   
+<br/>
+   vid_mem[(cy&gt;&gt;8)*M3_WIDTH+(cx&gt;&gt;8)]= clr;
+<br/>
+   
+<br/>
+   for(i=0; i&lt;360; i++)
+<br/>
+   {
+<br/>
+      angle = (i * 182);
+<br/>
+      
+<br/>
+      x = cx + radius * lu_cos(angle)&gt;&gt;12;
+<br/>
+      y = cy + radius * lu_sin(angle)&gt;&gt;12;
+<br/>
+      
+<br/>
+      vid_mem[(y&gt;&gt;8)*M3_WIDTH+(x&gt;&gt;8)]= clr;
+<br/>
+   }
+<br/>
+   
+<br/>
+   while(1);
+<br/>
+<br/>
+   return 0;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Since lu_cos has a range of [0,FFFFh], I divided that by 360 to come up with the multiplier for each degree (182).
+<br/>
+<br/>
+<br/>
+EDIT:
+<br/>
+I got around this problem by just using bresenham's circle algorithm, but I'd still like to know what I did wrong because I'm also trying to calculate projectile motion, which uses trig functions.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#164346 - Cearn - Wed Oct 29, 2008 8:26 am</h4>
+    <div class="postbody"><span class="postbody">The creators of C, pranksters that they are, made it so that the precedence of bit-shifts rank lower than additions (and the other bitwise operators lower than == and !=). This code:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">y = a + b*c&gt;&gt;d;</td> </tr></table><span class="postbody">is parsed as
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">y = (a + b*c)&gt;&gt;d;</td> </tr></table><span class="postbody">, which is not what you're after.
+<br/>
+<br/>
+Change this:</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">      x = cx + radius * lu_cos(angle)&gt;&gt;12;
+<br/>
+      y = cy + radius * lu_sin(angle)&gt;&gt;12;
+<br/>
+</td> </tr></table><span class="postbody">to this:</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">      x = cx + (radius * lu_cos(angle)&gt;&gt;12);
+<br/>
+      y = cy + (radius * lu_sin(angle)&gt;&gt;12);
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#164368 - crazakp - Wed Oct 29, 2008 9:27 pm</h4>
+    <div class="postbody"><span class="postbody">Your changes worked.  But I'm still confused about something.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+      x = cx + (radius * lu_cos(angle)&gt;&gt;12);
+<br/>
+      y = cy + (radius * lu_sin(angle)&gt;&gt;12); 
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+So in the parenthesis, the multiplication would happen before the bit shift.  Wouldn't that be (8.8Q * .12Q) and according to my understanding the resulting fixed point number would be 8.96Q (8 * 12).  I had thought about order of precedence earlier, and did this:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+    y = a + b * (c&gt;&gt;12)
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+And I don't think it worked.  I'm pretty sure my understanding is wrong so any clarification would be appreciated.  Thanks for your help.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#164377 - Cearn - Wed Oct 29, 2008 11:13 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>crazakp wrote:</b></span></td> </tr> <tr> <td class="quote">Your changes worked.  But I'm still confused about something.
+<br/>
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+      x = cx + (radius * lu_cos(angle)&gt;&gt;12);
+<br/>
+      y = cy + (radius * lu_sin(angle)&gt;&gt;12); 
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+So in the parenthesis, the multiplication would happen before the bit shift.  Wouldn't that be (8.8Q * .12Q) ...
+<br/>
+</span></td> </tr></table><span class="postbody">
+<br/>
+Yes, and that's what you want to happen. For accuracy, you'll want to have as many bits behind the 'decimal' point as possible.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>crazakp wrote:</b></span></td> </tr> <tr> <td class="quote">... and according to my understanding the resulting fixed point number would be 8.96Q (8 * 12).</td> </tr></table><span class="postbody">
+<br/>
+The numerical <span style="font-style: italic">values</span> of the numbers multiply, but the fixed-point bits add. It may help to compare it to a regular decimal case: (a*10^8) * (b*10^12) = a*b * 10^20. Analogously, 8.8Q*.12Q = 8.20Q. Of course you can't simply add that to the cx (which is 8.8Q), just like 1 meter + 1 cm is not 2 meters (or 2 cm). For addition, you have to convert to the same units again -- in this case the 8.20Q number is converted to 8.8Q by dividing by the 1&lt;&lt;12 (the .12Q equivalent of one).
+<br/>
+<br/>
+Fixed-point math in hex is a lot like fixed-point math in decimal. If it helps, try to see what it would look like in decimal (where you should be able to find many examples in schoolwork) and once you have that down apply it to hex/binary.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>crazakp wrote:</b></span></td> </tr> <tr> <td class="quote">I had thought about order of precedence earlier, and did this:
+<br/>
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+    y = a + b * (c&gt;&gt;12)
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+And I don't think it worked.  I'm pretty sure my understanding is wrong so any clarification would be appreciated. Thanks for your help.</span></td> </tr></table><span class="postbody">
+<br/>
+In this case, <span style="font-style: italic">c</span> is the sine or cosine with 12 fractional bits. The sine and cosine functions are <span style="font-style: italic">all</span> fractional bits, so removing all those bits by the early right-shift is not a good idea.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#164382 - crazakp - Thu Oct 30, 2008 2:56 am</h4>
+    <div class="postbody"><span class="postbody">I think I have a better understanding now.  Thanks for the thorough explanation.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

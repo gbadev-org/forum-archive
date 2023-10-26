@@ -1,0 +1,169 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>GBA -- Communication and Normal Mode - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > GBA -- Communication and Normal Mode</h2>
+<div id="posts">
+<div class="post">
+    <h4>#164827 - Trecius - Mon Nov 24, 2008 5:22 am</h4>
+    <div class="postbody"><span class="postbody">Hello, All:
+<br/>
+<br/>
+I've a question regarding GBA programming.  I'm developing a small set of functions for sending information from one GBA to another GBA, but I'm having problems with the communication.
+<br/>
+<br/>
+I can transmit information from the master to the slave, but information from the slave to the master is never received by the master.  I am using normal node, and my rate is 256Kbit.  I have posted my code below...
+<br/>
+<br/>
+<br/>
+#define REG_IOCTRL		*(volatile u16*)0x4000134
+<br/>
+#define REG_SCCNT_L	*(volatile u16*)0x4000128	// Serial Communication Channel Control Register
+<br/>
+#define REG_SCDMAIN	*(volatile u32*)0x4000120	// Serial Communication Data Register 0 and 1
+<br/>
+<br/>
+#define ENABLE_MULTIPLAYER	0x7FFF
+<br/>
+#define BIT_SO		0x0008
+<br/>
+#define BIT_SI		0x0004
+<br/>
+<br/>
+#define BIT_START		0x0080
+<br/>
+<br/>
+void EnableCommunications()
+<br/>
+{
+<br/>
+   REG_IOCTRL = REG_IOCTRL &amp; ENABLE_MULTIPLAYER;	// Bit 15 must be 0
+<br/>
+	#ifdef SLAVE
+<br/>
+	{
+<br/>
+		REG_SCCNT_L = 0x1008;	// External Clock, SO = high during inactivity, 32-bit mode
+<br/>
+	}
+<br/>
+	#else	// MASTER
+<br/>
+	{		
+<br/>
+		REG_SCCNT_L = 0x1009;	// Internal Clock @ 256 kHz, SO = high during inactivity, 32-bit mode
+<br/>
+	}
+<br/>
+<br/>
+	#endif
+<br/>
+}
+<br/>
+<br/>
+u32 Transmit(u32 data)
+<br/>
+{
+<br/>
+	REG_SCDMAIN = data;
+<br/>
+<br/>
+	#ifdef SLAVE
+<br/>
+	{
+<br/>
+		REG_SCCNT_L = REG_SCCNT_L | BIT_START;
+<br/>
+		REG_SCCNT_L = REG_SCCNT_L &amp; ~BIT_SO;
+<br/>
+<br/>
+		while (REG_SCCNT_L &amp; BIT_START)
+<br/>
+		{
+<br/>
+			// Just wait
+<br/>
+		}
+<br/>
+		REG_SCCNT_L = REG_SCCNT_L | BIT_SO;
+<br/>
+	}
+<br/>
+	#else	// MASTER
+<br/>
+	{		
+<br/>
+		while (REG_SCCNT_L &amp; BIT_SI)
+<br/>
+		{
+<br/>
+			// Just wait
+<br/>
+		}
+<br/>
+<br/>
+		REG_SCCNT_L = REG_SCCNT_L | BIT_START;
+<br/>
+		while (REG_SCCNT_L &amp; BIT_START)
+<br/>
+		{
+<br/>
+			// Just wait
+<br/>
+		}
+<br/>
+	}
+<br/>
+	#endif
+<br/>
+<br/>
+	return REG_SCDMAIN;
+<br/>
+}
+<br/>
+<br/>
+<br/>
+Is my code flawed somewhere?  When running only the slave and after initializing my communications, the slave's SO is never high; at least, as far as I can see.
+<br/>
+<br/>
+Again, I ask if my code flawed?  Do I need to do additional code initialization?  Do I need to do additional hardware initialization anywhere?  Thank you for your help.
+<br/>
+<br/>
+<br/>
+Trecius</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#164829 - eKid - Mon Nov 24, 2008 6:40 am</h4>
+    <div class="postbody"><span class="postbody">You need a special cable for normal mode. The normal multiplayer cable for GBA is meant for the multi-play mode. With the normal multiplayer cable (the one with the box in the middle) you can only do fast one-way communication in normal mode (ie master-&gt;slave1-&gt;slave2-&gt;slave3).</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#164830 - Trecius - Mon Nov 24, 2008 6:47 am</h4>
+    <div class="postbody"><span class="postbody">Thank you.  I have just figured that out too.  I was looking at my cable, and I notice that my SI line is shorted to ground.  As such, I can see why my master is constantly receiving 0.  Blagh, this is just frustrating.  It's time to rip apart the cable.  I assume all I need to do is unground the cable and cross the SI and SO lines... leaving all other lines "straight-through?"
+<br/>
+<br/>
+<br/>
+Trecius</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#164832 - wintermute - Mon Nov 24, 2008 9:56 am</h4>
+    <div class="postbody"><span class="postbody">I beleive most of those multiplayer cables don't supply all the wires you need. I found that GBC  2 player cables work better.<br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

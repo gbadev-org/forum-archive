@@ -1,0 +1,935 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Creating a smooth consistant curve path - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > Creating a smooth consistant curve path</h2>
+<div id="posts">
+<div class="post">
+    <h4>#157932 - DiscoStew - Mon Jun 02, 2008 3:47 am</h4>
+    <div class="postbody"><span class="postbody">Currently for my stuff, I'm using Bezier curves to handle my pathing curves from one point to another. However, I'm noticing that unless I do a lot of tweaking with the points, the increments when going through the curve are not static. What I'd like is to have a curve that with however many points it is split up by, the distance between each increment is the same, rather than having it speed up and down throughout the curve.
+<br/>
+<br/>
+EDIT:
+<br/>
+<br/>
+Either that, or perhaps a technique or method that makes it easier for dealing with Bezier curves in this manner. thx.<br/>_________________<br/><span style="font-weight: bold">DS</span> - It's all about <span style="font-weight: bold">D</span>isco<span style="font-weight: bold">S</span>tew</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#157947 - silent_code - Mon Jun 02, 2008 10:30 am</h4>
+    <div class="postbody"><span class="postbody">i don't know how useful this is to you and it's been some years i have dealt with it, but i remeber hermite spline curves to be quite useful.
+<br/>
+<br/>
+happy coding! :^)<br/>_________________<br/><span style="font-size: 9px; line-height: normal"><span style="text-decoration: underline"><span style="font-weight: bold"></span></span> July 5th 08: "<span style="font-weight: bold">Volumetric Shadow Demo</span>" 1.6.0 (final) source released
+<br/>
+June 5th 08: "<span style="font-weight: bold">Zombie NDS</span>" WIP released!
+<br/>
+It's all on my page, just click <span style="font-weight: bold">WWW</span> below.</span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#157948 - kusma - Mon Jun 02, 2008 10:38 am</h4>
+    <div class="postbody"><span class="postbody">In order to move at constant speed in a spline, you need to be able to calculate the length of each curve-segment. Unfortunately, it seems that there's no way of doing this analytically for Bezier-curves. If you're willing to spend some more processing-time, you could approximate the curve-segments with lines and calculate the length from them. Another option is to use another cuve-type, like silent_code suggested. There seems to be an analytical solution for hermite-curves (and thus it's variants, like catmul-rom and tcb-splines).</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#157958 - RickA - Mon Jun 02, 2008 2:08 pm</h4>
+    <div class="postbody"><span class="postbody">Another option that someone found (I can search for the sources if you like) which seemed pretty smart, is to generate another bezier spline offline which indicates the dt you need on the main spline to get a constant rate of movement. This apparently only requires two extra points per node, and then at runtime you do two bezier spline interpolations, first on the speed one to get the dt to use on the position (second) one.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#157959 - kusma - Mon Jun 02, 2008 2:13 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>RickA wrote:</b></span></td> </tr> <tr> <td class="quote">Another option that someone found (I can search for the sources if you like) which seemed pretty smart, is to generate another bezier spline offline which indicates the dt you need on the main spline to get a constant rate of movement. This apparently only requires two extra points per node, and then at runtime you do two bezier spline interpolations, first on the speed one to get the dt to use on the position (second) one.</td> </tr></table><span class="postbody">
+<br/>
+Keep in mind that he stated that the curve isn't static, so that speed-curve would have to be regenerated on the fly.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#161056 - mathHeadInClouds - Sun Jul 27, 2008 7:34 am</h4>
+    <div class="postbody"><span class="postbody">Here is an implementation of kusma's first suggestion. The code posted below is ready to compile and works, I tested it.
+<br/>
+It displays a cubic Bezier curve on the lower screen.
+<br/>
+In each point that is drawn, you calculate the "speed" at that point as the length of the vector of the partial derivatives (the tangent vector).
+<br/>
+In order for all the next points to be drawn to be always the same distance from the respective previous points, the increment in the parameter
+<br/>
+must be inversely proportional to that speed. deltaT = desiredDistToNextPixel / speed does that.
+<br/>
+If desiredDistToNextPixel is small, the drawn curve is dense and the approximation is very good. 
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#include &lt;nds.h&gt;
+<br/>
+#include &lt;stdlib.h&gt;
+<br/>
+#include &lt;math.h&gt;
+<br/>
+<br/>
+double getFirst(int index, double** points){
+<br/>
+   return points[index][0];
+<br/>
+}
+<br/>
+double getSecond(int index, double** points){
+<br/>
+   return points[index][1];
+<br/>
+}
+<br/>
+double* bAux3(double (*at)(int, double**), double** pts){
+<br/>
+   double* result = malloc(4*sizeof(double));
+<br/>
+   result[0] = at(0, pts);
+<br/>
+   result[1] = -3*at(0, pts) + 3*at(1, pts);
+<br/>
+   result[2] = 3*at(0, pts) - 6*at(1, pts) + 3*at(2, pts);
+<br/>
+   result[3] = -at(0, pts) + 3* at(1, pts) - 3*at(2, pts) + at(3, pts);
+<br/>
+   return result;
+<br/>
+}
+<br/>
+double** bezier3(double** points){
+<br/>
+   double** result = malloc(2*sizeof(double*));
+<br/>
+   result[0] = bAux3(getFirst, points);
+<br/>
+   result[1] = bAux3(getSecond, points);
+<br/>
+   return result;
+<br/>
+}
+<br/>
+double evalPoly( double* poly, int len, double val){
+<br/>
+   double result = 0;
+<br/>
+   while (len--) result = result*val + (*(poly+len));
+<br/>
+   return result;
+<br/>
+}
+<br/>
+double* paraToPoint(double** curve, int lenCurve, double para){
+<br/>
+   double* result = malloc(2*sizeof(double));
+<br/>
+   result[0] = evalPoly(curve[0], lenCurve, para);
+<br/>
+   result[1] = evalPoly(curve[1], lenCurve, para);
+<br/>
+   return result;
+<br/>
+}
+<br/>
+double* deriv( double* poly, int len){
+<br/>
+   double* result = malloc(sizeof(double)*(len-1));
+<br/>
+   int exponent;
+<br/>
+   for ( exponent = 1; exponent &lt; len; exponent++ ){
+<br/>
+      result[exponent-1] = exponent * poly[exponent];
+<br/>
+   }
+<br/>
+   return result;
+<br/>
+}
+<br/>
+double approximateLengthOf2DVector(double x, double y){
+<br/>
+   // returns a usable (worst case relative error &lt; 6.5%) approximation of the vector length sqrt(x^2 + y^2), without using the sqrt function
+<br/>
+   double absx = fabs(x);
+<br/>
+   double absy = fabs(y);
+<br/>
+   if ( absx &gt; absy ) return absx + 0.3284271247461903 * absy;
+<br/>
+   return absy + 0.3284271247461903 * absx;
+<br/>
+   // 0.3284271247461903 = -2.5 + 2*sqrt(2) solution of minimizing  a suitable squared error integral
+<br/>
+}
+<br/>
+void setPixelForParam( double** curve, int lenCurve, double t, int color){
+<br/>
+   double* where = paraToPoint(curve, lenCurve, t);
+<br/>
+   int x = ((int)(0.5 + where[0]));
+<br/>
+   int y = ((int)(0.5 + where[1]));
+<br/>
+   VRAM_A[256*y + x] = color;
+<br/>
+}
+<br/>
+void showSomeBezierCurve(){
+<br/>
+   int red = RGB15(31, 0, 0);
+<br/>
+   int degree = 3;
+<br/>
+   int len = degree + 1;
+<br/>
+   double p0[2] = {50., 10.};     // start
+<br/>
+   double p1[2] = {240., 190.};   // control 1
+<br/>
+   double p2[2] = {10., 190.};    // control 2
+<br/>
+   double p3[2] = {200., 10.};    // end
+<br/>
+   double** pts = malloc(len * sizeof(double*));
+<br/>
+   pts[0] = p0; pts[1] = p1; pts[2] = p2; pts[3] = p3;
+<br/>
+   double** curve = bezier3(pts);
+<br/>
+   double* x = curve[0];          // array of coefficients of the polynomial for the x coordinate (highest one first)
+<br/>
+   double* y = curve[1];          // ditto for y
+<br/>
+   double* dx = deriv(x, len);    // array of coefficients of the derivative with respect to x
+<br/>
+   double* dy = deriv(y, len);    // ditto for y
+<br/>
+   double t = 0.;                 // parameter of the curve
+<br/>
+   double desiredDistToNextPixel = 1.;           // to be tweaked
+<br/>
+   double maxDeltaT = 0.05;                      // to be tweaked
+<br/>
+   double tangentX, tangentY, speed, deltaT;     
+<br/>
+   while ( t &lt; 1. ){
+<br/>
+      setPixelForParam(curve, len, t, red);
+<br/>
+      tangentX = evalPoly(dx, degree, t);
+<br/>
+      tangentY = evalPoly(dy, degree, t);
+<br/>
+      speed = approximateLengthOf2DVector(tangentX, tangentY);
+<br/>
+      if ( desiredDistToNextPixel &gt; maxDeltaT * speed ) {
+<br/>
+         deltaT = maxDeltaT;
+<br/>
+      } else {
+<br/>
+         deltaT = desiredDistToNextPixel / speed;
+<br/>
+      }
+<br/>
+      t += deltaT;
+<br/>
+   }
+<br/>
+}
+<br/>
+int main(void){
+<br/>
+   irqInit();   irqEnable(IRQ_VBLANK);
+<br/>
+   videoSetMode(MODE_FB0);   vramSetBankA(VRAM_A_LCD);
+<br/>
+   lcdMainOnBottom();
+<br/>
+   consoleDemoInit();
+<br/>
+   showSomeBezierCurve();
+<br/>
+   while (1){
+<br/>
+   }
+<br/>
+   return 0;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+And now, I have a question / request.
+<br/>
+<br/>
+Please, someone modify my code, so that the bezier curve is displayed on both screens, not just the lower one. 
+<br/>
+Believe it or not, I don't know how to do that.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#161057 - eKid - Sun Jul 27, 2008 7:58 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>mathHeadInClouds wrote:</b></span></td> </tr> <tr> <td class="quote">Please, someone modify my code, so that the bezier curve is displayed on both screens, not just the lower one. 
+<br/>
+Believe it or not, I don't know how to do that.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+int main(void){
+<br/>
+   irqInit();
+<br/>
+   irqEnable(IRQ_VBLANK);
+<br/>
+   videoSetMode(MODE_FB0);
+<br/>
+   vramSetBankA(VRAM_A_LCD);
+<br/>
+   
+<br/>
+   lcdMainOnBottom();
+<br/>
+   
+<br/>
+   // use mode3 to display 16bit bitmap
+<br/>
+   videoSetModeSub(MODE_3_2D|DISPLAY_BG3_ACTIVE);
+<br/>
+   
+<br/>
+   // vram c to hold data
+<br/>
+   vramSetBankC(VRAM_C_SUB_BG);
+<br/>
+   
+<br/>
+   // use bg3 to display bitmap
+<br/>
+   SUB_BG3_CR = BG_BMP16_256x256;
+<br/>
+   SUB_BG3_XDX = 256;   // initialize bg3's matrix
+<br/>
+   SUB_BG3_XDY = 0;
+<br/>
+   SUB_BG3_YDX = 0;
+<br/>
+   SUB_BG3_YDY = 256;
+<br/>
+   
+<br/>
+   // draw curve
+<br/>
+   showSomeBezierCurve();
+<br/>
+   
+<br/>
+   // copy data to sub screen
+<br/>
+   int i;
+<br/>
+   for( i = 0; i &lt; 256*192; i++ )
+<br/>
+   {
+<br/>
+      // copy data and set opacity bit
+<br/>
+      BG_GFX_SUB[i] = VRAM_A[i] | 0x8000;
+<br/>
+   }
+<br/>
+   
+<br/>
+   while (1){
+<br/>
+   swiWaitForVBlank();   // idle cpu (lower power consumption)
+<br/>
+   }
+<br/>
+   return 0;
+<br/>
+} 
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+:)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#161063 - mathHeadInClouds - Sun Jul 27, 2008 2:00 pm</h4>
+    <div class="postbody"><span class="postbody">thank you so much eKid.
+<br/>
+<br/>
+Sorry to hijack your thread, but I think you got a conclusive answer, DiscoStew.
+<br/>
+(kusma is right in saying that "there's no way of doing this ["to calculate the length of each curve-segment"]
+<br/>
+analytically for Bezier-curves.", meaning that a closed formula for the parameter values that you have to pick
+<br/>
+in order to split the curve into segments of equal lengths does not exist.
+<br/>
+That's why the next parameter value is calculated using the previous one in the code, rather than using
+<br/>
+the non-existent wish-formula i -&gt; ith parameter value).
+<br/>
+<br/>
+Since the thread is already hijacked, I might as well ask another question building upon my previous one:
+<br/>
+<br/>
+I want to display the string "Hello World" on the top screen.
+<br/>
+<br/>
+I know have to add
+<br/>
+#include &lt;stdio.h&gt;
+<br/>
+on top, and then
+<br/>
+iprintf("\x1b[0;0H    Hello World");
+<br/>
+somewhere later. Yet again, I don't know how to set up things at the beginning - the stuff with the banks and modes is strangely beyond my comprehension.
+<br/>
+<br/>
+btw, upon request, i can post functions bezier4, bezier5, etc. for higher bezier curves, if anyone wants to know.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#161068 - silent_code - Sun Jul 27, 2008 8:27 pm</h4>
+    <div class="postbody"><span class="postbody">There is a libnds ansi_console example, which answers your question. :^)<br/>_________________<br/><span style="font-size: 9px; line-height: normal"><span style="text-decoration: underline"><span style="font-weight: bold"></span></span> July 5th 08: "<span style="font-weight: bold">Volumetric Shadow Demo</span>" 1.6.0 (final) source released
+<br/>
+June 5th 08: "<span style="font-weight: bold">Zombie NDS</span>" WIP released!
+<br/>
+It's all on my page, just click <span style="font-weight: bold">WWW</span> below.</span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#161070 - mathHeadInClouds - Sun Jul 27, 2008 9:50 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">There is a libnds ansi_console example, which answers your question. :^)
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+I think I didn't put the question right: I wanted the text to appear <span style="font-weight: bold"> IN ADDITION </span> to the two bezier curves on the top and bottom screen, not ONLY text as in the ansi_console example.
+<br/>
+<br/>
+I recognize that this is actually a newbie question, and that there is also a thread in the beginner forum ("Text over background" from sUPREz) with the same (or very similar) issue; eKid posted a link in response to that question ("bitmap_console"), but I cannot get that to compile.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#161073 - silent_code - Sun Jul 27, 2008 10:14 pm</h4>
+    <div class="postbody"><span class="postbody">Try VSD (open source) from my site. It has a paletted image and text on top of that on the sub screen. :^)
+<br/>
+<br/>
+You basically need to set up the console to "skip" past the background image memory. Or set the background to be read from memory past the console... You do that by assigning the right character, tile and bitmap bases.<br/>_________________<br/><span style="font-size: 9px; line-height: normal"><span style="text-decoration: underline"><span style="font-weight: bold"></span></span> July 5th 08: "<span style="font-weight: bold">Volumetric Shadow Demo</span>" 1.6.0 (final) source released
+<br/>
+June 5th 08: "<span style="font-weight: bold">Zombie NDS</span>" WIP released!
+<br/>
+It's all on my page, just click <span style="font-weight: bold">WWW</span> below.</span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#161347 - mathHeadInClouds - Fri Aug 01, 2008 9:27 pm</h4>
+    <div class="postbody"><span class="postbody">I'll paypal 5 Euros (that's about 8 dollars) to the first person to post code that displays the bezier curve on both screens (as the code here in this thread in my posting + eKids posting already does), and in addition, displays the text "Hello World" on the upper (sub) screen, using "printf" or "iprintf". The code should compile as-is on the newest edition of devkitpro.
+<br/>
+<br/>
+<br/>
+Thank you for your time.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#161359 - silent_code - Fri Aug 01, 2008 10:34 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>mathHeadInClouds wrote:</b></span></td> </tr> <tr> <td class="quote">I'll paypal 5 Euros (that's about 8 dollars) to the first person to post code that displays the bezier curve on both screens (as the code here in this thread in my posting + eKids posting already does), and in addition, displays the text "Hello World" on the upper (sub) screen, using "printf" or "iprintf". The code should compile as-is on the newest edition of devkitpro.
+<br/>
+<br/>
+Thank you for your time.</td> </tr></table><span class="postbody">
+<br/>
+I guess that means you owe me 5? now. :^D
+<br/>
+<br/>
+I don't want the money, so please <a class="postlink" href="http://www.devkitpro.org/support-devkitpro/" target="_blank">donate it to devkitPro</a> (I kindly request you add something like "With best regards from silent_code / <a class="postlink" href="http://www.robs-basement.de" target="_blank">www.robs-basement.de</a>", when possible) and make sure I get notified about the arrival of the donation.
+<br/>
+<br/>
+I can explain how it works (obviously), just ask when anything's unclear.
+<br/>
+<br/>
+Note: Some (double *) and (double **) castshad to added, as the sources above weren't compiling.
+<br/>
+<br/>
+I am using the current releases of devkitARM (R23b) and libnds (20071023).
+<br/>
+<br/>
+EDIT 1: Some comments have been added / extended.
+<br/>
+<br/>
+EDIT 2: Hopefully you don't mind the minor formating adjustments I made. (I prefer "double *pdfoo;" over "double* pdfoo;", because it's closer to the syntax. Example: "double dada, *pdada, dudu;")
+<br/>
+<br/>
+EDIT 3: <span style="font-weight: bold">I hope you do keep your promise.</span> ;^)
+<br/>
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#include &lt;nds.h&gt;
+<br/>
+<br/>
+#include &lt;stdio.h&gt; // Added by silent_code for *printf()
+<br/>
+#include &lt;stdlib.h&gt;
+<br/>
+#include &lt;math.h&gt;
+<br/>
+<br/>
+double getFirst(int index, double **points)
+<br/>
+{
+<br/>
+   return points[index][0];
+<br/>
+}
+<br/>
+double getSecond(int index, double **points)
+<br/>
+{
+<br/>
+   return points[index][1];
+<br/>
+}
+<br/>
+double *bAux3(double(*at)(int, double **), double **pts)
+<br/>
+{
+<br/>
+   double *result = (double *)malloc(4 * sizeof(double));
+<br/>
+   result[0] = at(0, pts);
+<br/>
+   result[1] = -3 * at(0, pts) + 3 * at(1, pts);
+<br/>
+   result[2] = 3 * at(0, pts) - 6 * at(1, pts) + 3 * at(2, pts);
+<br/>
+   result[3] = -at(0, pts) + 3 * at(1, pts) - 3 * at(2, pts) + at(3, pts);
+<br/>
+   return result;
+<br/>
+}
+<br/>
+double **bezier3(double **points)
+<br/>
+{
+<br/>
+   double **result = (double **)malloc(2 * sizeof(double *));
+<br/>
+   result[0] = bAux3(getFirst, points);
+<br/>
+   result[1] = bAux3(getSecond, points);
+<br/>
+   return result;
+<br/>
+}
+<br/>
+double evalPoly(double *poly, int len, double val)
+<br/>
+{
+<br/>
+   double result = 0;
+<br/>
+   while(len--) result = result * val + (*(poly + len));
+<br/>
+   return result;
+<br/>
+}
+<br/>
+double *paraToPoint(double **curve, int lenCurve, double para)
+<br/>
+{
+<br/>
+   double *result = (double *)malloc(2 * sizeof(double));
+<br/>
+   result[0] = evalPoly(curve[0], lenCurve, para);
+<br/>
+   result[1] = evalPoly(curve[1], lenCurve, para);
+<br/>
+   return result;
+<br/>
+}
+<br/>
+double *deriv(double *poly, int len)
+<br/>
+{
+<br/>
+   double *result = (double *)malloc(sizeof(double) * (len - 1));
+<br/>
+   int exponent;
+<br/>
+   for(exponent = 1; exponent &lt; len; exponent++)
+<br/>
+   {
+<br/>
+      result[exponent - 1] = exponent * poly[exponent];
+<br/>
+   }
+<br/>
+   return result;
+<br/>
+}
+<br/>
+double approximateLengthOf2DVector(double x, double y)
+<br/>
+{
+<br/>
+   // returns a usable (worst case relative error &lt; 6.5%) approximation of the vector length sqrt(x^2 + y^2), without using the sqrt function
+<br/>
+   double absx = fabs(x);
+<br/>
+   double absy = fabs(y);
+<br/>
+   if(absx &gt; absy) return absx + 0.3284271247461903 * absy;
+<br/>
+   return absy + 0.3284271247461903 * absx;
+<br/>
+   // 0.3284271247461903 = -2.5 + 2*sqrt(2) solution of minimizing  a suitable squared error integral
+<br/>
+}
+<br/>
+void setPixelForParam(double **curve, int lenCurve, double t, int color)
+<br/>
+{
+<br/>
+   double *where = paraToPoint(curve, lenCurve, t);
+<br/>
+   int x = ((int)(0.5 + where[0]));
+<br/>
+   int y = ((int)(0.5 + where[1]));
+<br/>
+   VRAM_A[256 * y + x] = color;
+<br/>
+}
+<br/>
+void showSomeBezierCurve()
+<br/>
+{
+<br/>
+   int red = RGB15(31, 0, 0);
+<br/>
+   int degree = 3;
+<br/>
+   int len = degree + 1;
+<br/>
+   double p0[2] = {50., 10.};     // start
+<br/>
+   double p1[2] = {240., 190.};   // control 1
+<br/>
+   double p2[2] = {10., 190.};    // control 2
+<br/>
+   double p3[2] = {200., 10.};    // end
+<br/>
+   double **pts = (double **)malloc(len * sizeof(double *));
+<br/>
+   pts[0] = p0;
+<br/>
+   pts[1] = p1;
+<br/>
+   pts[2] = p2;
+<br/>
+   pts[3] = p3;
+<br/>
+   double **curve = bezier3(pts);
+<br/>
+   double *x = curve[0];          // array of coefficients of the polynomial for the x coordinate (highest one first)
+<br/>
+   double *y = curve[1];          // ditto for y
+<br/>
+   double *dx = deriv(x, len);    // array of coefficients of the derivative with respect to x
+<br/>
+   double *dy = deriv(y, len);    // ditto for y
+<br/>
+   double t = 0.;                 // parameter of the curve
+<br/>
+   double desiredDistToNextPixel = 1.;           // to be tweaked
+<br/>
+   double maxDeltaT = 0.05;                      // to be tweaked
+<br/>
+   double tangentX, tangentY, speed, deltaT;
+<br/>
+   while(t &lt; 1.)
+<br/>
+   {
+<br/>
+      setPixelForParam(curve, len, t, red);
+<br/>
+      tangentX = evalPoly(dx, degree, t);
+<br/>
+      tangentY = evalPoly(dy, degree, t);
+<br/>
+      speed = approximateLengthOf2DVector(tangentX, tangentY);
+<br/>
+      if(desiredDistToNextPixel &gt; maxDeltaT * speed)
+<br/>
+      {
+<br/>
+         deltaT = maxDeltaT;
+<br/>
+      }
+<br/>
+      else
+<br/>
+      {
+<br/>
+         deltaT = desiredDistToNextPixel / speed;
+<br/>
+      }
+<br/>
+      t += deltaT;
+<br/>
+   }
+<br/>
+}
+<br/>
+//int main(void){
+<br/>
+//   irqInit();
+<br/>
+//   irqEnable(IRQ_VBLANK);
+<br/>
+//   videoSetMode(MODE_FB0);
+<br/>
+//   vramSetBankA(VRAM_A_LCD);
+<br/>
+//   lcdMainOnBottom();
+<br/>
+//   consoleDemoInit();
+<br/>
+//   showSomeBezierCurve();
+<br/>
+//   while(1){
+<br/>
+//   }
+<br/>
+//   return 0;
+<br/>
+//}
+<br/>
+<br/>
+<br/>
+/*
+<br/>
+ * Modified main() by silent_code
+<br/>
+ */
+<br/>
+<br/>
+int main(void)
+<br/>
+{
+<br/>
+   lcdMainOnBottom();
+<br/>
+<br/>
+   irqInit();
+<br/>
+   irqEnable(IRQ_VBLANK);
+<br/>
+<br/>
+   // VRAM bank A will hold the source 16bit bitmap for both screens
+<br/>
+   vramSetBankA(VRAM_A_LCD);
+<br/>
+<br/>
+   // VRAM bank B will hold a 16bit background bitmap for the main screen
+<br/>
+   // no offset needed
+<br/>
+   vramSetBankB(VRAM_B_MAIN_BG_0x06000000);
+<br/>
+<br/>
+   // VRAM bank C will hold all console data
+<br/>
+   // as well as a 16bit background bitmap for the sub screen
+<br/>
+   // no offset needed
+<br/>
+   vramSetBankC(VRAM_C_SUB_BG_0x06200000);
+<br/>
+<br/>
+   // Use mode 3 for the main screen to display a 16bit bitmap (BG3)
+<br/>
+   videoSetMode(MODE_3_2D | DISPLAY_BG3_ACTIVE);
+<br/>
+<br/>
+   // Set BG3 to display a 16bit bitmap without offset
+<br/>
+   BG3_CR = BG_BMP16_256x256;
+<br/>
+<br/>
+   // Initialize BG3's matrix
+<br/>
+   BG3_XDX = 256;
+<br/>
+   BG3_XDY = 0;
+<br/>
+   BG3_YDX = 0;
+<br/>
+   BG3_YDY = 256;
+<br/>
+<br/>
+   // Use mode 3 for the sub screen to display a 16bit bitmap (BG3)
+<br/>
+   // and the console text (BG0)
+<br/>
+   videoSetModeSub(MODE_3_2D | DISPLAY_BG3_ACTIVE | DISPLAY_BG0_ACTIVE);
+<br/>
+<br/>
+   // Set the font color
+<br/>
+   BG_PALETTE_SUB[255] = RGB15(31, 31, 31);
+<br/>
+<br/>
+   // Use BG3 to display a 16bit bitmap with a 2 * 16kB offset (the BMP base)
+<br/>
+   // Note: The offset is needed to skip past the console data, which comes first
+<br/>
+   SUB_BG3_CR = BG_BMP16_256x256 | BG_BMP_BASE(2);
+<br/>
+<br/>
+   // Initialize BG3's matrix
+<br/>
+   SUB_BG3_XDX = 256;
+<br/>
+   SUB_BG3_XDY = 0;
+<br/>
+   SUB_BG3_YDX = 0;
+<br/>
+   SUB_BG3_YDY = 256;
+<br/>
+<br/>
+   // Set BG0 to display an ordinary text layer,
+<br/>
+   // with the map at the first map memory block (generating a 14kB "hole")
+<br/>
+   // (map block size 2kB, must be within first 64kB)
+<br/>
+   // and the tile set at the second character memory block (which it wholly uses)
+<br/>
+   // (character block size 16kB, must be within first 256kB)
+<br/>
+   SUB_BG0_CR = BG_32x32 | BG_256_COLOR | BG_MAP_BASE(0) | BG_TILE_BASE(1);
+<br/>
+<br/>
+   // Initialize the console according to BG0 (map and tile set)
+<br/>
+   // with the default font
+<br/>
+   consoleInitDefault((uint16 *)SCREEN_BASE_BLOCK_SUB(0), (uint16 *)CHAR_BASE_BLOCK_SUB(1), 8);
+<br/>
+<br/>
+   iprintf("Hello World!\n");
+<br/>
+<br/>
+   // Draw a curve to VRAM bank A
+<br/>
+   // Note: Should normally be done during VBlank due to possible flickering.
+<br/>
+   showSomeBezierCurve();
+<br/>
+<br/>
+   // Copy the image to the screen bitmaps
+<br/>
+   // Note: Should also be done during VBlank.
+<br/>
+   int i;
+<br/>
+   uint32 pixels;
+<br/>
+   for(i = 0; i &lt; (256 * 192 / 2); i++)
+<br/>
+   {
+<br/>
+      // Read two pixels at a time and set the opacity bits
+<br/>
+      pixels = ((uint32 *)VRAM_A)[i] | 0x80008000;
+<br/>
+      // Write two pixels at a time
+<br/>
+      ((uint32 *)BG_BMP_RAM_SUB(2))[i] = pixels;
+<br/>
+      ((uint32 *)BG_BMP_RAM(0))[i] = pixels;   // This is equivalent to using BG_GFX
+<br/>
+   }
+<br/>
+<br/>
+   while(true)
+<br/>
+   {
+<br/>
+      swiWaitForVBlank();   // idle cpu (lower power consumption)
+<br/>
+   }
+<br/>
+   return 0;
+<br/>
+}</td> </tr></table><span class="postbody"><br/>_________________<br/><span style="font-size: 9px; line-height: normal"><span style="text-decoration: underline"><span style="font-weight: bold"></span></span> July 5th 08: "<span style="font-weight: bold">Volumetric Shadow Demo</span>" 1.6.0 (final) source released
+<br/>
+June 5th 08: "<span style="font-weight: bold">Zombie NDS</span>" WIP released!
+<br/>
+It's all on my page, just click <span style="font-weight: bold">WWW</span> below.</span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#161381 - mathHeadInClouds - Sat Aug 02, 2008 3:33 pm</h4>
+    <div class="postbody"><span class="postbody">Thank you, silent_code!
+<br/>
+<br/>
+The code works like a charm!
+<br/>
+<br/>
+<br/>
+A remark to all of you out there, who are planning to copy-past-modify the code in order to draw bezier curves: there's memory leaks all over the place (free isn't called), so you would have a crash due to lack of memory somewhere down the road. So if you're going to use it, put in the free-calls in the appropriate places.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#161402 - silent_code - Sat Aug 02, 2008 11:35 pm</h4>
+    <div class="postbody"><span class="postbody">&lt;IGNORE THIS BS&gt;
+<br/>
+&lt;OFFTOPIC&gt;
+<br/>
+In my experience (at least on the PC) that doesn't automatically mean you won't have any leaks... e.g. did anyone ever come along a delete call that didn't do its job?
+<br/>
+Might as well be just my memory tracer, but I doubt it (EDIT: &lt;BUZZ&gt; WRONG!), as sometimes rearrangeing a few lines will result in no memory leak. And other (most of them) allocations / deallocations which are just 100% the same, will work fine. ???? (EDIT: Yes, sometimes I'm that stupid and jumping to conclusions! Damn it.)
+<br/>
+&lt;/OFFTOPIC&gt;
+<br/>
+&lt;/IGNORE THIS BS&gt;
+<br/>
+<br/>
+Anyways, you're welcome! :^)<br/>_________________<br/><span style="font-size: 9px; line-height: normal"><span style="text-decoration: underline"><span style="font-weight: bold"></span></span> July 5th 08: "<span style="font-weight: bold">Volumetric Shadow Demo</span>" 1.6.0 (final) source released
+<br/>
+June 5th 08: "<span style="font-weight: bold">Zombie NDS</span>" WIP released!
+<br/>
+It's all on my page, just click <span style="font-weight: bold">WWW</span> below.</span></span><span class="gensmall"><br/><br/>Last edited by silent_code on Tue Aug 05, 2008 8:07 pm; edited 1 time in total</span></div>    
+</div>
+<div class="post">
+    <h4>#161431 - kusma - Sun Aug 03, 2008 12:31 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>silent_code wrote:</b></span></td> </tr> <tr> <td class="quote">In my experience (at least on the PC) that doesn't automatically mean you won't have any leaks... e.g. did anyone ever come along a delete call that didn't do its job?
+<br/>
+Might as well be just my memory tracer, but I doubt it, as sometimes rearrangeing a few lines will result in no memory leak. And other (most of them) allocations / deallocations which are just 100% the same, will work fine. ????</td> </tr></table><span class="postbody">
+<br/>
+I'm not quite sure I get what you're saying... Every call to malloc() should be paired with a call to free() so the memory will be returned to the heap. On modern operating systems all memory belonging to the process is released to the system on process termination, but that doesn't prevent you from starving the system within your application. Would you mind elaborating a bit and possibly post some example code?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#161435 - silent_code - Sun Aug 03, 2008 1:34 pm</h4>
+    <div class="postbody"><span class="postbody">EDIT: Don't bother about this...
+<br/>
+<br/>
+<br/>
+In order to avoid more offtopic posts, I've opened a new thread over here:
+<br/>
+<br/>
+<a class="postlink" href="http://forum.gbadev.org/viewtopic.php?p=161434#161434" target="_blank">http://forum.gbadev.org/viewtopic.php?p=161434#161434</a>
+<br/>
+<br/>
+Thanks for participating! :^)<br/>_________________<br/><span style="font-size: 9px; line-height: normal"><span style="text-decoration: underline"><span style="font-weight: bold"></span></span> July 5th 08: "<span style="font-weight: bold">Volumetric Shadow Demo</span>" 1.6.0 (final) source released
+<br/>
+June 5th 08: "<span style="font-weight: bold">Zombie NDS</span>" WIP released!
+<br/>
+It's all on my page, just click <span style="font-weight: bold">WWW</span> below.</span></span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

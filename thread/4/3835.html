@@ -1,0 +1,162 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Scrolling problems - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > Scrolling problems</h2>
+<div id="posts">
+<div class="post">
+    <h4>#24534 - ChronoDK - Thu Aug 05, 2004 10:14 am</h4>
+    <div class="postbody"><span class="postbody">I'm having trouble getting some scroll-code working. 
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+void UpdateMap(const unsigned short* source, unsigned short* dest, short source_width, short x, short y)
+<br/>
+{
+<br/>
+   short row, tile;
+<br/>
+<br/>
+   for(row = 0; row &lt; 21; row++)
+<br/>
+   {
+<br/>
+      for(tile = 0; tile &lt; 31; tile++)
+<br/>
+      {
+<br/>
+         dest[tile + row * 32] = source[(tile + x) + ((row + y) * source_width)];
+<br/>
+      }
+<br/>
+   }
+<br/>
+}
+<br/>
+<br/>
+void UpdateMap2(const unsigned short* source, unsigned short* dest, short source_width, short x, short y)
+<br/>
+{
+<br/>
+   short row, tile;
+<br/>
+<br/>
+   for(row = 0; row &lt; 21; row++)
+<br/>
+   {
+<br/>
+      for(tile = 0; tile &lt; 31; tile++)
+<br/>
+      {
+<br/>
+         DMAFastCopy(&amp;source[(tile + x) + ((row + y) * source_width)], &amp;dest[tile + row * 32], 16, DMA_32NOW);
+<br/>
+      }
+<br/>
+   }
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+The first function works fine when it only has to update one background, but when I need to scroll two backgrounds it's too slow. 
+<br/>
+<br/>
+Then I tried with DMA, using Harbours DMAFastCopy, but it's not even fast enough for one background. 
+<br/>
+<br/>
+Am I doing something wrong or should I try another approach? I need to be able to scroll two large 256-color backgrounds at the same time.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#24539 - poslundc - Thu Aug 05, 2004 1:40 pm</h4>
+    <div class="postbody"><span class="postbody">From the look of things, you're copying an entire 20x30 set of tiles into VRAM... it is unsurprising you don't have time to accomplish the entire thing twice in your VBlank period.
+<br/>
+<br/>
+Try to restrict your tile usage to a single set per screen/level/whatever and then just reuse tiles as necessary in constructing your map.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#24541 - ProblemBaby - Thu Aug 05, 2004 1:57 pm</h4>
+    <div class="postbody"><span class="postbody">Use the Wrap function (REG_BGXCNT |= 0x2000).[/code]</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#24553 - sajiimori - Thu Aug 05, 2004 5:22 pm</h4>
+    <div class="postbody"><span class="postbody">If you scroll less than 8 pixels per frame, you'll never have to copy more than one row/column of tiles at a time (except for the first frame).</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#24561 - dagamer34 - Thu Aug 05, 2004 11:14 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sajiimori wrote:</b></span></td> </tr> <tr> <td class="quote">If you scroll less than 8 pixels per frame, you'll never have to copy more than one row/column of tiles at a time (except for the first frame).</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Yeah, too bad that most of the time you will be scrolling sideways, meaning DMA can't be used to copy data. Though using a rotated background would be a good solution.<br/>_________________<br/>Little kids and Playstation 2's don't mix. :(</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#24564 - tepples - Fri Aug 06, 2004 12:04 am</h4>
+    <div class="postbody"><span class="postbody">There are 32 bytes per 8x8 pixel 16-color tile, and 32 bytes is a highly convenient chunk for an LDMIA/STMIA update loop.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#24568 - Miked0801 - Fri Aug 06, 2004 1:35 am</h4>
+    <div class="postbody"><span class="postbody">Which is exactly how we do it in our engine...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#24569 - dagamer34 - Fri Aug 06, 2004 1:53 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote">There are 32 bytes per 8x8 pixel 16-color tile, and 32 bytes is a highly convenient chunk for an LDMIA/STMIA update loop.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Convienient if you are pretty fluent ARM assembly... I can't say that I am. :(<br/>_________________<br/>Little kids and Playstation 2's don't mix. :(</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#24576 - ChronoDK - Fri Aug 06, 2004 7:57 am</h4>
+    <div class="postbody"><span class="postbody">Whoops - the code for only updating the map when I had scrolled 8 pixels had been commented out... It updated the map every frame and tried to hardware-scroll anyway :-)
+<br/>
+<br/>
+So the first function works just fine now. I'm a bit worried if it will be fast enough when I get more things running though... 
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Miked0801 wrote:</b></span></td> </tr> <tr> <td class="quote">Which is exactly how we do it in our engine...</td> </tr></table><span class="postbody">
+<br/>
+More hints would be helpful :-)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#24590 - sajiimori - Fri Aug 06, 2004 5:56 pm</h4>
+    <div class="postbody"><span class="postbody">Hints about the assembly stuff?  I wouldn't worry about it yet -- the speed of your code can be increased by 30x by only copying new tiles.  Get your algorithm right first, then if it's still not fast enough you can think about low-level optimizations.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#24612 - Miked0801 - Sat Aug 07, 2004 9:26 pm</h4>
+    <div class="postbody"><span class="postbody">I can honestly say that even doing full screen updates (with DMA transfers in VBlank) written in C will be fast enough for almost any thing you need to do.  We released a bunch of comerical games with that style of scroll engine and only switched over to edge drawing when we started doing dynamic char loading.  It isn't that hard to get a pretty fast scrollerdoing whole screen updates.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#24646 - dovoto - Sun Aug 08, 2004 4:55 pm</h4>
+    <div class="postbody"><span class="postbody">If you are interested there is example background rendering code (about 20 increasingly complex background demos) on my site.  They cover up to 4 way scrolling and start simple and get complex.  The code may be a bit outdated but it should still be sound in concept.
+<br/>
+<br/>
+<a class="postlink" href="http://www.thepernproject.com" target="_blank">www.thepernproject.com</a>   -&gt;tutorials -&gt; day 6 old html
+<br/>
+<br/>
+-jason<br/>_________________<br/><a href="http://www.drunkencoders.com" target="_blank">www.drunkencoders.com</a></span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

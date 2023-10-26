@@ -1,0 +1,183 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Fast conversion of unsigned audio samples to signed?[SOLVED] - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Fast conversion of unsigned audio samples to signed?[SOLVED]</h2>
+<div id="posts">
+<div class="post">
+    <h4>#150612 - sowee - Fri Feb 08, 2008 3:14 pm</h4>
+    <div class="postbody"><span class="postbody">Hey there, does anybody know a fast way to convert unsigned to signed? I seem to be having problems with streaming 8-bit wavs from memory card because of the conversion..this is basically the method i use to fill the buffer that i stream
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void FillRingBufferMono(void *stream, SoundStream *ssin, u32 numsamples)
+<br/>
+{
+<br/>
+   if( (ssin-&gt;data_pointer - 44) &gt; ssin-&gt;length){ ssin-&gt;data_pointer = 44; fseek(ssin-&gt;fp, ssin-&gt;data_pointer, SEEK_SET);}
+<br/>
+   if (ssin-&gt;data_pointer &lt; 44) { ssin-&gt;data_pointer = 44;}   
+<br/>
+<br/>
+   fread(stream, numsamples, (size_t)1, ssin-&gt;fp);            
+<br/>
+   if (ssin-&gt;bits_per_sample == 8){
+<br/>
+      toggleSignBit(stream, numsamples);                  
+<br/>
+   }
+<br/>
+   ssin-&gt;data_pointer+=numsamples;                     
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+and this is the method i use to convert to signed, which i got from darknight ez
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+void toggleSignBit(unsigned char *sample, unsigned int len) {
+<br/>
+      for(; len &gt; 0; --len, ++sample) {
+<br/>
+         *sample ^= 0x80;
+<br/>
+      }
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+It was running fine when i was doing some vram access in drawing to the framebuffer alongside  the streaming maybe because the vram access delays the timing a bit so the conversion is able to make it.. but now i removed the drawing code and theres popping sounds for my steaming...so i think i need to optimize the code but don't really know how else to do it?
+<br/>
+<br/>
+<span style="font-weight: bold">[Subject Fairy was here -- MOD]</span></span><span class="gensmall"><br/><br/>Last edited by sowee on Sat Feb 16, 2008 3:16 pm; edited 1 time in total</span></div>    
+</div>
+<div class="post">
+    <h4>#150617 - knight0fdragon - Fri Feb 08, 2008 5:45 pm</h4>
+    <div class="postbody"><span class="postbody">..um what haha
+<br/>
+<br/>
+your topic could me misleading, you should change the topic from unsigned to signed sound files or something
+<br/>
+anyway, it doesnt sound like an optimization issue with regards to the conversion, perhaps you are just not playing the sound properly, more code is going to have to be seen. 
+<br/>
+<br/>
+I have a feeling with the magic number 44 there, that you are not properly reading the wav file, since there are different variants to the wav header<br/>_________________<br/><a href="http://www.myspace.com/knight0fdragonds" target="_blank">http://www.myspace.com/knight0fdragonds</a>
+<br/>
+<br/>
+MK DS FC: Dragon 330772 075464 
+<br/>
+AC WW FC: Anthony SamsClub 1933-3433-9458 
+<br/>
+MPFH: Dragon 0215 4231 1206</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#150624 - tepples - Fri Feb 08, 2008 9:41 pm</h4>
+    <div class="postbody"><span class="postbody">knight0fdragon is right: A robust RIFF WAVE (.wav) parser reads individual chunks, such as 'fmt ' and 'data'. The "44" comes from the "canonical wave format", a subset of RIFF WAVE that consists of a RIFF WAVE header followed immediately by the 'fmt ' chunk and the 'data' chunk.
+<br/>
+<br/>
+I have written robust RIFF WAVE loading code. Want to see it?<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#150641 - sowee - Sat Feb 09, 2008 3:32 am</h4>
+    <div class="postbody"><span class="postbody">oops sorry for the misleading title, regarding wave files, i know there are variations but the wav files i'm testing all follow the microsoft format..to my knowledge at least because i used sox on them, they were playing fine (without any pops or bugs, tested from mono 8 bit 11025, up to stereo 16 bit 48000) when i had a method that just drew to the framebuffer in the main loop, but for higher quality wave files, the top of my console screen flickers, so whatever text printed there blinks randomly.
+<br/>
+<br/>
+When i removed the drawing method, the flickering stopped, but now the sound gets occassional pops, moreso for some sound formats (diff bit rates and frequency and channels), others seem to still work fine.. For stereo i don't use the method above, i have another which splits the interleaved data</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#150644 - sowee - Sat Feb 09, 2008 6:48 am</h4>
+    <div class="postbody"><span class="postbody">i also want to ask... what effect does vram access have with regards to fifo or vblank?
+<br/>
+<br/>
+when i have this my streamer runs perfectly fine:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void Texture2D_DrawSprite(Texture2D* sprite)
+<br/>
+{
+<br/>
+   VRAM_A[sprite-&gt;X + sprite-&gt;Y * SCREEN_WIDTH] = sprite-&gt;palette[sprite-&gt;pixels[0]];
+<br/>
+   int i;
+<br/>
+   for (i=0; i &lt; sprite-&gt;width; i++)
+<br/>
+   {
+<br/>
+      VRAM_A[sprite-&gt;X + i + sprite-&gt;Y * SCREEN_WIDTH] = sprite-&gt;palette[sprite-&gt;pixels[i]];
+<br/>
+      int j;
+<br/>
+      for (j = 0; j &lt; sprite-&gt;height; j++)
+<br/>
+      {
+<br/>
+         VRAM_A[sprite-&gt;X + i + (sprite-&gt;Y + j)* SCREEN_WIDTH ] = sprite-&gt;palette[sprite-&gt;pixels[i + (sprite-&gt;width * j)]];
+<br/>
+      }
+<br/>
+   }
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+i've tested and tested and this is the only piece of code which has a big effect on my streamer when i remove it and i really don't see the connection..[/code]</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#150906 - josath - Thu Feb 14, 2008 6:11 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sowee wrote:</b></span></td> </tr> <tr> <td class="quote">i used sox on them</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+If you're using sox anyway, why not just convert them to the correct format, and play them directly on the DS? instead of converting them to the wrong format, and trying to re-convert it on the DS...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#150909 - tepples - Thu Feb 14, 2008 10:22 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>josath wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sowee wrote:</b></span></td> </tr> <tr> <td class="quote">i used sox on them</td> </tr></table><span class="postbody">
+<br/>
+If you're using sox anyway, why not just convert them to the correct format, and play them directly on the DS? instead of converting them to the wrong format, and trying to re-convert it on the DS...</span></td> </tr></table><span class="postbody">
+<br/>
+I would imagine that the users will be using converters other than SoX to add audio files, and the developer wants to make the program robust to those converters. Does, say, NitroTracker require the user to use SoX before importing samples?[1] GBA productions such as <a class="postlink" href="http://www.pineight.com/gba/gsm/" target="_blank">GSM Player</a> could get away with requiring SoX because changing the appended file system required rebuilding and reflashing the NOR card. The DS, on the other hand, commonly uses FAT-formatted NAND cards, which allow files to be added or removed at will.
+<br/>
+<br/>
+Besides, does SoX support writing out a custom container format without modifying the source code? If not, how does the DS program know the original wave's sample rate?[1]
+<br/>
+<br/>
+<br/>
+<span style="font-size: 8px; line-height: normal">[1] Answer to rhetorical question: It does not.</span><br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#150992 - sowee - Sat Feb 16, 2008 3:16 pm</h4>
+    <div class="postbody"><span class="postbody">ok it seems i was misunderstood, i'm not converting a format to another format on the ds nor do i want to know the original wave's sample format or anything to that effect, i just wanted to justify why i put the number 44 there by saying the wave files came from sox because those wave files are what i used for testing. anyway, the topic has strayed off i think..besides, i don't seem to have the problem anymore at the moment. Thanks.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

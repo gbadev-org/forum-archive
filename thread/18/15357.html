@@ -1,0 +1,270 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Updating textures - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Updating textures</h2>
+<div id="posts">
+<div class="post">
+    <h4>#154128 - SiW - Fri Apr 11, 2008 7:49 pm</h4>
+    <div class="postbody"><span class="postbody">I'm having trouble getting my textures to update dynamically.  I know the subject has come up before, but I'm making a new thread rather than digging up one from last year to make sure any discussion is on current practices.
+<br/>
+<br/>
+I wait for vblank, then every ~2 seconds call this function:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+void Jigsaw::UpdateFrame( int frame )
+<br/>
+{
+<br/>
+   u8 *img;
+<br/>
+        
+<br/>
+        [point img at the right bits for this frame]
+<br/>
+   
+<br/>
+   u8 *piece_color = new u8[tileSize]; // tileSize may be e.g. 128*128
+<br/>
+   
+<br/>
+   while ( (REG_VCOUNT &lt; 192) || (REG_VCOUNT &gt; 214) ) {}
+<br/>
+   if ( (REG_VCOUNT &gt;= 192) &amp;&amp; (REG_VCOUNT &lt;= 214) )
+<br/>
+   {
+<br/>
+      // unlock texture memory
+<br/>
+      vramSetBankA( VRAM_A_LCD );
+<br/>
+      vramSetBankB( VRAM_B_LCD );
+<br/>
+            
+<br/>
+      for ( int i = 0; i &lt; numPieces; i++ )
+<br/>
+      {         
+<br/>
+         int width = 0;
+<br/>
+         int height = 0;
+<br/>
+                        [ get correct dimensions, e.g. TEXTURE_SIZE_64 ]
+<br/>
+         
+<br/>
+         [ modify piece_color ]
+<br/>
+         
+<br/>
+         // update gl info and copy texture data
+<br/>
+         glBindTexture( GL_TEXTURE_2D, textureIDs[i] );   
+<br/>
+         uint32* address = 0x06800000 + (uint32*)glGetTexturePointer( textureIDs[i] );
+<br/>
+         
+<br/>
+         glTexParameter( width, height, address, GL_RGB256, TEXGEN_TEXCOORD | GL_TEXTURE_COLOR0_TRANSPARENT );         
+<br/>
+         
+<br/>
+         dmaCopy( piece_color, address, tileSize );         
+<br/>
+      }
+<br/>
+      
+<br/>
+                // lock texture memory again
+<br/>
+      vramSetBankA( VRAM_A_TEXTURE );
+<br/>
+      vramSetBankB( VRAM_B_TEXTURE );            
+<br/>
+   }
+<br/>
+   
+<br/>
+   delete []piece_color;   
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+What happens is that my textured quads blink invisible when the function runs, but when they are visible again the original texture is displayed - no updating happens.
+<br/>
+<br/>
+I presume I would avoid the blinking if I speed up my texture updating, but that's not my concern right now, I just want to get the texture animating.
+<br/>
+<br/>
+So what am I doing wrong?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#154152 - TwentySeven - Sat Apr 12, 2008 12:07 am</h4>
+    <div class="postbody"><span class="postbody">I have code for this that works, its a bit of a hacked up version of the stuff out of libnds.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+uint32 DSM_glTexImage2D( GL_TEXTURE_TYPE_ENUM type, int sizeX, int sizeY, int param, const uint8* texture, uint32 addr) 
+<br/>
+{
+<br/>
+<br/>
+   uint32 size = 0;
+<br/>
+   uint32 vramTemp;
+<br/>
+   
+<br/>
+   uint32 dims[]={8,16,32,64,128,256};
+<br/>
+<br/>
+   size = 1 &lt;&lt; (sizeX + sizeY + 6);
+<br/>
+<br/>
+   switch (type) {
+<br/>
+      case GL_RGB:
+<br/>
+      case GL_RGBA:
+<br/>
+         size = size &lt;&lt; 1;
+<br/>
+         break;
+<br/>
+      case GL_RGB4:
+<br/>
+         size = size &gt;&gt; 2;
+<br/>
+         break;
+<br/>
+      case GL_RGB16:
+<br/>
+         size = size &gt;&gt; 1;
+<br/>
+         break;
+<br/>
+      default:
+<br/>
+         break;
+<br/>
+   }
+<br/>
+<br/>
+   if(!addr)
+<br/>
+   return 0;
+<br/>
+<br/>
+   // unlock texture memory
+<br/>
+   vramTemp = vramSetMainBanks(VRAM_A_LCD,VRAM_B_LCD,VRAM_C_LCD,VRAM_D_LCD);
+<br/>
+<br/>
+   if (type == GL_RGB) 
+<br/>
+   {
+<br/>
+      // We do GL_RGB as GL_RGBA, but we set each alpha bit to 1 during the copy
+<br/>
+      u16 * src = (u16*)texture;
+<br/>
+      u16 * dest = (u16*)addr;
+<br/>
+<br/>
+      while (size--) {
+<br/>
+         *dest++ = *src | (1 &lt;&lt; 15);
+<br/>
+         src++;
+<br/>
+      }
+<br/>
+   } 
+<br/>
+   else 
+<br/>
+   {
+<br/>
+      uint16 part_size=0;
+<br/>
+      if (type == GL_RGB256) part_size = ((dims[sizeX]*dims[sizeY])&gt;&gt;2); 
+<br/>
+      if (type == GL_RGBA) part_size = ((dims[sizeX]*dims[sizeY]*2)&gt;&gt;2); 
+<br/>
+      dmaCopyWordsAsynch(0, texture, (void*)addr, part_size); 
+<br/>
+      dmaCopyWordsAsynch(1, texture + part_size,   (void*)((int16*)addr + (part_size&gt;&gt;1)),   part_size ); 
+<br/>
+      dmaCopyWordsAsynch(2, texture + part_size*2, (void*)((int16*)addr + (part_size&gt;&gt;1)*2), part_size ); 
+<br/>
+      dmaCopyWords(      3, texture + part_size*3, (void*)((int16*)addr + (part_size&gt;&gt;1)*3), part_size );              
+<br/>
+   }
+<br/>
+   
+<br/>
+   VRAM_CR = vramTemp;
+<br/>
+   return addr;
+<br/>
+}
+<br/>
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+You pass in the texture pointer to this.  I'm also only using it with square textures.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#154153 - TwentySeven - Sat Apr 12, 2008 12:13 am</h4>
+    <div class="postbody"><span class="postbody">As for what the actual problem is, it looks suspiciously like you're running out of time to update your texture during vblank.
+<br/>
+<br/>
+You have roughly 2ms to get your texture uploaded and the CR's set back to normal, so if you have any processing to do, do it before vblank.
+<br/>
+<br/>
+If thats not it, are you binding your texture again after you're done uploading it?  I don't remember the exact reasoning except for it possibly needing to be done twice.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+glBindTexture(GL_TEXTURE_2D, TextureCache-&gt;Textures[j].Handle); 
+<br/>
+DSM_glTexImage2D( GL_RGBA, TEXTURE_SIZE_32 , TEXTURE_SIZE_32, 0, (byte*)point,TextureCache-&gt;Textures[j].Addr);   
+<br/>
+glBindTexture(GL_TEXTURE_2D, TextureCache-&gt;Textures[j].Handle); 
+<br/>
+</td> </tr></table><span class="postbody">[/code]</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#154168 - SiW - Sat Apr 12, 2008 2:51 am</h4>
+    <div class="postbody"><span class="postbody">Thanks for the function.  I am binding again after updating the texture, so I'm not really sure what the problem is.  I have no doubt that I'm running out of time, but even so I would expect to still see the texture change, wouldn't I?  Just with possible image corruption?
+<br/>
+<br/>
+I'll play around with your function, but I also tried coming at it from a different angle while trying to debug the problem.  See, I actually need to update every texture in memory, so for testing purposes I just tried an update function that calls glResetTextures and then regenerates textures with glGenTextures/glBindTexture/glTexImage2D.  That works, and I think it's actually fast enough for this particular application, so I may just stick with it.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#154170 - TwentySeven - Sat Apr 12, 2008 4:24 am</h4>
+    <div class="postbody"><span class="postbody">Yeah, my stuff just preallocates all of vram into N 32x32,64x64,128x128 textures at startup, and I just recycle texture slots using that above function.  It's not as nice as a proper dynamically allocating system but it means I don't run into fragmentation issues either.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

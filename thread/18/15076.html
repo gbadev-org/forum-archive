@@ -1,0 +1,839 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>M3 Real, Touch and drawing: Emu Yes, DS No? - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > M3 Real, Touch and drawing: Emu Yes, DS No?</h2>
+<div id="posts">
+<div class="post">
+    <h4>#151441 - nczempin - Tue Feb 26, 2008 12:58 pm</h4>
+    <div class="postbody"><span class="postbody">Hi,
+<br/>
+<br/>
+I'm an experienced Software Developer, and recently I've started playing around with DS Homebrew.
+<br/>
+<br/>
+I have an M3 Real (also have a Simply), got devkitPro and got it running (even under Vista), and can get most of the examples to work. However, it seems that something is wrong regarding the Stylus/touch recognition.
+<br/>
+<br/>
+I have successfully built the libnds TouchTest. Now I want to actually do something with the Stylus (a Swiss colleague asked whether there was a Nine Men's Morris for the DS, I said "sure" and I guess I was wrong, so now I have to code it ;-).
+<br/>
+<br/>
+Taking the TouchTest code and combining it with some drawing to VRAM directly, I tried to printf the touch coordinates on the top screen and draw pixels on the bottom.
+<br/>
+<br/>
+It seems I must have got the combination wrong somehow.
+<br/>
+<br/>
+Sorry not to be more specific; I'll post the code later (don't have it on this machine), but here's the problem:
+<br/>
+<br/>
+The code works as designed on the No$GBA 2.6. However, after uploading to the M3 Real it seems as if only either the touch or the drawing works, but not both.
+<br/>
+<br/>
+I think I need to learn more about all those graphics modes, but perhaps you can already spot something in the combination I'm using that would point to an easy solution.
+<br/>
+<br/>
+I also had touch problems with nearly all the PAlib examples (which is why I tried to stick to libnds for now).
+<br/>
+<br/>
+I haven't yet tried it on the M3 Simply (in case the Real is part of the problem) or another, perhaps more accurate, emulator.
+<br/>
+<br/>
+Thank you for considering my request.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#151444 - nczempin - Tue Feb 26, 2008 2:31 pm</h4>
+    <div class="postbody"><span class="postbody">I will provide the code that is causing the problem below.
+<br/>
+<br/>
+Please excuse the untidiness, this is work-in-progress code experimenting with libnds.
+<br/>
+<br/>
+It would be great if you could help with the following:
+<br/>
+<br/>
+[after you press R, a Nine Men's Morris board should appear. Irrespective of that, the text showing the xy coordinates of the touch should be displayed, just like in TouchTest]
+<br/>
+<br/>
+1. If you have an M3 Real, can you get it to work?
+<br/>
+2. Does it work on any other Homebrew solution?
+<br/>
+3. What am I doing wrong (aside from unused variables, functions, etc. :-)?
+<br/>
+4. If it works on the No$GBA but not with the M3Real, is the No$GBA the problem or the M3Real? Note that I've had virtually no other problems with the M3Real.
+<br/>
+<br/>
+I'm using the latest devkitPro, everything that comes with the 1.4.4 updater, and I'm on Vista Home Premium.
+<br/>
+<br/>
+Again, TouchTest by itself works.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#include &lt;nds.h&gt;
+<br/>
+#include &lt;registers_alt.h&gt;
+<br/>
+<br/>
+static int shape_width = 15;
+<br/>
+static int shape_height = 15;
+<br/>
+static int old_x = 0;
+<br/>
+static int old_y = 0;
+<br/>
+static int shape_x = 0;
+<br/>
+static int shape_y = 0;
+<br/>
+   static uint16 line_color = RGB15(31,31,31);
+<br/>
+   static uint16 COLOR_A = RGB15(31,0,0);
+<br/>
+   static uint16 COLOR_B = RGB15(0,0,31);
+<br/>
+<br/>
+static int MID_X=SCREEN_WIDTH /2;
+<br/>
+static int MID_Y=SCREEN_HEIGHT/2;
+<br/>
+static int direction = 1;
+<br/>
+<br/>
+<br/>
+   int min_x  = 4096 , min_y  = 4096, max_x  = 0, max_y   = 0;
+<br/>
+   int min_px = 4096 , min_py = 4096, max_px = 0 , max_py = 0;
+<br/>
+   touchPosition touch;
+<br/>
+volatile int frame = 0;
+<br/>
+<br/>
+enum { CONTINUOUS, SINGLE } TouchType = CONTINUOUS;
+<br/>
+<br/>
+<br/>
+void draw_shape(int x, int y, uint16* buffer, uint16 color)
+<br/>
+{
+<br/>
+  buffer += y * SCREEN_WIDTH + x;
+<br/>
+  int i;
+<br/>
+  for(i = 0; i &lt; shape_height; ++i) {
+<br/>
+    uint16* line = buffer + (SCREEN_WIDTH * i);
+<br/>
+    int j;
+<br/>
+    for(j = 0; j &lt; shape_width; ++j) {
+<br/>
+      *line++ = color;
+<br/>
+    }
+<br/>
+  }
+<br/>
+}
+<br/>
+void draw_shape_b(int x, int y, uint16* buffer, uint16 color){
+<br/>
+   draw_shape(x-shape_width/2,y-shape_width/2,buffer, color);
+<br/>
+}   
+<br/>
+void draw_line_horiz(int x, int y,int deltax,uint16* buffer, uint16 color)
+<br/>
+{
+<br/>
+  buffer += y * SCREEN_WIDTH + x;
+<br/>
+  int i=0;
+<br/>
+  //for(i = 0; i &lt; shape_height; ++i) {
+<br/>
+    uint16* line = buffer + (SCREEN_WIDTH * i);
+<br/>
+    int j;
+<br/>
+    for(j = 0; j &lt; deltax; ++j) {
+<br/>
+      *line++ = color;
+<br/>
+    }
+<br/>
+ // }
+<br/>
+}
+<br/>
+void draw_line_vert(int x, int y,int deltax,const uint16* buf, uint16 color)
+<br/>
+{
+<br/>
+  uint16* buffer = buf +y * SCREEN_WIDTH + x;
+<br/>
+    uint16* line = buffer;// + (SCREEN_WIDTH * i);
+<br/>
+    int j;
+<br/>
+    for(j = 0; j &lt; deltax; ++j) {
+<br/>
+      *line = color;
+<br/>
+      line += SCREEN_WIDTH;
+<br/>
+    }
+<br/>
+ }
+<br/>
+<br/>
+void draw_rect(int ulx1,int uly1,int w1){
+<br/>
+   draw_line_horiz(ulx1,uly1,w1,VRAM_A,line_color);
+<br/>
+   draw_line_horiz(ulx1,SCREEN_HEIGHT-uly1,w1,VRAM_A,line_color);
+<br/>
+   draw_line_vert(ulx1,uly1,w1,VRAM_A,line_color);
+<br/>
+   draw_line_vert(SCREEN_WIDTH-ulx1,uly1,w1,VRAM_A,line_color);
+<br/>
+}
+<br/>
+void draw_board(){
+<br/>
+       int w1=(SCREEN_HEIGHT*90)/100;
+<br/>
+    int ulx1 =MID_X - w1/2;
+<br/>
+    int uly1 = MID_Y-w1/2;
+<br/>
+   int w2=(SCREEN_HEIGHT*60)/100;
+<br/>
+    int ulx2 =MID_X - w2/2;
+<br/>
+    int uly2 = MID_Y-w2/2;
+<br/>
+   int w3=(SCREEN_HEIGHT*30)/100;
+<br/>
+    int ulx3 =MID_X - w3/2;
+<br/>
+    int uly3 = MID_Y-w3/2;
+<br/>
+    //int w1=(SCREEN_HEIGHT*90)/100;
+<br/>
+    //int h1 = 20;
+<br/>
+    draw_rect(ulx1,uly1,w1);
+<br/>
+   draw_rect(ulx2,uly2,w2);
+<br/>
+   draw_rect(ulx3,uly3,w3);
+<br/>
+   draw_line_horiz(ulx1,MID_Y,ulx3-ulx1,VRAM_A,line_color);
+<br/>
+   draw_line_horiz(SCREEN_WIDTH-ulx3,MID_Y,ulx3-ulx1,VRAM_A,line_color);
+<br/>
+   draw_line_vert(MID_X,uly1,ulx3-ulx1,VRAM_A,line_color);
+<br/>
+   draw_line_vert(MID_X,SCREEN_HEIGHT-uly3,ulx3-ulx1,VRAM_A,line_color);
+<br/>
+   
+<br/>
+   int board[7][7];
+<br/>
+   int i,j;
+<br/>
+for (i=0;i&lt;7;i++){
+<br/>
+   for (j=0;j&lt;7;j++){
+<br/>
+      board[i][j]=0;
+<br/>
+   }
+<br/>
+}
+<br/>
+            
+<br/>
+   board[0][0] = 1;
+<br/>
+   board[0][3] = 1;
+<br/>
+   board[0][6] = 1;
+<br/>
+   board[6][0] = 2;
+<br/>
+   board[2][2] = 2;
+<br/>
+   board[6][3] = 2;
+<br/>
+   
+<br/>
+   
+<br/>
+//   board[0][0] = 1;
+<br/>
+//   board[0][0] = 1;
+<br/>
+//   board[0][0] = 1;
+<br/>
+   int m = (SCREEN_WIDTH*30/2)/100;
+<br/>
+   int n = (SCREEN_HEIGHT*30/2)/100+1;
+<br/>
+   for (i=0;i&lt;7;++i){
+<br/>
+      for (j=0;j&lt;7;++j){
+<br/>
+    //     int xx = ulx1+(i*SCREEN_WIDTH*30)/100;
+<br/>
+         int xx = ulx1+i*n;//30;//SCREEN_WIDTH*30)/100;
+<br/>
+         int yy = uly1+n*j;
+<br/>
+         if (board[i][j]==1){
+<br/>
+             draw_shape_b(xx,yy,VRAM_A,COLOR_A);
+<br/>
+        }else if (board[i][j]==2){
+<br/>
+            
+<br/>
+            draw_shape_b(xx,yy,VRAM_A,COLOR_B);
+<br/>
+         }
+<br/>
+      }                     
+<br/>
+   }
+<br/>
+         
+<br/>
+   //draw_shape_b(SCREEN_WIDTH-ulx1,uly1,VRAM_A,RGB15(0,0,31));
+<br/>
+}
+<br/>
+void on_irq() 
+<br/>
+{   
+<br/>
+  if(REG_IF &amp; IRQ_VBLANK) {
+<br/>
+//    draw_shape(old_x, old_y, VRAM_A, RGB15(0, 0, 0));
+<br/>
+//    draw_shape(shape_x, shape_y, VRAM_A, RGB15(31, 0, 0));
+<br/>
+    // Tell the DS we handled the VBLANK interrupt
+<br/>
+    VBLANK_INTR_WAIT_FLAGS |= IRQ_VBLANK;
+<br/>
+    REG_IF |= IRQ_VBLANK;
+<br/>
+  }
+<br/>
+  else {
+<br/>
+    // Ignore all other interrupts
+<br/>
+    REG_IF = REG_IF;
+<br/>
+  }
+<br/>
+}
+<br/>
+<br/>
+void InitInterruptHandler()
+<br/>
+{
+<br/>
+  REG_IME = 0;
+<br/>
+  IRQ_HANDLER = on_irq;
+<br/>
+  REG_IE = IRQ_VBLANK;
+<br/>
+  REG_IF = ~0;
+<br/>
+  DISP_SR = DISP_VBLANK_IRQ;
+<br/>
+  REG_IME = 1;
+<br/>
+}
+<br/>
+void Vblank() {
+<br/>
+//---------------------------------------------------------------------------------
+<br/>
+   //frame++;
+<br/>
+}
+<br/>
+<br/>
+int main(int argc, char ** argv)
+<br/>
+{
+<br/>
+   int min_x  = 4096 , min_y  = 4096, max_x  = 0, max_y   = 0;
+<br/>
+   int min_px = 4096 , min_py = 4096, max_px = 0 , max_py = 0;
+<br/>
+   touchPosition touch;
+<br/>
+<br/>
+   powerON(POWER_ALL_2D);
+<br/>
+<br/>
+   // put the main screen on the bottom lcd
+<br/>
+   lcdMainOnBottom();
+<br/>
+<br/>
+   // Initialise the interrupt system
+<br/>
+   irqInit();
+<br/>
+   // install our simple vblank handler
+<br/>
+   irqSet(IRQ_VBLANK, Vblank);
+<br/>
+   // enable the interrupt
+<br/>
+   irqEnable(IRQ_VBLANK);
+<br/>
+   //initOAM();
+<br/>
+    //enable vram and map it to the right places
+<br/>
+    vramSetMainBanks(   VRAM_A_MAIN_SPRITE,        //A and B maped consecutivly as sprite memory
+<br/>
+                        VRAM_B_MAIN_SPRITE,        //this gives us 256KB which is the max
+<br/>
+                        VRAM_C_MAIN_BG_0x06000000,  //map C to background memory
+<br/>
+                        VRAM_D_LCD                 //not using D
+<br/>
+                        ); 
+<br/>
+   
+<br/>
+   //set the video mode
+<br/>
+    videoSetMode(  MODE_0_2D | 
+<br/>
+                   DISPLAY_SPR_ACTIVE |      //turn on sprites
+<br/>
+                   DISPLAY_BG0_ACTIVE |      //turn on background 0
+<br/>
+                   DISPLAY_SPR_1D         //this is used when in tile mode
+<br/>
+                    );
+<br/>
+<br/>
+   int i;
+<br/>
+   
+<br/>
+<br/>
+   // black backdrop
+<br/>
+   BG_PALETTE[0]=RGB15(0,0,0);
+<br/>
+<br/>
+   BG0_CR = BG_MAP_BASE(31);//use bg0 for the text
+<br/>
+   
+<br/>
+   BG_PALETTE[255] = RGB15(31,31,31);//by default font rendered with color 255
+<br/>
+   
+<br/>
+   //consoleInit() is a lot more flexible but this gets you up and running quick
+<br/>
+   //consoleInitDefault((u16*)SCREEN_BASE_BLOCK(31), (u16*)CHAR_BASE_BLOCK(0), 16);
+<br/>
+   videoSetMode(MODE_FB0);
+<br/>
+ vramSetBankA(VRAM_A_LCD);
+<br/>
+   irqInit();
+<br/>
+// install our simple vblank handler
+<br/>
+   irqSet(IRQ_VBLANK, Vblank);
+<br/>
+   // enable the interrupt
+<br/>
+   irqEnable(IRQ_VBLANK);
+<br/>
+   //videoSetMode(0);
+<br/>
+  videoSetModeSub(MODE_0_2D | DISPLAY_BG0_ACTIVE);
+<br/>
+  vramSetBankC(VRAM_C_SUB_BG);
+<br/>
+  SUB_BG0_CR = BG_MAP_BASE(31);
+<br/>
+<br/>
+  // Set the colour of the font to White.
+<br/>
+  BG_PALETTE_SUB[255] = RGB15(31,31,31);
+<br/>
+<br/>
+ consoleInitDefault((u16*)SCREEN_BASE_BLOCK_SUB(31), (u16*)CHAR_BASE_BLOCK_SUB(0), 16);   
+<br/>
+printf("\n\n\tNine Men's Morris\n");
+<br/>
+<br/>
+//lcdSwap();
+<br/>
+<br/>
+ 
+<br/>
+   iprintf("\x1b[4;8HTouch Screen Test");
+<br/>
+   iprintf("\x1b[15;4HRight Shoulder toggles");
+<br/>
+ 
+<br/>
+  while(1) {
+<br/>
+        //swiWaitForVBlank();
+<br/>
+ scanKeys();
+<br/>
+  touchPosition touchXY;
+<br/>
+  touchXY.px = 0;
+<br/>
+  touchXY.py = 0;
+<br/>
+ int pressed = keysDown();   // buttons pressed this loop
+<br/>
+<br/>
+ 
+<br/>
+  uint32 kh = keysHeld();
+<br/>
+  if (kh&amp;KEY_TOUCH){
+<br/>
+     touchXY = touchReadXY();
+<br/>
+}
+<br/>
+    printf("\x1b[10;0H");
+<br/>
+    printf("Touch x = %d   \n", touchXY.px);
+<br/>
+    printf("Touch y = %d   \n", touchXY.py);
+<br/>
+ 
+<br/>
+      // read the button states
+<br/>
+   //   scanKeys();
+<br/>
+<br/>
+      // read the touchscreen coordinates
+<br/>
+      touch=touchReadXY();
+<br/>
+      
+<br/>
+   //   int pressed = keysDown();   // buttons pressed this loop
+<br/>
+      int held = keysHeld();      // buttons currently held
+<br/>
+<br/>
+      // Right Shoulder button toggles the mode
+<br/>
+      if ( pressed &amp; KEY_R) TouchType ^= SINGLE;
+<br/>
+<br/>
+      iprintf("\x1b[14;4HTouch mode: %s",TouchType==CONTINUOUS?"CONTINUOUS ":"SINGLE SHOT");
+<br/>
+<br/>
+      iprintf("\x1b[6;5HTouch x = %04X, %04X\n", touch.x, touch.px);
+<br/>
+      iprintf("\x1b[7;5HTouch y = %04X, %04X\n", touch.y, touch.py);      
+<br/>
+<br/>
+      iprintf("\x1b[0;18Hkeys: %08X\n", keysHeld());
+<br/>
+      iprintf("\x1b[9;10HFrame %d\n", frame);
+<br/>
+<br/>
+      if ( TouchType == SINGLE &amp;&amp; !(pressed &amp; KEY_TOUCH) ) continue;
+<br/>
+<br/>
+      if ( !(held &amp; KEY_TOUCH) || touch.x == 0 || touch.y == 0) continue;
+<br/>
+      
+<br/>
+      iprintf("\x1b[12;12H(%d,%d)      ",touch.px,touch.py);
+<br/>
+<br/>
+      if ( touch.x &gt; max_x)      max_x = touch.x;
+<br/>
+      if ( touch.y &gt; max_y)      max_y = touch.y;
+<br/>
+      if ( touch.px &gt; max_px)   max_px = touch.px;
+<br/>
+      if ( touch.py &gt; max_py)   max_py = touch.py;
+<br/>
+<br/>
+      if ( touch.x &lt; min_x)      min_x = touch.x;
+<br/>
+      if ( touch.y &lt; min_y)      min_y = touch.y;
+<br/>
+      if ( touch.px &lt; min_px)   min_px = touch.px;
+<br/>
+      if ( touch.py &lt; min_py)   min_py = touch.py;
+<br/>
+<br/>
+      iprintf("\x1b[0;0H(%d,%d)      ",min_px,min_py);
+<br/>
+      iprintf("\x1b[1;0H(%d,%d)      ",min_x,min_y);
+<br/>
+      iprintf("\x1b[22;21H(%d,%d)",max_x,max_y);
+<br/>
+      iprintf("\x1b[23;23H(%d,%d)",max_px,max_py);
+<br/>
+      if (TouchType==SINGLE){
+<br/>
+draw_board();
+<br/>
+}
+<br/>
+  
+<br/>
+  }   return 0;
+<br/>
+} // End of main()
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#151468 - nczempin - Wed Feb 27, 2008 2:32 pm</h4>
+    <div class="postbody"><span class="postbody">Am I being impatient?
+<br/>
+<br/>
+Is no-one able or willing to:
+<br/>
+<br/>
+a) even write a single comment, no matter how disparaging?
+<br/>
+b) Try the code on an emulator?
+<br/>
+c) try the code on their M3 Real?
+<br/>
+c) try the code on their non-M3-Real device?
+<br/>
+<br/>
+Would it help if I provided a compiled .nds file?
+<br/>
+<br/>
+Where could I upload it?
+<br/>
+<br/>
+Would it help if I cut down the code to isolate the problem more? (I guess that's a rhetorical question, assuming there are experienced DS homebrew devs even reading my question)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#151469 - asiekierka - Wed Feb 27, 2008 2:51 pm</h4>
+    <div class="postbody"><span class="postbody">I'm not experienced, but the experienced ones are too busy working on Wii hacking and devkitPro r22. Give me the binary, i'll try it on NO$GBA, then on my EZ-V. Try to cut down the code a bit though.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#151470 - nczempin - Wed Feb 27, 2008 3:00 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>asiekierka wrote:</b></span></td> </tr> <tr> <td class="quote">I'm not experienced, but the experienced ones are too busy working on Wii hacking and devkitPro r22. Give me the binary, i'll try it on NO$GBA, then on my EZ-V. Try to cut down the code a bit though.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Well, I'll cut it down for analysis when I have some time (I've also downloaded the libnds source code to learn more about what's under the hood and perhaps pin it down). For now I can send you the actual binary by pm. Should be sufficient to at least learn something...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#151472 - eKid - Wed Feb 27, 2008 3:49 pm</h4>
+    <div class="postbody"><span class="postbody">Works for me, I push R and the board pops up, and the touch position is shown on the top screen. I'm testing using an old gba flashcart and WMB.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#151473 - nczempin - Wed Feb 27, 2008 4:11 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>eKid wrote:</b></span></td> </tr> <tr> <td class="quote">Works for me, I push R and the board pops up, and the touch position is shown on the top screen. I'm testing using an old gba flashcart and WMB.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Thank you for trying it.
+<br/>
+<br/>
+So at least for now there is evidence to suggest that the code is correct, and there is a problem with my M3Real, M3Real in general, or the way I am using it.
+<br/>
+<br/>
+It could also be that there is a problem with my devkit setup (default arm7), although I find it unlikely, since the Emu ran it like it should.
+<br/>
+<br/>
+<br/>
+So I would like to extend my plea for help: Can any others who have an M3Real confirm that it doesn't work for them?
+<br/>
+<br/>
+Are there any other known problems with the M3Real? Perhaps I am not using the correct firmware, or, or, or...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#151474 - eKid - Wed Feb 27, 2008 4:22 pm</h4>
+    <div class="postbody"><span class="postbody">Hmm.. I don't see anything terribly awful in the code, I'm not sure how running it on different devices could change the result. I think the problem is most likely in your devkit setup...
+<br/>
+<br/>
+BTW, why did you comment out the swiWaitForVBlank :(</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#151475 - nczempin - Wed Feb 27, 2008 5:11 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>eKid wrote:</b></span></td> </tr> <tr> <td class="quote">Hmm.. I don't see anything terribly awful in the code, I'm not sure how running it on different devices could change the result. I think the problem is most likely in your devkit setup...
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+So if the source is not the problem (we could confirm if someone sent me an .nds built from the code that I can try on my card), perhaps I should send out binaries. What is a good method of doing that; my own server has been offline for almost 6 months now... what methods does everybody else use to share temp files? Perhaps I can dig out my old myspace, or whatever. I am so out of touch with the latest in free webspace (because I had my own root server for so long) :-).
+<br/>
+<br/>
+<br/>
+If the problem is in my devkit setup, that still doesn't explain why the same .nds works on no$gba but not on my machine...
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+BTW, why did you comment out the swiWaitForVBlank :(</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Because I don't have any animation, and I was desperately trying to isolate the problem, and I took out interrupts and put them back in, etc....</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#151476 - JLsoft - Wed Feb 27, 2008 5:18 pm</h4>
+    <div class="postbody"><span class="postbody">You can try booting it from DSOrganize (3.2) set to use the Chishm booting method and see if that changes anything.
+<br/>
+<br/>
+I've noticed recently that some things don't act properly on the M3 DS Real when they're loaded using the cart's firmware (tried 2.8/2.9/3.0) menu, and using DSO made them run correctly :/</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#151477 - SiW - Wed Feb 27, 2008 5:29 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>JLsoft wrote:</b></span></td> </tr> <tr> <td class="quote">I've noticed recently that some things don't act properly on the M3 DS Real when they're loaded using the cart's firmware (tried 2.8/2.9/3.0) menu, and using DSO made them run correctly :/</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Which would perhaps be explained by the firmware loader not clearing state properly.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#151479 - nczempin - Wed Feb 27, 2008 5:39 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>JLsoft wrote:</b></span></td> </tr> <tr> <td class="quote">You can try booting it from DSOrganize (3.2) set to use the Chishm booting method and see if that changes anything.
+<br/>
+<br/>
+I've noticed recently that some things don't act properly on the M3 DS Real when they're loaded using the cart's firmware (tried 2.8/2.9/3.0) menu, and using DSO made them run correctly :/</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Bingo! Now it works.
+<br/>
+<br/>
+So what next?
+<br/>
+<br/>
+Do I boot from DSO for eternity, or can we nag someone about the firmware (or even help out)?
+<br/>
+<br/>
+Can I clear the state manually from my code? Presumably it has to do with the touch pad. I'll experiment myself (want to learn the nitty-gritty anyway), but if someone has a good idea already, I'd be willing to hear it ;-)
+<br/>
+<br/>
+(just for the record, I have "2.9 X version")</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#151484 - Cydrak - Wed Feb 27, 2008 6:57 pm</h4>
+    <div class="postbody"><span class="postbody">If you want better answers, then yes, please remove the extra code! In the process, you might find your own problem (yay). If not, it will help others out (yay^2). I know that sometimes it's not obvious what "extra" is, but in this case you have duplicate lines, and functions and variables that aren't even used. You know that, but impatient developers with bigger projects don't. ;)
+<br/>
+<br/>
+Also it would be nice to know exactly *what* it does. "Either the touch or drawing works"? Does touch make the drawing disappear? Does it only work with one or the other commented out? Does it seem to crash entirely? If so, can you find out when and where? How about registers? Try setting BRIGHTNESS to zero, that can still affect framebuffer. I think you've got all the other important stuff, but it's hard to tell.
+<br/>
+<br/>
+It works on my SC Lite. Sorry... I don't know what's up, though. This can be hard to work out without sitting in front of it. Last week had to debug a crash on M3CF over IMs... did I mention I &lt;3 assert()? Very muchly. &lt;3 &lt;3  &lt;3.
+<br/>
+<br/>
+I noticed on_irq() is broken: REG_IF is *not* a variable, and saying REG_IF |= FOO will clear *all* the pending interrupts, not just FOO. This would cause you to "lose" IRQs. I assume you pasted from a tutorial, so just beware: some of them are good, some are rather dodgy. :/
+<br/>
+<br/>
+Just use irqInit/irqSet/irqEnable, as you've correctly done--albeit, um, twice?--in main(). libnds will call the handlers for you. You just need to request IRQs from some things (timer, dma etc) when you start them up.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#151528 - nczempin - Thu Feb 28, 2008 11:43 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Cydrak wrote:</b></span></td> </tr> <tr> <td class="quote">If you want better answers, then yes, please remove the extra code! In the process, you might find your own problem (yay). If not, it will help others out (yay^2). I know that sometimes it's not obvious what "extra" is, but in this case you have duplicate lines, and functions and variables that aren't even used. You know that, but impatient developers with bigger projects don't. ;)
+<br/>
+<br/>
+Also it would be nice to know exactly *what* it does. "Either the touch or drawing works"? Does touch make the drawing disappear? Does it only work with one or the other commented out? Does it seem to crash entirely? If so, can you find out when and where? How about registers? Try setting BRIGHTNESS to zero, that can still affect framebuffer. I think you've got all the other important stuff, but it's hard to tell.
+<br/>
+<br/>
+It works on my SC Lite. Sorry... I don't know what's up, though. This can be hard to work out without sitting in front of it. Last week had to debug a crash on M3CF over IMs... did I mention I &lt;3 assert()? Very muchly. &lt;3 &lt;3  &lt;3.
+<br/>
+<br/>
+I noticed on_irq() is broken: REG_IF is *not* a variable, and saying REG_IF |= FOO will clear *all* the pending interrupts, not just FOO. This would cause you to "lose" IRQs. I assume you pasted from a tutorial, so just beware: some of them are good, some are rather dodgy. :/
+<br/>
+<br/>
+Just use irqInit/irqSet/irqEnable, as you've correctly done--albeit, um, twice?--in main(). libnds will call the handlers for you. You just need to request IRQs from some things (timer, dma etc) when you start them up.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Yep, the code is very much pasted, and stitched, and garbled (I did warn you about it, and yes, I wouldn't normally call the irq inits twice ;-), and if there is a way to present this apparent bug in the M3Real Firmware to their developers I will make sure to absolutely isolate it.
+<br/>
+<br/>
+Not sure if you noticed from my last post that I'm pretty sure I've found the problem, as the DSOrganize workaround works.
+<br/>
+<br/>
+The strange thing is that the basic TouchTest from which I copied half the code works, once I add the drawing code things start to go wrong.
+<br/>
+<br/>
+But we have found out that aside from the generic brain-dead-ness of my code, it actually works, except on (at least) the M3 DS Real Firmware 2.8, 2.9 and 3.0.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#151610 - thegamefreak0134 - Sat Mar 01, 2008 10:08 am</h4>
+    <div class="postbody"><span class="postbody">From what I can tell from my experiments, you will want to un-comment the swiWaitForVSync(). I had very similar issues, although I was simply getting very inaccurate touch results, and it was a result of trying to poll the touch hardware too often, or some other issue associated. The touch code and the hardware appear to be designed to handle only one coordinate per frame, so try putting the VSyncs back in and see if it helps.
+<br/>
+<br/>
+I wouldn't put it past the firmware on your card to leave garbage in memory, I know my SuperCard does exactly the same thing. Odd that it would respond in that particular way though. My best advice is, you have found a way to boot it using DSOrganize, and I tend to trust homebrew loaders rather than card firmware, so just use DSOrganize for it.
+<br/>
+<br/>
+-thegamefreak<br/>_________________<br/>What if the hokey-pokey really is what it's all about?
+<br/>
+<br/>
+[url=http:/www.darknovagames.com/index.php?action=recruit&amp;clanid=1]Support Zeta on DarkNova![/url]</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#151701 - nczempin - Mon Mar 03, 2008 6:03 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>thegamefreak0134 wrote:</b></span></td> </tr> <tr> <td class="quote">From what I can tell from my experiments, you will want to un-comment the swiWaitForVSync(). I had very similar issues, although I was simply getting very inaccurate touch results, and it was a result of trying to poll the touch hardware too often, or some other issue associated. The touch code and the hardware appear to be designed to handle only one coordinate per frame, so try putting the VSyncs back in and see if it helps.
+<br/>
+<br/>
+I wouldn't put it past the firmware on your card to leave garbage in memory, I know my SuperCard does exactly the same thing. Odd that it would respond in that particular way though. My best advice is, you have found a way to boot it using DSOrganize, and I tend to trust homebrew loaders rather than card firmware, so just use DSOrganize for it.
+<br/>
+<br/>
+-thegamefreak</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+well, the wait for sync was not the problem.
+<br/>
+<br/>
+I've changed a few other things that did the trick, however. I haven't determined yet which of these was the culprit:
+<br/>
+<br/>
+1. Cleaned up the code a little
+<br/>
+2. removed any PALib dependencies
+<br/>
+3. exchanged the palib makefile by one from the libnds examples
+<br/>
+<br/>
+I think probably 3) was what did it; I had a lot of problems with PALib in my setup, especially none of the touch examples seem to work (sorry to be so vague ;-)</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

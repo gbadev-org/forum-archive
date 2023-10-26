@@ -1,0 +1,91 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>operator new wierdness - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>C/C++ > operator new wierdness</h2>
+<div id="posts">
+<div class="post">
+    <h4>#41675 - cesium - Sun May 01, 2005 1:59 am</h4>
+    <div class="postbody"><span class="postbody">How hard does "operator new" work to find an empty block of RAM on the heap?
+<br/>
+<br/>
+I am using STL vectors in C++ with DevKitArm. I have a loop that appends chars onto a vector&lt;char&gt;. Vector allocates memory using new way down deep in new_allocator.h (line 81).
+<br/>
+<br/>
+The STL vector&lt;T&gt; container allocates memory as it needs it. If you try to append (push_back) a new item to the vector, and there is no more room, it will allocate more. How much more? Twice as much as it had before!
+<br/>
+<br/>
+OK, so I push_back a char the first time, and vector allocates 1 byte. When I push_back the next byte it allocates 2 bytes and frees the old 1 byte. Next time it allocates 4 bytes, and frees up the 2, etc, etc.
+<br/>
+<br/>
+Well, I found my code hanging in operator new, when I got up to the request to allocate 1024 bytes. I could see on the heap (which I have in EWRAM) almost all of the previous allocations, one after the other, each twice as big as the previous. (I pushed back the chars "ABCD...XYZ").
+<br/>
+<br/>
+But when it came time to allocate the new 1024 bytes, I could see that the next 1024 bytes on the heap were not empty. (By empty I mean that I see 0x08 in most of what appears unused space on the heap.) There were almost 1024 free bytes, but there was a chunk of data, all by itself, out in the heap! (I recognized a few strings of text that I had created earlier.) This chunk of data was positioned so that the next free block of RAM after the previous vector allocations was just not big enough to hold 1024 chars.
+<br/>
+<br/>
+So, without having the source code for new, I really could not single step through, and find out what was barfing. But new never, ever returned.
+<br/>
+<br/>
+So, my questions are:
+<br/>
+-Does new work hard to find EWRAM for me on the heap? Or just panic when it bumps into a used chunck before it satisfies the allocation request.
+<br/>
+-How can I get the source code for DevKitArm's new, compile and link it into my project so I can single step it in the debugger?
+<br/>
+-Does it seem odd to you that there was a block of data, all alone, a few kilobytes into the heap? Maybe that allocation is the root of all evil. Perhaps it was allocated in error? Should have been closer to the start of the heap?
+<br/>
+<br/>
+Since you've read this far, there's something you should know. All of this vector work is taking place within my interrupt service routine. Do the allocations performed by new in the "main" code play nice with those performed in IRQ's?
+<br/>
+<br/>
+cesium
+<br/>
+(Feeling more like Ytterbium today.)
+<br/>
+<br/>
+PS, Since I do know how many bytes I was going to push_back into the vector&lt;char&gt;, I reserved that many with the reserve member function and everything works fine. This works because allocating space for N chars from the start consumes less of the heap than allocating it in chunks that double in size each time. That's not the point. This problem is not just going to "go away." I'm sure it will come around again to bite me.
+<br/>
+I'd be very grateful for any Insight (pardon the pun) into debugging operator new when used in iterrupt service routines.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#41693 - tepples - Sun May 01, 2005 5:59 am</h4>
+    <div class="postbody"><span class="postbody">Interrupt service routines should not allocate memory out of the main heap. Think of what might happen to the heap if you try to call new from the main thread and from an ISR at the same time. Rather, they should preallocate a block of static memory and <a class="postlink" href="http://www.parashift.com/c++-faq-lite/dtors.html#faq-11.14" target="_blank">create a second heap in that block</a>.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#41712 - cesium - Sun May 01, 2005 1:57 pm</h4>
+    <div class="postbody"><span class="postbody">Again, Tepples is right on target.
+<br/>
+<br/>
+I'm sooo used to programming in multi-threaded, rather than interrupt driven code... I spaced this one. I turn off interrupts when I modify data structures that are shared with the ISR. But I've always been a little foggy about the heap. It is, of course, a data structure that is shared with the ISR.
+<br/>
+<br/>
+Tepples, you da' man. (But we all knew that beforehand.)
+<br/>
+<br/>
+The link you referenced looks like a sweet solution. I'll try it.
+<br/>
+<br/>
+cesium</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

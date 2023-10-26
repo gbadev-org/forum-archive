@@ -1,0 +1,431 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Camera class for 3d with theoretical 2Xperformance increase! - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Camera class for 3d with theoretical 2Xperformance increase!</h2>
+<div id="posts">
+<div class="post">
+    <h4>#50870 - omaremad - Sun Aug 14, 2005 12:51 am</h4>
+    <div class="postbody"><span class="postbody">Hello i found a nice camera class for Opengl which unlike tutorial 10 in nehe allows you to move and rotate the camera without using the stationary camera and rotating scenery trick. 
+<br/>
+<br/>
+It uses simple algebra no fancy matrixes.
+<br/>
+<br/>
+more over i ported it to nds and put touch screen look functions.
+<br/>
+<br/>
+The 2X performance increase is based on the fact that it would be ultimately easier to build levels out of seperate quads enabling us to have seperate texture for each quad and thus a proper level which can beloaded from something like a text file.
+<br/>
+<br/>
+and we all know that you have to use only 1 texture per triangle group,any way quads mean double the polygon that can be renedered
+<br/>
+<br/>
+over all no need to transform the level or enemies!
+<br/>
+<br/>
+I am going to build a mini engine with a text file map system and this camera.
+<br/>
+<br/>
+this method also makes it easy to implement collision algorithims and such.
+<br/>
+<br/>
+any way here is the code
+<br/>
+<br/>
+the camera was ported from an apron opengl tutorial
+<br/>
+<br/>
+How to use it
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+<br/>
+CCamera objCamera; //creates camera
+<br/>
+<br/>
+//after scan keys
+<br/>
+objCamera.Move_Camera(CAMERASPEED);//move forward
+<br/>
+objCamera.Move_Camera(-CAMERASPEED);//move backward
+<br/>
+////
+<br/>
+<br/>
+// applies the camera vars puy it in main loop after calculating the camera values and before //drawing anything
+<br/>
+   gluLookAt(objCamera.mPos.x,  objCamera.mPos.y,  objCamera.mPos.z,   
+<br/>
+           objCamera.mView.x, objCamera.mView.y, objCamera.mView.z,   
+<br/>
+           objCamera.mUp.x,   objCamera.mUp.y,   objCamera.mUp.z);
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+<br/>
+the header file put it somewhere and include it
+<br/>
+dont forget to setup trig funcs
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#define CAMERASPEED   0.03f            // The Camera Speed
+<br/>
+<br/>
+#ifndef PEN_DOWN
+<br/>
+#define PEN_DOWN   (((~IPC-&gt;buttons) &lt;&lt; 6) &amp; (1&lt;&lt;12))
+<br/>
+#endif
+<br/>
+<br/>
+<br/>
+static void get_pen_delta( int *dx, int *dy )
+<br/>
+{
+<br/>
+   static int prev_pen[2] = { 0x7FFFFFFF, 0x7FFFFFFF };
+<br/>
+<br/>
+   if( PEN_DOWN )
+<br/>
+   {
+<br/>
+      if( prev_pen[0] != 0x7FFFFFFF )
+<br/>
+      {
+<br/>
+         *dx = (prev_pen[0] - IPC-&gt;touchX);
+<br/>
+         *dy = (prev_pen[1] - IPC-&gt;touchY);
+<br/>
+      }
+<br/>
+<br/>
+      prev_pen[0] = IPC-&gt;touchX;
+<br/>
+      prev_pen[1] = IPC-&gt;touchY;
+<br/>
+   }
+<br/>
+   else
+<br/>
+   {
+<br/>
+      prev_pen[0] = prev_pen[1] = 0x7FFFFFFF;
+<br/>
+      *dx = *dy = 0;
+<br/>
+   }
+<br/>
+}
+<br/>
+<br/>
+<br/>
+<br/>
+<br/>
+//////////////////////////////////////
+<br/>
+//The tVector3 Struct
+<br/>
+//////////////////////////////////////
+<br/>
+typedef struct tVector3               // expanded 3D vector struct
+<br/>
+{         
+<br/>
+   tVector3() {}   // constructor
+<br/>
+   tVector3 (float new_x, float new_y, float new_z) // initialize constructor    
+<br/>
+   {x = new_x; y = new_y; z = new_z;}
+<br/>
+   // overload + operator so that we easier can add vectors
+<br/>
+   tVector3 operator+(tVector3 vVector) {return tVector3(vVector.x+x, vVector.y+y, vVector.z+z);}
+<br/>
+   // overload - operator that we easier can subtract vectors
+<br/>
+   tVector3 operator-(tVector3 vVector) {return tVector3(x-vVector.x, y-vVector.y, z-vVector.z);}
+<br/>
+   // overload * operator that we easier can multiply by scalars
+<br/>
+   tVector3 operator*(float number)    {return tVector3(x*number, y*number, z*number);}
+<br/>
+   // overload / operator that we easier can divide by a scalar
+<br/>
+   tVector3 operator/(float number)    {return tVector3(x/number, y/number, z/number);}
+<br/>
+   
+<br/>
+   float x, y, z;                  // 3D vector coordinates
+<br/>
+}tVector3;
+<br/>
+<br/>
+<br/>
+//////////////////////////////////////
+<br/>
+//The CCamera Class
+<br/>
+//////////////////////////////////////
+<br/>
+class CCamera 
+<br/>
+{
+<br/>
+   public:
+<br/>
+<br/>
+      tVector3 mPos;   
+<br/>
+      tVector3 mView;      
+<br/>
+      tVector3 mUp;         
+<br/>
+<br/>
+//NEW//////////////////NEW//////////////////NEW//////////////////NEW////////////////
+<br/>
+      int mWindowWidth;
+<br/>
+      int mWindowHeight;
+<br/>
+<br/>
+<br/>
+      // This function let you control the camera with the mouse
+<br/>
+      void Mouse_Move();
+<br/>
+<br/>
+//NEW//////////////////NEW//////////////////NEW//////////////////NEW////////////////
+<br/>
+<br/>
+      void Rotate_View(float x, float y, float z);
+<br/>
+      void Move_Camera(float cameraspeed);
+<br/>
+      void Position_Camera(float pos_x, float pos_y,float pos_z,
+<br/>
+                       float view_x, float view_y, float view_z,
+<br/>
+                      float up_x,   float up_y,   float up_z);
+<br/>
+};
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+<br/>
+the main camer file
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#include "main.h"
+<br/>
+<br/>
+/////////////////////////////////////////////////////////////////////////////////////////////////
+<br/>
+//                              THE CCAMERA POSITION CAMERA
+<br/>
+/////////////////////////////////////////////////////////////////////////////////////////////////
+<br/>
+void CCamera::Position_Camera(float pos_x,  float pos_y,  float pos_z,
+<br/>
+                       float view_x, float view_y, float view_z,
+<br/>
+                       float up_x,   float up_y,   float up_z)
+<br/>
+{
+<br/>
+   tVector3 vPos   = tVector3(pos_x,  pos_y,  pos_z);
+<br/>
+   tVector3 vView   = tVector3(view_x, view_y, view_z);
+<br/>
+   tVector3 vUp   = tVector3(up_x,   up_y,   up_z);
+<br/>
+   
+<br/>
+   mPos  = vPos;                     // set the position
+<br/>
+   mView = vView;                     // set the view
+<br/>
+   mUp   = vUp;                     // set the up vector
+<br/>
+}
+<br/>
+<br/>
+<br/>
+/////////////////////////////////////////////////////////////////////////////////////////////////
+<br/>
+//                              THE CCAMERA MOVE CAMERA
+<br/>
+/////////////////////////////////////////////////////////////////////////////////////////////////
+<br/>
+void CCamera::Move_Camera(float cameraspeed)
+<br/>
+{
+<br/>
+   tVector3 vVector = tVector3(0,0,0);      // init a new view vector
+<br/>
+   vVector = mView - mPos;               // Get the view vector
+<br/>
+   
+<br/>
+   // forward positive cameraspeed and backward negative -cameraspeed.
+<br/>
+   mPos.x  = mPos.x  + vVector.x * cameraspeed;
+<br/>
+   mPos.z  = mPos.z  + vVector.z * cameraspeed;
+<br/>
+   mView.x = mView.x + vVector.x * cameraspeed;
+<br/>
+   mView.z = mView.z + vVector.z * cameraspeed;
+<br/>
+}
+<br/>
+<br/>
+<br/>
+/////////////////////////////////////////////////////////////////////////////////////////////////
+<br/>
+//                              THE CCAMERA ROTATE VIEW
+<br/>
+/////////////////////////////////////////////////////////////////////////////////////////////////
+<br/>
+void CCamera::Rotate_View(float x, float y, float z)
+<br/>
+{
+<br/>
+   tVector3 vVector = mView - mPos;
+<br/>
+<br/>
+   if(x) 
+<br/>
+   {
+<br/>
+      mView.z = (float)(mPos.z + sin(x)*vVector.y + cos(x)*vVector.z);
+<br/>
+      mView.y = (float)(mPos.y + cos(x)*vVector.y - sin(x)*vVector.z);
+<br/>
+   }
+<br/>
+   if(y) 
+<br/>
+   {
+<br/>
+      mView.z = (float)(mPos.z + sin(y)*vVector.x + cos(y)*vVector.z);
+<br/>
+      mView.x = (float)(mPos.x + cos(y)*vVector.x - sin(y)*vVector.z);
+<br/>
+   }
+<br/>
+   if(z) 
+<br/>
+   {
+<br/>
+      mView.x = (float)(mPos.x + sin(z)*vVector.y + cos(z)*vVector.x);      
+<br/>
+      mView.y = (float)(mPos.y + cos(z)*vVector.y - sin(z)*vVector.x);
+<br/>
+   }
+<br/>
+}
+<br/>
+<br/>
+<br/>
+//NEW//////////////////NEW//////////////////NEW//////////////////NEW////////////////
+<br/>
+<br/>
+/////////////////////////////////////////////////////////////////////////////////////////////////
+<br/>
+//                              THE CCAMERA MOUSE MOVE
+<br/>
+/////////////////////////////////////////////////////////////////////////////////////////////////
+<br/>
+void CCamera::Mouse_Move()
+<br/>
+{
+<br/>
+   
+<br/>
+   float angle_y  = 0.0f;            
+<br/>
+   float angle_z  = 0.0f;                     
+<br/>
+   
+<br/>
+   int pen_delta[2];
+<br/>
+   get_pen_delta( &amp;pen_delta[0], &amp;pen_delta[1] );
+<br/>
+   // Get the direction from the mouse, and bring the number down to a reasonable amount
+<br/>
+   angle_y = (float)( (mid_x - pen_delta[0]) ) / 2;      
+<br/>
+   angle_z = (float)( (mid_y - pen_delta[1]) ) / 2;
+<br/>
+<br/>
+   // The higher the number(acceleration) is the faster the camera looks around.
+<br/>
+   mView.y += angle_z * 2;
+<br/>
+<br/>
+   // limit the rotation around the x-axis
+<br/>
+   if((mView.y - mPos.y) &gt; 8)  mView.y = mPos.y + 8;
+<br/>
+   if((mView.y - mPos.y) &lt;-8)  mView.y = mPos.y - 8;
+<br/>
+   
+<br/>
+   Rotate_View(0, -angle_y, 0); // Rotate
+<br/>
+}
+<br/>
+<br/>
+//NEW//////////////////NEW//////////////////NEW//////////////////NEW////////////////
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#50881 - connor9 - Sun Aug 14, 2005 5:16 am</h4>
+    <div class="postbody"><span class="postbody">Are you using floats though? You'd have to convert everything to fixed point math or else you'll be losing a lot of performance with floats.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#50883 - omaremad - Sun Aug 14, 2005 6:16 am</h4>
+    <div class="postbody"><span class="postbody">Im still a noob can you give me the function please.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#50894 - rmco2003 - Sun Aug 14, 2005 9:36 am</h4>
+    <div class="postbody"><span class="postbody">can you make a demo for us non-programmers to test out?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#50901 - blt - Sun Aug 14, 2005 11:58 am</h4>
+    <div class="postbody"><span class="postbody">- gluLookAt() setup the transformation matrix. "level or enemies" are transformed as usual, but it doesn't hurt performance as you have to transform everything in the end. It's just proper behavior to apply camera transformation in some matrix stack and not do a loadidentity/setupcamera everytime.
+<br/>
+- Using float is a killer.
+<br/>
+- You can't draw 2000 quads in total, but more around 1500. it's a vertex limit.
+<br/>
+- Your explanation reads as nonsense and general misunderstanding to me.
+<br/>
+<br/>
+Good luck trying your stuff, though. There's always things to learn.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

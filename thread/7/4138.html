@@ -1,0 +1,111 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Large OAM initialisation problem - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>C/C++ > Large OAM initialisation problem</h2>
+<div id="posts">
+<div class="post">
+    <h4>#26897 - twistee - Tue Sep 28, 2004 3:55 pm</h4>
+    <div class="postbody"><span class="postbody">Hi,
+<br/>
+<br/>
+    I made a bunch of sprites and wanted to load them into the OAM. I did:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">    for(loop = 0; loop &lt; 26112; loop++){ //51 32x32 256 colour sprites
+<br/>
+        OAMData[loop] = wozzaData[loop];
+<br/>
+    }</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+    But when I actually load the game no sprites come up, and when I check the memory for the OAM there is nothing there. I read about the troubles with arrays larger than 16k, but im not sure what to do with OAM...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#26898 - poslundc - Tue Sep 28, 2004 4:06 pm</h4>
+    <div class="postbody"><span class="postbody">OAM is object <span style="font-style: italic">attribute</span> memory, key word "attribute". It contains meta-information about the sprite, like x and y coordinate, shape and size, etc. Not the actual pixel map itself.
+<br/>
+<br/>
+OAMData looks like it comes from one of the tutorials like Pern and is a bad misnomer for Sprite VRAM. This is where the actual pixel-plot of the sprite is stored.
+<br/>
+<br/>
+There is nothing wrong with using the name OAMData so long as you keep it distinct from actual OAM. In order for a sprite to display you need to populate two sections of data: the Sprite VRAM and the OAM. The Sprite VRAM tells the GBA what to display; the OAM tells it how to display it.
+<br/>
+<br/>
+Unless you provide correct data in both Sprite VRAM and OAM, you won't get any sprites showing properly. Your code is only populating Sprite VRAM, not OAM.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#26899 - expos1994 - Tue Sep 28, 2004 4:39 pm</h4>
+    <div class="postbody"><span class="postbody">Open up your ROM in Visual Boy and select Tools/Tile Viewer, click the radio button at 0x6010000.  If OAMData is pointing to the right spot in memory (and it will be if you are using the Pern Project Tutorials), you should see your data. (You may have to click the 256 colors radio button).
+<br/>
+<br/>
+If you still don't see anything, did you load the 256 color palette?
+<br/>
+<br/>
+If you did those two steps and you still see blank tile memory, then I would check the data from wozzaData[].  
+<br/>
+<br/>
+Also you are going to be cutting it close loading that many 256 color tiles.  With 256 colors you can only load half as many tiles as you could with 16-color.  So if your 51 sprites are just frames of animation, you might want to think about copying in frames as they are needed so you only use 32 tiles of tile memory at a time. 
+<br/>
+<br/>
+Actually, I think you may be over already.  A 32x32 sprites takes 16 tiles. In 256 color mode that's 32 tiles (twice as much memory to store 256 color tiles). 32 * 51 sprites = 1632 tiles.   I can't recall off the top of my head, but I think you only get 1024 tiles for your sprites.  Either way, you really should think about copying data in frame by frame.  The GBA doesn't skip a beat loading a 32x32 frame.  Especially if you use DMA.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#27168 - twistee - Tue Oct 05, 2004 8:12 am</h4>
+    <div class="postbody"><span class="postbody">Ok, I have decided to do it frame by frame. Although, I am not too sure how to do this. I tried a simple method using basically the same code I had, but added a function to load the specific frame into the memory when needed:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void LoadSprite(int i){
+<br/>
+    for(int loop = i*512; loop &lt; (i*512+512); loop++){
+<br/>
+        OAMData[loop] = wozzawalkData[loop];
+<br/>
+    }
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+But it only shows the very first sprite (as its the first loaded), and then never changes...even though it should be attempting to load the other sprites. Is there anything I should add or completely change to do this properly?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#27175 - expos1994 - Tue Oct 05, 2004 2:47 pm</h4>
+    <div class="postbody"><span class="postbody">I'm not exactly sure what you are trying to do there.  Below is the way I do it.   This would load 512 elements from wozzawalkData at the beginning of OAMData.  On frame 0, it would grab the first 512, frame 1 would grab the second 512, and so on.
+<br/>
+<br/>
+If this weren't the first sprite in VRAM.  You would want to do this OAMData[loop + offset].  
+<br/>
+<br/>
+You might also check up on using DMA.  it works well for tasks like this, but doing it this way shouldn't slow you down.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+for (loop = 0; loop &lt; 512; loop++)
+<br/>
+       OAMData[loop] = wozzawalkData[loop + (framenumber * 512)]; 
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#27244 - twistee - Thu Oct 07, 2004 12:00 pm</h4>
+    <div class="postbody"><span class="postbody">Yeah I wasnt sure what i was doing with the code either looking at it now, what you gave me worked, thanks for the help!</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

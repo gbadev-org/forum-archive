@@ -1,0 +1,477 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Audio mixing problem - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Audio > Audio mixing problem</h2>
+<div id="posts">
+<div class="post">
+    <h4>#34953 - gbawiz - Fri Jan 28, 2005 5:50 pm</h4>
+    <div class="postbody"><span class="postbody">Hello,
+<br/>
+I have a question about the mixing of more than one channel of audio for playback via the GBA audio port.
+<br/>
+I have managed to setup an ISR which makes use of a double buffer method for streaming the audio to the DMA sound port.
+<br/>
+<br/>
+I have created an assembly routine for stepping the sample at the correct mixing frequencies, etc. I got all of the information on stepsample from the following site:
+<br/>
+<br/>
+<a href="http://oxygen.it.net.au/mixing/section4.html" target="_blank">http://oxygen.it.net.au/mixing/section4.html</a>
+<br/>
+<br/>
+When I step all 4 channels (or even 3) i get some of the sound but with a lot of clicking and it would appear that the 1/60th of a second for mixing all 4 channels into the 304 byte mixing buffer is not enough time.
+<br/>
+<br/>
+Should the mixing be done during the ISR?
+<br/>
+<br/>
+Thannks</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#34956 - poslundc - Fri Jan 28, 2005 6:13 pm</h4>
+    <div class="postbody"><span class="postbody">Is your routine in ARM assembly and is it being placed in IWRAM? You should have plenty of processor time to mix four channels even with a relatively inefficient mixer, especially if you aren't trying to make it share the processor with a game yet.
+<br/>
+<br/>
+It seems more probable that there is a programming error in your code than you are running out of processor time. This is especially more likely if you've written it in assembly. Does it function correctly when you only have one channel? Try tracing the state of the registers, stack and memory as you increase the number of channels you are mixing.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#34957 - gbawiz - Fri Jan 28, 2005 6:22 pm</h4>
+    <div class="postbody"><span class="postbody">Here is the assembly code for the stepsample routine which I wrote:
+<br/>
+Note: I had backed up registers before and after the routine but found that absolutely nothing happens, so I removed them. (it would seem that adding these seems to make things worse)
+<br/>
+stmfd r13!, {r4-r11, r14}
+<br/>
+assembly routine here
+<br/>
+ldmfd r13!, {r4-r11, r14}
+<br/>
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">@----------adding 4 to the registers because there are 4 bytes which indicate the address (32bit)-------------@
+<br/>
+<br/>
+<br/>
+@----- CODE START ----@
+<br/>
+   .global stepsample
+<br/>
+<br/>
+stepsample:
+<br/>
+<br/>
+ldr r1,[r0]         @load r1 with mix_lowspeed
+<br/>
+add r0,r0,#4      @point r0 to mix_count
+<br/>
+ldr r2,[r0]         @load r2 with mix_count
+<br/>
+adds r2,r2,r1      @add mix_lowspeed to mix_count &amp; set carry
+<br/>
+str r2,[r0]         @store result in mix_count
+<br/>
+<br/>
+<br/>
+add r0,r0,#4      @point r0 to mix_curptr
+<br/>
+mov r10,r0         @copy r0 to r10
+<br/>
+ldr r1,[r0]         @load r1 with mix_curptr
+<br/>
+add r0,r0,#4      @point r0 to mix_highspeed
+<br/>
+ldr r2,[r0]         @load r2 with mix_highspeed
+<br/>
+<br/>
+adc r1,r1,r2      @add mix_highspeed to mix_curptr with carry
+<br/>
+add r0,r0,#4      @point r0 to mix_loopend
+<br/>
+ldr r2,[r0]         @load r2 with mix_loopend
+<br/>
+<br/>
+<br/>
+cmp r1,r2         @compare mix_loopend with mix_currentptr
+<br/>
+bne savereturn      @if not equal then jump to procedure called savereturn
+<br/>
+<br/>
+add r0,r0,#4      @point r0 to mix_looplength
+<br/>
+ldr r2,[r0]         @load r2 with mix_looplength
+<br/>
+cmp r2,#0         @compare r2 with number zero
+<br/>
+bne loopback      @if r2 not zero then goto loopback procedure
+<br/>
+<br/>
+add r0,r0,#4      @point r0 to mix_activeflag
+<br/>
+mov r3,#0         @load r3 with value zero
+<br/>
+str r3,[r0]         @store zero in mix_activeflag
+<br/>
+b savereturn      @goto save and return procedure
+<br/>
+<br/>
+<br/>
+<br/>
+<br/>
+<br/>
+loopback:
+<br/>
+sub r1,r1,r2      @deduct mix_looplength from mix_currentptr
+<br/>
+<br/>
+<br/>
+savereturn:
+<br/>
+str r1,[r10]      @store new value of mix_curptr
+<br/>
+bx lr @return;
+<br/>
+<br/>
+<br/>
+@------ CODE END ----@
+<br/>
+@pool
+<br/>
+@endarea</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+<br/>
+The mixer works when one channel is enabled only (no point in mixer then).
+<br/>
+But when i add more than one then there are problems.
+<br/>
+For test purposes I allowed only one then added a time delay loop and it resulted in much the same as when using more than one channel. i.e a load of noize with the sample in the background playing quite slowly.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#34963 - poslundc - Fri Jan 28, 2005 7:10 pm</h4>
+    <div class="postbody"><span class="postbody">I can't comment on the correctness of your routine because I'm having a difficult time figuring out what it's doing.
+<br/>
+<br/>
+I can tell you that you are making some very basic errors, though, which may not affect the output of your sound but indicate that your code is hacked together. If your code is being called as a function from C, you <span style="font-style: italic">must</span> preserve r4-r11 and r14 across the function call, and your routine clobbers r10. You are also setting the status flags in several of your arithmetic operations for no apparent reason.
+<br/>
+<br/>
+I would write your mixer code in C first, get it working the way you want to, then look at porting your C code to assembly. That way you'll have a template that you know works for the assembly to be built upon.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#34975 - gbawiz - Fri Jan 28, 2005 8:34 pm</h4>
+    <div class="postbody"><span class="postbody">I tried writing the mixing routine in 'c' and found that it is worse.
+<br/>
+It's as if the 1/60th of a second time is not enough to fill the buffers with the mixed sound.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#34979 - poslundc - Fri Jan 28, 2005 9:54 pm</h4>
+    <div class="postbody"><span class="postbody">If the C code is being compiled in ARM mode and placed in IWRAM (see the instructions specific to your devkit to accomplish this), then a full VBlank cycle should be <span style="font-style: italic">plenty</span> of time to mix four channels into a 304-byte buffer. Even if someone were to write a really lackadaisical C-based mixer, I'd still ballpark that they would be able to mix something on the order of 400 channels in a single draw cycle. There's no way you should be running out of time at four.
+<br/>
+<br/>
+If it's not working, it's probably because there's something wrong with your code.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#34980 - isildur - Fri Jan 28, 2005 10:08 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>poslundc wrote:</b></span></td> </tr> <tr> <td class="quote"> lackadaisical </td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Learned a new word today :)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#34981 - poslundc - Fri Jan 28, 2005 10:13 pm</h4>
+    <div class="postbody"><span class="postbody">I do my best to enrich the vocabularies of GBA programmers everywhere.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#34982 - DekuTree64 - Fri Jan 28, 2005 10:19 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>poslundc wrote:</b></span></td> </tr> <tr> <td class="quote">Even if someone were to write a really lackadaisical C-based mixer, I'd still ballpark that they would be able to mix something on the order of 400 channels in a single draw cycle</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Huh? That would be 0.25% CPU per channel. I've never even broken 1% per channel with my best assembly tricks, and the simple yet not too horribly written mixer in my <a class="postlink" href="http://deku.gbadev.org/program/sound2.html" target="_blank">sound tutorial</a> does take a good chunk of the frame to mix 304 samples with 4 channels. That's THUMB in ROM though.
+<br/>
+<br/>
+gbawiz, try domething like this to see how long it's taking:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">while (REG_VCOUNT != 0){}
+<br/>
+PAL_BG[0] = RGB(31, 0, 0);
+<br/>
+SoundMix();
+<br/>
+PAL_BG[0] = 0;</td> </tr></table><span class="postbody">
+<br/>
+Then the red portion of the screen is where it's mixing, and the black portion is unused. If the entire screen is red, then yes, I would say speed is the problem.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#34986 - poslundc - Fri Jan 28, 2005 11:40 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>DekuTree64 wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>poslundc wrote:</b></span></td> </tr> <tr> <td class="quote">Even if someone were to write a really lackadaisical C-based mixer, I'd still ballpark that they would be able to mix something on the order of 400 channels in a single draw cycle</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Huh? That would be 0.25% CPU per channel. I've never even broken 1% per channel with my best assembly tricks, and the simple yet not too horribly written mixer in my <a class="postlink" href="http://deku.gbadev.org/program/sound2.html" target="_blank">sound tutorial</a> does take a good chunk of the frame to mix 304 samples with 4 channels. That's THUMB in ROM though.</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Whoops; I meant to type 40 and not 400. *sheepish grin*
+<br/>
+<br/>
+(It was an arbitrary figure based on my mixer doing 8 channels at 10% CPU consumption... so I figured 100% consumption could do 80... take half that for a reasonable guess on what an unoptimized mixer might do. But I guess I got a little overexcited with that zero key...)
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#35011 - gbawiz - Sat Jan 29, 2005 10:55 am</h4>
+    <div class="postbody"><span class="postbody">I have added the neat little trick using the palette to indicate the duration of the vblanks as provided by DekuTree64.
+<br/>
+<br/>
+here is what happens
+<br/>
+<br/>
+num_channels_active----resulting red percentage
+<br/>
+0----		   15% red
+<br/>
+1----		   60% red
+<br/>
+2----		   95% red (sounds bit dodgy now)
+<br/>
+3----		   red/black strobe effect (very clicky noize)
+<br/>
+----------------------------------------------------------------------------
+<br/>
+Here is a rundow of what happens when vblank occurs:
+<br/>
+<br/>
+ISR
+<br/>
+if vblank occurs then
+<br/>
+	set pallete to red
+<br/>
+	call mixer function
+<br/>
+	set pallete to black
+<br/>
+<br/>
+<br/>
+-------------------------------------------------------
+<br/>
+mixer function
+<br/>
+______________
+<br/>
+disable DMA flow
+<br/>
+swap buffers
+<br/>
+enable DMA flow
+<br/>
+indicate which buffer now playing
+<br/>
+<br/>
+if buffer 1 playing then mix buffer 2
+<br/>
+else mix buffer 1
+<br/>
+<br/>
+the process of mixing any buffer is:
+<br/>
+<br/>
+<br/>
+scan all buffer 'n' locations 0 to buffersize
+<br/>
+	if channel 0 active then stepsample channel 0
+<br/>
+	if channel 1 active then stepsample channel 1
+<br/>
+	if channel 2 active then stepsample channel 2
+<br/>
+	if channel 3 active then stepsample channel 3
+<br/>
+	add all together and divide by 4
+<br/>
+	send result to buffer 'n' [current location]
+<br/>
+next location of buffer 'n'
+<br/>
+<br/>
+there are 304 buffer locations with the appropriate DMA timer frequencies set according 
+<br/>
+<br/>
+to the VBLANK duration:
+<br/>
+<br/>
+Timer: 		64612 
+<br/>
+mix frequency:	18157
+<br/>
+Buffer sizes:	304
+<br/>
+-----------------------------------------------------------
+<br/>
+I can see that perhaps the mixing routine is taking too much time to execute.
+<br/>
+Also, how do I store the ISR in IWRAM?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#35019 - Arjan - Sat Jan 29, 2005 1:48 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>gbawiz wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+scan all buffer 'n' locations 0 to buffersize
+<br/>
+	if channel 0 active then stepsample channel 0
+<br/>
+	if channel 1 active then stepsample channel 1
+<br/>
+	if channel 2 active then stepsample channel 2
+<br/>
+	if channel 3 active then stepsample channel 3
+<br/>
+	add all together and divide by 4
+<br/>
+	send result to buffer 'n' [current location]
+<br/>
+next location of buffer 'n'</td> </tr></table><span class="postbody">
+<br/>
+Is this dividing done by using a real divide, or a bitshift?<br/>_________________<br/>dus.... <a href="http://www.bombaman.net" target="_blank">http://www.bombaman.net</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#35021 - gbawiz - Sat Jan 29, 2005 2:39 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Arjan wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>gbawiz wrote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+scan all buffer 'n' locations 0 to buffersize
+<br/>
+	if channel 0 active then stepsample channel 0
+<br/>
+	if channel 1 active then stepsample channel 1
+<br/>
+	if channel 2 active then stepsample channel 2
+<br/>
+	if channel 3 active then stepsample channel 3
+<br/>
+	add all together and divide by 4
+<br/>
+	send result to buffer 'n' [current location]
+<br/>
+next location of buffer 'n'</td> </tr></table><span class="postbody">
+<br/>
+Is this dividing done by using a real divide, or a bitshift?</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I actually use a bitshift (&gt;&gt;2) to reduce the sample to within the 8bit window
+<br/>
+<br/>
+I have been using another method whereby adding the samples together into a 16bit word then shifting &gt;&gt;2 before storing the result into the output buffer.
+<br/>
+The main problem seems to be with the mixing stage but I cannot find the problem.
+<br/>
+<br/>
+DekuTree64: I was wondering about the palette method, should the screen be totally black or is some red expected?
+<br/>
+Also when the palette changes within the VBLANK interrupt, are these changes made visible straight away or does the GBA wait until the VBLANK duration has finished before changing the background colour?
+<br/>
+<br/>
+Thanks</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#35050 - DekuTree64 - Sat Jan 29, 2005 9:38 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>gbawiz wrote:</b></span></td> </tr> <tr> <td class="quote">DekuTree64: I was wondering about the palette method, should the screen be totally black or is some red expected?
+<br/>
+Also when the palette changes within the VBLANK interrupt, are these changes made visible straight away or does the GBA wait until the VBLANK duration has finished before changing the background colour?</td> </tr></table><span class="postbody">
+<br/>
+Nope, the palette won't be visible until the screen starts drawing again. That's why I put the while(REG_VCOUNT != 0) first, so you can see exactly where the red starts and then how many lines it takes. 
+<br/>
+There are 228 lines total (160 visible, 68 in VBlank), so you can see what percent of the total time it's using by linesUsed*100/228.
+<br/>
+<br/>
+As for why it's so slow, loading all the channel pointer/volume/etc data for every channel on every sample is a lot of work to be done. My fastest mixer actually did work that way, but it did batches of 4 samples at a time, and kept them in registers while loading new channel data to add into them. 
+<br/>
+GCC probably isn't smart enough to make it fast even if you did do batches, so I'd suggest looping over your channels, and for each of them, loop over the whole 304 sample buffer, mixing the current channel into it.
+<br/>
+You'll need a 16-bit temporary buffer, and because of having to load and store the samples in that temporary buffer so many times, it's a pretty slow algorithm all around. Still, it's simple enough for a compiler to optimize about as well as a human could, so it works pretty good in C.
+<br/>
+<br/>
+Check out Tepples' TOD at <a class="postlink" href="http://www.pineight.com" target="_blank">www.pineight.com</a> for a good mixer in this style.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#35222 - gbawiz - Tue Feb 01, 2005 6:58 pm</h4>
+    <div class="postbody"><span class="postbody">Hello,
+<br/>
+I read before that the mixing routine could be stored in IWRAM to make execution faster, how can I store my mixing function in that area of memory?</span><span class="gensmall"><br/><br/>Last edited by gbawiz on Fri Feb 18, 2005 5:26 pm; edited 2 times in total</span></div>    
+</div>
+<div class="post">
+    <h4>#35232 - tepples - Tue Feb 01, 2005 8:51 pm</h4>
+    <div class="postbody"><span class="postbody">The easiest way to get code into IWRAM under recent devkitARM is to put your mixer function in a separate file, naming it 'whatever.iwram.c'. That would get compiled into 'whatever.iwram.o', and the link script would notice the .iwram.o suffix and have the startup code copy it into IWRAM.
+<br/>
+<br/>
+Another thing to watch out for is that you need to use a special jump instruction to call code in ROM from RAM or vice versa. In the main code (not the separate file containing the mixer), put __attribute__((long_call)) on the function's prototype (not its implementation) in order to get GCC to generate a long jump instruction:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">__attribute__((long_call)) int mixer(...);
+<br/>
+</td> </tr></table><span class="postbody"><br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#35274 - gbawiz - Wed Feb 02, 2005 12:13 pm</h4>
+    <div class="postbody"><span class="postbody">Hello,
+<br/>
+I have managed to move the mixing routine into IWRAM and have now noticed an improvement.
+<br/>
+I can squeeze 3 voices into the time allocated between VBLANKS but the fourth one being active causes problems.
+<br/>
+<br/>
+I believe that there is still too much time occupied by the ISR on the audio procedures and I cannot see how I can build an entire game program when the audio is not functioning fast enough.
+<br/>
+(i.e. when ISR is taken up with audio, is there enough room for animations and other game routines in ISR?)
+<br/>
+Thanks</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#36390 - gbawiz - Fri Feb 18, 2005 5:26 pm</h4>
+    <div class="postbody"><span class="postbody">storing in IWRAM
+<br/>
+compile the mixer routine into an object file.
+<br/>
+rename the object file to name.text.iwram.o</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

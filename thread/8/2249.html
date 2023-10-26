@@ -1,0 +1,101 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Messing with the stack pointer - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>ASM > Messing with the stack pointer</h2>
+<div id="posts">
+<div class="post">
+    <h4>#11767 - poslundc - Sat Oct 18, 2003 5:46 pm</h4>
+    <div class="postbody"><span class="postbody">If I save r13 at the beginning of my routine to somewhere relative to my code in IWRAM (this is for an ARM routine in IWRAM), can I safely use the register and then replace it at the end of my routine?
+<br/>
+<br/>
+Or do interrupts require the register to be pointing to the proper stack location?
+<br/>
+<br/>
+Thanks,
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#11771 - DekuTree64 - Sat Oct 18, 2003 6:17 pm</h4>
+    <div class="postbody"><span class="postbody">Depends on what you're doing in your interrupts. When an IRQ occurs, the CPU swaps r13 and r14 for r13_irq and r14_irq, copies r15 into r14_irq so you can return from the interrupt like a normal function, switches to ARM mode and executes from the address stored at 0x3007ffc (which is hardwired into the BIOS, so you can't change it). Normally it is safe to use r13 for whatever you want. The only problem is that the IRQ stack is only 64 bytes (you can make it bigger/smaller if you want though), so if you're doing much in your interrupts, you'll need to switch back to the user stack, which is the normal r13, and if it was being used for something else when it got interrupted, bad things will happen. But as long as you don't specifically switch to the user stack in your interrupts (by changing processor modes with msr/mrs), you can use r13 freely.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#11772 - poslundc - Sat Oct 18, 2003 6:22 pm</h4>
+    <div class="postbody"><span class="postbody">Sweet... that's not a problem, since currently I only have an HBlank interrupt and it only uses the IRQ stack to preserve the previous function's registers.
+<br/>
+<br/>
+That means one more register I can play with!
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#11784 - NEiM0D - Sat Oct 18, 2003 9:49 pm</h4>
+    <div class="postbody"><span class="postbody">When an interrupt occurs in the GBA, the BIOS saves registers {r0-r3,r12} to r13.
+<br/>
+It gets the address from 0x04000000-4 (=0x03007ffc mirrored), and jumps to there (= user IRQ handler).
+<br/>
+<br/>
+If you got alot of interrupts going off very quickly, I would not suggest changing r13 at all.
+<br/>
+If you really need r13, I suggest you change it back as soon as possible, before the next interrupt fires off, ifnot, the GBA will crash.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#11789 - DekuTree64 - Sat Oct 18, 2003 10:26 pm</h4>
+    <div class="postbody"><span class="postbody">Ah, I thought it would save them on r13_irq. But now that's got me thinking, what's r13_irq even there for if it doesn't allow you to free up r13?<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#11790 - torne - Sat Oct 18, 2003 10:37 pm</h4>
+    <div class="postbody"><span class="postbody">You can't use r13 and r13_irq at the same time; whichever maps to the current CPU mode is the one that's 'r13'. The point is so that you can switch to the IRQ stack without having to save the user stack pointer (because, uhm, where would you save it to? You don't know where the IRQ stack is..)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#11791 - DekuTree64 - Sat Oct 18, 2003 11:16 pm</h4>
+    <div class="postbody"><span class="postbody">Yeah, what I mean is why would you need a seprate IRQ stack if the user stack pointer always has to point to a stack when the IRQ occurs? Then you might as well use the user stack in your IRQ. 
+<br/>
+But I checked GBATEK and CowBite and they both say that it DOES switch to IRQ mode before pushing r0-r3, r12 so they do indeed go onto the interrupt stack, and therefore the user mode r13 is free to corrupt as I originally said.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#11794 - torne - Sun Oct 19, 2003 1:15 am</h4>
+    <div class="postbody"><span class="postbody">You have a seperate IRQ stack (in general, this is, not just the GBA) for a lot of reasons; the most likely being that the user stack pointer might be invalid, or pointing to userspace memory. I can't think of any reason that actually applies on the GBA. It's not at all unreasonable to switch to the userspace stack on entry to your ISR. The mode switch is done by the CPU core on taking an exception, before the BIOS handler is called and thus before any data is pushed.
+<br/>
+<br/>
+You're right that user mode r13 never needs to point anywhere sensible; I misinterpreted what was being asked. Whatever you do to the normal r13 matters only to your code; all BIOS code, interrupt handlers..etc run in IRQ or supervisor mode and have their own stacks.
+<br/>
+<br/>
+So yes, as long as you restore it, you can trash r13 during a function, though it'll have to be PC-relative since you won't have a stack pointer to load it back through. =)</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

@@ -1,0 +1,519 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Sound using FIFO - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Sound using FIFO</h2>
+<div id="posts">
+<div class="post">
+    <h4>#67334 - Haiken - Tue Jan 17, 2006 2:07 am</h4>
+    <div class="postbody"><span class="postbody">Hello everybody,
+<br/>
+<br/>
+I'm trying to play sound by sending fifo messages to the ARM7 cpu.
+<br/>
+It works but... it plays the sound only 1 time on 3 or 4.
+<br/>
+<br/>
+Here is my ARM7 code :
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">typedef struct FIFO_message {
+<br/>
+   u16 command;
+<br/>
+   u16 freelen;
+<br/>
+   TransferSoundData sounddata;   
+<br/>
+} FIFO_message, *pFIFO_message;
+<br/>
+<br/>
+#define MESSAGE_PLAY_SOUND 1
+<br/>
+<br/>
+void FIFOHandler(void) {
+<br/>
+   do {
+<br/>
+      pFIFO_message message = (pFIFO_message) REG_IPC_FIFO_RX;
+<br/>
+      s32 chan;
+<br/>
+      if (message == 0) continue;
+<br/>
+      if (message-&gt;command != MESSAGE_PLAY_SOUND) continue;
+<br/>
+<br/>
+      chan = getFreeSoundChannel();
+<br/>
+      if (chan &gt;= 0) {
+<br/>
+         startSound(message-&gt;sounddata.rate, message-&gt;sounddata.data, message-&gt;sounddata.len, chan, message-&gt;sounddata.vol, message-&gt;sounddata.pan, message-&gt;sounddata.format);
+<br/>
+      }
+<br/>
+      if (message-&gt;freelen &gt; 0) free(message);
+<br/>
+      
+<br/>
+    } while (!(REG_IPC_FIFO_CR &amp; IPC_FIFO_RECV_EMPTY));
+<br/>
+}
+<br/>
+<br/>
+...
+<br/>
+<br/>
+//in main() :
+<br/>
+<br/>
+   irqSet(IRQ_FIFO_NOT_EMPTY, FIFOHandler);
+<br/>
+   irqEnable(IRQ_FIFO_NOT_EMPTY);
+<br/>
+    REG_IPC_FIFO_CR = IPC_FIFO_ENABLE | IPC_FIFO_SEND_CLEAR | IPC_FIFO_RECV_IRQ;
+<br/>
+<br/>
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+My ARM9 code :
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void audio_init(void)
+<br/>
+{
+<br/>
+   //activate FIFO
+<br/>
+   REG_IPC_FIFO_CR = IPC_FIFO_ENABLE | IPC_FIFO_SEND_CLEAR;
+<br/>
+}
+<br/>
+<br/>
+void SendArm7Command(u32 command) {
+<br/>
+   fprintf(stderr, "sendarm7 %d\n", command);
+<br/>
+   while (REG_IPC_FIFO_CR &amp; IPC_FIFO_SEND_FULL) ;
+<br/>
+   if (REG_IPC_FIFO_CR &amp; IPC_FIFO_ERROR) {
+<br/>
+      REG_IPC_FIFO_CR |= IPC_FIFO_SEND_CLEAR; 
+<br/>
+      fprintf(stderr, "ipc error\n");
+<br/>
+   }
+<br/>
+<br/>
+    REG_IPC_FIFO_TX = command;
+<br/>
+}
+<br/>
+<br/>
+typedef struct FIFO_message {
+<br/>
+   u16 command;
+<br/>
+   u16 freelen;
+<br/>
+   TransferSoundData sounddata;   
+<br/>
+} FIFO_message, *pFIFO_message;
+<br/>
+<br/>
+#define MESSAGE_PLAY_SOUND 1
+<br/>
+<br/>
+static struct FIFO_message transfer[16];
+<br/>
+//#define transfer ((FIFO_message volatile *)(0x026FF000))
+<br/>
+static int lastsound=0;
+<br/>
+<br/>
+void audio_play_sound(Sound * sound)
+<br/>
+{
+<br/>
+  if (!sound || !_initiated || _mute)
+<br/>
+    return;
+<br/>
+<br/>
+  pFIFO_message m=malloc(sizeof(FIFO_message));
+<br/>
+<br/>
+  m-&gt;command = MESSAGE_PLAY_SOUND;
+<br/>
+  m-&gt;freelen=sizeof(FIFO_message);
+<br/>
+  m-&gt;sounddata.data = sound-&gt;buffer;
+<br/>
+  m-&gt;sounddata.len = sound-&gt;length;
+<br/>
+  m-&gt;sounddata.rate = 11025;
+<br/>
+  m-&gt;sounddata.vol = 127;
+<br/>
+  m-&gt;sounddata.pan = 64;
+<br/>
+  m-&gt;sounddata.format = 1 /*16bits ?*/ | 2/*ADCPM ?*/;
+<br/>
+  SendArm7Command((u32)m);
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I tried to store the messages in shared memory, but then sounds tend to get weird (sometimes the wrong sample or part of the sample is played, sometimes "junk" is played also).
+<br/>
+<br/>
+Any help would be greatly appreciated :)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#67539 - Haiken - Wed Jan 18, 2006 9:45 pm</h4>
+    <div class="postbody"><span class="postbody">I made it work by using a circular message buffer in shared memory, after IPC (thanks Chris Double's tutos :)
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#define sound_fifo ((FIFO_message*)((uint32)(IPC)+sizeof(TransferRegion)))</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I can't explain why it is working when it is located around 0x027FF000... it is described as being main RAM in the nds tech wiki, so why is it acting differently for another portion of the memory ?
+<br/>
+Is this an issue with the cache or something ?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#67591 - HyperHacker - Thu Jan 19, 2006 5:36 am</h4>
+    <div class="postbody"><span class="postbody">Yep. 027FF000 is an uncached mirror of 02000000. (Don't remember where the ranges end, they're both the same size though.)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#67673 - Haiken - Thu Jan 19, 2006 9:17 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">   WifiData = (Wifi_MainStruct *) (((u32)&amp;Wifi_Data_Struct)| 0x00400000); // should prevent the cache from eating us alive.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+This is taken from sgstair's wifilib
+<br/>
+So you have to use memory addresses starting at 0x02400000 to avoid caching issues.
+<br/>
+<br/>
+Actually I had tried that, but what I misunderstood is that you have to <span style="text-decoration: underline">write</span> with ARM9, and not read with ARM7, at 0x02400000 
+<br/>
+<br/>
+By the way, allocating a buffer with ARM9 and trying to free it with ARM7 seems to freeze the console for some 30 seconds (which is probably normal)
+<br/>
+<br/>
+Thanks HyperHacker :)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#67705 - wintermute - Thu Jan 19, 2006 11:55 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Haiken wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">   WifiData = (Wifi_MainStruct *) (((u32)&amp;Wifi_Data_Struct)| 0x00400000); // should prevent the cache from eating us alive.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+This is taken from sgstair's wifilib
+<br/>
+So you have to use memory addresses starting at 0x02400000 to avoid caching issues.
+<br/>
+<br/>
+Actually I had tried that, but what I misunderstood is that you have to <span style="text-decoration: underline">write</span> with ARM9, and not read with ARM7, at 0x02400000
+<br/>
+</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+The addresses are mirrored on the ARM7 as well, it should make no difference.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+<br/>
+By the way, allocating a buffer with ARM9 and trying to free it with ARM7 seems to freeze the console for some 30 seconds (which is probably normal)
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+and quite stupid :P I'm surprised that doesn't just crash.
+<br/>
+<br/>
+You can't malloc on one processor then expect to be able to free on the other one. There are effectively two independent C runtime libraries which are unaware of each other.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#67757 - HyperHacker - Fri Jan 20, 2006 3:20 am</h4>
+    <div class="postbody"><span class="postbody">You know, I was thinking about that earlier. Since ARM7 and ARM9 code is compiled separately, the compiler doesn't know what's in one when it compiles the other. That means if you declare a function in both, I imagine you'd end up with 2 copies of it. ARM7 and ARM9 use mainly the same instruction set, don't they? If they do, there must be some way to use the same code for both. Seeing how there's only 4MB of RAM... :-/</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#67780 - gladius - Fri Jan 20, 2006 9:30 am</h4>
+    <div class="postbody"><span class="postbody">Yes, it's possible.  You have to do a bit of dynamic library magic to get it to work.  Overlays should work properly.  Probably too much effort to be worth it though.
+<br/>
+<br/>
+Wintermute: Of course it makes a difference if you write to uncached ram versus reading from it.  A write to cached ram from the arm9 can sit in the cache for as long as it likes, a read then from the arm7 to the uncached region will get the last value there until the cache gets flushed.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#67781 - wintermute - Fri Jan 20, 2006 9:32 am</h4>
+    <div class="postbody"><span class="postbody">The ARM9 has 48k of exclusive RAM
+<br/>
+<br/>
+The ARM7 has 64k of exclusive RAM
+<br/>
+<br/>
+THere is a further 32k of RAM which is switchable betweeen the two processors but exclusive to the one which is given access.
+<br/>
+<br/>
+The ARM9 has caches, this requires careful handling of memory which is shared between the processors.
+<br/>
+<br/>
+Running both processors in the same memory incurs a performance penalty due to bus arbitration.
+<br/>
+<br/>
+It's certainly possible to build a unified binary that contains code for both processors but I think this would create more problems than it would solve.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#67784 - wintermute - Fri Jan 20, 2006 10:22 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>gladius wrote:</b></span></td> </tr> <tr> <td class="quote">Yes, it's possible.  You have to do a bit of dynamic library magic to get it to work.  Overlays should work properly.  Probably too much effort to be worth it though.
+<br/>
+<br/>
+Wintermute: Of course it makes a difference if you write to uncached ram versus reading from it.  A write to cached ram from the arm9 can sit in the cache for as long as it likes, a read then from the arm7 to the uncached region will get the last value there until the cache gets flushed.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Well sure, but the statement looked like it was saying you couldn't read the 0x2400000 range on ARM7 which just isn't true.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#67846 - Haiken - Fri Jan 20, 2006 9:38 pm</h4>
+    <div class="postbody"><span class="postbody">Actually, I was seeing it as a read (pass-through) cache, but it looks more like a write cache. Of course you can read in either region from the ARM7 :)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#67946 - melw - Sat Jan 21, 2006 2:25 pm</h4>
+    <div class="postbody"><span class="postbody">Haiken, when you have all working code for the sound FIFO, could you share a full example of it?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#67952 - Haiken - Sat Jan 21, 2006 3:45 pm</h4>
+    <div class="postbody"><span class="postbody">Sure !
+<br/>
+<br/>
+ARM7 :
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">typedef struct FIFO_message {
+<br/>
+   u16 command;
+<br/>
+   TransferSoundData sounddata;   
+<br/>
+} FIFO_message, *pFIFO_message;
+<br/>
+<br/>
+#define MESSAGE_PLAY_SOUND 1
+<br/>
+<br/>
+#define sound_fifo ((FIFO_message*)((uint32)(IPC)+sizeof(TransferRegion)))
+<br/>
+<br/>
+void FIFOHandler(void) {
+<br/>
+   while (!(REG_IPC_FIFO_CR &amp; IPC_FIFO_RECV_EMPTY)) {
+<br/>
+      pFIFO_message message = (pFIFO_message) REG_IPC_FIFO_RX;
+<br/>
+      s32 chan;
+<br/>
+      if (message == 0) continue;
+<br/>
+      if (message-&gt;command != MESSAGE_PLAY_SOUND) continue;
+<br/>
+<br/>
+      chan = getFreeSoundChannel();
+<br/>
+      if (chan &gt;= 0) {
+<br/>
+         startSound(message-&gt;sounddata.rate, message-&gt;sounddata.data, message-&gt;sounddata.len, chan, message-&gt;sounddata.vol, message-&gt;sounddata.pan, message-&gt;sounddata.format);
+<br/>
+      }
+<br/>
+      
+<br/>
+    }
+<br/>
+}
+<br/>
+<br/>
+//...
+<br/>
+<br/>
+//in main()
+<br/>
+<br/>
+   irqSet(IRQ_FIFO_NOT_EMPTY, FIFOHandler);
+<br/>
+   irqEnable(IRQ_FIFO_NOT_EMPTY);
+<br/>
+    REG_IPC_FIFO_CR = IPC_FIFO_ENABLE | IPC_FIFO_SEND_CLEAR | IPC_FIFO_RECV_IRQ;
+<br/>
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+<br/>
+ARM9:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+void audio_init(void)
+<br/>
+{
+<br/>
+   //activate FIFO
+<br/>
+   REG_IPC_FIFO_CR = IPC_FIFO_ENABLE | IPC_FIFO_SEND_CLEAR;
+<br/>
+}
+<br/>
+<br/>
+void SendArm7Command(u32 command) {
+<br/>
+   while (REG_IPC_FIFO_CR &amp; IPC_FIFO_SEND_FULL) ;
+<br/>
+   if (REG_IPC_FIFO_CR &amp; IPC_FIFO_ERROR) {
+<br/>
+      REG_IPC_FIFO_CR |= IPC_FIFO_SEND_CLEAR; 
+<br/>
+   }
+<br/>
+<br/>
+    REG_IPC_FIFO_TX = command;
+<br/>
+}
+<br/>
+<br/>
+typedef struct FIFO_message {
+<br/>
+   u16 command;
+<br/>
+   TransferSoundData sounddata;   
+<br/>
+} FIFO_message, *pFIFO_message;
+<br/>
+<br/>
+#define MESSAGE_PLAY_SOUND 1
+<br/>
+<br/>
+static struct FIFO_message transfer[16];
+<br/>
+static int lastsound=0;
+<br/>
+<br/>
+<br/>
+void audio_play_sound(Sound * sound)
+<br/>
+{
+<br/>
+<br/>
+  lastsound=(lastsound+1)&amp;15;
+<br/>
+ pFIFO_message transfer2 = (pFIFO_message)( ((u32)&amp;transfer[0]) | 0x00400000);
+<br/>
+<br/>
+  transfer2[lastsound].command = MESSAGE_PLAY_SOUND;
+<br/>
+  transfer2[lastsound].sounddata.data = sound-&gt;buffer;
+<br/>
+  transfer2[lastsound].sounddata.len = sound-&gt;length;
+<br/>
+  transfer2[lastsound].sounddata.rate = 11025;
+<br/>
+  transfer2[lastsound].sounddata.vol = 127;
+<br/>
+  transfer2[lastsound].sounddata.pan = 64;
+<br/>
+  transfer2[lastsound].sounddata.format = 3 /*16bits*/;  
+<br/>
+  SendArm7Command((u32)&amp;transfer[lastsound]);
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+A 16 elements circular buffer is enough, because the FIFO can only hold 16 elements too. Actually, I should use a 17 elements buffer to avoid writing the message the ARM7 is going to read when the buffer is full. Or make sure the FIFO is not full before filling the message.
+<br/>
+You might also simply want to drop the sound.
+<br/>
+<br/>
+If you want to malloc() your messages, I think you will have to send them back (with FIFO) to ARM9 to free them.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#74104 - melw - Thu Mar 02, 2006 1:54 pm</h4>
+    <div class="postbody"><span class="postbody">Got back to this after a while and got the sound FIFO working. Or at least sort of, as two problems remain:
+<br/>
+<br/>
+1) Whenever IRQ_VBLANK is set on ARM7 side, the FIFO IRQ stops partially responding. Sometimes, rarely some sounds do play but mostly it's all silenced. Whenever I remove the VBLANK interrupts sound playback is 100% functional. Wouldn't care too much about this otherwise but disabling the default VBLANK means also that touchscreen doesn't respond anymore...
+<br/>
+<br/>
+2) Sound volume is somehow very low. I've taken a look at various other sources and noticed that some people use more channels to play a single sound. Is this really the way to go or are there other tricks to increase the loudness?
+<br/>
+<br/>
+Any help on either of the issues would be appreciated very much, thanks!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#74117 - tepples - Thu Mar 02, 2006 4:25 pm</h4>
+    <div class="postbody"><span class="postbody">If the sound volume is very low, try looking at the minimum and maximum values of your buffer. If those are not at least +/- 100, then you need to increase all channel volumes by a constant factor and then (if you're using software mixing) clip each final sample to +/- 127 before writing to the buffer. But if your sample values are in fact close to +/- 127, as is the case with a lot of the complaints I get about GSM Player on both GBA and Nintendo DS ("it's too quiet even when I press Up to turn on volume boosting"), then you are possibly running into the Nintendo DS's output power limit, and you'll need to use powered headphones.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#74211 - melw - Fri Mar 03, 2006 3:30 pm</h4>
+    <div class="postbody"><span class="postbody">I have no idea why, but I found a temporary solution to my first problem by commeting the following two lines of code in the ARM7 interrupt handler:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">// Read the time
+<br/>
+rtcGetTime((uint8 *)ct);
+<br/>
+BCDToInteger((uint8 *)&amp;(ct[1]), 7);
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Although why reading the time would mess up the FIFO is beyond my comprehension...
+<br/>
+<br/>
+Tepples: Yes, of course making source sound louder is one possibility. But as the same audio files are absolutely ok on other platforms I wouldn't want to go processing/compressing/normalizing to max. them every time new sounds are needed on NDS. What I'm also talking about is that the low volume seems to be quite common problem with lot of homebrew audio applications and I'm just wondering if there's something the sound playback lacks commonly - as opposed to commercial games where audio playback is always as loud as needed.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#74248 - tepples - Fri Mar 03, 2006 8:21 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>melw wrote:</b></span></td> </tr> <tr> <td class="quote">Tepples: Yes, of course making source sound louder is one possibility. But as the same audio files are absolutely ok on other platforms</td> </tr></table><span class="postbody">
+<br/>
+Other handheld platforms, or do you mean a desktop with a 30 watt per channel amplifier?
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">I wouldn't want to go processing/compressing/normalizing to max. them every time new sounds are needed on NDS.</td> </tr></table><span class="postbody">
+<br/>
+What you could do is make a file listing conversions from source (.wav?) format to the DS format where the converter is capable of doing audio processing during each rebuild.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">What I'm also talking about is that the low volume seems to be quite common problem with lot of homebrew audio applications and I'm just wondering if there's something the sound playback lacks commonly - as opposed to commercial games where audio playback is always as loud as needed.</td> </tr></table><span class="postbody">
+<br/>
+Sounds in commercial games are equalized, normalized, limited, and sometimes even saturated to fit the characteristics of the target platform, even though that's what you claim that you wouldn't want to do. Sorry :-(<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#74452 - HyperHacker - Sun Mar 05, 2006 7:59 am</h4>
+    <div class="postbody"><span class="postbody">Moonshell at 150% volume is fine for me. How loud are you trying to get it?</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

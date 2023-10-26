@@ -1,0 +1,262 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>strange struct-behaviour - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>C/C++ > strange struct-behaviour</h2>
+<div id="posts">
+<div class="post">
+    <h4>#15524 - schoebey - Sat Jan 24, 2004 12:50 am</h4>
+    <div class="postbody"><span class="postbody">hello
+<br/>
+<br/>
+i have defined a struct like this:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+struct ROOM  
+<br/>
+{   
+<br/>
+   char extended[2];      
+<br/>
+   
+<br/>
+   const u8* objectinfo[10];
+<br/>
+   const u8* screendata;
+<br/>
+   const u8* screenpalette;
+<br/>
+   struct point borderedge[10];
+<br/>
+   struct SWAPLINE swapline[2];   
+<br/>
+   struct OBJECT object[10];
+<br/>
+   
+<br/>
+} __attribute__ ((aligned (8)));
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+(not sure about the __attribute stuff...it seems to fix some probs i had without it though...)
+<br/>
+<br/>
+<br/>
+now, i create an array of structs:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+struct ROOM rooms[50];
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+which seems to work fine. But if i change the size of the array to, say 100, my whole mem-layout seems to be turned upside-down. 
+<br/>
+Pointers don't seem to point to the correct memory-locations, and thus i'm unable to decompress data correctly anymore....
+<br/>
+<br/>
+furthermore, i think it should not matter whether a "u8" definition is standing before a "u8*" definition in the struct (except it might, depending on the situation, make the struct-size slightly smaller).
+<br/>
+But if i change the order of the definitions, everything is being turned upside-down (same as the above problem)....
+<br/>
+<br/>
+maybe i'm missing a crutial point here, but according to the exercises we did with gcc @university, it should run perfectly, no matter how big the struct-array and no matter what the order of the struct-members is...
+<br/>
+(unless the size of the whole thing exceeds mem-capacity)
+<br/>
+<br/>
+It may even happen, that the alignment of ever struct-member is correct up to element 20 of the array, then el.20 has one member with an incorrect alignment and everything else works.....
+<br/>
+<br/>
+has anybody some suggestions? i'd really appreciate any help
+<br/>
+<br/>
+thanks
+<br/>
+schoebey<br/>_________________<br/>to an artificial mind, all reality is virtual</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#15527 - sajiimori - Sat Jan 24, 2004 1:39 am</h4>
+    <div class="postbody"><span class="postbody">Depending on the size of SWAPLINE and OBJECT, your array could be overflowing IWRAM (assuming you're putting it in IWRAM).  For instance, if SWAPLINE and OBJECT are both 20 bytes, an array of 100 ROOMs will consume at least 35K.
+<br/>
+<br/>
+DKA's malloc is configured to use EWRAM by default, so you could always try that out.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#15536 - sgeos - Sat Jan 24, 2004 7:04 am</h4>
+    <div class="postbody"><span class="postbody">You only have so much space to work with.  If I wrote the following code:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+struct magic_box {
+<br/>
+/* A whole bunch of suff in the body */
+<br/>
+};
+<br/>
+<br/>
+struct magic_box[1000001];
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+In theory that would work.  The compiler may generate code that works- in theory.  In reality, I don't have enough space for one million and one magic boxes.
+<br/>
+<br/>
+-Brendan</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#15563 - schoebey - Sun Jan 25, 2004 1:46 am</h4>
+    <div class="postbody"><span class="postbody">it's not the space i'm talking about...i have plenty of space for my struct-array, IF it's located in EWRAM....
+<br/>
+<br/>
+...in fact, it's even the case that (for example) everything works fine with 100 elements in the struct-array, but when i reduce it to 50, everything is messed up (and i'm NOT using the elements above 50)
+<br/>
+<br/>
+however, the suggestion of sajiimori might work....i'll give that one a try as soon as i have the time
+<br/>
+<br/>
+<br/>
+but i still don't understand why the order of the members in the struct matters this much....
+<br/>
+<br/>
+<br/>
+thanks<br/>_________________<br/>to an artificial mind, all reality is virtual</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#15564 - sgeos - Sun Jan 25, 2004 2:35 am</h4>
+    <div class="postbody"><span class="postbody">Do you know if it is in EWRAM?  You could always dump a pointer to the first word in EWRAM and than look at that location in VBA to see where your array starts.:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">struct type_t {
+<br/>
+/* data */
+<br/>
+};
+<br/>
+<br/>
+struct type_t array[50];
+<br/>
+<br/>
+void *address = &amp;array[0];
+<br/>
+*(void *)0x02000000 = address;
+<br/>
+whie (1) {
+<br/>
+/* Loop forever so I can look at 0x02000000 */
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+What do the insides of your other structs look like?  Even if the struct is used for some display related, storage and retrieval of data can be tested on the PC.  Have you done any testing of the code on the PC?
+<br/>
+<br/>
+-Brendan</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#15575 - schoebey - Sun Jan 25, 2004 2:19 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sgeos wrote:</b></span></td> </tr> <tr> <td class="quote">What do the insides of your other structs look like?  Even if the struct is used for some display related, storage and retrieval of data can be tested on the PC.  Have you done any testing of the code on the PC?
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+do you mean whether the struct contains the right data or not? 
+<br/>
+i use the struct for: 
+<br/>
+   -vertices of a polygon in which the character should be able to move
+<br/>
+   -objects (including coordinates and pointers to text-strings related to the object)
+<br/>
+   -pointers to gfx-data
+<br/>
+   -etc.
+<br/>
+<br/>
+i did not test any of this on the PC, but everything seems to be filled with the correct data (if i don't change the order of the struct-members or the size of the array).
+<br/>
+The funny thing is: if i create an array of 20, then fill this array with data for those 20 rooms, it may occur that only room 15 is messed up. if i then leave ar[14] (room 15) blank and move room 15 to ar[15], it's not messed up anymore, so i thought it had to be an alignment-problem...
+<br/>
+(so one way to fix my problems would be to introduce a "buffer" every couple of rooms - i've tested it and it seems to work, but it's a waste of space)
+<br/>
+<br/>
+btw. thanks for the tip with the pointer-dump...haven't thought of that ;-)
+<br/>
+(hopefully i'll find some time soon to test all that)
+<br/>
+<br/>
+schoebey<br/>_________________<br/>to an artificial mind, all reality is virtual</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#15576 - poslundc - Sun Jan 25, 2004 2:30 pm</h4>
+    <div class="postbody"><span class="postbody">[quote="schoebey"]</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sgeos wrote:</b></span></td> </tr> <tr> <td class="quote">The funny thing is: if i create an array of 20, then fill this array with data for those 20 rooms, it may occur that only room 15 is messed up. if i then leave ar[14] (room 15) blank and move room 15 to ar[15], it's not messed up anymore, so i thought it had to be an alignment-problem...</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Can you confirm that the struct gets messed up when you first assign its value?
+<br/>
+<br/>
+That is to say, try filling your buffer however your normally fill it, then <span style="font-style: italic">immediately</span> check to see if those values are correct. For example:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">room[14].a = 10;
+<br/>
+room[14].b = 14;
+<br/>
+room[14].c = 25;
+<br/>
+if ((room[14].a == 10) &amp;&amp; (room[14].b == 14) &amp;&amp; (room[14].c == 25))
+<br/>
+   while (1);</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+You would expect this code snippet to enter an infinite loop if your values are being assigned properly (thus crashing your game when you run it).
+<br/>
+<br/>
+If it doesn't enter the infinite loop, then there may be a problem with your struct alignment or how you load/save the data or something.
+<br/>
+<br/>
+If it does, though, then I'll bet your problem lies in a faulty pointer somewhere else in your program that is overriding your data. I've had this happen before, where code that used to work fine suddenly stopped working fine because two unrelated sections of my program were overwriting memory (because of a faulty pointer). The only way to track this down is to systematically test and narrow down the spot in the code where your values get overwritten.
+<br/>
+<br/>
+Dan.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#15588 - Paul Shirley - Sun Jan 25, 2004 9:57 pm</h4>
+    <div class="postbody"><span class="postbody">removed</span><span class="gensmall"><br/><br/>Last edited by Paul Shirley on Sun Mar 28, 2004 9:18 pm; edited 1 time in total</span></div>    
+</div>
+<div class="post">
+    <h4>#15638 - schoebey - Mon Jan 26, 2004 10:19 pm</h4>
+    <div class="postbody"><span class="postbody">Thanks to everyone of you!
+<br/>
+<br/>
+as it seems, it really was the case that my struct occupied all of IWRAM...
+<br/>
+using a malloc and the proper sizeof(), everything works (more or less) as it should...now i'm also able to change the order of the struct-members without any side-effect...
+<br/>
+<br/>
+...now i can concentrate again fully on geting the sound to work...(which might result in some more posts ;-) )
+<br/>
+<br/>
+thanks again, folks! you're really helpful<br/>_________________<br/>to an artificial mind, all reality is virtual</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

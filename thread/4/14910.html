@@ -1,0 +1,718 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>trying to get graphics to show up in the screen right - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > trying to get graphics to show up in the screen right</h2>
+<div id="posts">
+<div class="post">
+    <h4>#149770 - yaazz - Fri Jan 25, 2008 3:33 am</h4>
+    <div class="postbody"><span class="postbody">Hey everyone I am back again. I am trying to get a picture (All the picture is is 4 rectangles of different colors that should fill the screen) to scroll around on the GBA screen. 
+<br/>
+<br/>
+I am again using the book "Programming the Nintendo Game Boy Advance"
+<br/>
+The rectangle scrolls just fine, but is being sheared to the right for some reason. It also looks completely wrong vertically, with all green for a few pixels......
+<br/>
+<br/>
+hopefully someone can help me out...
+<br/>
+<br/>
+The code is pretty much copy and pasted from the pdf.. 
+<br/>
+Here it is 
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+////////////////////////////////////////////////////////////
+<br/>
+// Programming The Game Boy Advance
+<br/>
+// Chapter 6: Tile-Based Video Modes
+<br/>
+// TileMode0 Project
+<br/>
+// main.c source code file
+<br/>
+////////////////////////////////////////////////////////////
+<br/>
+//include the sample tileset/map
+<br/>
+#include "colorz.pal.c"
+<br/>
+#include "colorz.map.c"
+<br/>
+#include "colorz.raw.c"
+<br/>
+<br/>
+<br/>
+#define MULTIBOOT int __gba_multiboot;
+<br/>
+MULTIBOOT
+<br/>
+<br/>
+<br/>
+<br/>
+//function prototype
+<br/>
+void DMAFastCopy(void*, void*, unsigned int, unsigned int);
+<br/>
+<br/>
+//defines needed by DMAFastCopy
+<br/>
+#define REG_DMA3SAD *(volatile unsigned int*)0x40000D4
+<br/>
+#define REG_DMA3DAD *(volatile unsigned int*)0x40000D8
+<br/>
+#define REG_DMA3CNT *(volatile unsigned int*)0x40000DC
+<br/>
+#define DMA_ENABLE 0x80000000
+<br/>
+#define DMA_TIMING_IMMEDIATE 0x00000000
+<br/>
+#define DMA_16 0x00000000
+<br/>
+#define DMA_32 0x04000000
+<br/>
+#define DMA_32NOW (DMA_ENABLE | DMA_TIMING_IMMEDIATE | DMA_32)
+<br/>
+#define DMA_16NOW (DMA_ENABLE | DMA_TIMING_IMMEDIATE | DMA_16)
+<br/>
+<br/>
+//scrolling registers for background 0
+<br/>
+#define REG_BG0HOFS *(volatile unsigned short*)0x4000010
+<br/>
+#define REG_BG0VOFS *(volatile unsigned short*)0x4000012
+<br/>
+<br/>
+//background setup registers and data
+<br/>
+#define REG_BG0CNT *(volatile unsigned short*)0x4000008
+<br/>
+#define REG_BG1CNT *(volatile unsigned short*)0x400000A
+<br/>
+#define REG_BG2CNT *(volatile unsigned short*)0x400000C
+<br/>
+#define REG_BG3CNT *(volatile unsigned short*)0x400000E
+<br/>
+#define BG_COLOR256 0x80
+<br/>
+#define CHAR_SHIFT 2
+<br/>
+#define SCREEN_SHIFT 8
+<br/>
+#define WRAPAROUND 0x1
+<br/>
+<br/>
+//background tile bitmap sizes
+<br/>
+#define TEXTBG_SIZE_256x256 0x0
+<br/>
+#define TEXTBG_SIZE_256x512 0x8000
+<br/>
+#define TEXTBG_SIZE_512x256 0x4000
+<br/>
+#define TEXTBG_SIZE_512x512 0xC000
+<br/>
+<br/>
+//background memory offset macros
+<br/>
+#define CharBaseBlock(n) (((n)*0x4000)+0x6000000)
+<br/>
+#define ScreenBaseBlock(n) (((n)*0x800)+0x6000000)
+<br/>
+<br/>
+//background mode identifiers
+<br/>
+#define BG0_ENABLE 0x100
+<br/>
+#define BG1_ENABLE 0x200
+<br/>
+#define BG2_ENABLE 0x400
+<br/>
+#define BG3_ENABLE 0x800
+<br/>
+<br/>
+//video identifiers
+<br/>
+#define REG_DISPCNT *(unsigned int*)0x4000000
+<br/>
+#define BGPaletteMem ((unsigned short*)0x5000000)
+<br/>
+#define SetMode(mode) REG_DISPCNT = (mode)
+<br/>
+<br/>
+//vertical refresh register
+<br/>
+#define REG_DISPSTAT *(volatile unsigned short*)0x4000004
+<br/>
+<br/>
+//button identifiers
+<br/>
+#define BUTTON_RIGHT 16
+<br/>
+#define BUTTON_LEFT 32
+<br/>
+#define BUTTON_UP 64
+<br/>
+#define BUTTON_DOWN 128
+<br/>
+#define BUTTONS (*(volatile unsigned int*)0x04000130)
+<br/>
+<br/>
+//wait for vertical refresh
+<br/>
+void WaitVBlank(void)
+<br/>
+{
+<br/>
+    while((REG_DISPSTAT &amp; 1));
+<br/>
+}
+<br/>
+<br/>
+////////////////////////////////////////////////////////////
+<br/>
+// Function: main()
+<br/>
+// Entry point for the program
+<br/>
+////////////////////////////////////////////////////////////
+<br/>
+int main(void)
+<br/>
+{
+<br/>
+    int x = 0, y = 0;
+<br/>
+    int n;
+<br/>
+<br/>
+    //create a pointer to background 0 tilemap buffer
+<br/>
+    unsigned short* bg0map =(unsigned short*)ScreenBaseBlock(31);
+<br/>
+<br/>
+    //set up background 0
+<br/>
+    REG_BG0CNT = BG_COLOR256 | TEXTBG_SIZE_256x256 |(31 &lt;&lt; SCREEN_SHIFT) | WRAPAROUND;
+<br/>
+<br/>
+    //set video mode 0 with background 0
+<br/>
+    SetMode(0 | BG0_ENABLE);
+<br/>
+<br/>
+    //copy the palette into the background palette memory
+<br/>
+    DMAFastCopy((void*)colorz_Palette, (void*)BGPaletteMem,256, DMA_16NOW);
+<br/>
+<br/>
+    //copy the tile images into the tile memory
+<br/>
+    DMAFastCopy((void*)colorz_Tiles, (void*)CharBaseBlock(0),640, DMA_32NOW);
+<br/>
+<br/>
+    //copy the tile map into background 0
+<br/>
+    DMAFastCopy((void*)colorz_Map, (void*)bg0map, 256, DMA_32NOW);
+<br/>
+<br/>
+//main game loop
+<br/>
+while(1)
+<br/>
+{
+<br/>
+<br/>
+    //wait for vertical refresh
+<br/>
+    WaitVBlank();
+<br/>
+<br/>
+    //D-pad moves background
+<br/>
+    if(!(BUTTONS &amp; BUTTON_LEFT)) x--;
+<br/>
+    if(!(BUTTONS &amp; BUTTON_RIGHT)) x++;
+<br/>
+    if(!(BUTTONS &amp; BUTTON_UP)) y--;
+<br/>
+    if(!(BUTTONS &amp; BUTTON_DOWN)) y++;
+<br/>
+<br/>
+    //use hardware background scrolling
+<br/>
+    REG_BG0VOFS = y ;
+<br/>
+    REG_BG0HOFS = x ;
+<br/>
+<br/>
+    //wait for vertical refresh
+<br/>
+    WaitVBlank();
+<br/>
+    for(n = 0; n &lt; 4000; n++);
+<br/>
+    }
+<br/>
+    return 0;
+<br/>
+}
+<br/>
+<br/>
+////////////////////////////////////////////////////////////
+<br/>
+// Function: DMAFastCopy
+<br/>
+// Fast memory copy function built into hardware
+<br/>
+////////////////////////////////////////////////////////////
+<br/>
+void DMAFastCopy(void* source, void* dest, unsigned int count,unsigned int mode)
+<br/>
+{
+<br/>
+    if (mode == DMA_16NOW || mode == DMA_32NOW)
+<br/>
+    {
+<br/>
+        REG_DMA3SAD = (unsigned int)source;
+<br/>
+        REG_DMA3DAD = (unsigned int)dest;
+<br/>
+        REG_DMA3CNT = count | mode;
+<br/>
+    }
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+<br/>
+And the picture files
+<br/>
+<br/>
+colors.raw.c
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+//
+<br/>
+// colorz (640 uncompressed bytes)
+<br/>
+//
+<br/>
+const unsigned char colorz_Tiles[640] = {
+<br/>
+0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 
+<br/>
+0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 
+<br/>
+0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 
+<br/>
+0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 
+<br/>
+0x03, 0x03, 0x03, 0x03, 0x03, 0x00, 0x04, 0x04, 0x03, 0x03, 0x03, 0x03, 0x03, 0x00, 0x04, 0x04, 
+<br/>
+0x03, 0x03, 0x03, 0x03, 0x03, 0x00, 0x04, 0x04, 0x03, 0x03, 0x03, 0x03, 0x03, 0x00, 0x04, 0x04, 
+<br/>
+0x03, 0x03, 0x03, 0x03, 0x03, 0x00, 0x04, 0x04, 0x03, 0x03, 0x03, 0x03, 0x03, 0x00, 0x04, 0x04, 
+<br/>
+0x03, 0x03, 0x03, 0x03, 0x03, 0x00, 0x04, 0x04, 0x03, 0x03, 0x03, 0x03, 0x03, 0x00, 0x04, 0x04, 
+<br/>
+0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 
+<br/>
+0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 
+<br/>
+0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 
+<br/>
+0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 
+<br/>
+0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 
+<br/>
+0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 
+<br/>
+0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 
+<br/>
+0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 
+<br/>
+0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x02, 0x02, 0x02, 0x02, 0x00, 0x05, 0x05, 
+<br/>
+0x02, 0x02, 0x02, 0x02, 0x02, 0x00, 0x05, 0x05, 0x02, 0x02, 0x02, 0x02, 0x02, 0x00, 0x05, 0x05, 
+<br/>
+0x02, 0x02, 0x02, 0x02, 0x02, 0x00, 0x05, 0x05, 0x02, 0x02, 0x02, 0x02, 0x02, 0x00, 0x05, 0x05, 
+<br/>
+0x02, 0x02, 0x02, 0x02, 0x02, 0x00, 0x05, 0x05, 0x02, 0x02, 0x02, 0x02, 0x02, 0x00, 0x05, 0x05, 
+<br/>
+0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 
+<br/>
+0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 
+<br/>
+0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 
+<br/>
+0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 
+<br/>
+0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 
+<br/>
+0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 
+<br/>
+0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 
+<br/>
+0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 
+<br/>
+0x02, 0x02, 0x02, 0x02, 0x02, 0x00, 0x05, 0x05, 0x02, 0x02, 0x02, 0x02, 0x02, 0x00, 0x05, 0x05, 
+<br/>
+0x02, 0x02, 0x02, 0x02, 0x02, 0x00, 0x05, 0x05, 0x02, 0x02, 0x02, 0x02, 0x02, 0x00, 0x05, 0x05, 
+<br/>
+0x02, 0x02, 0x02, 0x02, 0x02, 0x00, 0x05, 0x05, 0x02, 0x02, 0x02, 0x02, 0x02, 0x00, 0x05, 0x05, 
+<br/>
+0x02, 0x02, 0x02, 0x02, 0x02, 0x00, 0x05, 0x05, 0x02, 0x02, 0x02, 0x02, 0x02, 0x00, 0x05, 0x05, 
+<br/>
+0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 
+<br/>
+0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 
+<br/>
+0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 
+<br/>
+0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 
+<br/>
+0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 
+<br/>
+0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 
+<br/>
+0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 
+<br/>
+0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x01
+<br/>
+};
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+colorz.map.c
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+/*
+<br/>
+ * 8x32 map data
+<br/>
+ */
+<br/>
+const unsigned short colorz_Map[256] = {
+<br/>
+0x0000, 0x0001, 0x0002, 0x0003, 0x0004,0x0000, 0x0001, 0x0002,
+<br/>
+0x0000, 0x0001, 0x0002, 0x0003, 0x0004,0x0000, 0x0001, 0x0002,
+<br/>
+0x0000, 0x0001, 0x0002, 0x0003, 0x0004,0x0000, 0x0001, 0x0002,
+<br/>
+0x0000, 0x0001, 0x0002, 0x0003, 0x0004,0x0000, 0x0001, 0x0002,
+<br/>
+0x0000, 0x0001, 0x0002, 0x0003, 0x0004,0x0000, 0x0001, 0x0002,
+<br/>
+0x0000, 0x0001, 0x0002, 0x0003, 0x0004,0x0000, 0x0001, 0x0002,
+<br/>
+0x0000, 0x0001, 0x0002, 0x0003, 0x0004,0x0000, 0x0001, 0x0002,
+<br/>
+0x0000, 0x0001, 0x0002, 0x0003, 0x0004,0x0000, 0x0001, 0x0002,
+<br/>
+0x0000, 0x0001, 0x0002, 0x0003, 0x0004,0x0000, 0x0001, 0x0002,
+<br/>
+0x0000, 0x0001, 0x0002, 0x0003, 0x0004,0x0000, 0x0001, 0x0002,
+<br/>
+0x0000, 0x0001, 0x0002, 0x0003, 0x0004,0x0000, 0x0001, 0x0002,
+<br/>
+0x0000, 0x0001, 0x0002, 0x0003, 0x0004,0x0000, 0x0001, 0x0002,
+<br/>
+0x0000, 0x0001, 0x0002, 0x0003, 0x0004,0x0000, 0x0001, 0x0002,
+<br/>
+0x0000, 0x0001, 0x0002, 0x0003, 0x0004,0x0000, 0x0001, 0x0002,
+<br/>
+0x0000, 0x0001, 0x0002, 0x0003, 0x0004,0x0000, 0x0001, 0x0002,
+<br/>
+0x0000, 0x0001, 0x0002, 0x0003, 0x0004,0x0000, 0x0001, 0x0002,
+<br/>
+0x0000, 0x0001, 0x0002, 0x0003, 0x0004,0x0000, 0x0001, 0x0002,
+<br/>
+0x0000, 0x0001, 0x0002, 0x0003, 0x0004,0x0000, 0x0001, 0x0002,
+<br/>
+0x0000, 0x0001, 0x0002, 0x0003, 0x0004,0x0000, 0x0001, 0x0002,
+<br/>
+0x0000, 0x0001, 0x0002, 0x0003, 0x0004,0x0000, 0x0001, 0x0002,
+<br/>
+0x0000, 0x0001, 0x0002, 0x0003, 0x0004,0x0000, 0x0001, 0x0002,
+<br/>
+0x0000, 0x0001, 0x0002, 0x0003, 0x0004,0x0000, 0x0001, 0x0002,
+<br/>
+0x0000, 0x0001, 0x0002, 0x0003, 0x0004,0x0000, 0x0001, 0x0002,
+<br/>
+0x0000, 0x0001, 0x0002, 0x0003, 0x0004,0x0000, 0x0001, 0x0002,
+<br/>
+0x0000, 0x0001, 0x0002, 0x0003, 0x0004,0x0000, 0x0001, 0x0002,
+<br/>
+0x0000, 0x0001, 0x0002, 0x0003, 0x0004,0x0000, 0x0001, 0x0002,
+<br/>
+0x0000, 0x0001, 0x0002, 0x0003, 0x0004,0x0000, 0x0001, 0x0002,
+<br/>
+0x0000, 0x0001, 0x0002, 0x0003, 0x0004,0x0000, 0x0001, 0x0002,
+<br/>
+0x0000, 0x0001, 0x0002, 0x0003, 0x0004,0x0000, 0x0001, 0x0002,
+<br/>
+0x0000, 0x0001, 0x0002, 0x0003, 0x0004,0x0000, 0x0001, 0x0002,
+<br/>
+0x0000, 0x0001, 0x0002, 0x0003, 0x0004,0x0000, 0x0001, 0x0002,
+<br/>
+0x0000, 0x0001, 0x0002, 0x0003, 0x0004,0x0000, 0x0001, 0x0002,
+<br/>
+};
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+colorz.pal.c
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+const unsigned short colorz_Palette[256] = {
+<br/>
+0x0000, 0x0010, 0x001f, 0x03e0, 0x03ff, 0x7c00, 0x0000, 0x0000, 
+<br/>
+0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 
+<br/>
+0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 
+<br/>
+0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 
+<br/>
+0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 
+<br/>
+0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 
+<br/>
+0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 
+<br/>
+0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 
+<br/>
+0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 
+<br/>
+0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 
+<br/>
+0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 
+<br/>
+0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 
+<br/>
+0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 
+<br/>
+0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 
+<br/>
+0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 
+<br/>
+0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 
+<br/>
+0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 
+<br/>
+0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 
+<br/>
+0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 
+<br/>
+0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 
+<br/>
+0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 
+<br/>
+0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 
+<br/>
+0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 
+<br/>
+0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 
+<br/>
+0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 
+<br/>
+0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 
+<br/>
+0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 
+<br/>
+0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 
+<br/>
+0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 
+<br/>
+0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 
+<br/>
+0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 
+<br/>
+0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000
+<br/>
+};
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#149786 - Dwedit - Fri Jan 25, 2008 9:14 am</h4>
+    <div class="postbody"><span class="postbody">Unless you love killing off your batteries, get rid of that WaitVBlank function ASAP, and forget you ever saw that version.  Spinning the CPU on the DISPSTAT register is 100% CPU usage, and eats up lots of power.  Instead, you should use the BIOS halt functions to wait for an interrupt.
+<br/>
+The only rule is that you must install an interrupt handler before you can use the wait vblank functions.  I think it's time to break out Libgba, because it makes it very easy to get an interrupt handler up and running quickly.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#149802 - yaazz - Fri Jan 25, 2008 2:47 pm</h4>
+    <div class="postbody"><span class="postbody">Interesting, I was wondering why CPU usage was 100% on my computer... I never even thought of battery life. Thanks for pointing that out
+<br/>
+<br/>
+Back to the topic at hand. I have a screenshot of what is happening and what  it is supposed to look like 
+<br/>
+<a href="http://pics.apartment808.com/users/yaazz/wronggba.JPG">[Images not permitted - Click here to view it]</a>
+<br/>
+<br/>
+I am quite certain that the problem lies in my not copying the correct amount of bytes with the DMA functions, but the book "Programming the Nintendo Game Boy Advance" doesn't state how many there should be! 
+<br/>
+I just guessed you input the size of the array, but that doesn't seem to work</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#149803 - Dwedit - Fri Jan 25, 2008 2:50 pm</h4>
+    <div class="postbody"><span class="postbody">Your tilemap is 240 wide, a GBA's tilemap is 256 wide.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#149810 - Kyoufu Kawa - Fri Jan 25, 2008 3:33 pm</h4>
+    <div class="postbody"><span class="postbody">"Programming the Nintendo Game Boy Advance" is bad for you. Try <a class="postlink" href="http://www.coranac.com/tonc/text/" target="_blank">this</a>.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#149817 - gmiller - Fri Jan 25, 2008 5:36 pm</h4>
+    <div class="postbody"><span class="postbody">Also
+<br/>
+<br/>
+#define REG_DISPCNT *(unsigned int*)0x4000000 
+<br/>
+<br/>
+should be
+<br/>
+<br/>
+#define REG_DISPCNT *(unsigned short*)0x4000000 
+<br/>
+<br/>
+among other things.  The material is so full of bugs and bad practices I discourage my students from reading it except for entertainment.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#150247 - yaazz - Fri Feb 01, 2008 12:45 am</h4>
+    <div class="postbody"><span class="postbody">I appreciate the advice, but does anyone know what I can do to fix the problem in the topic?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#150249 - gmiller - Fri Feb 01, 2008 1:23 am</h4>
+    <div class="postbody"><span class="postbody">Your DMA's are trying to move too much data based on your data.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+//copy the tile images into the tile memory
+<br/>
+    DMAFastCopy((void*)colorz_Tiles, (void*)CharBaseBlock(0),640, DMA_32NOW);
+<br/>
+<br/>
+    //copy the tile map into background 0
+<br/>
+    DMAFastCopy((void*)colorz_Map, (void*)bg0map, 256, DMA_32NOW); 
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Each of these is trying to move some number of 32 bit values when based on your data the numbers you put in are for 16 bit values.  So ... you either need to half the number of elements you are tring to move or change DMA_32NOW to DMA_16NOW.
+<br/>
+<br/>
+This will correct the data transfer but I do not know if it will fix it all.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#150487 - yaazz - Tue Feb 05, 2008 6:27 pm</h4>
+    <div class="postbody"><span class="postbody">thanks gmiller, that helped but didnt fix the problem entirely. It still appears to be skewed slightly to the right. 
+<br/>
+From reading the TONC tutorial, I see that you can have your bitmaps in 8bpp or 16bpp. Could part of the problem be that my bitmap is set to 8pp, but the hardware is set to 16 causing a double pixel write?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#150491 - Kyoufu Kawa - Tue Feb 05, 2008 8:20 pm</h4>
+    <div class="postbody"><span class="postbody">I can imagine loading an 8bpp image in a 16bpp mode to give some problems, yeah...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#150495 - Cearn - Tue Feb 05, 2008 9:10 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>yaazz wrote:</b></span></td> </tr> <tr> <td class="quote">thanks gmiller, that helped but didnt fix the problem entirely. It still appears to be skewed slightly to the right. 
+<br/>
+From reading the TONC tutorial, I see that you can have your bitmaps in 8bpp or 16bpp. Could part of the problem be that my bitmap is set to 8bpp, but the hardware is set to 16 causing a double pixel write?</td> </tr></table><span class="postbody">
+<br/>
+You're not working with bitmaps here, you're working with tilemaps and GBA tilemaps only use 4bpp or 8bpp graphics. If you had a mismatch between the graphics bitdepth and how the hardware uses the data, you'd sooner see something like <a class="postlink" href="http://www.coranac.com/tonc/text/objbg.htm#ssec-img-tiles" target="_blank">this</a>, not just shifted graphics. 
+<br/>
+<br/>
+When graphics are shifted, it usually means that the source width isn't the same as the destination width. The data is always stored as a linear array, the bitmap will appear by how you group this data into two dimensions. For example, you can have 3*5=15 items stored linearly as:
+<br/>
+<br/>
+111222333444555
+<br/>
+<br/>
+If width=3, you will see:
+<br/>
+111
+<br/>
+222
+<br/>
+333
+<br/>
+444
+<br/>
+555
+<br/>
+<br/>
+but if width=5, you see
+<br/>
+11122
+<br/>
+23334
+<br/>
+44455
+<br/>
+<br/>
+<br/>
+The original data is the same, but the 2D interpretation is different. This is what is probably happening in your case: the source bitmap has a width of 240 (30 tiles), but, as Dwedit said, the GBA tilemaps has a width of 256 (32 tiles). Pad your bitmap to 256 pixels wide or copy each scanline separately.
+<br/>
+<br/>
+<br/>
+The earlier problem with DMA_16 vs DMA_32 wasn't the bitdepth of the data you're copying, it's how much data is copied each DMA-step and in total: DMA_16 copies per 2 bytes for a total of count*2, DMA_32 uses 4 bytes each step for a total of count*4. DMA doesn't actually care about or change what you're copying, but you do have to take care that it copies the correct amount.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#150517 - Cydrak - Wed Feb 06, 2008 1:21 am</h4>
+    <div class="postbody"><span class="postbody">If you installed devkitPro, have you seen libgba and the working examples which came with it? <a class="postlink" href="http://www.coranac.com/projects/#tonc" target="_blank">TONC</a> also comes with libraries and plenty of code to match the text, if that's easier to follow. Particularly see the "tonc-code.zip\code\basic\brin_demo\" project (and matching section on <a class="postlink" href="http://www.coranac.com/tonc/text/regbg.htm" target="_blank">tiled backgrounds</a>) which looks like what you're trying to do.
+<br/>
+<br/>
+Hmm. As mentioned, that text has no shortage of <a class="postlink" href="http://www.coranac.com/documents/taptngba/" target="_blank">serious problems</a>... but lemme see.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void WaitVBlank(void) {
+<br/>
+    while((REG_DISPSTAT &amp; 1));
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+Bit 0 is <span style="font-style: italic">set</span> during vblank. So besides burning power, this waits for vblank to <span style="font-style: italic">end</span>. Outside of vblank, it does nothing at all. As a bonus, the compiler may see the empty for() "delay," and feel it has every right to toss it out. :-)
+<br/>
+<br/>
+So I think while() is running full tilt here, during draw time (exactly when you don't want it to). If it "tears up" when you try to scroll, that would be why. Anyway, both libraries I mentioned provide a working function. You just need to #include the right header, enable the vblank interrupt, and call VBlankIntrWait() between frames. (I could be wrong, but I don't think a handler is required, they seem to use a dispatcher and ack interrupts by default.)
+<br/>
+<br/>
+Also watch out for the register #defines, some of them look a bit dodgy (REG_DISPCNT and WRAPAROUND are clearly wrong, don't know about the others). This is pretty fundamental stuff, and another point in favor of the libraries... bugs here will just lead to lots of confusion and hair loss. (Especially if the code using the #defines is otherwise correct!)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#150524 - yaazz - Wed Feb 06, 2008 3:28 am</h4>
+    <div class="postbody"><span class="postbody">Cearn you are a god. That fixed my problem! 
+<br/>
+There is still a bunch of crap on the bottom but I assume this is also a byproduct of not enough tiles</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

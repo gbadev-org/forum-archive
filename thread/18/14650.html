@@ -1,0 +1,390 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Slow fseek - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Slow fseek</h2>
+<div id="posts">
+<div class="post">
+    <h4>#146806 - simonjhall - Sun Dec 09, 2007 2:46 pm</h4>
+    <div class="postbody"><span class="postbody">The game I'm currently porting on seems to be giving the file system a real workout and I'm not sure of what to do about it.
+<br/>
+Normally during the loading code there is lots of fopen/fseek/fread/fclose over and over, despite the file being opened and closed every time is the same (it's just the seek that's different). I've handled this by adding a layer in between the original fopen calls and the actual fopen system call to handle multiple accesses to the same file in a better way.
+<br/>
+<br/>
+Load times are now much faster, but the fseeks are still a problem - for instance an average fseek seems to take ~50-100ms. What can I do about this? Is there any way to cache the fat? What does the cache info that's passed into fatInit do? Btw reading and writing seem nice and fast, it's just opening seeking and ftelling that are dead slow.
+<br/>
+<br/>
+Word.<br/>_________________<br/><span style="font-weight: bold"><a class="postlink" href="https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&amp;business=simonjhall%40gmail%2ecom&amp;no_shipping=2&amp;no_note=1&amp;tax=0&amp;currency_code=GBP&amp;lc=GB&amp;bn=PP%2dDonationsBF&amp;charset=UTF%2d8" target="_blank">Big thanks to everyone who donated for Quake2</a></span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#146807 - tepples - Sun Dec 09, 2007 4:00 pm</h4>
+    <div class="postbody"><span class="postbody">In FAT, fseek() is a linear traversal of a linked list of cluster numbers in the file allocation table. This takes longer for files that have more clusters, such as larger files or files on file systems with smaller clusters.
+<br/>
+<br/>
+FAT was originally designed for floppy disks smaller than 1 MB. It is only a series of historical accidents that led to its widespread use for memory cards topping 1 GB. File systems designed for larger media tend to use either a tree structure or a list of "extents" to store which files belong to which folders.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#146808 - simonjhall - Sun Dec 09, 2007 4:31 pm</h4>
+    <div class="postbody"><span class="postbody">Yeah the file in question is 175 megs in size. If I go to reformat my flash card (512 MB) I don't get an option to choose the cluster size...
+<br/>
+Is the whole fat loaded into memory, or is it traversed every time file access happens?<br/>_________________<br/><span style="font-weight: bold"><a class="postlink" href="https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&amp;business=simonjhall%40gmail%2ecom&amp;no_shipping=2&amp;no_note=1&amp;tax=0&amp;currency_code=GBP&amp;lc=GB&amp;bn=PP%2dDonationsBF&amp;charset=UTF%2d8" target="_blank">Big thanks to everyone who donated for Quake2</a></span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#146811 - Dwedit - Sun Dec 09, 2007 4:53 pm</h4>
+    <div class="postbody"><span class="postbody">If I needed better speed seeking in big files, I'd start by modifying libfat.
+<br/>
+First make it cache more FAT sectors, possibly less concern with data sectors since data might just be streamed right off.
+<br/>
+Then build a lookup table to divide the cluster list into 256 parts, like a percentage of a file.  So if you wanted to go to a location 50% into the file, you'd look at table entry 128.  This is to improve seek time dramatically, since you seek into the middle of the cluster chain without starting at the beginning.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#146816 - tepples - Sun Dec 09, 2007 6:01 pm</h4>
+    <div class="postbody"><span class="postbody">To specify large clusters when formatting an SD card or a CF card that's 2 GB or smaller, choose FAT, not FAT32. FAT32 generally uses 4 KiB clusters, while FAT16 uses clusters of size (volume size / 65536) rounded up to the next power of 2, in your case 8 KiB. Each sector of the file allocation table also stores twice as many cluster numbers in FAT as in FAT32. You may have more luck with third-party formatting tools.
+<br/>
+<br/>
+On FAT, 8 KiB per cluster:
+<br/>
+A 175 MiB file consists of 175*1024/8 = 22,400 clusters. At 256 clusters per FAT sector, the part of the FAT used for this file is 88 sectors long.
+<br/>
+<br/>
+On FAT32, 4 KiB per cluster:
+<br/>
+A 175 MiB file consists of 175*1024/4 = 44,800 clusters. At 128 clusters per FAT sector, the part of the FAT used for this file is 350 sectors long.
+<br/>
+<br/>
+The above assume that the file is defragmented. A fragmented file's clusters may span even more sectors of the FAT and thus will take even longer to seek through. I'd suggest running defrag on your card to see if it speeds things up.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#146825 - elwing - Sun Dec 09, 2007 8:08 pm</h4>
+    <div class="postbody"><span class="postbody">just a stupid question of somone who does not program on the DS... i guess that the large file you try to access is a .pak archive, am i right? if so, why not let the user unpak the archive rather than letting quake2 unpack it? that will prolly solve one performance problem...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#146827 - simonjhall - Sun Dec 09, 2007 9:33 pm</h4>
+    <div class="postbody"><span class="postbody">Ok, I just tried it and it takes the same amount of time to load from one big file as it does from individual files. Looks like fopen takes just as long as fseek :-)
+<br/>
+<br/>
+Also when I go to format regardless of the file system type I only get the option for "default allocation size".
+<br/>
+EDIT: tried defragging - only a minimal difference! Hmm...<br/>_________________<br/><span style="font-weight: bold"><a class="postlink" href="https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&amp;business=simonjhall%40gmail%2ecom&amp;no_shipping=2&amp;no_note=1&amp;tax=0&amp;currency_code=GBP&amp;lc=GB&amp;bn=PP%2dDonationsBF&amp;charset=UTF%2d8" target="_blank">Big thanks to everyone who donated for Quake2</a></span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#146828 - tepples - Sun Dec 09, 2007 9:50 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>simonjhall wrote:</b></span></td> </tr> <tr> <td class="quote">Also when I go to format regardless of the file system type I only get the option for "default allocation size".</td> </tr></table><span class="postbody">
+<br/>
+Have you tried formatting it under Linux, if you have it? Or what about a third-party formatting tool for Windows?<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#146857 - Peter - Mon Dec 10, 2007 7:32 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>simonjhall wrote:</b></span></td> </tr> <tr> <td class="quote">Ok, I just tried it and it takes the same amount of time to load from one big file as it does from individual files. Looks like fopen takes just as long as fseek :-)</td> </tr></table><span class="postbody">
+<br/>
+You could also layout your pak file that all files from one level come after another. If you don't have some slick streaming in your game, but load all resources at level start, this should work.<br/>_________________<br/>Kind Regards,
+<br/>
+Peter</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#146860 - chishm - Mon Dec 10, 2007 10:26 am</h4>
+    <div class="postbody"><span class="postbody">Both seek and open will traverse the relevant structures of the disc to find the correct information. Open starts at the beginning of a directory and scans until it finds the requested file. Seek starts at a file's first cluster and traverses the cluster chain in the FAT until it finds the correct offset. Both operations start at the beginning of the structure each time. The exception to this is seeking further forward in an opened file, where it starts from the current cluster. If you can, seek further forward in the file each time without closing it in between. 
+<br/>
+<br/>
+You can increase the performance by increasing the number of cached sectors. The default on the DS is 8 sectors, which is adequate for most situations, but obviously not in yours. Each cached sector consumes about 524 bytes of memory, so be aware of memory limitations. The cache applies to all regions of the disc (FAT, directories and files).<br/>_________________<br/><a class="postlink" href="http://chishm.drunkencoders.com" target="_blank">http://chishm.drunkencoders.com</a>
+<br/>
+<a class="postlink" href="http://dldi.drunkencoders.com" target="_blank">http://dldi.drunkencoders.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#146863 - kusma - Mon Dec 10, 2007 11:20 am</h4>
+    <div class="postbody"><span class="postbody">I'm pretty sure Simon has no extra memory to spare (Quake is a bloody tight fit!), and my guess is that he'll REDUCE the amount of cached sectors after reading this ;)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#146866 - simonjhall - Mon Dec 10, 2007 12:06 pm</h4>
+    <div class="postbody"><span class="postbody">Why do people think I'm working on another Quake? I think I need a new project! One...trick...pony...
+<br/>
+Although Q2 won't fit on a stock DS, with the inclusion of slot-2 memory there's actually plenty of internal RAM spare since all the heavy stuff is coming via the gba interface. If increasing the cache size improves the turnaround time then I'm all for it! There does seem to be beef with PSP Q2 in that 24 meg isn't enough. However I'm having no problem running the game on the DS with a 16 meg card (+4MB internal), but 32 is preferable...
+<br/>
+<br/>
+Btw, chishm you say that seeking to a later place in the file is better thatn going backwards. What if I use SEEK_SET to a later place in the file? Will that be slow, or will it know that it's after the current position and therefore be faster? Finally, why is ftell just as slow as fseek with these big files?
+<br/>
+<br/>
+Ta btw :-)<br/>_________________<br/><span style="font-weight: bold"><a class="postlink" href="https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&amp;business=simonjhall%40gmail%2ecom&amp;no_shipping=2&amp;no_note=1&amp;tax=0&amp;currency_code=GBP&amp;lc=GB&amp;bn=PP%2dDonationsBF&amp;charset=UTF%2d8" target="_blank">Big thanks to everyone who donated for Quake2</a></span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#146869 - kusma - Mon Dec 10, 2007 12:23 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>simonjhall wrote:</b></span></td> </tr> <tr> <td class="quote">Why do people think I'm working on another Quake?</td> </tr></table><span class="postbody">
+<br/>
+Because your description of the problem match the quake BSP-files? :)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#146870 - simonjhall - Mon Dec 10, 2007 12:28 pm</h4>
+    <div class="postbody"><span class="postbody">Yeah ;-)
+<br/>
+I'm just trying to avoid putting a 'Q' character in ever post I make! Q3A for the win!<br/>_________________<br/><span style="font-weight: bold"><a class="postlink" href="https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&amp;business=simonjhall%40gmail%2ecom&amp;no_shipping=2&amp;no_note=1&amp;tax=0&amp;currency_code=GBP&amp;lc=GB&amp;bn=PP%2dDonationsBF&amp;charset=UTF%2d8" target="_blank">Big thanks to everyone who donated for Quake2</a></span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#146871 - kusma - Mon Dec 10, 2007 12:53 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>simonjhall wrote:</b></span></td> </tr> <tr> <td class="quote">Q3A for the win!</td> </tr></table><span class="postbody">
+<br/>
+Doesn't the Q3 use compressed pak-files? :)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#146872 - simonjhall - Mon Dec 10, 2007 1:00 pm</h4>
+    <div class="postbody"><span class="postbody">Probably. And I bet the decompression algorithm isn't stock code, it's written in some interpretted language and the only data type available to the programmer is 'super float'. Lay off the float keyword would you, John? &lt;/mini rant&gt;<br/>_________________<br/><span style="font-weight: bold"><a class="postlink" href="https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&amp;business=simonjhall%40gmail%2ecom&amp;no_shipping=2&amp;no_note=1&amp;tax=0&amp;currency_code=GBP&amp;lc=GB&amp;bn=PP%2dDonationsBF&amp;charset=UTF%2d8" target="_blank">Big thanks to everyone who donated for Quake2</a></span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#146874 - kusma - Mon Dec 10, 2007 2:01 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>simonjhall wrote:</b></span></td> </tr> <tr> <td class="quote">Probably. And I bet the decompression algorithm isn't stock code, it's written in some interpretted language and the only data type available to the programmer is 'super float'. Lay off the float keyword would you, John? &lt;/mini rant&gt;</td> </tr></table><span class="postbody">
+<br/>
+IIRC the compression is simply zlib.
+<br/>
+<br/>
+Complete sidetrack: Oh, come on. The VM can be greatly improved by just skipping IEEE-conformance on most operations. Each operation are already split out to separate functions, so the integration shouldn't be that tricky either. Also, block-floating-point can be done for the vector type without much hassle. I just wish I could compile a working version of QuakeDS on my DKA 21 install, so I could test it out.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#146876 - simonjhall - Mon Dec 10, 2007 2:42 pm</h4>
+    <div class="postbody"><span class="postbody">Tbh the VM isn't the place where the speed is going, that's why I'm not too worried about its performance. Also how would I make it so the fp stuff doesn't conform? It'd be nice if the default dka float emulation stuff could be interchanged with a less-precise fp implementation. I'm sure it's not too hard, but I'm not sure of where to begin.
+<br/>
+<br/>
+I did actually spend quite some time converting it to use fixed-point rather than floating-point data for everything but due to the hard-coded nature of a lot of the data types it made it difficult to run the fixed-point version side-by-side with the floating-point version. There's lots of assumptions like "the structure is 20b in size, the element we want it 12b in". Even if the VM were removed altogether the program will only increase in speed by like 10%... It's the stuff that's called by the VM that's slow and I've spent a lot of time improving.
+<br/>
+<br/>
+Oh and yeah I've been meaning to sort out these 20-&gt;21 issues! It's just that touching the code is something that I want to avoid for a few months since I'm all quaked out ;-)<br/>_________________<br/><span style="font-weight: bold"><a class="postlink" href="https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&amp;business=simonjhall%40gmail%2ecom&amp;no_shipping=2&amp;no_note=1&amp;tax=0&amp;currency_code=GBP&amp;lc=GB&amp;bn=PP%2dDonationsBF&amp;charset=UTF%2d8" target="_blank">Big thanks to everyone who donated for Quake2</a></span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#146877 - kusma - Mon Dec 10, 2007 3:55 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>simonjhall wrote:</b></span></td> </tr> <tr> <td class="quote">Tbh the VM isn't the place where the speed is going, that's why I'm not too worried about its performance. Also how would I make it so the fp stuff doesn't conform? It'd be nice if the default dka float emulation stuff could be interchanged with a less-precise fp implementation. I'm sure it's not too hard, but I'm not sure of where to begin.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+One thing is to make the division (and make all build-in functions that use fp-divide) into an rcp by looking up the mantissa in a LUT and adjusting the exponent. The same thing goes for the square-root. I can write up and test an implementation tonight. FP-divides and square roots are only approximations in the first place, and NaN and INF gives weird operation anyway - so this should be good enough.
+<br/>
+<br/>
+for the vector normalize function, it's quite easy to roll out custom fp-multiplications and additions to calculate the squared length (the rsq-input) and then the vector scaling can also be easily rolled. And the vector components don't need to be packed-unpacked multiple times, so something is gained there as well.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+I did actually spend quite some time converting it to use fixed-point rather than floating-point data for everything but due to the hard-coded nature of a lot of the data types it made it difficult to run the fixed-point version side-by-side with the floating-point version. There's lots of assumptions like "the structure is 20b in size, the element we want it 12b in". Even if the VM were removed altogether the program will only increase in speed by like 10%... It's the stuff that's called by the VM that's slow and I've spent a lot of time improving.
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+The built-ins? Those are primarily what I was thinking about :)
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">
+<br/>
+Oh and yeah I've been meaning to sort out these 20-&gt;21 issues! It's just that touching the code is something that I want to avoid for a few months since I'm all quaked out ;-)</td> </tr></table><span class="postbody">
+<br/>
+I'll see if I get something running outside quake, and e-mail it so you can figure it out ;)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#146904 - Doom5 - Tue Dec 11, 2007 1:03 am</h4>
+    <div class="postbody"><span class="postbody">You can choose the cluster size when formatting your SD card. I use 32k or 64K for best performance. X = the drive letter you want to format.
+<br/>
+<br/>
+. In command prompt type the following:
+<br/>
+<br/>
+Format X: /FS:FAT /A:64K
+<br/>
+<br/>
+<br/>
+/FS:filesystem  Specifies the type of the file system (FAT, FAT32, or NTFS).
+<br/>
+<br/>
+ /A:size         Overrides the default allocation unit size. Default setting
+<br/>
+                 are strongly recommended for general use.
+<br/>
+                 NTFS supports 512, 1024, 2048, 4096, 8192, 16K, 32K, 64K.
+<br/>
+                 FAT supports 512, 1024, 2048, 4096, 8192, 16K, 32K, 64K,
+<br/>
+                 (128K, 256K for sector size &gt; 512 bytes).
+<br/>
+                 FAT32 supports 512, 1024, 2048, 4096, 8192, 16K, 32K, 64K,
+<br/>
+                 (128K, 256K for sector size &gt; 512 bytes).</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#146917 - chishm - Tue Dec 11, 2007 10:05 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>simonjhall wrote:</b></span></td> </tr> <tr> <td class="quote">Btw, chishm you say that seeking to a later place in the file is better thatn going backwards. What if I use SEEK_SET to a later place in the file? Will that be slow, or will it know that it's after the current position and therefore be faster?</td> </tr></table><span class="postbody">
+<br/>
+It calculates the difference between the current position and the next position then scans forward through the cluster chain until it gets to the correct spot.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>simonjhall wrote:</b></span></td> </tr> <tr> <td class="quote">Finally, why is ftell just as slow as fseek with these big files?</td> </tr></table><span class="postbody">
+<br/>
+Can't honestly say. All f* functions except fstat go through a newlib layer first, and it may be doing some weird things. Try using the lower level ones such as open/read/close, but keep in mind that newlib provides an extra buffer that won't be there so you may lose performance doing this.<br/>_________________<br/><a class="postlink" href="http://chishm.drunkencoders.com" target="_blank">http://chishm.drunkencoders.com</a>
+<br/>
+<a class="postlink" href="http://dldi.drunkencoders.com" target="_blank">http://dldi.drunkencoders.com</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#146920 - simonjhall - Tue Dec 11, 2007 10:19 am</h4>
+    <div class="postbody"><span class="postbody">Gotcha. I did try changing a lot of seek sets to seek curs - the current position: no difference. I'll have a go with the unbuffered versions later... However it's corporate xmas do day today, so I guess I won't be! Instead I'll be making a fool of myself with the people I work with ;-)
+<br/>
+Oh I also tried different cache sizes to see how that affected things. Using my M3 Simply (which is pretty fast already) the sweet spot of cache sizes passed to fatInit seems to be '16'. Anything larger than 32 and it starts to slow down. I tried '320' for kicks and it was well slow!
+<br/>
+<br/>
+@doom5 - cool, thanks, I'll try this later (ie tomorrow) and see how I get on. I'm wary of forcing people to re-encode their files for faster loading so doing something like this could be ace.
+<br/>
+<br/>
+Btw: would FAT32 be better than regular FAT? Is it supported on the DS? I remember learning all this stuff at uni but it's all gone right out of my head!<br/>_________________<br/><span style="font-weight: bold"><a class="postlink" href="https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&amp;business=simonjhall%40gmail%2ecom&amp;no_shipping=2&amp;no_note=1&amp;tax=0&amp;currency_code=GBP&amp;lc=GB&amp;bn=PP%2dDonationsBF&amp;charset=UTF%2d8" target="_blank">Big thanks to everyone who donated for Quake2</a></span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#146944 - tepples - Tue Dec 11, 2007 8:41 pm</h4>
+    <div class="postbody"><span class="postbody">Chishm's libfat works with FAT32, but some adapters' built-in menus do not.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#146971 - ingramb - Wed Dec 12, 2007 8:51 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Then build a lookup table to divide the cluster list into 256 parts, like a percentage of a file. So if you wanted to go to a location 50% into the file, you'd look at table entry 128. This is to improve seek time dramatically, since you seek into the middle of the cluster chain without starting at the beginning.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+I just want to say thanks for this suggestion.  I have heavy file streaming in my program, and this REALLY makes things faster.  Before reading this thread, I had no idea that seeking was so slow.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#146975 - simonjhall - Wed Dec 12, 2007 11:44 am</h4>
+    <div class="postbody"><span class="postbody">Wanna give some sample code? ;-)
+<br/>
+How exactly do you get a hold of the fat data and then once you've traversed it (however you want) what do you do with the results?<br/>_________________<br/><span style="font-weight: bold"><a class="postlink" href="https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&amp;business=simonjhall%40gmail%2ecom&amp;no_shipping=2&amp;no_note=1&amp;tax=0&amp;currency_code=GBP&amp;lc=GB&amp;bn=PP%2dDonationsBF&amp;charset=UTF%2d8" target="_blank">Big thanks to everyone who donated for Quake2</a></span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#147013 - ingramb - Thu Dec 13, 2007 4:54 am</h4>
+    <div class="postbody"><span class="postbody">In fatfile.h, add to FILE_STRUCT:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">u32 clusterTable[256];
+<br/>
+u32 clustersPerEntry;</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+In fatfile.c, add to end of open function:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">u32 clusterCount = (file-&gt;filesize + partition-&gt;bytesPerCluster - 1) / partition-&gt;bytesPerCluster;
+<br/>
+file-&gt;clustersPerEntry = (clusterCount + 255) / 256;
+<br/>
+u32 cluster = file-&gt;startCluster;
+<br/>
+u32 count;
+<br/>
+u32 i;
+<br/>
+<br/>
+for(i = 0; i &lt; 256; i++) {
+<br/>
+  file-&gt;clusterTable[i] = cluster;
+<br/>
+  for(count = 0; count &lt; file-&gt;clustersPerEntry; count++) {
+<br/>
+    cluster = _FAT_fat_nextCluster(partition, cluster);
+<br/>
+  }
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+In fatfile.c, in the seek function, change the logic to calculate cluster to this (no longer matters if seeking forwards or backwards):
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">u32 clusterTableIndex;
+<br/>
+u32 clusterTableOffset;
+<br/>
+clusCount = position / partition-&gt;bytesPerCluster;
+<br/>
+clusterTableIndex = clusCount / file-&gt;clustersPerEntry;
+<br/>
+clusterTableOffset = clusCount % file-&gt;clustersPerEntry;
+<br/>
+cluster = file-&gt;clusterTable[clusterTableIndex];
+<br/>
+<br/>
+nextCluster = _FAT_fat_nextCluster (partition, cluster);
+<br/>
+while(clusterTableOffset &gt; 0 &amp;&amp; nextCluster != CLUSTER_FREE &amp;&amp; nextCluster != CLUSTER_EOF) {
+<br/>
+  clusterTableOffset--;
+<br/>
+  cluster = nextCluster;
+<br/>
+  nextCluster = _FAT_fat_nextCluster (partition, cluster);
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+This will all break if you try to write to the file.  In this case, I'd probly add a dirty bit, and recalculate the cluster table as needed, but all my files are read only for now.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">How exactly do you get a hold of the fat data and then once you've traversed it (however you want) what do you do with the results?</td> </tr></table><span class="postbody">
+<br/>
+Not really sure what you mean.  I was using fopen/fread, I recently changed to open/read...didn't seem to make much difference.  Im reading small 1-4kb blocks from all over a large 90MB file many times every frame.  I've worked very hard on lots of caching schemes to reduce file system access because the seek times were killing me.  With this new code, everything is much smoother.  It's still faster once the cache is full, but it lags a lot less as it's filling up.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#147236 - simonjhall - Sun Dec 16, 2007 9:14 pm</h4>
+    <div class="postbody"><span class="postbody">Ah, I getcha. I didn't realise that you were modifying libfat in order to do this. I'll have a go with this when I eventually get round to getting r21 and the associated source ;-)<br/>_________________<br/><span style="font-weight: bold"><a class="postlink" href="https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&amp;business=simonjhall%40gmail%2ecom&amp;no_shipping=2&amp;no_note=1&amp;tax=0&amp;currency_code=GBP&amp;lc=GB&amp;bn=PP%2dDonationsBF&amp;charset=UTF%2d8" target="_blank">Big thanks to everyone who donated for Quake2</a></span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#147731 - DekuTree64 - Thu Dec 27, 2007 1:28 am</h4>
+    <div class="postbody"><span class="postbody">Here's something even more interesting, which may or may not be related...
+<br/>
+<br/>
+If you write to a file and then call ftell, all subsequent writes are many times slower. Test case:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">int i;
+<br/>
+FILE *file = fopen(filename, "wb");
+<br/>
+fwrite((void*)0x2000000, 1, 1, file);
+<br/>
+ftell(file);
+<br/>
+fwrite((void*)0x2000000, 1, 50000, file);
+<br/>
+fclose(file);</td> </tr></table><span class="postbody">
+<br/>
+Takes about 5 seconds, but if I remove either the first write, or the ftell, then it's basically instant (tested on R4 and GBAMP).
+<br/>
+<br/>
+Any ideas? I can probably work around needing the ftell anyway, but it seems like a rather odd thing to happen.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

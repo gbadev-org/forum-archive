@@ -1,0 +1,186 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Interrupts and VBlank - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Interrupts and VBlank</h2>
+<div id="posts">
+<div class="post">
+    <h4>#78197 - qw3rky - Wed Apr 05, 2006 10:12 pm</h4>
+    <div class="postbody"><span class="postbody">I am having serious trouble getting the vblank swi to work on the DS. I'm building my own minimalistic DS library for educational purposes and because I'm absurdly picky over naming things, and I've done the same already with the GBA, so I'm no n00b at coding interrupts. I've tried compiling the ISR as ARM only, putting it in ITCM, putting it in IWRAM, and it just won't work. My current code does work fine in iDeaS, but not in Dualis (which is becoming my favorite emulator) or actual hardware.
+<br/>
+<br/>
+here's my SWI call: (carried over from my GBA code)
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#ifdef __thumb__
+<br/>
+#define vsync() asm volatile("swi 0x5")
+<br/>
+#else
+<br/>
+#define vsync() asm volatile("swi 0x50000")
+<br/>
+#endif
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+here's my interrupt initialization:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+   disableInterrupts(); // IME = 0
+<br/>
+   InterruptHandler = (uint32) isr;
+<br/>
+   InterruptEnable |= VBLANK_INTR_ENABLE;
+<br/>
+   DisplayStatus   |= VBLANK_INTR_REQUEST;
+<br/>
+   enableInterrupts(); // IME = 1
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+and here's my isr:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+void isr()
+<br/>
+{
+<br/>
+   /* disable interrupts */
+<br/>
+   disableInterrupts();
+<br/>
+<br/>
+   /* acknowledge flags */
+<br/>
+   InterruptCheck |= VBLANK_INTR_ENABLE;
+<br/>
+   InterruptFlags |= VBLANK_INTR_ENABLE;
+<br/>
+   
+<br/>
+   /* re-enable interrupts */ 
+<br/>
+   enableInterrupts();
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+DSTek says that an ARM9 interrupt can be either ARM or THUMB code, so it seems there's no need to compile it separately as ARM like we had to do with the GBA. So it seems like my code should work perfectly fine, which it does on iDeaS, but if it doesn't work on hardware, I consider it completely useless. The Vsync is the most essential timing mechanism you can have in a console game, so obviously this is pretty important for me to sort out. Does anyone know what I'm doing wrong?<br/>_________________<br/>I've coded about 17 different implementations of Pong. It's the game dev's "hello, world".
+<br/>
+<a class="postlink" href="http://brian.grogan.jr.googlepages.com/dual_scheme.zip" target="_blank">DualScheme - Scheme Interpreter for DS</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#78205 - DekuTree64 - Wed Apr 05, 2006 10:48 pm</h4>
+    <div class="postbody"><span class="postbody">What is InterruptCheck defined as, and where do you have DTCM located? Is it declared volatile?<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#78210 - qw3rky - Wed Apr 05, 2006 11:18 pm</h4>
+    <div class="postbody"><span class="postbody">i'm still using the linker scripts from DevKitARM, so the DTCM is defined at 0x00800000 (in ds_arm9.ld) and InterruptCheck is my name for what libnds calls VBLANK_INTR_WAIT_FLAGS (the register at 0x00803FF8), which has to be one of the most inaccurate, inappropriate names I've seen in the entire library (so hopefully you can understand my interest in rolling my own).<br/>_________________<br/>I've coded about 17 different implementations of Pong. It's the game dev's "hello, world".
+<br/>
+<a class="postlink" href="http://brian.grogan.jr.googlepages.com/dual_scheme.zip" target="_blank">DualScheme - Scheme Interpreter for DS</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#78211 - qw3rky - Wed Apr 05, 2006 11:22 pm</h4>
+    <div class="postbody"><span class="postbody">I've declared all the registers as volatile (InterruptCheck, InterruptEnable, InterruptFlags, MasterInterrupt, etc.). Did you mean: have I declared DTCM volatile? Because if that's the case, no, how would you go about doing that?<br/>_________________<br/>I've coded about 17 different implementations of Pong. It's the game dev's "hello, world".
+<br/>
+<a class="postlink" href="http://brian.grogan.jr.googlepages.com/dual_scheme.zip" target="_blank">DualScheme - Scheme Interpreter for DS</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#78212 - qw3rky - Wed Apr 05, 2006 11:29 pm</h4>
+    <div class="postbody"><span class="postbody">Oh, and if it helps, here are my definitions in my own personal interrupts.h:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#define MasterInterrupt (* (volatile uint16*) 0x04000208)
+<br/>
+#define enableInterrupts()  MasterInterrupt = 1
+<br/>
+#define disableInterrupts() MasterInterrupt = 0
+<br/>
+<br/>
+#define InterruptEnable (* (volatile uint32*) 0x04000210)
+<br/>
+#define InterruptFlags  (* (volatile uint32*) 0x04000214)
+<br/>
+#define VBLANK_INTR_ENABLE 0x00000001
+<br/>
+<br/>
+#define InterruptHandler (* (volatile uint32*) 0x00803FFC)
+<br/>
+#define InterruptCheck   (* (volatile uint32*) 0x00803FF8)
+<br/>
+</td> </tr></table><span class="postbody"><br/>_________________<br/>I've coded about 17 different implementations of Pong. It's the game dev's "hello, world".
+<br/>
+<a class="postlink" href="http://brian.grogan.jr.googlepages.com/dual_scheme.zip" target="_blank">DualScheme - Scheme Interpreter for DS</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#78514 - qw3rky - Fri Apr 07, 2006 8:49 pm</h4>
+    <div class="postbody"><span class="postbody">Okay, I feel a little stupid. Let this be a lesson to the less experienced coders on this board, always triple check your defines and declarations before making a post. It turns out that everything in my code was correct and working fine EXCEPT for one thing. In my constants for Display Status, I defined the 0th bit as V-Blank IRQ Enable instead of the 3rd as it has been stated in both DSTek (http://neimod.com/dstek/) and GBATek (http://nocash.emubase.de/gbatek.htm#lcdiointerruptsandstatus). So, uhh, nothin' to see here folks.
+<br/>
+<br/>
+Here was my code before:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+/* --- Display Status --- */
+<br/>
+#define DisplayStatus (* (volatile uint16*) 0x04000004)
+<br/>
+<br/>
+/* bit 0, vertical blank interrupt enable */
+<br/>
+#define VBLANK_INTR_REQUEST 0x00000001  // WRONG!
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+and here's my code now:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+/* --- Display Status --- */
+<br/>
+#define DisplayStatus (* (volatile uint16*) 0x04000004)
+<br/>
+<br/>
+/* bit 3, vertical blank interrupt enable */
+<br/>
+#define VBLANK_INTR_REQUEST 0x00000008
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Now I am well on my way towards coding up a more descriptively named (though maybe a bit verbose) library for the DS. Thank you DekuTree for trying to help.<br/>_________________<br/>I've coded about 17 different implementations of Pong. It's the game dev's "hello, world".
+<br/>
+<a class="postlink" href="http://brian.grogan.jr.googlepages.com/dual_scheme.zip" target="_blank">DualScheme - Scheme Interpreter for DS</a></span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

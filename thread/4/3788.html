@@ -1,0 +1,162 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Illegal halfword write - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > Illegal halfword write</h2>
+<div id="posts">
+<div class="post">
+    <h4>#24065 - JL - Tue Jul 27, 2004 9:25 am</h4>
+    <div class="postbody"><span class="postbody">Hi guys,
+<br/>
+<br/>
+When using visual boy advance with tracing on, I get the following report in my trace.log when I start my code:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+Illegal halfword write: 0000 to 00000000 from 08002568
+<br/>
+Illegal halfword write: 0000 to 00000002 from 08002568
+<br/>
+Illegal halfword write: 0000 to 00000004 from 08002568
+<br/>
+Illegal halfword write: 0000 to 00000006 from 08002568
+<br/>
+Illegal halfword write: 0000 to 00000008 from 08002568
+<br/>
+Illegal halfword write: 0000 to 0000000a from 08002568
+<br/>
+Illegal halfword write: 0000 to 0000000c from 08002568
+<br/>
+Illegal halfword write: 0000 to 0000000e from 08002568
+<br/>
+Illegal halfword write: 0000 to 00000010 from 08002568
+<br/>
+Illegal halfword write: 0000 to 00000012 from 08002568
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+The list goes on, but this gives you the idea. When I objdump my .elf file the assembly code looks like this (it's in the play function for a modplayer which is written in C++ b.t.w.):
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+void ModPlayer::play()
+<br/>
+{
+<br/>
+ 8002558:   e92d45f0    stmdb   sp!, {r4, r5, r6, r7, r8, sl, lr}
+<br/>
+    int i;
+<br/>
+    signed short sample;
+<br/>
+<br/>
+    // Flip the bit to disable the DMA
+<br/>
+    REG_DM1CNT ^=ENABLE_DMA; 
+<br/>
+ 800255c:   e3a02301    mov   r2, #67108864   ; 0x4000000
+<br/>
+ 8002560:   e59240c4    ldr   r4, [r2, #196]
+<br/>
+ 8002564:   e2241102    eor   r1, r4, #-2147483648   ; 0x80000000
+<br/>
+ 8002568:   e58210c4    str   r1, [r2, #196]
+<br/>
+    // Swap the buffer where the DMA fetches the samples from
+<br/>
+    REG_DMA1SAD = (u32)(myPlayBuffer1 ? myBuffer2 : myBuffer1);
+<br/>
+ 800256c:   e3a01f99    mov   r1, #612   ; 0x264
+<br/>
+ 8002570:   e7d04001    ldrb   r4, [r0, r1]
+<br/>
+    // Flip the bit to enable the DMA again
+<br/>
+    REG_DM1CNT ^=ENABLE_DMA; 
+<br/>
+ 8002574:   e59280c4    ldr   r8, [r2, #196]
+<br/>
+ 8002578:   e3540000    cmp   r4, #0   ; 0x0
+<br/>
+ 800257c:   e1a0c000    mov   ip, r0
+<br/>
+ 8002580:   e2287102    eor   r7, r8, #-2147483648   ; 0x80000000
+<br/>
+ 8002584:   1280ce13    addne   ip, r0, #304   ; 0x130
+<br/>
+ 8002588:   e58270c4    str   r7, [r2, #196]
+<br/>
+ 800258c:   e582c0bc    str   ip, [r2, #188]
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+<br/>
+I compile with devkitadv5, and this particular snippet uses -O3. However, when I compile with no optimization the illegal write occurs at another position which looks like the same problem.
+<br/>
+<br/>
+My question is, what is wrong with above code (how come it starts writing at 0 and upward each subsequent call)?  With the little assembly I know, I don't see any clue for that to happen in this code... 
+<br/>
+<br/>
+Also what I find strange is that the bit flipping part (REG_DM1CNT ^=ENABLE_DMA) looks different in assembly for both of the calls although that might be the compiler optimizing. 
+<br/>
+<br/>
+Grtz,
+<br/>
+Niels</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#24073 - FluBBa - Tue Jul 27, 2004 1:46 pm</h4>
+    <div class="postbody"><span class="postbody">If I understand that confusing code it writes to REG_DMA1SAD <span style="text-decoration: underline">after</span> it has restarted the DMA.
+<br/>
+And what should r0 be when it enters the code? are you sure the C code doesn't take any arguments?<br/>_________________<br/>I probably suck, my not is a programmer.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#24139 - wintermute - Wed Jul 28, 2004 12:53 pm</h4>
+    <div class="postbody"><span class="postbody">That looks like you've hit a compiler bug in the O3 optimizations, that code is quite blatently wrong.
+<br/>
+<br/>
+If you fix whatever is wrong with your code at O0 then crank up the optimizations you might get somewhere.
+<br/>
+<br/>
+You could also try upgrading to devkitARM, it may be that the particular bug you've hit has been fixed in gcc 3.4.1.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#24239 - JL - Fri Jul 30, 2004 9:32 am</h4>
+    <div class="postbody"><span class="postbody">Hi Wintermute,
+<br/>
+<br/>
+I upgraded to devkitarm but it has the same results, the difference seems to be that devkitarm also has the same effect at optimization level -O0 (the code is different though).
+<br/>
+<br/>
+Remarkably though, nothing is crashing, the trace just indicates that something is writing at the wrong position and the objdump code shows some weird code. 
+<br/>
+<br/>
+I'm gonna figure out how to use insight, that seems to work nicely along with devkitarm doesn't it (never got it to work with devkitadv), maybe it gives me some clues as to what's wrong. I'll try to isolate the bug and post more info when I figure it out...
+<br/>
+<br/>
+Cheers,
+<br/>
+Niels
+<br/>
+<br/>
+Btw: the conversion to devkitarm (from devkitadv) was a breeze, nice work!</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

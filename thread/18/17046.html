@@ -1,0 +1,135 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>sgIP_TCP: either buggy or awkward - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > sgIP_TCP: either buggy or awkward</h2>
+<div id="posts">
+<div class="post">
+    <h4>#171995 - PypeBros - Thu Jan 07, 2010 5:40 pm</h4>
+    <div class="postbody"><span class="postbody">I've never seen a TCP implementation behaving like dswifi, and chances are that it might explain the "data losses" and deadlocks I'm experiencing with my homebrew. The dswifi code I'm using is a bit old (dkp-r21, tagged "2005-2006"), so I've compared my version (2005-2006) against the latest version in devkitpro and did not noticed significant changes in the TCP protocol handling.
+<br/>
+<br/>
+I've got a <a class="postlink" href="http://sylvainhb.blogspot.com/2010/01/sgiptcp-either-buggy-or-awkward.html" target="_blank">snapshot of a wireshark capture highlighting the problem</a>, to help explaining my concern.
+<br/>
+<br/>
+The first oddity is that the DS seems to ACKnowledge everything from the PC, including pure ACKs (that is, packets with 0 bytes of data). I added a filtering rule to get that noise out of the trace, so you won't see it on the screenshot.
+<br/>
+<br/>
+Moreover, it doesn't look to take all ACKs into account when sending a packet, but only the oldest one ... E.g. if you look closely at lines 4060 &amp; 4061 on the screenshot, the DS clearly received some ACK from the PC, since it increases the sequence number (and transmit new data). However, while the PC said "I got everything up to byte #101796", the DS keeps starts transmission from byte #100633 (that is, 256 bytes farther).
+<br/>
+<br/>
+My code use non-blocking sockets and tries to send 256 bytes every 5/60th second, rolling back if transmission couldn't be done properly. (I'll tripple-check it, just in case) ...
+<br/>
+<br/>
+Has anyone observed this before ? If not, I plan to study Sg Stair's code to figure out how I could improve it.<br/>_________________<br/><a class="postlink" href="http://sylvainhb.blogspot.com/p/sprite-editor.html" target="_blank"> SEDS: Sprite Edition on DS</a> :: <a class="postlink" href="http://sylvainhb.blogspot.com/search/label/modplayer" target="_blank">modplayer</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#172003 - TwentySeven - Fri Jan 08, 2010 8:25 am</h4>
+    <div class="postbody"><span class="postbody">Yes, its well known that his implementation is .. wobbly.
+<br/>
+<br/>
+He promised us a brand new TCP stack was in the works a fair while ago.  
+<br/>
+<br/>
+The UDP stack seems A-Ok though, and some wifi with broken bits is much appreciated compared to no wifi at all.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#172010 - wintermute - Fri Jan 08, 2010 2:17 pm</h4>
+    <div class="postbody"><span class="postbody">Slight rant to start, these things drive me up the wall.
+<br/>
+<br/>
+Firstly, it's best if you use the latest tools, bugs have been fixed, improvements have been made and it's pretty much impossible to verify any problems you may report.
+<br/>
+<br/>
+Secondly dswifi is a separate library dependent only on libnds and has no relation to the devkitARM version. The latest version is 0.3.11, 2005-2006 is utterly meaningless as a version number (it's also 2010 now :p).
+<br/>
+<br/>
+Thirdly devkitPro is a vendor of toolchains and libraries, we have no version numbers and support platforms other than the DS.
+<br/>
+<br/>
+dswifi is indeed a touch wobbly in places and is in need of an update or two. Sgstair has been talking about a major rewrite for quite some time but Microsoft keep him quite busy.
+<br/>
+<br/>
+Recently I've been considering using <a class="postlink" href="http://www.sics.se/~adam/uip/index.php/Main_Page" target="_blank">uIP</a> as a basis for a rewrite but obviously I have a million and one other things occupying my time. Any help you could offer in improving dswifi would be greatly appreciated.
+<br/>
+<br/>
+Probably the best way to start is to make contact with sgstair - he's usually around #dswifi on irc.blitzed.org but patience will be required. There are also a number of knowlegable users in #dsdev on the same irc server.<br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#172012 - sgstair - Fri Jan 08, 2010 8:58 pm</h4>
+    <div class="postbody"><span class="postbody">(And I should mention, there were some ACK bugs that have been fixed in a more recent version - which might include what you're seeing. Not significant changes, but subtle ones.)
+<br/>
+I will take a look at your capture though.
+<br/>
+<br/>
+-Stephen<br/>_________________<br/><a class="postlink" href="http://blog.akkit.org/" target="_blank">http://blog.akkit.org/</a> - <a class="postlink" href="http://www.akkit.org/dswifi/" target="_blank">http://www.akkit.org/dswifi/</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#172013 - sgstair - Fri Jan 08, 2010 9:18 pm</h4>
+    <div class="postbody"><span class="postbody">Huh, ok - so there's just a screenshot.
+<br/>
+<br/>
+There is probably a congestion issue here, due to packet loss, some iffy logic, and outgoing message queuing; If you look further back in the trace then yes, there is almost certainly an ack at 100337, 100633, 100889
+<br/>
+<br/>
+This is an issue that I recognize wasn't designed for, and one of the many reasons I want to rewrite the library :)
+<br/>
+Probably the best way to handle this particular issue is to only allow one outgoing message per endpoint in the outgoing queue; But the current circular buffer isn't designed for it; Some logic to only keep one message queued could be written, but it would be tricky to synchronize. I have been planning on going with a much different approach in the rewrite. 
+<br/>
+<br/>
+Presently the stack will send packets when you Send(), when it gets an Ack, and additionally on a timer from time to time. Since it's sending (up to) 1400 byte messages they can actaully take a nontrivial time to post (~6ms to send at 2mbit) - not to mention the wifi HW might retry if the other end didn't acknowledge it (or it loses that packet). You might see the problems leading up here :) The transmit buffer is big enough to hold a dozen packets or so, so this sort of lag can be pretty bad. Fortunately the TCP stack is pretty reliable (doesn't lose data), unfortunately though there are issues like these that hurt performance.
+<br/>
+<br/>
+It is a bit of a minefield, there are a lot of reasons I'd like to scrap the current lib and write a new one; the only reason I can't is time - too busy doing other stuff.
+<br/>
+<br/>
+-Stephen<br/>_________________<br/><a class="postlink" href="http://blog.akkit.org/" target="_blank">http://blog.akkit.org/</a> - <a class="postlink" href="http://www.akkit.org/dswifi/" target="_blank">http://www.akkit.org/dswifi/</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#172019 - PypeBros - Sat Jan 09, 2010 12:27 pm</h4>
+    <div class="postbody"><span class="postbody">Thanks for your time. 
+<br/>
+@wintermute: don't get me wrong here: I post this here to improve my knowledge of how things evolved, because I am myself seasoned with network stacks and would love to help by improving sgstair's one if I can. I just don't want to do useless job.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">probably a congestion issue here, due to packet loss, some iffy logic, and outgoing message queuing;</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Wisely said. Most so I observe this mostly because there was a delay between decision of ACK'ing and transmission of the ACK that is higher than expected. Thanks for your details on the internals of the lib. I'll study them with more care after the dishes are washed ;)
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">Fortunately the TCP stack is pretty reliable (doesn't lose data)</td> </tr></table><span class="postbody">
+<br/>
+The third-pass on my own code was the correct one: I finally found the reason of data losses. There is indeed still performance issues (upload being 30% of the download bandwidth) but that's something i can live with. Sending more data at a time also reduce the effect of such "useless" retransmissions.<br/>_________________<br/><a class="postlink" href="http://sylvainhb.blogspot.com/p/sprite-editor.html" target="_blank"> SEDS: Sprite Edition on DS</a> :: <a class="postlink" href="http://sylvainhb.blogspot.com/search/label/modplayer" target="_blank">modplayer</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#172020 - sgstair - Sat Jan 09, 2010 2:22 pm</h4>
+    <div class="postbody"><span class="postbody">You're welcome to ask me further questions if you like; And if you want to help maintain the lib, you are most probably welcome, provided you have a sufficient grasp of coding ;)
+<br/>
+<br/>
+As has been said, I would like to rewrite the whole thing next; I'm not particularly proud of it, as it is my first network stack - I've made plenty of mistakes (and have plenty of ideas on how to do things better).
+<br/>
+However, I don't have time to sink into it presently, and probably won't for another few months, And when I do it will take another few months to actually accomplish anything, so there is still an imminent use for some improvements if you're interested.
+<br/>
+<br/>
+-Stephen<br/>_________________<br/><a class="postlink" href="http://blog.akkit.org/" target="_blank">http://blog.akkit.org/</a> - <a class="postlink" href="http://www.akkit.org/dswifi/" target="_blank">http://www.akkit.org/dswifi/</a></span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

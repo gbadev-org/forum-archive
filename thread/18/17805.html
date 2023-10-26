@@ -1,0 +1,147 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>DS Interrupts - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > DS Interrupts</h2>
+<div id="posts">
+<div class="post">
+    <h4>#177133 - sverx - Fri Dec 16, 2011 11:10 am</h4>
+    <div class="postbody"><span class="postbody">I'm not really sure I understood completely how to work with interrupts :|
+<br/>
+<br/>
+I have an ARM7 code where I'm managing interrupts with many handlers: VBlank, VCount, Timer0, wi-fi... then, in the VBlank handler, I have to call some PowerManagement functions, but I read that it is unsafe to leave interrupts enabled while doing that...
+<br/>
+<br/>
+So first I disabled the interrupts:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">REG_IME = IME_DISABLE;</td> </tr></table><span class="postbody">
+<br/>
+do the PowerManagement function calls, and re-enable the interrupts:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">REG_IME = IME_ENABLE;</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+well, sometimes it happens that after doing that, the ARM7 stops managing the interrupts: for instance I'm sure that the Timer0 interrupt handler doesn't get called because it is the music timer, and I hear that the music get stuck.
+<br/>
+<br/>
+Any suggestions? What does happen to the interrupts that happen when IME is disabled? Do they get queued or what?
+<br/>
+<br/>
+Thanks!<br/>_________________<br/><a class="postlink" href="http://bit.ly/yiQrz9" target="_blank">libXM7</a>|<a class="postlink" href="http://bit.ly/yJwcOo" target="_blank">NDS programming tutorial (Italiano)</a>|<a class="postlink" href="http://disjointedstudio.blogspot.com/" target="_blank">Waimanu DS / GBA</a>|<a class="postlink" href="http://adshomebrewersdiary.blogspot.com" target="_blank">A DS Homebrewer's Diary</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177134 - Miked0801 - Fri Dec 16, 2011 4:59 pm</h4>
+    <div class="postbody"><span class="postbody">Make sure the clear the interrupt flag field as well.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177135 - sverx - Fri Dec 16, 2011 5:02 pm</h4>
+    <div class="postbody"><span class="postbody">You mean REG_IF, right? I really don't get why should I clear that... if interrupts are disabled (IME=0), why should they raise flags in there? :|<br/>_________________<br/><a class="postlink" href="http://bit.ly/yiQrz9" target="_blank">libXM7</a>|<a class="postlink" href="http://bit.ly/yJwcOo" target="_blank">NDS programming tutorial (Italiano)</a>|<a class="postlink" href="http://disjointedstudio.blogspot.com/" target="_blank">Waimanu DS / GBA</a>|<a class="postlink" href="http://adshomebrewersdiary.blogspot.com" target="_blank">A DS Homebrewer's Diary</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177136 - Dwedit - Fri Dec 16, 2011 5:36 pm</h4>
+    <div class="postbody"><span class="postbody">Interrupts are disabled from being processed, not from triggering.  So IF can change.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177144 - sverx - Mon Dec 19, 2011 9:41 am</h4>
+    <div class="postbody"><span class="postbody">I see... and of course if IF isn't reset, the interrupts won't be triggered even when IME is re-enabled, right?
+<br/>
+<br/>
+BTW I'm also missing how interrupts take precedence one on the other... I mean, would an interrupt interrupt another interrupt in servicing if this second one has priority? (I know how interrupt works on x86 hardware, I never deeply read how do they work on ARM...)<br/>_________________<br/><a class="postlink" href="http://bit.ly/yiQrz9" target="_blank">libXM7</a>|<a class="postlink" href="http://bit.ly/yJwcOo" target="_blank">NDS programming tutorial (Italiano)</a>|<a class="postlink" href="http://disjointedstudio.blogspot.com/" target="_blank">Waimanu DS / GBA</a>|<a class="postlink" href="http://adshomebrewersdiary.blogspot.com" target="_blank">A DS Homebrewer's Diary</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177145 - Miked0801 - Mon Dec 19, 2011 5:15 pm</h4>
+    <div class="postbody"><span class="postbody">Or you get a whole bunch as each is triggered - can't quite remember how that works.
+<br/>
+<br/>
+Nested interrupts are quite possible on the DS/GBA.  All you need is to not turn off interrupts (or turn them back on) at the beginning of your vector.  We had VBlank, HBlank, and serial being allowed to interrupt timer interrupts.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177147 - Dwedit - Mon Dec 19, 2011 7:23 pm</h4>
+    <div class="postbody"><span class="postbody">Here's what the LibGBA interrupt handler does:  (I rewrote it later for my own project)
+<br/>
+<br/>
+Before executing it, the BIOS pushes 6 words onto the stack (libgba handler later pushes 4 words).
+<br/>
+<br/>
+* Sets REG_IME to 0 (interrupt master enable)
+<br/>
+* Mixes with BIOS's copy of interrupt flags so BIOS wait functions work (GBA and NDS7 only)
+<br/>
+* Linear search through the interrupt list, handlers that get added earlier are handled slightly faster.  Handlers added sooner have priority over handlers added later.
+<br/>
+If handler found:
+<br/>
+* Acknowledges the interrupt by clearing its interrupt flag
+<br/>
+* Switches to System mode so code runs with the normal stack.  REG_IME is still at zero, so interrupts are disabled that way.
+<br/>
+* When returning from the handler, disables interrupts again, switches to IRQ mode to return from the interrupt handler.
+<br/>
+* Returns to the interrupt handler code, which switches back to IRQ mode so it can return to BIOS.
+<br/>
+If no handler found:
+<br/>
+* Acknowledges the interrupt by clearing its interrupt flag
+<br/>
+* Returns to BIOS
+<br/>
+<br/>
+After executing it, the BIOS pops its 6 words from the stack and and returns to the previous CPU mode.
+<br/>
+<br/>
+10 words get put on the IRQ stack every time it handles an interrupt  (when using the libgba/libnds interrupt handler).
+<br/>
+On the GBA, the IRQ stack is 160 bytes large, so you can have up to 4 nested interrupts before it clobbers the system stack.
+<br/>
+On NDS7, suggested size is 172 bytes large (4 nested interrupts max), on NDS9 it's 224 bytes large (5 nested interrupts max).
+<br/>
+Make interrupt handlers can't retrigger before they are finished being handled, otherwise you can get an infinite stack overflow crash.
+<br/>
+<br/>
+When I rewrote the IRQ handling code, I defined some types of interrupts as "high priority", so they jumped directly to the handler with the CPU still in IRQ mode.  When they finish, they simply return to the BIOS's return code.  Other handlers were not priority, and they executed in System mode (and could be interrupted).
+<br/>
+I also replaced the linear search with fast Log 2 which always completes within 11 instructions, but I'm not sure if that's much faster.
+<br/>
+<br/>
+One problem I encountered is that VCOUNT and HBLANK interrupts can be lost forever if interrupts are disabled for too long.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177148 - sverx - Tue Dec 20, 2011 10:41 am</h4>
+    <div class="postbody"><span class="postbody">Thanks for the answers!
+<br/>
+I'm using </span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">irqSet(IRQ_VBLANK, myVblankHandler);</td> </tr></table><span class="postbody"> in my (ARM7) code, and I never had to explicitly reset REG_IF myself, it always worked fine without that, and even never had to mask REG_IE or clear REG_IME or such... so I guess other interrupts (one is TIMER0 for instance) were able to interrupt my VBlank handler without causing any problem...
+<br/>
+<br/>
+Then I added that 'critical' section where I'm reading/writing PM registers, clearing REG_IME before that and setting it again when the job is done and... well, problems started. :|
+<br/>
+<br/>
+Now I'll run some more tests explicitly resetting REG_IF after re-enabling REG_IME and see...
+<br/>
+<br/>
+Thanks again anyway :)<br/>_________________<br/><a class="postlink" href="http://bit.ly/yiQrz9" target="_blank">libXM7</a>|<a class="postlink" href="http://bit.ly/yJwcOo" target="_blank">NDS programming tutorial (Italiano)</a>|<a class="postlink" href="http://disjointedstudio.blogspot.com/" target="_blank">Waimanu DS / GBA</a>|<a class="postlink" href="http://adshomebrewersdiary.blogspot.com" target="_blank">A DS Homebrewer's Diary</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#177150 - sverx - Thu Dec 29, 2011 12:06 pm</h4>
+    <div class="postbody"><span class="postbody">for completeness, I have to add that functions that access PM registers already have been made 'safe' in libnds, since almost 3 years ago
+<br/>
+<br/>
+<a href="http://sourceforge.net/apps/trac/devkitpro/browser/trunk/libnds/source/arm7/spi.c?rev=3533" target="_blank">http://sourceforge.net/apps/trac/devkitpro/browser/trunk/libnds/source/arm7/spi.c?rev=3533</a>
+<br/>
+<br/>
+so there's no need to disable and re-enable interrupts 'around' PM function calls<br/>_________________<br/><a class="postlink" href="http://bit.ly/yiQrz9" target="_blank">libXM7</a>|<a class="postlink" href="http://bit.ly/yJwcOo" target="_blank">NDS programming tutorial (Italiano)</a>|<a class="postlink" href="http://disjointedstudio.blogspot.com/" target="_blank">Waimanu DS / GBA</a>|<a class="postlink" href="http://adshomebrewersdiary.blogspot.com" target="_blank">A DS Homebrewer's Diary</a></span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

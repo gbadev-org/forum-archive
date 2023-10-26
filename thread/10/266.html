@@ -1,0 +1,1119 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Mixing/Double buffering example - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Audio > Mixing/Double buffering example</h2>
+<div id="posts">
+<div class="post">
+    <h4>#1617 - Vortex - Mon Jan 20, 2003 7:44 pm</h4>
+    <div class="postbody"><span class="postbody">Hello,
+<br/>
+<br/>
+Since I was not able to find any GBA exaples how to do mixing (i.e. more that one sound at a time) I spend some time this weekend and here is the code:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+/////////////////////////////////////////////////////////////////////////////
+<br/>
+// sound.c
+<br/>
+// ver: 0.4.3
+<br/>
+<br/>
+#include "gba.h" 
+<br/>
+#include "screenmode.h" 
+<br/>
+#include "keypad.h" 
+<br/>
+<br/>
+#include "sound21.c"
+<br/>
+// #include "sound25.c"
+<br/>
+<br/>
+///////////////////////////////////////////////////////////////////////////////
+<br/>
+// Sound Control
+<br/>
+<br/>
+#define FIFO_A (0x040000A0)
+<br/>
+#define FIFO_B (0x040000A4)
+<br/>
+<br/>
+struct SountCntH
+<br/>
+{
+<br/>
+   int Ch1to4OutputRatio          : 2;
+<br/>
+   int DSndAOutRatio              : 1;
+<br/>
+   int DSndBOutRatio              : 1;
+<br/>
+   int unused                     : 4;
+<br/>
+<br/>
+   int EnableDSndAToRightSpeaker  : 1;
+<br/>
+   int EnableDSndAToLeftSpeaker   : 1;
+<br/>
+   int DSndASampleRateTimer       : 1;
+<br/>
+   int DSndAFIFOReset             : 1;
+<br/>
+<br/>
+   int EnableDSndBToRightSpeaker  : 1;
+<br/>
+   int EnableDSndBToLeftSpeaker   : 1;
+<br/>
+   int DSndBSampleRateTimer       : 1;
+<br/>
+   int DSndBFIFOReset             : 1;
+<br/>
+<br/>
+};
+<br/>
+<br/>
+///////////////////////////////////////////////////////////////////////////////
+<br/>
+// Sound Buffer Definitions and Prototypes
+<br/>
+<br/>
+#define PLAYBACK_FREQ     (16384)
+<br/>
+#define SOUND_BUFFER_SIZE (16384)
+<br/>
+<br/>
+s8  SoundBuffer1[SOUND_BUFFER_SIZE] __attribute__ ((section (".ewram"))) = { 0 };
+<br/>
+s8  SoundBuffer2[SOUND_BUFFER_SIZE] __attribute__ ((section (".ewram"))) = { 0 };
+<br/>
+s8* SoundBuffer __attribute__ ((section (".ewram"))) = SoundBuffer1;
+<br/>
+u8  activeSoundBuffer __attribute__ ((section (".ewram"))) = 0;
+<br/>
+<br/>
+void sbClear(void); 
+<br/>
+void sbFlip(void); 
+<br/>
+void sbInsertSample( const s8* sound_data, u16 sound_data_size, u16 offset ); 
+<br/>
+<br/>
+void InterruptProcess(void) __attribute__ ((section(".iwram"))); //the interrupt handler from crt0.s
+<br/>
+<br/>
+///////////////////////////////////////////////////////////////////////////////
+<br/>
+// Interrupt Handler
+<br/>
+<br/>
+void InterruptProcess(void)
+<br/>
+{
+<br/>
+   // Init DMA1 Source
+<br/>
+   REG_DMA1SAD = (unsigned long) SoundBuffer; // DMA1 source
+<br/>
+<br/>
+   //clear the interrupt(s)
+<br/>
+   REG_IF |= REG_IF;
+<br/>
+}
+<br/>
+<br/>
+///////////////////////////////////////////////////////////////////////////////
+<br/>
+// Sound Buffer Functions
+<br/>
+<br/>
+void sbFlip(void)
+<br/>
+{
+<br/>
+   if( activeSoundBuffer == 0 )
+<br/>
+   {
+<br/>
+      SoundBuffer = SoundBuffer2;
+<br/>
+      activeSoundBuffer = 1;
+<br/>
+   }
+<br/>
+   else
+<br/>
+   {
+<br/>
+      SoundBuffer = SoundBuffer1;
+<br/>
+      activeSoundBuffer = 0;
+<br/>
+   }
+<br/>
+}
+<br/>
+<br/>
+void sbClear(void)
+<br/>
+{
+<br/>
+   u32* buffer = (u32*) SoundBuffer;
+<br/>
+   u32 i;
+<br/>
+<br/>
+   for( i = 0; i &lt; SOUND_BUFFER_SIZE / 4; i++ )
+<br/>
+      buffer[i] = 0;
+<br/>
+}
+<br/>
+<br/>
+void sbClearAll(void)
+<br/>
+{
+<br/>
+   u32* buffer1; 
+<br/>
+   u32* buffer2; 
+<br/>
+   u32 i;
+<br/>
+<br/>
+   buffer1 = (u32*) SoundBuffer1;
+<br/>
+   buffer2 = (u32*) SoundBuffer2;
+<br/>
+<br/>
+   for( i = 0; i &lt; SOUND_BUFFER_SIZE / 4; i++ )
+<br/>
+   {
+<br/>
+      buffer1[i] = 0;
+<br/>
+      buffer2[i] = 0;
+<br/>
+   }
+<br/>
+}
+<br/>
+<br/>
+// sound_data_size must be divisible by 4 !!!
+<br/>
+void sbInsertSampleDMA( const s8* sound_data, u16 sound_data_size )
+<br/>
+{
+<br/>
+   // The sample is too big
+<br/>
+   if( sound_data_size &gt; SOUND_BUFFER_SIZE )
+<br/>
+      return;
+<br/>
+<br/>
+   REG_DMA3SAD   = (u32) sound_data;
+<br/>
+   REG_DMA3DAD   = (u32) SoundBuffer;
+<br/>
+   REG_DMA3CNT_L = sound_data_size / 4; 
+<br/>
+   REG_DMA3CNT_H = 0x8400;      // DMA Enable | 32-bit transfer
+<br/>
+}
+<br/>
+<br/>
+void sbInsertSample( const s8* sound_data, u16 sound_data_size, u16 offset )
+<br/>
+{
+<br/>
+   u32 i;
+<br/>
+   u16 pos = offset;
+<br/>
+<br/>
+   // The sample is too large
+<br/>
+   if( sound_data_size &gt; SOUND_BUFFER_SIZE )
+<br/>
+      return;
+<br/>
+<br/>
+   for( i = 0; i &lt; sound_data_size; i++ )
+<br/>
+   {
+<br/>
+      SoundBuffer[pos++] = sound_data[i];
+<br/>
+<br/>
+      if( pos == SOUND_BUFFER_SIZE )
+<br/>
+         pos = 0;
+<br/>
+   }
+<br/>
+}
+<br/>
+<br/>
+u32 sbGetCurrentPosition(void)
+<br/>
+{
+<br/>
+   return 0;
+<br/>
+}
+<br/>
+<br/>
+//////////////////////////////////////////////////////////////////
+<br/>
+// Resources Used: Timer0, Timer1, DMA1
+<br/>
+void InitSoundSystem()
+<br/>
+{
+<br/>
+   const u32 cpuFreq = 16777216;
+<br/>
+   struct SountCntH snd_ctrl;
+<br/>
+<br/>
+   activeSoundBuffer = 0;
+<br/>
+   SoundBuffer = SoundBuffer1;
+<br/>
+   sbClearAll();
+<br/>
+<br/>
+   snd_ctrl.Ch1to4OutputRatio          = 0;
+<br/>
+   snd_ctrl.DSndAOutRatio              = 1;   // 100%
+<br/>
+   snd_ctrl.DSndBOutRatio              = 0;   
+<br/>
+   snd_ctrl.unused                     = 0;
+<br/>
+<br/>
+   snd_ctrl.EnableDSndAToRightSpeaker  = 1;
+<br/>
+   snd_ctrl.EnableDSndAToLeftSpeaker   = 1;
+<br/>
+   snd_ctrl.DSndASampleRateTimer       = 0;   //Timer 0
+<br/>
+   snd_ctrl.DSndAFIFOReset             = 1;
+<br/>
+<br/>
+   snd_ctrl.EnableDSndBToRightSpeaker  = 0;
+<br/>
+   snd_ctrl.EnableDSndBToLeftSpeaker   = 0;
+<br/>
+   snd_ctrl.DSndBSampleRateTimer       = 0;   // Timer 0
+<br/>
+   snd_ctrl.DSndBFIFOReset             = 0;
+<br/>
+<br/>
+   ///////////////////////////////////////////////////////////////////////////////
+<br/>
+   // Play a mono sound at PLAYBACK_FREQ
+<br/>
+   // Uses timer 0 as sampling rate source
+<br/>
+   // Uses timer 1 to count the samples played in order to stop the sound 
+<br/>
+<br/>
+   // REG_SOUNDCNT_H = 0x0b0F; //enable DS A&amp;B + fifo reset + use timer0 + max volume to L and R
+<br/>
+<br/>
+   REG_SOUNDCNT_H = *(u16*) &amp;snd_ctrl; 
+<br/>
+   REG_SOUNDCNT_X = 0x0080; // Turn sound chip on
+<br/>
+<br/>
+   // Clear the FIFO
+<br/>
+   // u32* fifo_a = (u32*) FIFO_A;
+<br/>
+   // *fifo_a = 0;
+<br/>
+<br/>
+   // Direct Sound Channel A
+<br/>
+   REG_DMA1SAD   = (unsigned long) SoundBuffer;   // DMA1 source
+<br/>
+   REG_DMA1DAD   = FIFO_A;                     // Write to FIFO A address
+<br/>
+   REG_DMA1CNT_H = 0xb600;                     // DMA control: DMA enabled+ start on FIFO+32bit+repeat+increment source&amp;dest
+<br/>
+   REG_DMA1CNT_L = 0;
+<br/>
+<br/>
+   REG_TM1CNT_L  = 0xFFFF - SOUND_BUFFER_SIZE;      // 0xffff-the number of samples to play
+<br/>
+   REG_TM1CNT_H  = 0xC4;                     // Enable Timer1 + IRQ and cascade from Timer0
+<br/>
+<br/>
+   REG_IE        = 0x10;   // Enable IRQ for timer 1 
+<br/>
+   REG_IME       = 1;      // Master enable interrupts
+<br/>
+<br/>
+   // Formula for playback frequency is: 0xFFFF-round(cpuFreq/PLAYBACK_FREQ)
+<br/>
+   // REG_TM0CNT_L = 0xFBE8; //16khz playback freq
+<br/>
+   // REG_TM0CNT_L = 0xFD07; // 22.05 khz playback freq
+<br/>
+<br/>
+   REG_TM0CNT_L = 0xFFFF - (cpuFreq/PLAYBACK_FREQ);
+<br/>
+   REG_TM0CNT_H = 0x0080;  // Enable Timer0
+<br/>
+}
+<br/>
+<br/>
+void AgbMain (void)
+<br/>
+{
+<br/>
+   InitSoundSystem();
+<br/>
+<br/>
+   SetMode( MODE_3 | BG2_ENABLE );
+<br/>
+<br/>
+   while(1)
+<br/>
+   {
+<br/>
+      if(!(*KEYS &amp; KEY_A))
+<br/>
+      {
+<br/>
+         while(!(*KEYS &amp; KEY_A));
+<br/>
+<br/>
+         sbInsertSample((const s8*) SOUND21_DATA, SOUND21_LENGTH, SOUND_BUFFER_SIZE - 3000 );
+<br/>
+         // sbInsertSampleDMA((const s8*) SOUND21_DATA, SOUND21_LENGTH);
+<br/>
+      }
+<br/>
+      else if(!(*KEYS &amp; KEY_B))
+<br/>
+      {
+<br/>
+         while(!(*KEYS &amp; KEY_B));
+<br/>
+<br/>
+         sbClear();      
+<br/>
+      }
+<br/>
+   }
+<br/>
+}
+<br/>
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+All of the sound-related functions start with sb prefix. The program uses double buffering. I am planning to rewrite some of the functions in ASM once I am happy with the overall implementation. Right now the program output is mono, but in the next version I will double the buffers and implement a stereo output. The next step will be to add some FX functions as delay, reverb and echo. Please let me know if you think there is a way to optimize the code and/or if you find any errors.
+<br/>
+<br/>
+Thanks</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#1633 - xonox - Mon Jan 20, 2003 9:20 pm</h4>
+    <div class="postbody"><span class="postbody">The easiest way to mix two samples is to take them one byte at a time.
+<br/>
+A slow but working way is to divide both bytes by two (to lower their volume to prevent clipping) and then add them.  It's a simple way to do that and i can't put in more details 'cause i am writing this from my break at work.  I'll write again later if i find better ideas.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#1637 - Vortex - Mon Jan 20, 2003 9:53 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>xonox wrote:</b></span></td> </tr> <tr> <td class="quote">The easiest way to mix two samples is to take them one byte at a time.
+<br/>
+A slow but working way is to divide both bytes by two (to lower their volume to prevent clipping) and then add them.  It's a simple way to do that and i can't put in more details 'cause i am writing this from my break at work.  I'll write again later if i find better ideas.</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+xonox,
+<br/>
+<br/>
+You are right - the described way of mixing works very well. A primitive delay was included as well. Here is the updated code:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+/////////////////////////////////////////////////////////////////////////////
+<br/>
+// sound.c
+<br/>
+// ver: 0.5.1
+<br/>
+<br/>
+#include "gba.h" 
+<br/>
+#include "screenmode.h" 
+<br/>
+#include "keypad.h" 
+<br/>
+#include "interrupt.h" 
+<br/>
+<br/>
+#include "sound21.c"
+<br/>
+#include "sound25.c"
+<br/>
+<br/>
+///////////////////////////////////////////////////////////////////////////////
+<br/>
+// Sound Control
+<br/>
+<br/>
+#define FIFO_A (0x040000A0)
+<br/>
+#define FIFO_B (0x040000A4)
+<br/>
+<br/>
+struct SountCntH
+<br/>
+{
+<br/>
+   int Ch1to4OutputRatio          : 2;
+<br/>
+   int DSndAOutRatio              : 1;
+<br/>
+   int DSndBOutRatio              : 1;
+<br/>
+   int unused                     : 4;
+<br/>
+<br/>
+   int EnableDSndAToRightSpeaker  : 1;
+<br/>
+   int EnableDSndAToLeftSpeaker   : 1;
+<br/>
+   int DSndASampleRateTimer       : 1;
+<br/>
+   int DSndAFIFOReset             : 1;
+<br/>
+<br/>
+   int EnableDSndBToRightSpeaker  : 1;
+<br/>
+   int EnableDSndBToLeftSpeaker   : 1;
+<br/>
+   int DSndBSampleRateTimer       : 1;
+<br/>
+   int DSndBFIFOReset             : 1;
+<br/>
+<br/>
+};
+<br/>
+<br/>
+///////////////////////////////////////////////////////////////////////////////
+<br/>
+// Sound Buffer Definitions and Prototypes
+<br/>
+<br/>
+#define PLAYBACK_FREQ     (16384)
+<br/>
+<br/>
+// Allocating 2 secs sound buffer
+<br/>
+#define SOUND_BUFFER_SIZE (PLAYBACK_FREQ*2)
+<br/>
+<br/>
+#define MAX_NUMBER_OF_SOUNDS_MIXED 2
+<br/>
+<br/>
+s8  SoundBuffer1[SOUND_BUFFER_SIZE] __attribute__ ((section (".ewram"))) = { 0 };
+<br/>
+s8  SoundBuffer2[SOUND_BUFFER_SIZE] __attribute__ ((section (".ewram"))) = { 0 };
+<br/>
+<br/>
+volatile s8* SoundBuffer        __attribute__ ((section (".ewram"))) = SoundBuffer1;
+<br/>
+volatile u8  activeSoundBuffer  __attribute__ ((section (".ewram"))) = 0;
+<br/>
+volatile u32 currentSample      __attribute__ ((section (".ewram"))) = 0;
+<br/>
+ 
+<br/>
+void sbClearBuffer(u32* buffer)  __attribute__ ((section(".iwram"))); 
+<br/>
+void sbClearAll(void);
+<br/>
+void sbClear(void); 
+<br/>
+void sbFlip(void) __attribute__ ((section(".iwram"))); 
+<br/>
+void sbInsertSample( const s8* sound_data, u16 sound_data_size, u16 offset ); 
+<br/>
+<br/>
+void InterruptProcess(void) __attribute__ ((section(".iwram"))); //the interrupt handler from crt0.s
+<br/>
+<br/>
+///////////////////////////////////////////////////////////////////////////////
+<br/>
+// Interrupt Handler
+<br/>
+<br/>
+void InterruptProcess(void)
+<br/>
+{
+<br/>
+   if(REG_IF &amp; IF_TIMER1_OVERFLOW)
+<br/>
+   {
+<br/>
+      if( activeSoundBuffer == 0 )
+<br/>
+         sbClearBuffer((u32*) SoundBuffer1 );
+<br/>
+      else
+<br/>
+         sbClearBuffer((u32*) SoundBuffer2 );
+<br/>
+<br/>
+      sbFlip();
+<br/>
+<br/>
+      // Init DMA1 Source
+<br/>
+      REG_DMA1SAD = (unsigned long) SoundBuffer; // DMA1 source
+<br/>
+<br/>
+      currentSample = 0;
+<br/>
+   }
+<br/>
+   else if(REG_IF &amp; IF_TIMER0_OVERFLOW)
+<br/>
+      currentSample ++;
+<br/>
+<br/>
+   // Clear the interrupt(s)
+<br/>
+   REG_IF |= REG_IF;
+<br/>
+}
+<br/>
+<br/>
+///////////////////////////////////////////////////////////////////////////////
+<br/>
+// Sound Buffer Functions
+<br/>
+<br/>
+void sbFlip(void)
+<br/>
+{
+<br/>
+   if( activeSoundBuffer == 0 )
+<br/>
+   {
+<br/>
+      SoundBuffer = SoundBuffer2;
+<br/>
+      activeSoundBuffer = 1;
+<br/>
+   }
+<br/>
+   else
+<br/>
+   {
+<br/>
+      SoundBuffer = SoundBuffer1;
+<br/>
+      activeSoundBuffer = 0;
+<br/>
+   }
+<br/>
+}
+<br/>
+<br/>
+void sbClear(void)
+<br/>
+{
+<br/>
+   u32* buffer = (u32*) SoundBuffer;
+<br/>
+   u32 i;
+<br/>
+<br/>
+   for( i = 0; i &lt; SOUND_BUFFER_SIZE / 4; i++ )
+<br/>
+      buffer[i] = 0;
+<br/>
+}
+<br/>
+<br/>
+void sbClearBuffer(u32* buffer)
+<br/>
+{
+<br/>
+   u32 i;
+<br/>
+<br/>
+   for( i = 0; i &lt; SOUND_BUFFER_SIZE / 4; i++ )
+<br/>
+      buffer[i] = 0;
+<br/>
+}
+<br/>
+<br/>
+void sbClearAll(void)
+<br/>
+{
+<br/>
+   u32* buffer1; 
+<br/>
+   u32* buffer2; 
+<br/>
+   u32 i;
+<br/>
+<br/>
+   buffer1 = (u32*) SoundBuffer1;
+<br/>
+   buffer2 = (u32*) SoundBuffer2;
+<br/>
+<br/>
+   for( i = 0; i &lt; SOUND_BUFFER_SIZE / 4; i++ )
+<br/>
+   {
+<br/>
+      buffer1[i] = 0;
+<br/>
+      buffer2[i] = 0;
+<br/>
+   }
+<br/>
+}
+<br/>
+<br/>
+void sbInsertSampleDelay( const s8* sound_data, u16 sound_data_size, u16 offset, u16 delay )
+<br/>
+{
+<br/>
+   sbInsertSample( sound_data, sound_data_size, offset );
+<br/>
+   sbInsertSample( sound_data, sound_data_size, offset + delay );
+<br/>
+}
+<br/>
+<br/>
+// volume 0-255
+<br/>
+void sbInsertSampleVolume( const s8* sound_data, u16 sound_data_size, u16 offset, u8 volume )
+<br/>
+{
+<br/>
+   u32 i;
+<br/>
+   u16 pos = offset;
+<br/>
+<br/>
+   s8*  Buffer;
+<br/>
+   s8*  BackBuffer;
+<br/>
+<br/>
+   // The sample is too large or Invalid offset
+<br/>
+   if( sound_data_size &gt; SOUND_BUFFER_SIZE || offset &gt; SOUND_BUFFER_SIZE )
+<br/>
+      return;
+<br/>
+   
+<br/>
+   if(activeSoundBuffer == 0)
+<br/>
+   {
+<br/>
+      Buffer      = SoundBuffer1;
+<br/>
+      BackBuffer  = SoundBuffer2;
+<br/>
+   }
+<br/>
+   else
+<br/>
+   {
+<br/>
+      Buffer      = SoundBuffer2;
+<br/>
+      BackBuffer  = SoundBuffer1;
+<br/>
+   }
+<br/>
+<br/>
+<br/>
+   for( i = 0; i &lt; sound_data_size; i++ )
+<br/>
+   {
+<br/>
+      Buffer[pos] += ((sound_data[i] * volume) / 255);
+<br/>
+<br/>
+      if( ++pos == SOUND_BUFFER_SIZE )
+<br/>
+      {
+<br/>
+         pos = 0;
+<br/>
+         Buffer = BackBuffer;
+<br/>
+      }
+<br/>
+   }
+<br/>
+}
+<br/>
+<br/>
+void sbInsertSample( const s8* sound_data, u16 sound_data_size, u16 offset )
+<br/>
+{
+<br/>
+   u32 i;
+<br/>
+   u16 pos = offset;
+<br/>
+<br/>
+   s8*  Buffer;
+<br/>
+   s8*  BackBuffer;
+<br/>
+<br/>
+   // The sample is too large or Invalid offset
+<br/>
+   if( sound_data_size &gt; SOUND_BUFFER_SIZE || offset &gt; SOUND_BUFFER_SIZE )
+<br/>
+      return;
+<br/>
+   
+<br/>
+   if(activeSoundBuffer == 0)
+<br/>
+   {
+<br/>
+      Buffer      = SoundBuffer1;
+<br/>
+      BackBuffer  = SoundBuffer2;
+<br/>
+   }
+<br/>
+   else
+<br/>
+   {
+<br/>
+      Buffer      = SoundBuffer2;
+<br/>
+      BackBuffer  = SoundBuffer1;
+<br/>
+   }
+<br/>
+<br/>
+<br/>
+   for( i = 0; i &lt; sound_data_size; i++ )
+<br/>
+   {
+<br/>
+      Buffer[pos] += sound_data[i] / MAX_NUMBER_OF_SOUNDS_MIXED;
+<br/>
+<br/>
+      if( ++pos == SOUND_BUFFER_SIZE )
+<br/>
+      {
+<br/>
+         pos = 0;
+<br/>
+         Buffer = BackBuffer;
+<br/>
+      }
+<br/>
+   }
+<br/>
+}
+<br/>
+<br/>
+u32 sbGetCurrentPosition(void)
+<br/>
+{
+<br/>
+   return currentSample;
+<br/>
+}
+<br/>
+<br/>
+//////////////////////////////////////////////////////////////////
+<br/>
+// Resources Used: Timer0, Timer1, DMA1
+<br/>
+void sbInitSoundSystem()
+<br/>
+{
+<br/>
+   const u32 cpuFreq = 16777216;
+<br/>
+   struct SountCntH snd_ctrl;
+<br/>
+<br/>
+   currentSample     = 0;
+<br/>
+   activeSoundBuffer = 0;
+<br/>
+   SoundBuffer       = SoundBuffer1;
+<br/>
+<br/>
+   sbClearAll();
+<br/>
+<br/>
+   snd_ctrl.Ch1to4OutputRatio          = 0;
+<br/>
+   snd_ctrl.DSndAOutRatio              = 1;   // 100%
+<br/>
+   snd_ctrl.DSndBOutRatio              = 0;   
+<br/>
+   snd_ctrl.unused                     = 0;
+<br/>
+<br/>
+   snd_ctrl.EnableDSndAToRightSpeaker  = 1;
+<br/>
+   snd_ctrl.EnableDSndAToLeftSpeaker   = 1;
+<br/>
+   snd_ctrl.DSndASampleRateTimer       = 0;   //Timer 0
+<br/>
+   snd_ctrl.DSndAFIFOReset             = 1;
+<br/>
+<br/>
+   snd_ctrl.EnableDSndBToRightSpeaker  = 0;
+<br/>
+   snd_ctrl.EnableDSndBToLeftSpeaker   = 0;
+<br/>
+   snd_ctrl.DSndBSampleRateTimer       = 0;   // Timer 0
+<br/>
+   snd_ctrl.DSndBFIFOReset             = 0;
+<br/>
+<br/>
+   ///////////////////////////////////////////////////////////////////////////////
+<br/>
+   // Play a mono sound at PLAYBACK_FREQ
+<br/>
+   // Uses timer 0 as sampling rate source
+<br/>
+   // Uses timer 1 to count the samples played in order to stop the sound 
+<br/>
+<br/>
+   // REG_SOUNDCNT_H = 0x0b0F; //enable DS A&amp;B + fifo reset + use timer0 + max volume to L and R
+<br/>
+<br/>
+   REG_SOUNDCNT_H = *(u16*) &amp;snd_ctrl; 
+<br/>
+   REG_SOUNDCNT_X = 0x0080; // Turn sound chip on
+<br/>
+<br/>
+   // Clear the FIFO
+<br/>
+   // u32* fifo_a = (u32*) FIFO_A;
+<br/>
+   // *fifo_a = 0;
+<br/>
+<br/>
+   // Direct Sound Channel A
+<br/>
+   REG_DMA1SAD   = (unsigned long) SoundBuffer;   // DMA1 source
+<br/>
+   REG_DMA1DAD   = FIFO_A;                     // Write to FIFO A address
+<br/>
+   REG_DMA1CNT_H = 0xb600;                     // DMA control: DMA enabled+ start on FIFO+32bit+repeat+increment source&amp;dest
+<br/>
+   REG_DMA1CNT_L = 0;
+<br/>
+<br/>
+   REG_TM1CNT_L  = 0xFFFF - SOUND_BUFFER_SIZE;      // 0xffff-the number of samples to play
+<br/>
+   REG_TM1CNT_H  = 0xC4;                     // Enable Timer1 + IRQ and cascade from Timer0
+<br/>
+<br/>
+   REG_IE        = 0x18;   // Enable IRQ for timer 1 and timer 0
+<br/>
+//  REG_IE        = 0x10;   // Enable IRQ for timer 1 
+<br/>
+   REG_IME       = 1;      // Master enable interrupts
+<br/>
+<br/>
+   // Formula for playback frequency is: 0xFFFF-round(cpuFreq/PLAYBACK_FREQ)
+<br/>
+   // REG_TM0CNT_L = 0xFBE8; //16khz playback freq
+<br/>
+   // REG_TM0CNT_L = 0xFD07; // 22.05 khz playback freq
+<br/>
+<br/>
+   REG_TM0CNT_L = 0xFFFF - (cpuFreq/PLAYBACK_FREQ);
+<br/>
+//  REG_TM0CNT_H = 0x0080;  // Enable Timer0
+<br/>
+   REG_TM0CNT_H = 0x00C0;  // Enable Timer0 + IRQ
+<br/>
+}
+<br/>
+<br/>
+void AgbMain (void)
+<br/>
+{
+<br/>
+   u8 volume = 127;
+<br/>
+<br/>
+   sbInitSoundSystem();
+<br/>
+<br/>
+   SetMode( MODE_3 | BG2_ENABLE );
+<br/>
+<br/>
+   while(1)
+<br/>
+   {
+<br/>
+      if(!(*KEYS &amp; KEY_A))
+<br/>
+      {
+<br/>
+         while(!(*KEYS &amp; KEY_A));
+<br/>
+<br/>
+         sbInsertSample((const s8*) SOUND21_DATA, SOUND21_LENGTH, currentSample );      
+<br/>
+      }
+<br/>
+      else if(!(*KEYS &amp; KEY_B))
+<br/>
+      {
+<br/>
+         while(!(*KEYS &amp; KEY_B));
+<br/>
+<br/>
+         sbInsertSample((const s8*) SOUND25_DATA, SOUND25_LENGTH, currentSample );
+<br/>
+      }
+<br/>
+      else if(!(*KEYS &amp; KEY_L))
+<br/>
+      {
+<br/>
+         while(!(*KEYS &amp; KEY_L));
+<br/>
+<br/>
+         // sbInsertSampleDelay((const s8*) SOUND21_DATA, SOUND21_LENGTH, currentSample, 5000 );      
+<br/>
+         sbInsertSampleVolume((const s8*) SOUND21_DATA, SOUND21_LENGTH, currentSample, volume );      
+<br/>
+      }
+<br/>
+      else if(!(*KEYS &amp; KEY_UP))
+<br/>
+      {
+<br/>
+         while(!(*KEYS &amp; KEY_UP));
+<br/>
+         volume++;
+<br/>
+      }
+<br/>
+      else if(!(*KEYS &amp; KEY_DOWN))
+<br/>
+      {
+<br/>
+         while(!(*KEYS &amp; KEY_DOWN));
+<br/>
+         volume--;
+<br/>
+      }
+<br/>
+   }
+<br/>
+}
+<br/>
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#1685 - NEiM0D - Tue Jan 21, 2003 4:24 pm</h4>
+    <div class="postbody"><span class="postbody">Great, what you could also have done is look at my NMOD source, there's a C version included.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#1690 - col - Tue Jan 21, 2003 4:57 pm</h4>
+    <div class="postbody"><span class="postbody">Also check out this link
+<br/>
+<br/>
+<a href="http://www.oxygen.it.net.au/mixing/" target="_blank">http://www.oxygen.it.net.au/mixing/</a>
+<br/>
+<br/>
+Its a tutorial on writing a mixer, it's intel based code, and some of the optimization tips are not relevant, but its a very good overview.
+<br/>
+<br/>
+Check out the 'volumetable' idea(section5) as a simple yet very effective way to post process the volume to prevent noticable clipping - especially with more channels.
+<br/>
+<br/>
+cheers
+<br/>
+<br/>
+col</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#1705 - tepples - Tue Jan 21, 2003 8:19 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>col wrote:</b></span></td> </tr> <tr> <td class="quote">Check out the 'volumetable' idea(section5) as a simple yet very effective way to post process the volume</td> </tr></table><span class="postbody">
+<br/>
+That's efficient on hardware with fast memory and slow multiply instructions, but a lookup to a "volume table" in ROM costs more cycles than a simple ARM 'mul' instruction (3 cycles for 'mul' with an 8-bit multiplier, 4 cycles for 'mla').
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">to prevent noticable clipping - especially with more channels.</td> </tr></table><span class="postbody">
+<br/>
+Doing this through a table is also inefficient because clipping with ARM's conditional move instructions (four cycles) is just as fast as going through a table.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#1706 - NEiM0D - Tue Jan 21, 2003 8:22 pm</h4>
+    <div class="postbody"><span class="postbody">Not unless the table is in iwram</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#1710 - col - Tue Jan 21, 2003 9:18 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>tepples wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>col wrote:</b></span></td> </tr> <tr> <td class="quote">Check out the 'volumetable' idea(section5) as a simple yet very effective way to post process the volume</td> </tr></table><span class="postbody">
+<br/>
+That's efficient on hardware with fast memory and slow multiply instructions, but a lookup to a "volume table" in ROM costs more cycles than a simple ARM 'mul' instruction (3 cycles for 'mul' with an 8-bit multiplier, 4 cycles for 'mla').
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">to prevent noticable clipping - especially with more channels.</td> </tr></table><span class="postbody">
+<br/>
+Doing this through a table is also inefficient because clipping with ARM's conditional move instructions (four cycles) is just as fast as going through a table.</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+...erm, sorry my mistake - it's a while since i read that article, and i just skimmed it this time - what i'm refering to is not the volumetable but the 'post processing' table - (I call it 'clip-table').
+<br/>
+<br/>
+cheers
+<br/>
+<br/>
+col.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

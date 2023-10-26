@@ -1,0 +1,155 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Resetting interrupts, and VBLANK_INTR_WAIT_FLAGS - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Resetting interrupts, and VBLANK_INTR_WAIT_FLAGS</h2>
+<div id="posts">
+<div class="post">
+    <h4>#152078 - krozen - Sun Mar 09, 2008 2:43 pm</h4>
+    <div class="postbody"><span class="postbody">Hi,
+<br/>
+I'm working through some interrupt examples. I pretty much understand interrupts, except for one thing: VBLANK_INTR_WAIT_FLAGS. I have the following function, which is called on every VBLANK:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+void irq()
+<br/>
+{
+<br/>
+   REG_IF = IRQ_VBLANK;
+<br/>
+   VBLANK_INTR_WAIT_FLAGS = IRQ_VBLANK;
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Why does VBLANK_INTR_WAIT_FLAGS have to be reset similiar to REG_IF? Is this just to "reset" the interrupt on the  REG_DISPSTAT "side" in the same way as we are resetting the interrupting on REG_IF?
+<br/>
+Cheers</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#152080 - tepples - Sun Mar 09, 2008 3:12 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>krozen wrote:</b></span></td> </tr> <tr> <td class="quote">Why does VBLANK_INTR_WAIT_FLAGS have to be reset similiar to REG_IF?</td> </tr></table><span class="postbody">
+<br/>
+This location tells the BIOS that the interrupt has happened and that your ISR has handled it.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#152084 - krozen - Sun Mar 09, 2008 4:10 pm</h4>
+    <div class="postbody"><span class="postbody">Okay - cheers for that Tepples. So, does something similiar have to be performed for every interrupt - or does VBLANK_INTR_WAIT_FLAGS have to be set regardless of what time of interrupt fires? (by type I mean vblank, hblank, dma etc.)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#152088 - eKid - Sun Mar 09, 2008 7:48 pm</h4>
+    <div class="postbody"><span class="postbody">I think it should really be called INTR_WAIT_FLAGS. Since it can be used for more than just the vblank interrupt. It's for the IntrWait SWI. During that SWI the cpu goes to sleep until awoken by any interrupt. After your interrupt routine is finished it checks the flags against which interrupts you told it to wait for. The flags only has to be set for whatever you call IntrWait with. (ie, swiWaitForVBlank calls IntrWait with the vblank interrupt specified)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#152096 - Cydrak - Sun Mar 09, 2008 9:45 pm</h4>
+    <div class="postbody"><span class="postbody">Yup. IntrWait waits for a match, but it doesn't check IRQ registers. It couldn't, because a proper handler already acknowledged the IRQ! So if you don't set INTR_WAIT_FLAGS, it will sleep forever.
+<br/>
+<br/>
+Beware that REG_IF and INTR_WAIT_FLAGS have to be set differently.
+<br/>
+- REG_IF is a register and setting the bits actually *clears* them.
+<br/>
+- INTR_WAIT_FLAGS is just a variable; bits *stay set* (until IntrWait clears them).
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">irqsPending = REG_IE &amp; REG_IF;
+<br/>
+INTR_WAIT_FLAGS |= irqsPending; // note: "or" required to not lose multiple IRQs
+<br/>
+REG_IF = irqsToHandle;          // plain "=" since "or" would clear everything
+<br/>
+... now go handle those ...</td> </tr></table><span class="postbody">
+<br/>
+This is roughly what libnds does. I can't think why one *wouldn't* set INTR_WAIT_FLAGS to all the pending IRQs, as this lets you wait for any interrupt. Though, AFAIK you must eventually ack REG_IF, to get out of the ISR, and back to IntrWait in the first place.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#152106 - tepples - Mon Mar 10, 2008 2:42 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>eKid wrote:</b></span></td> </tr> <tr> <td class="quote">I think it should really be called INTR_WAIT_FLAGS.</td> </tr></table><span class="postbody">
+<br/>
+I called it BIOS_IF in my own header, which I used until the FAT libraries came out.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#152122 - wintermute - Mon Mar 10, 2008 12:00 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>krozen wrote:</b></span></td> </tr> <tr> <td class="quote">Hi,
+<br/>
+I'm working through some interrupt examples. I pretty much understand interrupts, except for one thing: VBLANK_INTR_WAIT_FLAGS. I have the following function, which is called on every VBLANK:
+<br/>
+<br/>
+<table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+void irq()
+<br/>
+{
+<br/>
+   REG_IF = IRQ_VBLANK;
+<br/>
+   VBLANK_INTR_WAIT_FLAGS = IRQ_VBLANK;
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+</span></td> </tr></table><span class="postbody">
+<br/>
+<br/>
+It's also worth noting that any tutorial which teaches you interrupts in this manner is leading you down a road of eventual pain and suffering.
+<br/>
+<br/>
+The ARM has separate user and interrupt stacks and, generally, the interrupt stack is quite small, 256 bytes with the standard setup. If you start using local variables in your interrupt handlers then it's very likely that you will overflow the interrupt stack and end up with some rather difficult bugs to track down. On the GBA and the DS ARM7 the interrupt dispatcher itself <span style="font-weight: bold">must</span> be ARM code, not thumb.
+<br/>
+<br/>
+The libnds and libgba dispatchers avoid these issues by switching the processor back to user mode before calling the user supplied interrupt handlers and allowing the code to be thumb. This particular trickery is not possible in C.
+<br/>
+<br/>
+In my opinion an ARM interrupt dispatcher should never be written in C and trying to write a single function to handle all of your interrupts is going to cause you a world of hurt.<br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#152154 - krozen - Mon Mar 10, 2008 8:04 pm</h4>
+    <div class="postbody"><span class="postbody">Cheers for the feedback guys.
+<br/>
+Wintermute: I was under the impression that you could only have one ISR. Is it possible to write as ISR for each different interrupt type?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#152165 - wintermute - Mon Mar 10, 2008 11:26 pm</h4>
+    <div class="postbody"><span class="postbody">There's only one master ISR, known as a dispatcher. In libnds this handles all the mode switching &amp; flag setting before handing off to the user defined handlers.
+<br/>
+<br/>
+Have a look at <a href="http://tinyurl.com/yprc5h" target="_blank">http://tinyurl.com/yprc5h</a> to see how it's done.
+<br/>
+<br/>
+Trying to do that in C just adds unnecessary complexity you really don't need. It's possible but honestly, just don't.<br/>_________________<br/><a class="postlink" href="http://www.devkitpro.org/" target="_blank">devkitPro - professional toolchains at amateur prices</a>
+<br/>
+<a class="postlink" href="http://wiki.devkitpro.org/index.php/IRC" target="_blank">devkitPro IRC support</a>
+<br/>
+<a class="postlink" href="http://davejmurphy.com/" target="_blank">Personal Blog</a></span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

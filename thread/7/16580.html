@@ -1,0 +1,1252 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Removing fading from dsdoom - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>C/C++ > Removing fading from dsdoom</h2>
+<div id="posts">
+<div class="post">
+    <h4>#167973 - (sniper) 109 - Sat Apr 04, 2009 7:36 pm</h4>
+    <div class="postbody"><span class="postbody">I recently downloaded the dsdoom source code and Devkit. My current goals 
+<br/>
+are:
+<br/>
+<br/>
+-removing the doom fading
+<br/>
+-change controls.
+<br/>
+<br/>
+Anyway, I've learned that the doom fading requires the table for calculating the darkness/brightness, and as far as I could tell, it just searches an array with the index being calculated by the position on the screen of the pixel, the darkness of the room, the original color, and how high the sector is compared to your view. I know for a fact that the ds doesn't like multiplying or dividing so removing the fading would probably give a 10 to 15% FPS increase.
+<br/>
+I presume that I'd be able to solve this by cutting the fading code out of the source, although I can't find (or recognize) the doom fading code.
+<br/>
+I was told that it could be located in the i_main from the ARM9.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#include "config.h"
+<br/>
+<br/>
+#ifdef HAVE_UNISTD_H
+<br/>
+#include &lt;unistd.h&gt;
+<br/>
+#endif
+<br/>
+<br/>
+#ifdef WIFI_DEBUG
+<br/>
+#include &lt;user_debugger.h&gt;
+<br/>
+#endif
+<br/>
+<br/>
+#include "doomdef.h"
+<br/>
+#include "m_argv.h"
+<br/>
+#include "d_main.h"
+<br/>
+#include "i_system.h"
+<br/>
+#include "i_video.h"
+<br/>
+#include "z_zone.h"
+<br/>
+#include "lprintf.h"
+<br/>
+#include "m_random.h"
+<br/>
+#include "doomstat.h"
+<br/>
+#include "g_game.h"
+<br/>
+#include "m_misc.h"
+<br/>
+#include "i_sound.h"
+<br/>
+#include "i_main.h"
+<br/>
+#include "lprintf.h"
+<br/>
+#ifdef USE_SDL
+<br/>
+#include "SDL.h"
+<br/>
+#endif
+<br/>
+#include "doomstat.h"
+<br/>
+#include "st_lib.h"
+<br/>
+#include "d_deh.h"               // Jefklak 20/11/06 - allow grabbing of s_STRINGCAP vars
+<br/>
+#include "version.h"            // ^ DS DOOM version number
+<br/>
+#include "../../ndsx_ledblink.h"   // ^ LED manipulator
+<br/>
+#include "../../ndsx_brightness.h"   // ^ Brightness manipulator
+<br/>
+<br/>
+<br/>
+#include "gba_nds_fat.h"
+<br/>
+#include &lt;dswifi9.h&gt;
+<br/>
+#define      VCOUNT      (*((u16 volatile *) 0x04000006))
+<br/>
+<br/>
+#ifdef WIFI_DEBUG
+<br/>
+void debug_print_stub(char *string)
+<br/>
+{
+<br/>
+   printf(string);
+<br/>
+}
+<br/>
+#endif
+<br/>
+<br/>
+#include "buddyblock.h"
+<br/>
+<br/>
+//---------------------------------------------------------------------------------
+<br/>
+// Dswifi stub functions
+<br/>
+void * sgIP_malloc(int size) { return blockAlloc(size); }
+<br/>
+void sgIP_free(void * ptr) { blockFree(ptr); }
+<br/>
+<br/>
+// sgIP_dbgprint only needed in debug version
+<br/>
+void sgIP_dbgprint(char * txt, ...) {   }
+<br/>
+<br/>
+// wifi timer function, to update internals of sgIP
+<br/>
+void Timer_50ms(void)
+<br/>
+{
+<br/>
+   Wifi_Timer(50);
+<br/>
+}
+<br/>
+<br/>
+// notification function to send fifo message to arm7
+<br/>
+void arm9_synctoarm7()
+<br/>
+{ // send fifo message
+<br/>
+   REG_IPC_FIFO_TX=0x87654321;
+<br/>
+}
+<br/>
+<br/>
+// interrupt handler to receive fifo messages from arm7
+<br/>
+void arm9_fifo()
+<br/>
+{ // check incoming fifo messages
+<br/>
+   u32 value = REG_IPC_FIFO_RX;
+<br/>
+   if(value == 0x87654321) Wifi_Sync();
+<br/>
+}
+<br/>
+//---------------------------------------------------------------------------------
+<br/>
+<br/>
+int broken_pipe;
+<br/>
+<br/>
+/* Most of the following has been rewritten by Lee Killough
+<br/>
+ *
+<br/>
+ * I_GetTime
+<br/>
+ * killough 4/13/98: Make clock rate adjustable by scale factor
+<br/>
+ * cphipps - much made static
+<br/>
+ */
+<br/>
+<br/>
+int realtic_clock_rate = 100;
+<br/>
+static int_64_t I_GetTime_Scale = 1&lt;&lt;24;
+<br/>
+<br/>
+static int I_GetTime_Scaled(void)
+<br/>
+{
+<br/>
+  return (int)( (int_64_t) I_GetTime_RealTime() * I_GetTime_Scale &gt;&gt; 24);
+<br/>
+}
+<br/>
+<br/>
+<br/>
+<br/>
+static int  I_GetTime_FastDemo(void)
+<br/>
+{
+<br/>
+  static int fasttic;
+<br/>
+  return fasttic++;
+<br/>
+}
+<br/>
+<br/>
+<br/>
+<br/>
+static int I_GetTime_Error(void)
+<br/>
+{
+<br/>
+  I_Error("I_GetTime_Error: GetTime() used before initialization");
+<br/>
+  return 0;
+<br/>
+}
+<br/>
+<br/>
+<br/>
+<br/>
+int (*I_GetTime)(void) = I_GetTime_Error;
+<br/>
+<br/>
+void I_Init(void)
+<br/>
+{
+<br/>
+  /* killough 4/14/98: Adjustable speedup based on realtic_clock_rate */
+<br/>
+  if (fastdemo)
+<br/>
+    I_GetTime = I_GetTime_FastDemo;
+<br/>
+  else
+<br/>
+    if (realtic_clock_rate != 100)
+<br/>
+      {
+<br/>
+        I_GetTime_Scale = ((int_64_t) realtic_clock_rate &lt;&lt; 24) / 100;
+<br/>
+        I_GetTime = I_GetTime_Scaled;
+<br/>
+      }
+<br/>
+    else
+<br/>
+      I_GetTime = I_GetTime_RealTime;
+<br/>
+<br/>
+  {
+<br/>
+    /* killough 2/21/98: avoid sound initialization if no sound &amp; no music */
+<br/>
+    extern boolean nomusicparm, nosfxparm;
+<br/>
+    if (!(nomusicparm &amp;&amp; nosfxparm))
+<br/>
+      I_InitSound();
+<br/>
+  }
+<br/>
+}
+<br/>
+<br/>
+/* cleanup handling -- killough:
+<br/>
+ */
+<br/>
+static void I_SignalHandler(int s)
+<br/>
+{
+<br/>
+/*
+<br/>
+  char buf[2048];
+<br/>
+<br/>
+#ifdef SIGPIPE
+<br/>
+  // CPhipps - report but don't crash on SIGPIPE
+<br/>
+  if (s == SIGPIPE) {
+<br/>
+    fprintf(stderr, "Broken pipe\n");
+<br/>
+    broken_pipe = 1;
+<br/>
+    return;
+<br/>
+  }
+<br/>
+#endif
+<br/>
+  signal(s,SIG_IGN);  // Ignore future instances of this signal.
+<br/>
+<br/>
+  strcpy(buf,"Exiting on signal: ");
+<br/>
+  I_SigString(buf+strlen(buf),2000-strlen(buf),s);
+<br/>
+<br/>
+  // If corrupted memory could cause crash, dump memory
+<br/>
+  // allocation history, which points out probable causes
+<br/>
+  if (s==SIGSEGV || s==SIGILL || s==SIGFPE)
+<br/>
+    Z_DumpHistory(buf);
+<br/>
+<br/>
+  I_Error("I_SignalHandler: %s", buf);*/
+<br/>
+}
+<br/>
+<br/>
+/* killough 2/22/98: Add support for ENDBOOM, which is PC-specific
+<br/>
+ *
+<br/>
+ * this converts BIOS color codes to ANSI codes.
+<br/>
+ * Its not pretty, but it does the job - rain
+<br/>
+ * CPhipps - made static
+<br/>
+ */
+<br/>
+<br/>
+inline static int convert(int color, int *bold)
+<br/>
+{
+<br/>
+  if (color &gt; 7) {
+<br/>
+    color -= 8;
+<br/>
+    *bold = 1;
+<br/>
+  }
+<br/>
+  switch (color) {
+<br/>
+  case 0:
+<br/>
+    return 0;
+<br/>
+  case 1:
+<br/>
+    return 4;
+<br/>
+  case 2:
+<br/>
+    return 2;
+<br/>
+  case 3:
+<br/>
+    return 6;
+<br/>
+  case 4:
+<br/>
+    return 1;
+<br/>
+  case 5:
+<br/>
+    return 5;
+<br/>
+  case 6:
+<br/>
+    return 3;
+<br/>
+  case 7:
+<br/>
+    return 7;
+<br/>
+  }
+<br/>
+  return 0;
+<br/>
+}
+<br/>
+<br/>
+/* CPhipps - flags controlling ENDOOM behaviour */
+<br/>
+enum {
+<br/>
+  endoom_colours = 1,
+<br/>
+  endoom_nonasciichars = 2,
+<br/>
+  endoom_droplastline = 4
+<br/>
+};
+<br/>
+<br/>
+unsigned int endoom_mode;
+<br/>
+<br/>
+static void PrintVer(void)
+<br/>
+{
+<br/>
+  char vbuf[200];
+<br/>
+  lprintf(LO_INFO,"%s\n",I_GetVersionString(vbuf,200));
+<br/>
+}
+<br/>
+<br/>
+/* I_EndDoom
+<br/>
+ * Prints out ENDOOM or ENDBOOM, using some common sense to decide which.
+<br/>
+ * cphipps - moved to l_main.c, made static
+<br/>
+ */
+<br/>
+static void I_EndDoom(void)
+<br/>
+{
+<br/>
+  int lump_eb, lump_ed, lump = -1;
+<br/>
+<br/>
+  /* CPhipps - ENDOOM/ENDBOOM selection */
+<br/>
+  lump_eb = W_CheckNumForName("ENDBOOM");/* jff 4/1/98 sign our work    */
+<br/>
+  lump_ed = W_CheckNumForName("ENDOOM"); /* CPhipps - also maybe ENDOOM */
+<br/>
+<br/>
+  if (lump_eb == -1)
+<br/>
+    lump = lump_ed;
+<br/>
+  else if (lump_ed == -1)
+<br/>
+    lump = lump_eb;
+<br/>
+  else
+<br/>
+  { /* Both ENDOOM and ENDBOOM are present */
+<br/>
+#define LUMP_IS_NEW(num) (!((lumpinfo[num].source == source_iwad) || (lumpinfo[num].source == source_auto_load)))
+<br/>
+    switch ((LUMP_IS_NEW(lump_ed) ? 1 : 0 ) |
+<br/>
+      (LUMP_IS_NEW(lump_eb) ? 2 : 0)) {
+<br/>
+    case 1:
+<br/>
+      lump = lump_ed;
+<br/>
+      break;
+<br/>
+    case 2:
+<br/>
+      lump = lump_eb;
+<br/>
+      break;
+<br/>
+    default:
+<br/>
+      /* Both lumps have equal priority, both present */
+<br/>
+      lump = (P_Random(pr_misc) &amp; 1) ? lump_ed : lump_eb;
+<br/>
+      break;
+<br/>
+    }
+<br/>
+  }
+<br/>
+<br/>
+  if (lump != -1)
+<br/>
+  {
+<br/>
+    const char (*endoom)[2] = (void*)W_CacheLumpNum(lump);
+<br/>
+    int i, l = W_LumpLength(lump) / 2;
+<br/>
+<br/>
+    /* cph - colour ENDOOM by rain */
+<br/>
+    int oldbg = -1, oldcolor = -1, bold = 0, oldbold = -1, color = 0;
+<br/>
+#ifndef _WIN32
+<br/>
+    if (endoom_mode &amp; endoom_nonasciichars)
+<br/>
+      /* switch to secondary charset, and set to cp437 (IBM charset) */
+<br/>
+      printf("\e)K\016");
+<br/>
+#endif /* _WIN32 */
+<br/>
+<br/>
+    /* cph - optionally drop the last line, so everything fits on one screen */
+<br/>
+    if (endoom_mode &amp; endoom_droplastline)
+<br/>
+      l -= 80;
+<br/>
+    lprintf(LO_INFO,"\n");
+<br/>
+    for (i=0; i&lt;l; i++)
+<br/>
+    {
+<br/>
+#ifdef _WIN32
+<br/>
+      I_ConTextAttr(endoom[i][1]);
+<br/>
+#elif defined (DJGPP)
+<br/>
+      textattr(endoom[i][1]);
+<br/>
+#else
+<br/>
+      if (endoom_mode &amp; endoom_colours)
+<br/>
+      {
+<br/>
+        if (!(i % 80))
+<br/>
+        {
+<br/>
+          /* reset everything when we start a new line */
+<br/>
+          oldbg = -1;
+<br/>
+          oldcolor = -1;
+<br/>
+          printf("\e[0m\n");
+<br/>
+        }
+<br/>
+        /* foreground color */
+<br/>
+        bold = 0;
+<br/>
+        color = endoom[i][1] % 16;
+<br/>
+        if (color != oldcolor)
+<br/>
+        {
+<br/>
+          oldcolor = color;
+<br/>
+          color = convert(color, &amp;bold);
+<br/>
+          if (oldbold != bold)
+<br/>
+          {
+<br/>
+            oldbold = bold;
+<br/>
+      printf("\e[%cm", bold + '0');
+<br/>
+      if (!bold) oldbg = -1;
+<br/>
+          }
+<br/>
+          /* we buffer everything or output is horrendously slow */
+<br/>
+          printf("\e[%dm", color + 30);
+<br/>
+          bold = 0;
+<br/>
+        }
+<br/>
+        /* background color */
+<br/>
+        color = endoom[i][1] / 16;
+<br/>
+        if (color != oldbg)
+<br/>
+        {
+<br/>
+          oldbg = color;
+<br/>
+          color = convert(color, &amp;bold);
+<br/>
+          printf("\e[%dm", color + 40);
+<br/>
+        }
+<br/>
+      }
+<br/>
+#endif
+<br/>
+      /* cph - portable ascii printout if requested */
+<br/>
+      if (isascii(endoom[i][0]) || (endoom_mode &amp; endoom_nonasciichars))
+<br/>
+        lprintf(LO_INFO,"%c",endoom[i][0]);
+<br/>
+      else /* Probably a box character, so do #'s */
+<br/>
+        lprintf(LO_INFO,"#");
+<br/>
+    }
+<br/>
+#ifndef _WIN32
+<br/>
+    lprintf(LO_INFO,"\b"); /* hack workaround for extra newline at bottom of screen */
+<br/>
+    lprintf(LO_INFO,"\r");
+<br/>
+    if (endoom_mode &amp; endoom_nonasciichars)
+<br/>
+      putchar('\017'); /* restore primary charset */
+<br/>
+#endif /* _WIN32 */
+<br/>
+    W_UnlockLumpNum(lump);
+<br/>
+  }
+<br/>
+#ifndef _WIN32
+<br/>
+  if (endoom_mode &amp; endoom_colours)
+<br/>
+    puts("\e[0m"); /* cph - reset colours */
+<br/>
+  PrintVer();
+<br/>
+#else /* _WIN32 */
+<br/>
+  I_uSleep(3000000); // CPhipps - don't thrash cpu in this loop
+<br/>
+#endif /* _WIN32 */
+<br/>
+}
+<br/>
+<br/>
+static int has_exited;
+<br/>
+<br/>
+/* I_SafeExit
+<br/>
+ * This function is called instead of exit() by functions that might be called
+<br/>
+ * during the exit process (i.e. after exit() has already been called)
+<br/>
+ * Prevent infinitely recursive exits -- killough
+<br/>
+ */
+<br/>
+<br/>
+void I_SafeExit(int rc)
+<br/>
+{
+<br/>
+  if (!has_exited)    /* If it hasn't exited yet, exit now -- killough */
+<br/>
+    {
+<br/>
+      has_exited=rc ? 2 : 1;
+<br/>
+      exit(rc);
+<br/>
+    }
+<br/>
+}
+<br/>
+<br/>
+// Jefklak 19/11/06 - add ShutdownGraphics() call (why wasn't this used before?)
+<br/>
+// also turn DS power off.
+<br/>
+void I_Quit (void)
+<br/>
+{
+<br/>
+  if (!has_exited)
+<br/>
+    has_exited=1;   /* Prevent infinitely recursive exits -- killough */
+<br/>
+<br/>
+  if (has_exited == 1) {
+<br/>
+   I_ShutdownGraphics();
+<br/>
+    I_EndDoom();
+<br/>
+    if (demorecording)
+<br/>
+      G_CheckDemoStatus();
+<br/>
+    M_SaveDefaults ();
+<br/>
+  }
+<br/>
+<br/>
+  // Jefklak 19/11/06 - power the ting off, please.
+<br/>
+  free(DS_USERNAME);
+<br/>
+  powerOFF(POWER_ALL);
+<br/>
+}
+<br/>
+<br/>
+#ifdef SECURE_UID
+<br/>
+uid_t stored_euid = -1;
+<br/>
+#endif
+<br/>
+<br/>
+void StartWifi()
+<br/>
+{
+<br/>
+#ifdef WIFI_DEBUG
+<br/>
+   set_verbosity(VERBOSE_INFO | VERBOSE_ERROR | VERBOSE_TRACE);
+<br/>
+#endif
+<br/>
+<br/>
+#ifdef WIFI
+<br/>
+   { // send fifo message to initialize the arm7 wifi
+<br/>
+      REG_IPC_FIFO_CR = IPC_FIFO_ENABLE | IPC_FIFO_SEND_CLEAR; // enable &amp; clear FIFO
+<br/>
+      
+<br/>
+      u32 Wifi_pass= Wifi_Init(WIFIINIT_OPTION_USELED);
+<br/>
+      REG_IPC_FIFO_TX=0x12345678;
+<br/>
+      REG_IPC_FIFO_TX=Wifi_pass;
+<br/>
+      
+<br/>
+      *((volatile u16 *)0x0400010E) = 0; // disable timer3
+<br/>
+      
+<br/>
+//      irqInit(); 
+<br/>
+      initBuddyBlocks(5);
+<br/>
+      irqSet(IRQ_TIMER3, Timer_50ms); // setup timer IRQ
+<br/>
+      irqEnable(IRQ_TIMER3);
+<br/>
+      irqSet(IRQ_FIFO_NOT_EMPTY, arm9_fifo); // setup fifo IRQ
+<br/>
+      irqEnable(IRQ_FIFO_NOT_EMPTY);
+<br/>
+      
+<br/>
+      REG_IPC_FIFO_CR = IPC_FIFO_ENABLE | IPC_FIFO_RECV_IRQ; // enable FIFO IRQ
+<br/>
+      
+<br/>
+      Wifi_SetSyncHandler(arm9_synctoarm7); // tell wifi lib to use our handler to notify arm7
+<br/>
+<br/>
+      // set timer3
+<br/>
+      *((volatile u16 *)0x0400010C) = -6553; // 6553.1 * 256 cycles = ~50ms;
+<br/>
+      *((volatile u16 *)0x0400010E) = 0x00C2; // enable, irq, 1/256 clock
+<br/>
+      
+<br/>
+      while(Wifi_CheckInit()==0) { // wait for arm7 to be initted successfully
+<br/>
+         while(VCOUNT&gt;192); // wait for vblank
+<br/>
+         while(VCOUNT&lt;192);
+<br/>
+      }
+<br/>
+   } // wifi init complete - wifi lib can now be used!
+<br/>
+   
+<br/>
+   iprintf("Connecting via WFC data\n");
+<br/>
+   { // simple WFC connect:
+<br/>
+      int i;
+<br/>
+      Wifi_AutoConnect(); // request connect
+<br/>
+      while(1) {
+<br/>
+         i=Wifi_AssocStatus(); // check status
+<br/>
+         if(i==ASSOCSTATUS_ASSOCIATED) {
+<br/>
+            iprintf("Connected successfully!\n");
+<br/>
+            break;
+<br/>
+         }
+<br/>
+         if(i==ASSOCSTATUS_CANNOTCONNECT) {
+<br/>
+            iprintf("Could not connect!\n");
+<br/>
+            break;
+<br/>
+         }
+<br/>
+      }
+<br/>
+   } // if connected, you can now use the berkley sockets interface to connect to the internet!
+<br/>
+   
+<br/>
+#ifdef WIFI_DEBUG
+<br/>
+   debugger_connect_tcp(192, 168, 1, 105);   //your IP here
+<br/>
+   debugger_init();
+<br/>
+   user_debugger_update();
+<br/>
+#else
+<br/>
+   defaultExceptionHandler();
+<br/>
+#endif
+<br/>
+#endif
+<br/>
+}
+<br/>
+<br/>
+// Jefklak 19/11/06 - Switches lower DS screen back to console or vice versa.
+<br/>
+int gen_screen_swap = 0;
+<br/>
+int gen_console_enable = 1;
+<br/>
+void switchConsole()
+<br/>
+{
+<br/>
+   // ### LOWER SCREEN #### //
+<br/>
+   if(gen_console_enable)
+<br/>
+   {
+<br/>
+      videoSetModeSub(MODE_0_2D|DISPLAY_BG0_ACTIVE);
+<br/>
+      vramSetBankC(VRAM_C_SUB_BG);
+<br/>
+<br/>
+      SUB_BG0_CR = BG_MAP_BASE(31);
+<br/>
+      BG_PALETTE_SUB[255] = RGB15(31,31,31);
+<br/>
+<br/>
+      consoleInitDefault((u16*)SCREEN_BASE_BLOCK_SUB(31), (u16*)CHAR_BASE_BLOCK_SUB(0), 16);
+<br/>
+      //consoleClear();
+<br/>
+      FG = 0;
+<br/>
+<br/>
+      lprintf(LO_INFO, "%s (FG buffer is %i)\n", s_CONSOLESWAPON, FG);
+<br/>
+      if(gamestate == GS_LEVEL)
+<br/>
+         players[consoleplayer].message = s_CONSOLESWAPON;
+<br/>
+   }
+<br/>
+   else
+<br/>
+   {
+<br/>
+      videoSetModeSub(MODE_5_2D | DISPLAY_BG3_ACTIVE);
+<br/>
+      vramSetBankC(VRAM_C_SUB_BG);
+<br/>
+<br/>
+      SUB_BG3_CR = BG_BMP8_512x512;
+<br/>
+      SUB_BG3_XDX = (320 * 256)/256; //1 &lt;&lt; 8;
+<br/>
+      SUB_BG3_XDY = 0; // BG SCALING X
+<br/>
+      SUB_BG3_YDX = 0; // BG SCALING Y
+<br/>
+      SUB_BG3_YDY = (200*256)/192; // &lt;&lt; 8;
+<br/>
+      SUB_BG3_CX = 0;
+<br/>
+      SUB_BG3_CY = 0;
+<br/>
+      memset(BG_GFX_SUB, 0, 512 * 512 * 2);
+<br/>
+<br/>
+      /**
+<br/>
+       * adjusted in st_lib.h (static int instead of #define)
+<br/>
+       * hu_lib.h includes st_lib.h and uses same FG screen[x] identifier
+<br/>
+       * if no console, draw stats to lower screen!
+<br/>
+       * Also increase upper screen display size.
+<br/>
+       **/
+<br/>
+      FG = 1;
+<br/>
+      if(gamestate == GS_LEVEL)
+<br/>
+         players[consoleplayer].message = s_CONSOLESWAPOFF;
+<br/>
+   }
+<br/>
+<br/>
+   if(gamestate == GS_LEVEL)
+<br/>
+      M_SizeDisplay(FG);
+<br/>
+}
+<br/>
+<br/>
+// Jefklak 21/11/06 - brightness wrapper for ndsx_brightness.h
+<br/>
+// Only apply brightness register changes if DSLite.
+<br/>
+void DStoggleBrightness()
+<br/>
+{
+<br/>
+   if(!NDSX_IsLite())   // SetBrigtness_Next() doesn't work anyway...
+<br/>
+      return;
+<br/>
+<br/>
+   NDSX_SetBrightness_Next();
+<br/>
+   lprintf(LO_INFO, "%s\n", s_DSBRIGHTNESS);
+<br/>
+   if(gamestate == GS_LEVEL)
+<br/>
+      players[consoleplayer].message = s_DSBRIGHTNESS;
+<br/>
+}
+<br/>
+<br/>
+// Jefklak 21/11/06 - Finally works! retrieve profile username
+<br/>
+// Had to be wrapped to ARM7... How weird.
+<br/>
+char *DS_USERNAME = NULL;
+<br/>
+void DSgetUserName()
+<br/>
+{
+<br/>
+   int i;
+<br/>
+   int nameLen = NDSX_GetPersonalNameLen();
+<br/>
+   DS_USERNAME = malloc(nameLen + 1);
+<br/>
+<br/>
+   // safety fail
+<br/>
+   if(nameLen &lt;= 0)
+<br/>
+   {
+<br/>
+      DS_USERNAME = "Player1";
+<br/>
+      return;
+<br/>
+   }
+<br/>
+<br/>
+   for(i=0; i &lt; nameLen; i++)
+<br/>
+   {
+<br/>
+      // get ascii-bits from utf-16 name
+<br/>
+      *(DS_USERNAME + i) = (char)(NDSX_GetPersonalName() &amp; 255);
+<br/>
+   }
+<br/>
+}
+<br/>
+<br/>
+//int main(int argc, const char * const * argv)
+<br/>
+int main(int argc, char **argv)
+<br/>
+{
+<br/>
+   myargc = argc;
+<br/>
+   myargv = argv;
+<br/>
+<br/>
+   powerON(POWER_ALL);
+<br/>
+   WAIT_CR=0xe800;
+<br/>
+   REG_IPC_FIFO_CR = IPC_FIFO_ENABLE | IPC_FIFO_SEND_CLEAR;
+<br/>
+   
+<br/>
+   irqInit();   // Enable our quintessential vblank interrupt
+<br/>
+   irqSet(IRQ_VBLANK, NULL);
+<br/>
+   irqEnable(IRQ_VBLANK);
+<br/>
+   
+<br/>
+   TIMER0_DATA=0;   // Set up the timer
+<br/>
+   TIMER1_DATA=0;
+<br/>
+   TIMER0_CR=TIMER_DIV_1024;
+<br/>
+   TIMER1_CR=TIMER_CASCADE;
+<br/>
+ 
+<br/>
+   // Jefklak 19/11/06 - adjust upper/lower screen stuff
+<br/>
+   // ### UPPER SCREEN #### //
+<br/>
+   videoSetMode(MODE_5_2D|DISPLAY_BG3_ACTIVE);   // BG3 only - extended rotation
+<br/>
+   vramSetBankA(VRAM_A_MAIN_BG_0x6000000);      // same as VRAM_A_MAIN_BG
+<br/>
+   vramSetBankB(VRAM_B_MAIN_BG_0x6020000);      // use second bank for main screen - 256 KiB
+<br/>
+<br/>
+   BG3_CR = BG_BMP8_512x512;               // BG3 Control register, 8 bits
+<br/>
+    BG3_XDX = (320 * 256)/256; //1 &lt;&lt; 8;
+<br/>
+    BG3_XDY = 0; // BG SCALING X
+<br/>
+    BG3_YDX = 0; // BG SCALING Y
+<br/>
+    BG3_YDY = (200*256)/192; // &lt;&lt; 8;
+<br/>
+    BG3_CX = 0;
+<br/>
+    BG3_CY = 0;
+<br/>
+<br/>
+   // Disable LED blinking if the passcard does not do it for us (DSX).
+<br/>
+   NDSX_SetLedBlink_Off();
+<br/>
+<br/>
+   // clear upper screen (black) instead of junk
+<br/>
+   switchConsole();
+<br/>
+   memset(BG_GFX, 0, 512 * 512 * 2);
+<br/>
+   swiWaitForVBlank();
+<br/>
+   DSgetUserName();   // essential, retrieves username via Fifo buffer.
+<br/>
+<br/>
+   consoleClear();
+<br/>
+   iprintf("Welcome %s!\nThis is DS DOOM Build %s\n\n", DS_USERNAME, VER_DSDOOM);
+<br/>
+   if (!FAT_InitFiles())
+<br/>
+   {
+<br/>
+      iprintf("Unable to initialize media device!\n");
+<br/>
+   } else {
+<br/>
+      iprintf("FAT_InitFiles(): initialized.\n");
+<br/>
+   }
+<br/>
+<br/>
+   iprintf("\x1b[4;0HChoose your game type\n\n");
+<br/>
+   iprintf("      Standard game\n      Network game");
+<br/>
+   
+<br/>
+   int line = 6;
+<br/>
+   while(1) {
+<br/>
+      iprintf("\x1b[%d;4H]\x1b[15C[",line);
+<br/>
+      swiWaitForVBlank();
+<br/>
+      scanKeys();
+<br/>
+      int keys = keysDown();
+<br/>
+      iprintf("\x1b[%d;4H \x1b[15C ",line);
+<br/>
+      if ( (keys &amp; KEY_UP) &amp;&amp; line == 7 ) line = 6;
+<br/>
+      if ( (keys &amp; KEY_DOWN) &amp;&amp; line == 6 ) line = 7;
+<br/>
+      if ( keys &amp; KEY_A ) break;
+<br/>
+   }
+<br/>
+   
+<br/>
+   if (line == 7 )
+<br/>
+     netgame = true;
+<br/>
+   else
+<br/>
+     netgame = false;
+<br/>
+<br/>
+  /* Version info */
+<br/>
+  lprintf(LO_INFO,"\n");
+<br/>
+  PrintVer();
+<br/>
+<br/>
+  /* cph - Z_Close must be done after I_Quit, so we register it first. */
+<br/>
+  atexit(Z_Close);
+<br/>
+  /*
+<br/>
+     killough 1/98:
+<br/>
+<br/>
+     This fixes some problems with exit handling
+<br/>
+     during abnormal situations.
+<br/>
+<br/>
+     The old code called I_Quit() to end program,
+<br/>
+     while now I_Quit() is installed as an exit
+<br/>
+     handler and exit() is called to exit, either
+<br/>
+     normally or abnormally. Seg faults are caught
+<br/>
+     and the error handler is used, to prevent
+<br/>
+     being left in graphics mode or having very
+<br/>
+     loud SFX noise because the sound card is
+<br/>
+     left in an unstable state.
+<br/>
+  */
+<br/>
+<br/>
+  Z_Init();                  /* 1/18/98 killough: start up memory stuff first */
+<br/>
+<br/>
+  atexit(I_Quit);/*
+<br/>
+#ifndef _DEBUG
+<br/>
+  signal(SIGSEGV, I_SignalHandler);
+<br/>
+#ifdef SIGPIPE
+<br/>
+  signal(SIGPIPE, I_SignalHandler); // CPhipps - add SIGPIPE, as this is fatal
+<br/>
+#endif
+<br/>
+  signal(SIGTERM, I_SignalHandler);
+<br/>
+  signal(SIGFPE,  I_SignalHandler);
+<br/>
+  signal(SIGILL,  I_SignalHandler);
+<br/>
+  signal(SIGINT,  I_SignalHandler);  // killough 3/6/98: allow CTRL-BRK during init
+<br/>
+  signal(SIGABRT, I_SignalHandler);
+<br/>
+#endif
+<br/>
+*/
+<br/>
+  /* cphipps - call to video specific startup code */
+<br/>
+  I_PreInitGraphics();
+<br/>
+  D_DoomMain ();
+<br/>
+  return 0;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Incase your confused here's a screenshot of what I'd like to do.
+<br/>
+<a href="http://img4.imageshack.us/my.php?image=screenshotdoom200904041l.png" target="_blank">http://img4.imageshack.us/my.php?image=screenshotdoom200904041l.png</a>
+<br/>
+The top image has doom fading.
+<br/>
+The bottom one doesn't<br/>_________________<br/><a class="postlink" href="http://top-car-images.com/1987-bmw-750il/" target="_blank">1987 bmw 750il</a> <a class="postlink" href="http://top-car-images.com/2003-bmw-m3-csl/" target="_blank">2003 bmw m3 csl</a></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#167983 - Miked0801 - Sun Apr 05, 2009 5:12 am</h4>
+    <div class="postbody"><span class="postbody">Umm, the DS likes multiplies and divides just fine. Muls take 2-5 cycles.  Divides in the 30ish range.  Not bad at all.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#167984 - Kath - Sun Apr 05, 2009 12:48 pm</h4>
+    <div class="postbody"><span class="postbody">That just looks like the setup code, wouldn't you want to start looking in   D_DoomMain()?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#167990 - elhobbs - Mon Apr 06, 2009 12:32 am</h4>
+    <div class="postbody"><span class="postbody">what is "doom fading"? is this the sector lighting? if so, then I would be surprised if that is a speed issue.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

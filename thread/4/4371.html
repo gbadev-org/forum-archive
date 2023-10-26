@@ -1,0 +1,188 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Mode4 - Problem - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > Mode4 - Problem</h2>
+<div id="posts">
+<div class="post">
+    <h4>#28978 - Caedes - Tue Nov 09, 2004 3:50 pm</h4>
+    <div class="postbody"><span class="postbody">I have a big problem. The following code should display a character stored in 8 bytes. It is 8 pxl wide and 8 pxl high. One row is stored in one pixel.
+<br/>
+<br/>
+I checked over 100 times, but it still doesn't work!
+<br/>
+The screenmode is MODE_4 | BG2_ENABLE.
+<br/>
+<br/>
+Please help me.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+int VideoBufferPos(int x, int y)
+<br/>
+{
+<br/>
+      return (y*240+x);
+<br/>
+}
+<br/>
+<br/>
+void DrawCharMode4(int x, int y, int ch, u8 Color, u8 Color2)
+<br/>
+{
+<br/>
+   u16* VideoBuffer = (u16*)0x6000000;
+<br/>
+   int i,j;
+<br/>
+   int k=VideoBufferPos(x,y);
+<br/>
+   int l;
+<br/>
+   u8 nC;
+<br/>
+   for(j=0;j&lt;8;j++)
+<br/>
+   {
+<br/>
+      for(i=0;i&lt;8;i++)
+<br/>
+      {
+<br/>
+         if ((1&lt;&lt;i) &amp; Chars[ch*8+j])
+<br/>
+         {
+<br/>
+            nC=Color;
+<br/>
+         }
+<br/>
+         else
+<br/>
+            nC=Color2;
+<br/>
+         l=k/2;
+<br/>
+         int DblWrdMask=(0xFF&lt;&lt;(8*(k%2)));
+<br/>
+         int NewColMask=(nC&lt;&lt;(8*(k%2)));
+<br/>
+         VideoBuffer[l]=(VideoBuffer[l] &amp; !DblWrdMask)  | NewColMask;
+<br/>
+<br/>
+         k++;
+<br/>
+      }
+<br/>
+      k+=(240-8);
+<br/>
+   }
+<br/>
+}</td> </tr></table><span class="postbody"><br/>_________________<br/>Kirby is our master. (&gt;?)7</span><span class="gensmall"><br/><br/>Last edited by Caedes on Tue Nov 09, 2004 4:19 pm; edited 1 time in total</span></div>    
+</div>
+<div class="post">
+    <h4>#28989 - sajiimori - Tue Nov 09, 2004 7:04 pm</h4>
+    <div class="postbody"><span class="postbody">Debugging tips:
+<br/>
+<br/>
+Name all your values.  Don't use magic numbers.
+<br/>
+<br/>
+Name more expressions by seperating them into functions.  For instance, (1&lt;&lt;i)&amp;Chars... can become a function with a sensible name.
+<br/>
+<br/>
+After you have the components seperated, test them one at a time.
+<br/>
+<br/>
+You'll want a printf function for sure, because otherwise you're limited to seeing what ends up on screen (which is often not enough information to find the problem).  I'd recommend Dan's posprintf in combination with VBA's console print SWI.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#28996 - Caedes - Tue Nov 09, 2004 9:33 pm</h4>
+    <div class="postbody"><span class="postbody">I'm very interested in these console print SWI. I use VBA so this surely would help me.
+<br/>
+<br/>
+In fact one of my main problems _is_ that I have no feedback from my program _what_ it does.
+<br/>
+<br/>
+I will see what I can find about Dan's posprintf, but please can you explain SWI?
+<br/>
+<br/>
+<br/>
+PS:Sorry for my(maybe) bad English.<br/>_________________<br/>Kirby is our master. (&gt;?)7</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#28997 - sajiimori - Tue Nov 09, 2004 9:34 pm</h4>
+    <div class="postbody"><span class="postbody">It's in the VBA FAQ on forgotten's site.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#29030 - Cearn - Wed Nov 10, 2004 10:06 am</h4>
+    <div class="postbody"><span class="postbody">The only thing that I can't really consider bad is in:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">        VideoBuffer[l]=(VideoBuffer[l] &amp; !DblWrdMask)  | NewColMask;</td> </tr></table><span class="postbody">
+<br/>
+DblWrdMask will be 0x00FF or 0xFF00 for even and odd pixels, respectively. The expression " !DblWrdMask " is a <span style="font-weight: bold">conditional</span> expression, not a logical one, and will either be true or false, depending on whether DblWrdMask is zero or not. In this case, the result will always be false (i.e. zero), and a 0-mask will clear both pixels, rather than just the one you wanted to mask. The operator to invert all the bits for the mask is ~.
+<br/>
+Also, division and modulo aren't quite the fastest operators on the GBA; using shift-right (x/2 is x&gt;&gt;1) and ANDing (x%2 is x&amp;1) might be a better idea, as is using unsigned ints when using them for masks.
+<br/>
+<br/>
+As for debugging, VBA has a memory viewer which peek and poke at. And you can always try the code in a normal PC program and use the debugger in that compiler.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#29040 - sajiimori - Wed Nov 10, 2004 5:19 pm</h4>
+    <div class="postbody"><span class="postbody">*, /, and % will reduce to bit operations if you're working with constant powers of 2 (which he is).</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#29190 - Caedes - Sat Nov 13, 2004 9:41 am</h4>
+    <div class="postbody"><span class="postbody">@Cearn
+<br/>
+Thank you very much for your help!
+<br/>
+Now it works. I confused ! and ~.  Such an unexpected mistake... 
+<br/>
+<br/>
+Thank you<br/>_________________<br/>Kirby is our master. (&gt;?)7</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#29196 - Cearn - Sat Nov 13, 2004 2:07 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sajiimori wrote:</b></span></td> </tr> <tr> <td class="quote">*, /, and % will reduce to bit operations if you're working with constant powers of 2 (which he is).</td> </tr></table><span class="postbody">
+<br/>
+They do?
+<br/>
+*runs test case with -S flag*
+<br/>
+Well, I'll be a monkey's uncle, they do! Thanks for pointing that out. (devkitARM still gives me a lot of excess code for the modulo replacement, though)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#29208 - tepples - Sat Nov 13, 2004 9:05 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Cearn wrote:</b></span></td> </tr> <tr> <td class="quote"><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>sajiimori wrote:</b></span></td> </tr> <tr> <td class="quote">*, /, and % will reduce to bit operations if you're working with constant powers of 2 (which he is).</td> </tr></table><span class="postbody">
+<br/>
+They do?
+<br/>
+*runs test case with -S flag*
+<br/>
+Well, I'll be a monkey's uncle, they do! Thanks for pointing that out. (devkitARM still gives me a lot of excess code for the modulo replacement, though)</span></td> </tr></table><span class="postbody">
+<br/>
+There won't be as much "excess code" if you're dealing with unsigned numbers.<br/>_________________<br/>-- Where is he?
+<br/>
+-- Who?
+<br/>
+-- You know, the human.
+<br/>
+-- I think he moved to Tilwick.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

@@ -1,0 +1,210 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Non recursive Quadtree - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Non recursive Quadtree</h2>
+<div id="posts">
+<div class="post">
+    <h4>#156742 - brett47 - Tue May 13, 2008 3:24 pm</h4>
+    <div class="postbody"><span class="postbody">I've been developing some 3d stuff on the DS, making use of quadtrees for partitioning the 3d world. However a 16kb stack isn't exactly a friendly match for recursive functions so I wanted to go for an non-recursive solution. However the algorithm to do so evades me as my brain gets lost trying to work out the solution. Here's my recursive function which is simple enough:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void RenderQuadtreeNode(CQuadtree* pNode)
+<br/>
+{
+<br/>
+    if (pNode == NULL) { return; }
+<br/>
+<br/>
+    if (pNode-&gt;IsLeaf == true) {
+<br/>
+        DrawNode();
+<br/>
+    } else {
+<br/>
+        CQuadtree **pSubNodes = pNode-&gt;GetSubNodes();
+<br/>
+        RenderQuadtreeNode(pSubNodes[FRONTLEFT]);
+<br/>
+        RenderQuadtreeNode(pSubNodes[FRONTRIGHT]);
+<br/>
+        RenderQuadtreeNode(pSubNodes[BACKLEFT]);
+<br/>
+        RenderQuadtreeNode(pSubNodes[BACKRIGHT]);
+<br/>
+ }
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Here's my effort so far, it really starts to get messier towards the end of the function at the point where you have to start thinking about coming back down the tree. Any suggestions?
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void RenderQuadTree(CQuadtree* pNode) // Pass in root node
+<br/>
+{
+<br/>
+    int Level = 0;
+<br/>
+    int CurrentChild[MaxLevels]; // Set these all to 0
+<br/>
+<br/>
+    if (pNode == NULL) { return; }  // Process the root node
+<br/>
+    CQuadtree **pSubNodes = pNode-&gt;GetSubNodes();
+<br/>
+    pNode = pSubNodes[CurrentChild[Level]];
+<br/>
+    Level = 1;
+<br/>
+<br/>
+    while (Level &gt; 0) {
+<br/>
+        if (pNode-&gt;IsLeaf == false) {   // Get children and go up tree
+<br/>
+            pSubNodes = pNode-&gt;GetSubNodes();
+<br/>
+            pNode = pSubNodes[CurrentChild[Level]];
+<br/>
+            Level++;
+<br/>
+        } else {
+<br/>
+            if (pNode != NULL) {    // The node has polygons to draw
+<br/>
+                DrawNode();
+<br/>
+            }
+<br/>
+            // At this stage need to go across to next child
+<br/>
+            Level--;
+<br/>
+            CurrentChild[Level]++;
+<br/>
+            if (CurrentChild[Level] &gt; 3) {
+<br/>
+                Level--;
+<br/>
+                CurrentChild[Level]++;
+<br/>
+            }
+<br/>
+            Level++;
+<br/>
+        }
+<br/>
+    }
+<br/>
+}</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#156743 - Maxxie - Tue May 13, 2008 3:40 pm</h4>
+    <div class="postbody"><span class="postbody">There should be no problem in recursively walk the tree.
+<br/>
+<br/>
+Your example code can be called several hundret recursive times before it exceeds the stacklimit.
+<br/>
+<br/>
+<br/>
+As long as you avoid (as you did sucessfull) to declare unneeded vars in the recursive function (as for checking bounds, or DrawNode()) you shouldn't have any problems.
+<br/>
+<br/>
+<br/>
+:edit: Beside that, you are in your non recursive function pushing a fairly big block onto the stack contraproductive to the goal of shrinking the stackusage. You could allways create an array on the heap rather then stack.
+<br/>
+<br/>
+int CurrentChild[MaxLevels];
+<br/>
+becomes
+<br/>
+int CurrentChild[] = new int[MaxLevels];
+<br/>
+<br/>
+and dont forget to delete at function exit.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#156747 - DekuTree64 - Tue May 13, 2008 5:24 pm</h4>
+    <div class="postbody"><span class="postbody">I don't quite understand the second function, but since the natural recursive version takes node pointers at each call, it would be easier to do a manual stack of node pointers:
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">void RenderQuadtreeNode(CQuadtree* pNode) 
+<br/>
+{ 
+<br/>
+    int Level = 0;
+<br/>
+    CQuadtree *Stack[MaxLevels];
+<br/>
+<br/>
+    Stack[Level++] = pNode; // First iteration
+<br/>
+<br/>
+    while(Level &gt; 0)
+<br/>
+    {
+<br/>
+        CQuadtree *CurNode = Stack[--Level];
+<br/>
+<br/>
+        if (CurNode == NULL) { continue; }
+<br/>
+<br/>
+        if (CurNode-&gt;IsLeaf == true) { 
+<br/>
+            DrawNode(CurNode); 
+<br/>
+        } else { 
+<br/>
+            CQuadtree **pSubNodes = pNode-&gt;GetSubNodes(); 
+<br/>
+            Stack[Level++] = pSubNodes[FRONTLEFT]; 
+<br/>
+            Stack[Level++] = pSubNodes[FRONTRIGHT]; 
+<br/>
+            Stack[Level++] = pSubNodes[BACKLEFT]; 
+<br/>
+            Stack[Level++] = pSubNodes[BACKRIGHT]; 
+<br/>
+        }
+<br/>
+    } 
+<br/>
+}</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+As Maxxie says, you might need to allocate the stack on the heap. But maybe not, since now it's only 4 bytes per iteration, rather than needing the node pointer, return address, and any other register values that happened to be in use.
+<br/>
+<br/>
+EDIT: On second thought, my stack might actually take more memory, since it's pushing on 4 nodes before going deeper. Could be condensed down slightly by having each entry store the pSubNodes double-pointer and an index into it. But since the stack is heapable now, it doesn't matter too much how big it is anyway.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#156826 - memoni - Wed May 14, 2008 9:05 am</h4>
+    <div class="postbody"><span class="postbody">There are stackless algorithms for traversing hierarchies too!
+<br/>
+<a href="http://www.mpi-inf.mpg.de/~guenther/StacklessGPURT/index.html" target="_blank">http://www.mpi-inf.mpg.de/~guenther/StacklessGPURT/index.html</a>
+<br/>
+<br/>
+I have used it for a stackless AABB tree traversal, I think it should work with quadtrees too.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

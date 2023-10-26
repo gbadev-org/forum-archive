@@ -1,0 +1,386 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>plotting large groups of pixels [solved] - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Beginners > plotting large groups of pixels [solved]</h2>
+<div id="posts">
+<div class="post">
+    <h4>#168697 - wallacoloo - Sat May 16, 2009 1:32 am</h4>
+    <div class="postbody"><span class="postbody">So I have several cases in which I simply need to display a rectangle of a solid color. Rather than individually plotting each pixel, there's got to be another way. But how? I've tried using memcpy to copy 1 row at a time. I'm in mode 3, 16bit colors. When I tried implementing memcpy to redraw the entire screen gray, it worked quickly, but it didn't draw over the entire screen. Portions of the screen were solid gray, and other portions were interlaced gray and black. I have no idea why. Any suggestions?
+<br/>
+<br/>
+Here's the code:
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+int main()
+<br/>
+{
+<br/>
+    *(unsigned long*)0x4000000 = 0x403; // mode3, bg2 on 
+<br/>
+    unsigned short* Screen = (unsigned short*)0x6000000;
+<br/>
+    unsigned char toCopy[480];
+<br/>
+    unsigned short spot = 0;
+<br/>
+    while(spot &lt; 480) { //fill an array so it represents 1 row of solid grey
+<br/>
+        toCopy[spot] = 148; //byte 1
+<br/>
+        spot++;
+<br/>
+        toCopy[spot] = 82; //byte 2
+<br/>
+        spot++;
+<br/>
+    }
+<br/>
+    unsigned int row = 0;
+<br/>
+    while(row &lt; 76800) { //thats 240 (width) * 160 (height) * 2 (bytes per pixel)
+<br/>
+        memcpy(Screen+row,toCopy,480); //copy it onto the screen
+<br/>
+        row += 480;
+<br/>
+    }
+<br/>
+     while(1) {} //wait forever...
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+thanks for the help!
+<br/>
+-Colin</span><span class="gensmall"><br/><br/>Last edited by wallacoloo on Thu Jun 25, 2009 11:54 pm; edited 3 times in total</span></div>    
+</div>
+<div class="post">
+    <h4>#168699 - Miked0801 - Sat May 16, 2009 1:45 am</h4>
+    <div class="postbody"><span class="postbody">Depending on how memcpy is implemented, it may be doing u8 copies to VRAM which is bad.  To check, use a for loop to do your copy, u16s or u32s at a time.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#168700 - wallacoloo - Sat May 16, 2009 2:09 am</h4>
+    <div class="postbody"><span class="postbody">I fixed it...
+<br/>
+<br/>
+OK, I think I get what's happening. Because Screen is declared as a short, I only need to add 240 to "row" every loop. But thinking about it, since I'm adding "row" to the "Screen" pointer, it shouldn't work that way. So now I'm just confused as to why changing row += 480 to row += 240 fixed it...</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#168701 - elhobbs - Sat May 16, 2009 2:31 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>wallacoloo wrote:</b></span></td> </tr> <tr> <td class="quote">I fixed it...
+<br/>
+<br/>
+OK, I think I get what's happening. Because Screen is declared as a short, I only need to add 240 to "row" every loop. But thinking about it, since I'm adding "row" to the "Screen" pointer, it shouldn't work that way. So now I'm just confused as to why changing row += 480 to row += 240 fixed it...</td> </tr></table><span class="postbody">because you are incrementing a short array. the compiler knows thart a short is 2 bytes. in other words the compiler takes care of changing your 240 short offset into 480 bytes.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#168702 - Dwedit - Sat May 16, 2009 2:42 am</h4>
+    <div class="postbody"><span class="postbody">The implementations of memset and memcpy in DevkitARM aren't the best.  But ideally, you'd want to use memset to set a bunch of pixels, along with a GOOD implementation of memset.
+<br/>
+<br/>
+Here's an ARM ASM 32-bit memset if you want it...  On the GBA, this is better than using DMA to fill memory.
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+@void memset32(u32 *dest, u32 word, u32 size);
+<br/>
+<br/>
+memset32:
+<br/>
+   @r0 = dest
+<br/>
+   @r1 = word to fill
+<br/>
+   @r2 = number of BYTES to write
+<br/>
+   @all paramters MUST be word aligned, and size must be a multiple of 4
+<br/>
+   bic r2,r2,#3  @forces size to be a multiple of 4, remove this line if you don't need it
+<br/>
+<br/>
+   @pre-subtract, jump ahead if not enough remaining
+<br/>
+   subs r2,r2,#32
+<br/>
+   bmi 2f
+<br/>
+   stmfd sp!,{r3-r7,lr}
+<br/>
+   mov r3,r1
+<br/>
+   mov r4,r1
+<br/>
+   mov r5,r1
+<br/>
+   mov r6,r1
+<br/>
+   mov r7,r1
+<br/>
+   mov r12,r1
+<br/>
+   mov lr,r1
+<br/>
+1:
+<br/>
+   stmia r0!,{r1,r3-r7,r12,lr} @32 bytes
+<br/>
+   subs r2,r2,#32
+<br/>
+   bmi 3f
+<br/>
+   stmia r0!,{r1,r3-r7,r12,lr}
+<br/>
+   subs r2,r2,#32
+<br/>
+   bpl 1b
+<br/>
+3:
+<br/>
+   ldmfd sp!,{r3-r7,lr}
+<br/>
+2:
+<br/>
+   adds r2,r2,#32
+<br/>
+   bxle lr
+<br/>
+1:   
+<br/>
+   str r1,[r0],#4
+<br/>
+   subs r2,r2,#4
+<br/>
+   bxle lr
+<br/>
+   str r1,[r0],#4
+<br/>
+   subs r2,r2,#4
+<br/>
+   bgt 1b
+<br/>
+   bx lr
+<br/>
+</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+edit: edited to fix dumb bugs<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"><br/><br/>Last edited by Dwedit on Fri May 29, 2009 1:22 pm; edited 1 time in total</span></div>    
+</div>
+<div class="post">
+    <h4>#168703 - wallacoloo - Sat May 16, 2009 2:58 am</h4>
+    <div class="postbody"><span class="postbody">I would've gone with memset, but as I understand, memset can only handle chars, not shorts. And I needed to use 16bit colors. Anyone know a workaround? I'm not in need of the extra speed anymore, but I might be in the future :D
+<br/>
+<br/>
+Also, Dwedit, can I use that code along with c++? (if so, how?)
+<br/>
+thanks for the help again.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#168732 - sverx - Mon May 18, 2009 10:51 am</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>wallacoloo wrote:</b></span></td> </tr> <tr> <td class="quote">I needed to use 16bit colors. Anyone know a workaround?</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+swiCopy() maybe?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#168842 - wallacoloo - Fri May 29, 2009 2:35 am</h4>
+    <div class="postbody"><span class="postbody">I didn't know whether to start a new thread or not, but I have another similar problem. I have been trying to learn mode 4. That's where you have the 256 color palette. I'm trying to do something real simple, draw a "0" onto the screen. What happens is that I get something that looks somewhat like a 0. But it appears that every 2 pixels are being treated as one. So sometimes, where there is supposed to be 1 pixel, 2 pixels are drawn. Or where there's supposed to be 1 pixel, 0 pixels are drawn. I'm not getting any single pixels. It's either 2 or 0. I think this has to do with memcpy. I've tried recreating the image data as a short array, but with no success. Here's the code with plenty of comments. Thanks for the help again!
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+#define RGB16(r,g,b)  (r+(g&lt;&lt;5)+(b&lt;&lt;10)) 
+<br/>
+unsigned char* Screen = (unsigned char*)0x6000000;
+<br/>
+unsigned short* pallete = (unsigned short*)0x5000000; //pointer to color pallete. (I'm using mode 4)
+<br/>
+       
+<br/>
+const unsigned char txt_0[64] =  //this is the number 0 (drawn with a slash through it so it doesn't look like an o)
+<br/>
+{
+<br/>
+    0,0,0,1,1,1,0,0,
+<br/>
+    0,0,1,0,0,0,1,0,
+<br/>
+    0,1,0,0,0,1,0,1,
+<br/>
+    0,1,0,0,1,0,0,1,
+<br/>
+    0,1,0,0,1,0,0,1,
+<br/>
+    0,1,0,1,0,0,0,1,
+<br/>
+    0,0,1,0,0,0,1,0,
+<br/>
+    0,0,0,1,1,1,0,0
+<br/>
+};
+<br/>
+       
+<br/>
+void draw_txt_0(unsigned short pos) { //take a position on screen and draw a number 0 there
+<br/>
+     memcpy(Screen + pos,txt_0,8); //row 1
+<br/>
+     memcpy(Screen+240 + pos,txt_0+8,8); //row 2
+<br/>
+     memcpy(Screen+480 + pos,txt_0+16,8); //row 3
+<br/>
+     memcpy(Screen+720 + pos,txt_0+24,8); //and so on...
+<br/>
+     memcpy(Screen+960 + pos,txt_0+32,8);
+<br/>
+     memcpy(Screen+1200 + pos,txt_0+40,8);
+<br/>
+     memcpy(Screen+1440 + pos,txt_0+48,8);
+<br/>
+     memcpy(Screen+1680 + pos,txt_0+56,8);
+<br/>
+}
+<br/>
+int main()
+<br/>
+{
+<br/>
+    *(unsigned long*)0x4000000 = 0x404; // mode4, bg2 on 
+<br/>
+    pallete[0] = RGB16(24,24,24); //background color
+<br/>
+    pallete[1] = RGB16(4,4,4); //text color
+<br/>
+    memset(Screen,0,38400); //set entire screen to color background color
+<br/>
+    draw_txt_0(2430); //draw a 0 at pixel 2430.
+<br/>
+    while(1) {} //wait forever...
+<br/>
+}</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#168844 - dantheman - Fri May 29, 2009 7:11 am</h4>
+    <div class="postbody"><span class="postbody">You can't write to the VRAM in 8-bit chunks, only 16 bits at a time.  If you write to only the first 8 bits, it will mirror the change in the last 8 bits.  TONC has a better explanation and some code to work around the issue.  Basically you read in two bytes, figure out which byte you're changing, modify it, then write both bytes back to VRAM.  Mode 4 isn't nearly as efficient as it could be because of this hardware limitation.
+<br/>
+<br/>
+Two other suggestions:
+<br/>
+1.  in your RGB16 macro, put parentheses around the r, g, and b letters.  Your current macro will break if you call, for instance, "RGB15(15+someVariable, 16-someOtherVariable, 29)"
+<br/>
+2.  Might be easier to make an offset macro for calculating the right memory location to copy to.  Something like 
+<br/>
+#define OFFSET(r, c) ((r)*240 + (c))
+<br/>
+<br/>
+Regarding the original question though, I too am curious what the fastest way to plot rectangles in Mode 3 would be.  I've been developing an application that could greatly benefit from a plotting speed increase, and I'm currently using DMA for that purpose.  If there's a faster way, then I'm all ears.  Dwedit, could your code be used in mode 3 for plotting single pixels?  Or would it be restricted to widths of even sizes (which isn't too big of a constraint)?</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#168848 - Dwedit - Fri May 29, 2009 1:04 pm</h4>
+    <div class="postbody"><span class="postbody">Here's the code again, wrapped up as a GCC function this time.
+<br/>
+<span style="font-weight: bold">Edit: Now tested, stupid bugs fixed.</span>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">
+<br/>
+IWRAM_CODE __attribute__ ((naked)) __attribute__ ((noinline))   //replace with ITCM_CODE for nintendo ds arm9
+<br/>
+void memset32(u32 *dest, u32 word, int size)
+<br/>
+{
+<br/>
+    //dest = destination address (must be word aligned)
+<br/>
+    //word = word to fill
+<br/>
+    //size = size in BYTES  (but smallest unit used by this function is words)
+<br/>
+    __asm__ volatile (
+<br/>
+    "   adr r3,0f"                      "\n\t"  //switch to ARM mode
+<br/>
+    "   bx r3"                          "\n\t"
+<br/>
+    "   .balign 4"                      "\n\t"
+<br/>
+    "   .arm"                           "\n\t"
+<br/>
+    "0: bic r2,r2,#3"                   "\n\t"
+<br/>
+    "   subs r2,r2,#32"                 "\n\t"  //pre-subtract, jump ahead if not enough remaining
+<br/>
+    "   bmi 2f"                         "\n\t"
+<br/>
+    "   stmfd sp!,{r3-r7,lr}"           "\n\t"
+<br/>
+    "   mov r3,r1"                      "\n\t"
+<br/>
+    "   mov r4,r1"                      "\n\t"
+<br/>
+    "   mov r5,r1"                      "\n\t"
+<br/>
+    "   mov r6,r1"                      "\n\t"
+<br/>
+    "   mov r7,r1"                      "\n\t"
+<br/>
+    "   mov r12,r1"                     "\n\t"
+<br/>
+    "   mov lr,r1"                      "\n\t"
+<br/>
+    "1: stmia r0!,{r1,r3-r7,r12,lr}"    "\n\t" //32 bytes
+<br/>
+    "   subs r2,r2,#32"                 "\n\t"
+<br/>
+    "   bmi 3f"                         "\n\t"
+<br/>
+    "   stmia r0!,{r1,r3-r7,r12,lr}"    "\n\t"
+<br/>
+    "   subs r2,r2,#32"                 "\n\t"
+<br/>
+    "   bpl 1b"                         "\n\t"
+<br/>
+    "3: ldmfd sp!,{r3-r7,lr}"           "\n\t"
+<br/>
+    "2: adds r2,r2,#32"                 "\n\t"
+<br/>
+    "   bxle lr"                        "\n\t"
+<br/>
+    "1: str r1,[r0],#4"                 "\n\t"
+<br/>
+    "   subs r2,r2,#4"                  "\n\t"
+<br/>
+    "   bxle lr"                        "\n\t"
+<br/>
+    "   str r1,[r0],#4"                 "\n\t"
+<br/>
+    "   subs r2,r2,#4"                  "\n\t"
+<br/>
+    "   bgt 1b"                         "\n\t"
+<br/>
+    "   bx lr "                         "\n\t"
+<br/>
+    "   .thumb"                         "\n\t"
+<br/>
+    );
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody"><br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

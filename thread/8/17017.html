@@ -1,0 +1,724 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Optimization ideas for software mixing. - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>ASM > Optimization ideas for software mixing.</h2>
+<div id="posts">
+<div class="post">
+    <h4>#171736 - Ruben - Fri Dec 18, 2009 10:42 am</h4>
+    <div class="postbody"><span class="postbody">Hi.
+<br/>
+<br/>
+So I decided to see if you guys have any optimization ideas for my GBA mixer, which I intend to also port to the DS for 30 channel output. So... here's the latest code. (It's a bit messy due to tabs and quite long &gt;_&lt;')
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">/**********************************************/
+<br/>
+<br/>
+#include "sasInternal.inc"
+<br/>
+<br/>
+/**********************************************/
+<br/>
+<br/>
+.global sasMain
+<br/>
+<br/>
+/**********************************************/
+<br/>
+<br/>
+.text
+<br/>
+.align
+<br/>
+.thumb
+<br/>
+.thumb_func
+<br/>
+<br/>
+sasMain:
+<br/>
+    ldr     r0, =sasVar
+<br/>
+    ldrb    r1, [r0]
+<br/>
+    lsr     r1, #0x01   @ if(mixer == off)
+<br/>
+    bcc     2f          @   return
+<br/>
+    push    {lr}
+<br/>
+    ldr     r0, =sasUpdate
+<br/>
+    bl      1f          @ update songs
+<br/>
+    pop     {r0}
+<br/>
+    mov     lr, r0
+<br/>
+    ldr     r0, =sasARM @ could probably incorporate
+<br/>
+                        @ into sasUpdate but meh.
+<br/>
+1:  bx      r0
+<br/>
+2:  bx      lr
+<br/>
+<br/>
+.align
+<br/>
+.size sasMain, .-sasMain
+<br/>
+<br/>
+/**********************************************/
+<br/>
+<br/>
+.section .iwram, "ax", %progbits
+<br/>
+.align
+<br/>
+.arm
+<br/>
+<br/>
+sasARM:
+<br/>
+    stmfd    sp!, {r4-r11,lr}
+<br/>
+    
+<br/>
+@ clear 16-bit interleaved stereo mixing buffer
+<br/>
+    ldr        r0, =.LMixBuffer
+<br/>
+    ldr        r1, =SAS_BUFSIZE / 8
+<br/>
+    mov        r2, #0x00
+<br/>
+    mov        r3, #0x00
+<br/>
+    mov        r4, #0x00
+<br/>
+    mov        r5, #0x00
+<br/>
+    mov        r6, #0x00
+<br/>
+    mov        r7, #0x00
+<br/>
+    mov        r8, #0x00
+<br/>
+    mov        r9, #0x00
+<br/>
+1:  subs       r1, r1, #0x01
+<br/>
+    stmhsia    r0!, {r2-r9}
+<br/>
+    bne        1b
+<br/>
+    
+<br/>
+    ldr        ip, =sasVar
+<br/>
+    ldmia      ip, {r0-r2}              @ {xxPPVVxx,LLLLxxxx,RRRRRRRR}
+<br/>
+    
+<br/>
+    mov        r0, r0, lsr #0x08        @ 00xxPPVV
+<br/>
+    bic        r0, r0, #0xFF0000        @ 0000PPVV
+<br/>
+    orr        r0, r0, r0, lsl #0x08    @ 00PPxxVV
+<br/>
+    bic        r0, r0, #0xFF00          @ 00PP00VV
+<br/>
+    subs       r0, r0, #0x010000        @ if(--pp &lt; 0)
+<br/>
+    addmi      r0, r0, #0x010000        @   pp = 0
+<br/>
+    mov        r1, r1, lsr #0x10        @ 0000LLLL
+<br/>
+    ldr        r3, =.LMixBuffer
+<br/>
+    ldr        r4, =sasChan
+<br/>
+<br/>
+/******************************\
+<br/>
+ * r0-L16 * Volume            *
+<br/>
+ * r0-H16 * Polyphony         *
+<br/>
+ * r1-X32 * Buffer length     *
+<br/>
+ * r2-X32 * Reciprocal        *
+<br/>
+ * r3-X32 * Mixing buffer     *
+<br/>
+ * r4-X32 * Channel           *
+<br/>
+\******************************/
+<br/>
+<br/>
+.LOLChan:
+<br/>
+    ldr        r5, [r4], #SAS_CHANSIZE
+<br/>
+    tst        r5, #sasOn + sasNoteOn
+<br/>
+    beq        .LOLChanContinue @ if(channel == off || no note on) continue
+<br/>
+    stmfd      sp!, {r0-r4}
+<br/>
+    sub        r4, r4, #SAS_CHANSIZE
+<br/>
+<br/>
+.LILChanEnv:
+<br/>
+    mov        r6, r5, lsr #0x04
+<br/>
+    and        r6, r6, #0x0F
+<br/>
+    ldr        r7, [r4, #0x18]                  @ env {a,d,s,r}, 8-bit
+<br/>
+    mov        r9, #0xFF
+<br/>
+    and        r8, r9, r5, lsr #0x08            @ env_val
+<br/>
+    bic        r5, r5, r8, lsl #0x08            @ env_val = 0
+<br/>
+    tst        r5, #sasNoteOn
+<br/>
+    bne        .LILChanNoteOn
+<br/>
+    tst        r5, #sasNoteOff
+<br/>
+    bne        .LILChanNoteOff
+<br/>
+<br/>
+.LILChanEnv000:
+<br/>
+    cmp        r6, #sasAttack                    @ if(env_state != attack)
+<br/>
+    bne        .LILChanEnv001                    @   continue
+<br/>
+    
+<br/>
+    and        ip, r9, r7
+<br/>
+    add        r8, r8, ip                        @ env += env_val
+<br/>
+    cmp        r8, #0xFF
+<br/>
+    ble        .LILChanEnvEnd                    @ if(env &lt;= 255) goto mix
+<br/>
+    
+<br/>
+    tst        r7, #0xFF00                       @ if(env[decay]) {
+<br/>
+    movne      r8, #0xFF                         @   env_val   = 255,
+<br/>
+    movne      r6, #sasDecay                     @   env_state = decay
+<br/>
+    andeq      r8, r9, r7, lsr #0x10             @ } else {
+<br/>
+    moveq      r6, #sasSustain                   @   env_val = sustain_val, env_state = sustain
+<br/>
+    b          .LILChanEnvEnd                    @ } goto mix
+<br/>
+<br/>
+.LILChanEnv001:
+<br/>
+    cmp        r6, #sasDecay
+<br/>
+    bne        .LILChanEnv002
+<br/>
+    
+<br/>
+    and        ip, r9, r7, lsr #0x08
+<br/>
+    subs       r8, r8, ip                       @ if(env_val -= env[decay] &lt;= 0)
+<br/>
+    ble        .LIllegalChanState               @   chan-&gt;stop()
+<br/>
+    and        ip, r9, r7, lsr #0x10
+<br/>
+    cmp        r8, ip                           @ if(env_val &lt;= env[sustain])
+<br/>
+    movle      r6, #sasSustain                  @   env_state = sustain
+<br/>
+    b          .LILChanEnvEnd
+<br/>
+<br/>
+.LILChanEnv002:
+<br/>
+    cmp        r6, #sasSustain
+<br/>
+    bne        .LILChanEnv003
+<br/>
+    and        r8, r9, r7, lsr #0x10            @ env = env[sustain]
+<br/>
+    b          .LILChanEnvEnd
+<br/>
+<br/>
+.LILChanEnv003:
+<br/>
+    cmp        r6, #sasRelease
+<br/>
+    bne        .LIllegalChanState
+<br/>
+    subs       r8, r8, r7, lsr #0x18            @ if(env_val -= env[release] &lt;= 0)
+<br/>
+    bgt        .LILChanEnvEnd
+<br/>
+    ble        .LIllegalChanState               @   chan-&gt;stop()
+<br/>
+<br/>
+.LILChanNoteOn:
+<br/>
+    ldr     r11, [ r4, #0x20]    @ &amp;wave
+<br/>
+    
+<br/>
+    ldr     r12, [r11, #0x0C]   @ wave-&gt;length
+<br/>
+#if SAS_MIXMODE == SAS_MIXMODE_NN
+<br/>
+    rsb     r14,  r12, #0x00    @ -length (negated for mixing trick)
+<br/>
+    str     r14, [ r4, #0x10]
+<br/>
+#else
+<br/>
+    str     r12, [ r4, #0x10]
+<br/>
+#endif
+<br/>
+    add     r14,  r12, r11      @ &amp;wave + length
+<br/>
+    add     r14,  r14, #0x10    @ wave-&gt;data + length
+<br/>
+    str     r14, [ r4, #0x04]
+<br/>
+    ldrb    r14, [r11]
+<br/>
+    ands    r14, r14, #sasLooped
+<br/>
+    ldrne   r14, [r11, #0x08]   @ wave-&gt;loop
+<br/>
+    rsbne   r14, r14, r12       @   store loop size
+<br/>
+    str     r14, [ r4, #0x14]   @ else store 0
+<br/>
+    mov     r14, #0x00
+<br/>
+    str     r14, [ r4, #0x08]   @ remainder = 0
+<br/>
+    
+<br/>
+    bic      r5, r5, #0xFF      @ env_stat = 0, stat = 0
+<br/>
+    orr      r5, r5, #sasOn     @ stat = on
+<br/>
+    tst      r7, #0xFF
+<br/>
+    movne    r6, #sasAttack
+<br/>
+    movne    r8, #0x00
+<br/>
+    bne     .LILChanEnv000
+<br/>
+    tst      r7, #0xFF00
+<br/>
+    movne    r6, #sasDecay
+<br/>
+    movne    r8, #0xFF
+<br/>
+    bne     .LILChanEnv001
+<br/>
+    tst      r7, #0xFF0000
+<br/>
+    movne    r6, #sasSustain
+<br/>
+    bne     .LILChanEnv002
+<br/>
+    tst      r7, #0xFF000000
+<br/>
+    movne    r6, #sasRelease
+<br/>
+    movne    r8, #0xFF
+<br/>
+    bne     .LILChanEnv003
+<br/>
+    beq     .LIllegalChanState
+<br/>
+<br/>
+.LILChanNoteOff:
+<br/>
+    tst        r7, #0xFF000000
+<br/>
+    movne      r6, #sasRelease
+<br/>
+    bne        .LILChanEnv003
+<br/>
+    beq        .LIllegalChanState
+<br/>
+<br/>
+.LILChanEnvEnd:
+<br/>
+    orr        r5, r5, r8, lsl #0x08                @ env_val = new env_val
+<br/>
+    bic        r5, r5, #0xF0+sasNoteOn+sasNoteOff   @ env_stat = 0, clear note on/off
+<br/>
+    orr        r5, r5, r6, lsl #0x04                @ env_stat = new env_stat
+<br/>
+    strh       r5, [r4]
+<br/>
+    
+<br/>
+    mov        ip, r5, lsr #0x18                @ panning
+<br/>
+    mov        r5, r5, lsr #0x10
+<br/>
+    and        r5, r5, #0xFF                    @ volume
+<br/>
+    mul        r5, r8, r5                       @ volume * env
+<br/>
+    and        r0, r0, #0xFF
+<br/>
+    mul        r6, r5, r0                       @ volume * env * mvol
+<br/>
+    movs       r5, r6, lsr #0x08 + 7
+<br/>
+    beq        .LIllegalChanState
+<br/>
+    rsb        r6, ip, #0x7F
+<br/>
+    mul        r6, r5, r6                       @ vol * (127 - pan)
+<br/>
+    mov        r6, r6, lsr #0x07
+<br/>
+    mul        r5, ip, r5                       @ vol * (  0 + pan)
+<br/>
+    mov        r5, r5, lsr #0x07
+<br/>
+    orr        r5, r5, r6, lsl #0x10            @ lvol + rvol&lt;&lt;16
+<br/>
+    
+<br/>
+    ldmib    r4, {r7-r11}
+<br/>
+    umull    r2, r9, r9, r2
+<br/>
+#if SAS_MIXMODE == SAS_MIXMODE_NN
+<br/>
+    cmp     r11, #0x00
+<br/>
+    beq     .LILChanMixOS
+<br/>
+<br/>
+.macro MixFL or
+<br/>
+    ldrsb   r14, [r7, r10]
+<br/>
+    mla     \or,  r5, r14, \or @ smp*vols + out
+<br/>
+    adds     r8,  r8,  r2      @ sub += subinc
+<br/>
+    adcs    r10, r10,  r9      @ adc to true position
+<br/>
+    subpl   r10, r10, r11      @ if &lt;0 loop
+<br/>
+.endm
+<br/>
+<br/>
+.macro MixOS or
+<br/>
+    ldrsb   r14, [r7, r10]
+<br/>
+    mla     \or,  r5, r14, \or @ smp*vols + out
+<br/>
+    adds     r8,  r8,  r2
+<br/>
+    adcs    r10, r10,  r9
+<br/>
+    bpl     .LOutOfData        @ kill on finish
+<br/>
+.endm
+<br/>
+<br/>
+.LILChanMixFL:
+<br/>
+    ldmia    r3 , {r0,r4,r6,ip}
+<br/>
+    MixFL    r0
+<br/>
+    MixFL    r4
+<br/>
+    MixFL    r6
+<br/>
+    MixFL    ip
+<br/>
+    stmia    r3!, {r0,r4,r6,ip}
+<br/>
+    subs     r1, r1, #0x04
+<br/>
+    bne      .LILChanMixFL
+<br/>
+    beq      .LILChanMixEnd
+<br/>
+<br/>
+.LILChanMixOS:
+<br/>
+    ldmia    r3 , {r0,r4,r6,ip}
+<br/>
+    MixOS    r0
+<br/>
+    MixOS    r4
+<br/>
+    MixOS    r6
+<br/>
+    MixOS    ip
+<br/>
+    stmia    r3!, {r0,r4,r6,ip}
+<br/>
+    subs     r1, r1, #0x04
+<br/>
+    bne      .LILChanMixOS
+<br/>
+<br/>
+#else
+<br/>
+<br/>
+    str        r11, .LoopSize         @ store loop length
+<br/>
+    add        r11,  r7, #0x01        @ src + 1 (for interpolation)
+<br/>
+    mov        r2,  r2, lsr #0x20-23  @ cfreq&lt;&lt;23/sfreq
+<br/>
+    orr        r2,  r2, r9, lsl #0x17 @ (add integer portion &lt;&lt; 23)
+<br/>
+<br/>
+.macro Mix or
+<br/>
+    ldrsb    r14, [ r7, -r10]           @ s0
+<br/>
+    ldrsb     r9, [r11, -r10]           @ s1
+<br/>
+    sub       r9,   r9,  r14            @ s1-s0
+<br/>
+    mul       r9,   r8,   r9            @ subpos(s1-s0)
+<br/>
+    add      r14,  r14,   r9, asr #0x17 @ f(s1-s0) ~= s0.sub
+<br/>
+    mla      \or,   r5,  r14, \or       @ smp*vols + out
+<br/>
+    add       r8,   r8,   r2            @ pos += inc
+<br/>
+    subs     r10,  r10,   r8, lsr #0x17 @ smpleft -= pos &gt;&gt; 23
+<br/>
+    bic       r8,   r8, #0x3F800000     @ smpleft -= integer
+<br/>
+    blls    .LNoDat                     @ no data left
+<br/>
+.endm
+<br/>
+<br/>
+.LILChanMix:
+<br/>
+    ldmia    r3 , {r0,r4,r6,ip}
+<br/>
+    Mix      r0
+<br/>
+    Mix      r4
+<br/>
+    Mix      r6
+<br/>
+    Mix      ip
+<br/>
+    stmia    r3!, {r0,r4,r6,ip}
+<br/>
+    subs     r1, r1, #0x04
+<br/>
+    bne      .LILChanMix
+<br/>
+<br/>
+#endif
+<br/>
+<br/>
+.LILChanMixEnd:
+<br/>
+    ldr        r0, [sp, #0x04*4]
+<br/>
+    str        r8, [r0, #0x08-SAS_CHANSIZE]
+<br/>
+    str        sl, [r0, #0x10-SAS_CHANSIZE]
+<br/>
+<br/>
+.LILChanDone:
+<br/>
+    ldmfd    sp!, {r0-r4}
+<br/>
+<br/>
+.LOLChanContinue:
+<br/>
+    subs    r0, r0, #0x010000
+<br/>
+    bhs     .LOLChan
+<br/>
+<br/>
+/******************************\
+<br/>
+ * r0-X32 * Destination       *
+<br/>
+ * r1-X32 * Buffer length     *
+<br/>
+ * r2-X32 * Mask 00FF00FF     *
+<br/>
+ * r3-X32 * Mixing buffer     *
+<br/>
+\******************************/
+<br/>
+<br/>
+.LDownsample:
+<br/>
+    ldr        r0, =sasBuffer
+<br/>
+    ldr        r2, =sasVar
+<br/>
+    ldrb       r2, [r2, #0x03]
+<br/>
+    cmp        r2, #0x02  @ mix to buffer 2?
+<br/>
+    addeq      r0, r0, r1 @   yes.
+<br/>
+    mov        r2, #0xFF
+<br/>
+    orr        r2, r2, r2, lsl #0x10
+<br/>
+    
+<br/>
+1:  ldmia      r3!, {r4-r7}
+<br/>
+   
+<br/>
+    and        r4, r2, r4, lsr #0x08
+<br/>
+    and        r5, r2, r5, lsr #0x08
+<br/>
+    orr        r4, r4, r5, lsl #0x08
+<br/>
+    
+<br/>
+    and        r6, r2, r6, lsr #0x08
+<br/>
+    and        r7, r2, r7, lsr #0x08
+<br/>
+    orr        r6, r6, r7, lsl #0x08
+<br/>
+    
+<br/>
+    eor        r6, r6, r4, lsr #0x10
+<br/>
+    eor        r4, r4, r6, lsl #0x10
+<br/>
+    eor        r6, r6, r4, lsr #0x10
+<br/>
+    
+<br/>
+    str        r6, [r0, #SAS_BUFSIZE*2]
+<br/>
+    str        r4, [r0], #0x04
+<br/>
+    
+<br/>
+    subs       r1, r1, #0x04
+<br/>
+    bne        1b
+<br/>
+<br/>
+.LExit:
+<br/>
+    ldmfd      sp!, {r4-r11,lr}
+<br/>
+    bx        lr
+<br/>
+<br/>
+.LIllegalChanState:
+<br/>
+    mov     r5, #0x00
+<br/>
+    strb    r5, [r4]
+<br/>
+    b       .LILChanDone
+<br/>
+<br/>
+#if SAS_MIXMODE == SAS_MIXMODE_LI
+<br/>
+<br/>
+.LoopSize:    .word 0
+<br/>
+.LNoDat:
+<br/>
+    ldr        r9, .LoopSize
+<br/>
+    adds       sl, sl, r9
+<br/>
+    movgt      pc, lr
+<br/>
+    ldr        r4, [sp, #0x04*4]
+<br/>
+    str        r9, [r4, #-SAS_CHANSIZE]
+<br/>
+    b         .LILChanDone
+<br/>
+<br/>
+#endif
+<br/>
+#if SAS_MIXMODE == SAS_MIXMODE_NN
+<br/>
+<br/>
+.LOutOfData:
+<br/>
+    ldr      r4, [sp, #0x04*4]
+<br/>
+    strb    r11, [r4, #-SAS_CHANSIZE]
+<br/>
+    b      .LILChanDone
+<br/>
+<br/>
+#endif
+<br/>
+<br/>
+.LMixBuffer:
+<br/>
+    .space    SAS_BUFSIZE * 4
+<br/>
+<br/>
+.align
+<br/>
+.size sasARM, .-sasARM
+<br/>
+<br/>
+/**********************************************\
+<br/>
+ * EOF                                        * 
+<br/>
+\**********************************************/</td> </tr></table><span class="postbody">
+<br/>
+<br/>
+Any tips, specially on the hotspot (mixing)?</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

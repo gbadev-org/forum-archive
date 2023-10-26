@@ -1,0 +1,115 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>How to handle text and text/dialog boxes? - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>Coding > How to handle text and text/dialog boxes?</h2>
+<div id="posts">
+<div class="post">
+    <h4>#178420 - chickendude - Sat Jun 13, 2015 7:33 pm</h4>
+    <div class="postbody"><span class="postbody">I've been thinking about this for a while now and i can't quite come up with a good solution. Currently my text is drawn as 8x8 tiles (i believe i've seen some things which appear to be 6x8? That would look much better, but i can't think of a way to pull that off) in one background and the text box is drawn on another background with a higher priority (drawn behind the font background). However, today i came across an issue with that when trying to add a popup box:
+<br/>
+<a class="postlink" href="http://www.mirari.fr/GmqC" target="_blank">http://www.mirari.fr/GmqC</a> (i guess i can't post an image, so here's a link to the image)
+<br/>
+<br/>
+Since the popup box is getting drawn to the same background as the other text box, it obviously is overwriting that space so the transparent corners show the background. I also shifted the text bg layer 4 pixels down and to the right so that it'd hug nicely to the frame of the box, but you can see the text shows through on the top border and there's an extra space on the bottom border where you should be able to see the text.
+<br/>
+<br/>
+A few ways that i can see to get around this are:
+<br/>
+1. Use the other two backgrounds as a top layer that get drawn over top of the current background.
+<br/>
+2. Draw the border as sprites. This seems like a bit of a pain to do, but then i wouldn't have to waste the other two borders.
+<br/>
+3. Use a bitmap mode.
+<br/>
+<br/>
+How are text boxes and text normally drawn in games? Most games seem to use unaligned/variable width text, but i can't imagine doing that with sprites (there's likely not enough sprite memory to display a full screen of text anyway). I might just have to reorganize things to prevent boxes from getting drawn over top of each other.
+<br/>
+<br/>
+(EDIT: Sorry for the ugly colors/font, i'm just trying to get things working first)</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#178421 - DekuTree64 - Mon Jun 15, 2015 5:31 am</h4>
+    <div class="postbody"><span class="postbody">There are many ways to do text and windows, but most of the time I just use 8x8 characters, where the font background is the text box color rather than transparent, so I can draw the window and text on a single layer. Then it's not such a big deal to use an additional BG for a popup.
+<br/>
+<br/>
+Assuming you stick with the style of offsetting the BG by 4 pixels so you can have the text right up close to the window border, then you'll have a tricky situation due to the fact that the DS's screen resolution is the same as the BG width, so wrapping happens immediately at the edge of the screen. You could make special border tiles for screen-width windows, where one tile contains both left and right borders, so when it wraps it will look right.
+<br/>
+<br/>
+As for variable width text, my favorite method is to skip loading the entire font into VRAM, and instead dedicate a block of VRAM to the window, and draw to those tiles like a bitmap. This actually is simpler if you use a separate layer for the text, so you can start by clearing the tile data all to 0. Also simpler if you use 4-bit tiles, so you can load an entire 8 pixel row as a single u32. Fill out your screen data with either rows or columns of increasing tile numbers covering the window area.
+<br/>
+<br/>
+To print a character, you calculate what tile number to draw into based on the x and y position you're drawing to and the position of the window, and make a pointer to that tile's pixel data in VRAM. Then calculate your horizontal pixel offset within that tile (which is simply x&amp;7). Load a row of the tile, and a row of your font character. Bitshift the font pixel data left by offset*4 and OR it into the tile data and write back to VRAM. If the character is straddling the border between two tiles, load a row of the next tile to the right, OR with fontPixels &gt;&gt; (8 - offset)*4, and write that back to VRAM. Increment your pointers, and repeat for the next row.
+<br/>
+<br/>
+ORing into the tile VRAM can make a mess if you have two different colored things overlapping on the same pixel, but with text you should generally never have overlap, so it's not a problem, and greatly speeds things up compared to drawing one pixel at a time. There are a lot more fun tricks to do in this system, but it would take a while to explain them, and it's probably confusing enough as it is :-/ I should write a proper article on it sometime...<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#178422 - chickendude - Mon Jun 15, 2015 8:13 am</h4>
+    <div class="postbody"><span class="postbody">Ok, that all sounds pretty interesting, thanks for the explanations. Currently i have text wrapping implemented, i give the textbox a height and width and the text routine wraps it if it goes past the right border and waits for a keypress if the text is vertically longer than the box, so that part is working ok.
+<br/>
+<br/>
+Putting text and borders on one tile also seems like a nice idea, but i'm not quite sure how i could prevent it from having that empty border around it. I've also been looking at other games to get some ideas to make the windows prettier, and one thing that seems relatively simple is having flashing filled boxes, i imagine i could have two sets of boxes, a normal box and a filled box, and for the filled box i could gradually change the palette entry of the filled color.
+<br/>
+<br/>
+For variable width font, i'm not quite sure if i've understood. Do you essentially set up a tilemap with the tiles going from 0 - (w*h) and then you write to those tiles as if they were a bitmap? That again sounds like an interesting idea, though it'll take a bit of thinking to handle unaligned tiles. I wouldn't be against using an 8bpp bitmap as there'd still be room for some other stuff (and a palette to play around with some simple effects), but i'll play around with your tile idea first.
+<br/>
+<br/>
+Thanks for the help!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#178423 - DekuTree64 - Mon Jun 15, 2015 11:37 pm</h4>
+    <div class="postbody"><span class="postbody"></span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>chickendude wrote:</b></span></td> </tr> <tr> <td class="quote">Putting text and borders on one tile also seems like a nice idea, but i'm not quite sure how i could prevent it from having that empty border around it.</td> </tr></table><span class="postbody">
+<br/>
+Yeah, the border would normally have some transparent space around it. But if a window with text only takes one BG then you can use a second BG for overlapping boxes and let the transparency show through naturally.
+<br/>
+<br/>
+With the variable width font, you could put all text on one BG and all windows on another (make more alternate border tiles, which have the space outside the border filled with the window background color so it can overlap another window on the same layer). Since the text layer can be cleared and drawn to in pixel coordinates, you could clear any text overlapping the popup window's border, without having to erase entire characters at a time.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">For variable width font, i'm not quite sure if i've understood. Do you essentially set up a tilemap with the tiles going from 0 - (w*h) and then you write to those tiles as if they were a bitmap?</td> </tr></table><span class="postbody">
+<br/>
+Yep.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Quote:</b></span></td> </tr> <tr> <td class="quote">That again sounds like an interesting idea, though it'll take a bit of thinking to handle unaligned tiles. I wouldn't be against using an 8bpp bitmap as there'd still be room for some other stuff (and a palette to play around with some simple effects), but i'll play around with your tile idea first.</td> </tr></table><span class="postbody">
+<br/>
+Yeah, a bitmap layer really would be easier. DS isn't near as tight on VRAM as GBA, plus you can have tile and bitmap layers at the same time. I just wanted to explain one of the ways to do it in tile mode since that's what most commercial games do.
+<br/>
+<br/>
+The main advantages of the tile version are that it lets you use 4-bit mode (half the VRAM), and only cover certain areas of the screen with unique tiles so you don't use a full screen's worth of VRAM if you only need a small text box.<br/>_________________<br/>___________
+<br/>
+The best optimization is to do nothing at all.
+<br/>
+Therefore a fully optimized program doesn't exist.
+<br/>
+-Deku</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#178426 - chickendude - Wed Jun 17, 2015 4:37 pm</h4>
+    <div class="postbody"><span class="postbody">I ended up going the bitmap route (this is actually for the DS anyway). I didn't realize how much slower it'd be though, when drawing a full screen of text i was running into vblank issues and had to reorganize a couple things. It's probably largely the fault of my bad code, though :P
+<br/>
+<br/>
+I'm really happy with it though, it looks much nicer now with variable width letters and i can also erase on a pixel (rather than tile) level.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>

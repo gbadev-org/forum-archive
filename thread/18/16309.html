@@ -1,0 +1,402 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Circular Windows on NDS - gbadev.org forum archive</title>
+        <link rel="stylesheet" href="/static/pure-min.css" />
+        <link rel="stylesheet" href="/static/main.css" />
+    </head>
+    <body>
+        <h1>gbadev.org forum archive</h1>
+
+        This is a mirror of the content originally found on forum.gbadev.org
+        (now offline), salvaged from Wayback machine copies. <br />
+
+        <h2>DS development > Circular Windows on NDS</h2>
+<div id="posts">
+<div class="post">
+    <h4>#165565 - MaesterRowen - Sat Dec 27, 2008 11:22 pm</h4>
+    <div class="postbody"><span class="postbody">Hello everyone.
+<br/>
+<br/>
+I have spent a large portion of the day trying to understand and figure out how to make circular windows on the NDS.
+<br/>
+<br/>
+I have done some searching on these forums and other resources and have found the discussion on TONCs page, as well as at this <a class="postlink" href="http://forum.gbadev.org/viewtopic.php?t=9023" target="_blank">http://forum.gbadev.org/viewtopic.php?t=9023</a>
+<br/>
+<br/>
+I was wondering if anyone had any example code for the NDS that created circular windows. 
+<br/>
+<br/>
+I feel if I can understand how the circular window code works, the concept will be there to create any effect I would like.
+<br/>
+<br/>
+I almost had a window with a diagonal edge; but I had a problem with it scrolling from the bottom to the top.  It was never stationary.
+<br/>
+<br/>
+I appreciate the help.</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#165567 - MaesterRowen - Sun Dec 28, 2008 2:14 am</h4>
+    <div class="postbody"><span class="postbody">Well,
+<br/>
+<br/>
+I figured it out ^_^.
+<br/>
+<br/>
+Thanks!</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#165579 - silent_code - Sun Dec 28, 2008 8:46 pm</h4>
+    <div class="postbody"><span class="postbody">Why not share your solution? :^)<br/>_________________<br/><span style="font-size: 9px; line-height: normal"><span style="text-decoration: underline"><span style="font-weight: bold"></span></span> July 5th 08: "<span style="font-weight: bold">Volumetric Shadow Demo</span>" 1.6.0 (final) source released
+<br/>
+June 5th 08: "<span style="font-weight: bold">Zombie NDS</span>" WIP released!
+<br/>
+It's all on my page, just click <span style="font-weight: bold">WWW</span> below.</span></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#165583 - Dwedit - Mon Dec 29, 2008 2:32 am</h4>
+    <div class="postbody"><span class="postbody">Use HDMA to transfer new window boundaries every scanline.<br/>_________________<br/>"We are merely sprites that dance at the beck and call of our button pressing overlord."</span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#165586 - MaesterRowen - Mon Dec 29, 2008 4:01 am</h4>
+    <div class="postbody"><span class="postbody">For the record books, here is the code to make the circular window on the DS.  It can probably be refined and made better, but atleast it works.  It's a slight modification of the TONC guide.
+<br/>
+<br/>
+</span><table align="center" border="0" cellpadding="3" cellspacing="1" width="90%"><tr> <td><span class="genmed"><b>Code:</b></span></td> </tr> <tr> <td class="code">#include &lt;nds.h&gt;
+<br/>
+#include &lt;stdio.h&gt;
+<br/>
+#include &lt;stdlib.h&gt;
+<br/>
+<br/>
+#include "bg01.h"
+<br/>
+<br/>
+#define WIN0_BG0 BIT(0)
+<br/>
+#define WIN0_BG1 BIT(1)
+<br/>
+#define WIN0_BG2 BIT(2)
+<br/>
+#define WIN0_BG3 BIT(3)
+<br/>
+<br/>
+#define WIN1_BG0 BIT(8)
+<br/>
+#define WIN1_BG1 BIT(9)
+<br/>
+#define WIN1_BG2 BIT(10)
+<br/>
+#define WIN1_BG3 BIT(11)
+<br/>
+<br/>
+u16 g_winh[SCREEN_HEIGHT + 1];
+<br/>
+<br/>
+#define DMA_HDMA (DMA_ENABLE | DMA_REPEAT | DMA_START_HBL | DMA_DST_RESET)
+<br/>
+<br/>
+#define DMA_TRANSFER(_dst, _src, count, ch, mode)   \
+<br/>
+do {                                            \
+<br/>
+    DMA_CR(ch)= 0;                         \
+<br/>
+   DMA_SRC(ch)= (unsigned int)(_src);       \
+<br/>
+    DMA_DEST(ch)= (unsigned int)(_dst);             \
+<br/>
+    DMA_CR(ch)= (count) | (mode);          \
+<br/>
+} while(0)
+<br/>
+<br/>
+<br/>
+int getSize(uint8 *source, uint16 *dest, uint32 arg) 
+<br/>
+{
+<br/>
+   return *(uint32*)source;
+<br/>
+}
+<br/>
+<br/>
+uint8 readByte(uint8 *source)
+<br/>
+{
+<br/>
+   return *source;
+<br/>
+}
+<br/>
+<br/>
+void decompressToVRAM(const void* source, void* dest)
+<br/>
+{
+<br/>
+   TDecompressionStream decStream = {
+<br/>
+      getSize,
+<br/>
+      NULL,
+<br/>
+      readByte};
+<br/>
+<br/>
+   swiDecompressLZSSVram((void*)source, dest, 0, &amp;decStream);
+<br/>
+}
+<br/>
+<br/>
+void win_circle(int x0, int y0, int rr, u16 winh[]) 
+<br/>
+{ 
+<br/>
+   int x=0, y= rr, d= 1-rr; 
+<br/>
+   u32 tmp; 
+<br/>
+<br/>
+   for(int i = 0; i &lt; SCREEN_HEIGHT + 1; i++)
+<br/>
+   {
+<br/>
+      winh[i] = 0;
+<br/>
+   }
+<br/>
+<br/>
+   while(y &gt;= x) 
+<br/>
+   { 
+<br/>
+      // side octs 
+<br/>
+      tmp= 255; 
+<br/>
+      if(x0+y&lt;255) 
+<br/>
+         tmp= x0+y; 
+<br/>
+      if(x0&gt;y) 
+<br/>
+         tmp |= (x0-y)&lt;&lt;8; 
+<br/>
+       
+<br/>
+      if(y0&gt;=x)      // o4, o7 
+<br/>
+         winh[y0-x]= tmp; 
+<br/>
+      if(y0+x&lt;192)   // o0, o3 
+<br/>
+         winh[y0+x]= tmp; 
+<br/>
+<br/>
+      if(d&lt;0) 
+<br/>
+      { 
+<br/>
+         d += 2*x+3; 
+<br/>
+      } 
+<br/>
+      else   // change in y: top/bottom octs 
+<br/>
+      { 
+<br/>
+         tmp= 255; 
+<br/>
+         if(x0+x&lt;255) 
+<br/>
+            tmp= x0+x; 
+<br/>
+         if(x0&gt;x) 
+<br/>
+            tmp |= (x0-x)&lt;&lt;8; 
+<br/>
+          
+<br/>
+         if(y0&gt;=y)      // o5, o6 
+<br/>
+            winh[y0-y]= tmp; 
+<br/>
+         if(y0+y&lt;192)   // o1, o2 
+<br/>
+            winh[y0+y]= tmp; 
+<br/>
+<br/>
+         d += 2*(x- --y)+3; 
+<br/>
+      } 
+<br/>
+      x++; 
+<br/>
+   } 
+<br/>
+} 
+<br/>
+<br/>
+int main()
+<br/>
+{
+<br/>
+<br/>
+   vramSetBankA(VRAM_A_MAIN_BG);
+<br/>
+   
+<br/>
+   REG_BG3CNT = BG_BMP8_256x256 | BG_BMP_BASE(0) | BG_PRIORITY(3);
+<br/>
+<br/>
+   REG_BG3PA = 1 &lt;&lt; 8;
+<br/>
+   REG_BG3PB = 0;
+<br/>
+   REG_BG3PC = 0;
+<br/>
+   REG_BG3PD = 1 &lt;&lt; 8;
+<br/>
+<br/>
+   REG_BG3X = 0 &lt;&lt; 8;
+<br/>
+   REG_BG3Y = 0 &lt;&lt; 8;
+<br/>
+<br/>
+   dmaCopy(bg01Pal, BG_PALETTE, bg01PalLen);
+<br/>
+   decompressToVRAM(bg01Bitmap, BG_BMP_RAM(0));
+<br/>
+   
+<br/>
+   consoleDemoInit();
+<br/>
+   
+<br/>
+<br/>
+   WIN1_X0 = 0;
+<br/>
+   WIN1_X1 = 0;
+<br/>
+<br/>
+   WIN1_Y0 = 0;
+<br/>
+   WIN1_Y1 = 0;
+<br/>
+<br/>
+   WIN_IN = WIN1_BG3;
+<br/>
+<br/>
+   videoSetMode(MODE_5_2D | DISPLAY_BG3_ACTIVE | DISPLAY_WIN1_ON);
+<br/>
+<br/>
+   int tickValue = 1;
+<br/>
+<br/>
+   int r =  1;
+<br/>
+   int pressed = 0;
+<br/>
+<br/>
+   // Infinite loop to keep the program running
+<br/>
+   while (1)
+<br/>
+   {
+<br/>
+      scanKeys();
+<br/>
+<br/>
+      consoleClear();
+<br/>
+         
+<br/>
+<br/>
+      if(keysDown() &amp; KEY_A)
+<br/>
+      {
+<br/>
+         pressed = 1;
+<br/>
+         r = 1;
+<br/>
+         tickValue = 1;
+<br/>
+         WIN1_Y0 = 0;
+<br/>
+         WIN1_Y1 = 192;
+<br/>
+      }
+<br/>
+<br/>
+      if ( pressed == 1)
+<br/>
+      {
+<br/>
+         if(--tickValue &lt; 0)
+<br/>
+         {
+<br/>
+            tickValue = 1;
+<br/>
+            r = r + 8;
+<br/>
+         }
+<br/>
+<br/>
+         if(r &gt; 160)
+<br/>
+         {
+<br/>
+            tickValue = 60;
+<br/>
+            r= 161;
+<br/>
+            pressed = 2;
+<br/>
+         }
+<br/>
+<br/>
+         win_circle(128, 96, r, g_winh);
+<br/>
+         DMA_TRANSFER(&amp;WIN1_X1, &amp;g_winh, 1, 3, DMA_HDMA);
+<br/>
+      }
+<br/>
+      else if (pressed == 2)
+<br/>
+      {
+<br/>
+         videoSetMode(MODE_5_2D | DISPLAY_BG3_ACTIVE);
+<br/>
+         pressed = 3;
+<br/>
+      }
+<br/>
+<br/>
+<br/>
+      swiWaitForVBlank();
+<br/>
+   }
+<br/>
+   
+<br/>
+   return 0;
+<br/>
+}
+<br/>
+</td> </tr></table><span class="postbody"></span><span class="gensmall"></span></div>    
+</div>
+<div class="post">
+    <h4>#165618 - MaesterRowen - Tue Dec 30, 2008 7:15 am</h4>
+    <div class="postbody"><span class="postbody">Hmm, I tried out this circular window code on the hardware, and it seems to fall victim to the Vblank Window Glitch.
+<br/>
+<br/>
+Guess I need to figure out how to compensate for that.</span><span class="gensmall"></span></div>    
+</div>
+</div>
+
+    </body>
+</html>
